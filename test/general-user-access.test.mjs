@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import {createFeedCache} from '../request-feed-cache.mjs';
 import {
   GENERAL_USER_ROLE, GENERAL_USER_MENU_OPTIONS, MOBILE_USER_ROLES,
   generalUserCanAccessMenu, generalUserMenuSelection, normalizeMobileUserRole, resolveMobileAccess,
@@ -149,7 +150,7 @@ test("General User request feeds keep dashboard, optional Requests, and Reports 
       app:{get(_path,_guard,callback){handler=callback;}},requireSession(){},GENERAL_USER_ROLE,
       ...siteAccess,currentUserRecord:async()=>user,assignedUserSiteName:value=>value.site,requestProjection:"*",
       pool:{query:async()=>({rows})},canonicalSiteName:value=>value,
-      requestsVisibleToSession:value=>value,attachDailyRemarks:async value=>value,
+      requestsVisibleToSession:value=>value,attachDailyRemarks:async value=>value,requestFeedCache:createFeedCache({ttlMs:0}),
     });
     vm.runInContext(source,context);
     const res={set(){},json(value){body=value;},status(code){assert.fail(`Unexpected status ${code}`);}};

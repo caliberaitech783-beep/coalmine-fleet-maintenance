@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import * as scope from '../region-scope.mjs';
 import {recordsForSite,canonicalSiteName} from '../site-location.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
+import {createFeedCache} from '../request-feed-cache.mjs';
 import {dashboardEquipmentScope,scopeDashboardEquipmentRecords} from '../dashboard-equipment-access.mjs';
 import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
@@ -59,7 +60,7 @@ test('equipment, dashboard, Info Pulse and scheduled reports agree on both assig
 test('request APIs apply selected sites to every Team User feed, including a changed assignment',async()=>{
   for(const role of ['General User','Production User','Maintenance User','MIS User'])for(const selected of [user,{site:'Majri OB'},{}]){
     const result=await invoke('get','/api/requests',{record:selected,session:sessionFor(role),query:{scope:'dashboard'},dependencies:{
-      pool:{query:async()=>({rows})},requestProjection:'*',requestsVisibleToSession:rows=>rows,attachDailyRemarks:async rows=>rows,
+      pool:{query:async()=>({rows})},requestProjection:'*',requestsVisibleToSession:rows=>rows,attachDailyRemarks:async rows=>rows,requestFeedCache:createFeedCache({ttlMs:0}),
     }});
     assert.equal(result.status,200);
     assert.deepEqual(result.body,selected===user?rows.slice(0,2):selected.site?[rows[2]]:[]);

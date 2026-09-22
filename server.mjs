@@ -24,6 +24,7 @@ import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,productionFirstTripCutoffMs} from './info-pulse-data.mjs';
+import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -90,6 +91,18 @@ const app=express();
 // OTP requests) fired for the whole site instead of one user.
 app.set('trust proxy',true);
 app.use(compression({threshold:1024}));
+// The shared request feed is only reused between writes. Clearing on the way in
+// stops a poll that overlaps a write from repopulating stale rows, and clearing
+// again when the write has answered means the refresh that follows a click
+// always reads the database.
+const requestFeedCache=createFeedCache({ttlMs:3000});
+app.use((req,res,next)=>{
+  if(req.method!=='GET'&&req.method!=='HEAD'){
+    requestFeedCache.clear();
+    res.on('finish',()=>requestFeedCache.clear());
+  }
+  next();
+});
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
 const backupStorageRoot=path.resolve(process.env.BACKUP_STORAGE_ROOT||(
@@ -3338,15 +3351,34 @@ async function genericWhatsAppAlertLogins(client,recipients,{purpose,site}){
   }).map(user=>String(user.login||'').trim().toLowerCase()))];
 }
 
+// WhatsApp delivery is one network call to Meta per recipient. Holding the HTTP
+// reply until Meta answers made every create, close, verify and daily update
+// feel slow, so the fan-out is handed to the event loop once the caller's own
+// work is done. Delivery, retries and whatsapp_alert_history are unchanged; a
+// failure is logged instead of surfacing on a click that already succeeded.
+const whatsappDeliveries=new Set();
+function deferWhatsAppNotifications(logins,reference,message,workflowTemplate,{workflowType='',site='',whatsappRecipients=null}={}){
+  if(!logins.length&&!whatsappRecipients?.length)return null;
+  const delivery=new Promise((resolve)=>{
+    setImmediate(()=>{
+      (async()=>{
+        const audience=workflowType?whatsappRecipients??logins:await genericWhatsAppAlertLogins(pool,whatsappRecipients??logins,{purpose:workflowTemplate?.templateKey,site});
+        await sendWhatsAppNotifications(pool,audience,reference,message,workflowTemplate,{workflowType,site});
+      })()
+        .catch((error)=>console.error(`Notification for ${reference} was saved, but its WhatsApp follow-up failed.`,error?.message||error))
+        .finally(()=>{whatsappDeliveries.delete(delivery);resolve();});
+    });
+  });
+  whatsappDeliveries.add(delivery);
+  return delivery;
+}
+
 async function addTicketNotifications(client,recipients,reference,message,workflowTemplate,{whatsapp=true,whatsappRecipients=null,workflowType='',site=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
-  if(whatsapp){
-    const audience=workflowType?whatsappRecipients??logins:await genericWhatsAppAlertLogins(client,whatsappRecipients??logins,{purpose:workflowTemplate?.templateKey,site});
-    await sendWhatsAppNotifications(client,audience,reference,message,workflowTemplate,{workflowType,site});
-  }
+  if(whatsapp)deferWhatsAppNotifications(logins,reference,message,workflowTemplate,{workflowType,site,whatsappRecipients});
 }
 
 async function addTicketNotificationsBestEffort(client,recipients,reference,message,workflowTemplate,options){
@@ -4127,7 +4159,10 @@ async function notifyProductionFirstTripPending(request,closedAt,closedBy){
     const closedAtLabel=requestNotificationTime(closedAt);
     const message=`First trip entry pending for ${request.ref}. ${equipmentDetails} at ${request.site} was made On Road by ${closedBy} at ${closedAtLabel}. Production team must record the first trip/work start entry.`;
     await addTicketNotificationsBestEffort(pool,recipients,request.ref,message,null,{whatsapp:false,site:request.site});
-    await sendWhatsAppNotifications(pool,recipients,request.ref,message,null,{site:request.site,purpose:'requestClosed'});
+    setImmediate(()=>{
+      sendWhatsAppNotifications(pool,recipients,request.ref,message,null,{site:request.site,purpose:'requestClosed'})
+        .catch((error)=>console.error(`First trip notification for ${request.ref} was saved, but its WhatsApp follow-up failed.`,error?.message||error));
+    });
   }catch(error){
     console.error(`Request ${request?.ref||''} was made On Road, but production first-trip notification failed.`,error);
   }
@@ -4601,7 +4636,12 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       const manager=await currentUserRecord(req.session);
       scopedManagerSites=managerReportScope({...manager,site:assignedUserSiteName(manager)}).sites;
     }
-    const {rows}=await pool.query(query);
+    // Production users read their own rows, which is a small indexed query. Every
+    // other role reads the same full feed, so those polls share one read and its
+    // remarks for a few seconds instead of repeating both per user.
+    const ownRowsOnly=query.values.length>0;
+    const readFeed=async()=>attachDailyRemarks((await pool.query(query)).rows);
+    const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed);
     const siteVisibleRows=scopedManagerSites!==null
       ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
       : scopedSite===null
@@ -4609,8 +4649,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       : scopedSite
         ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
         : [];
-    const visibleRows=requestsVisibleToSession(siteVisibleRows,req.session);
-    const payload=await attachDailyRemarks(visibleRows);
+    const payload=requestsVisibleToSession(siteVisibleRows,req.session);
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',payload);
     return res.json(payload);
   }catch(error){next(error)}

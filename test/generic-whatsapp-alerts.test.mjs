@@ -70,7 +70,10 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
   // Execute the real server selection, delivery and best-effort functions
   // together; only I/O and the clock are replaced.
   const snippet=sourceBetween('async function sendWhatsAppNotifications(','let consolidatedReportRunning=false;');
-  const api=new Function(...Object.keys(bindings),`${snippet};return {sendWhatsAppNotifications,genericWhatsAppAlertLogins,addTicketNotifications,sendGenericWhatsAppAlertBestEffort};`)(...Object.values(bindings));
+  const api=new Function(...Object.keys(bindings),`${snippet};return {sendWhatsAppNotifications,genericWhatsAppAlertLogins,addTicketNotifications,sendGenericWhatsAppAlertBestEffort,whatsappDeliveries};`)(...Object.values(bindings));
+  // WhatsApp delivery is handed to the event loop so a click never waits for
+  // Meta; tests that assert on delivery settle it first.
+  api.settleWhatsApp=async()=>{while(api.whatsappDeliveries.size)await Promise.all([...api.whatsappDeliveries]);};
   const sentLogins=()=>templates.concat(texts).map(({to})=>normalizeLogin(users.find(user=>String(user.phone||user.phoneNo||user.phoneNumber)===to)?.login));
   return {...api,client,users,settings,templates,texts,templateAttempts,history,inApp,queries,errors,sentLogins};
 }
@@ -165,6 +168,7 @@ for(const purpose of ['ticketCreated','ticketResolved']){
 test('dailyUpdate sends to operational users at the exact assigned site and excludes leadership',async()=>{
   const api=harness(),inApp=[' CREATOR ','manager','director','creator','other-site',''];
   await api.addTicketNotifications(api.client,inApp,'REQ/1','Daily update',{templateKey:'dailyUpdate',parameters:['Maintenance author','REQ/1']},{site:'SASTI II'});
+  await api.settleWhatsApp();
   assert.deepEqual(sorted(api.sentLogins()),sorted(siteUserLogins));
   assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager','director','other-site']);
   assert.ok(api.templates.every(message=>message.purpose==='dailyUpdate'));
@@ -269,6 +273,7 @@ test('workflow routing bypasses generic expansion and rechecks the saved event r
   const api=harness();api.settings.events.opened.recipientRoles=['maintenanceSupervisor'];
   await api.addTicketNotifications(api.client,['creator','manager'],'REQ/1','Opened',{templateKey:'requestOpened',parameters:[]},
     {workflowType:'opened',site:'Sasti OB',whatsappRecipients:['maintenance','super','other-site','manager']});
+  await api.settleWhatsApp();
   assert.deepEqual(api.sentLogins(),['maintenance']);
   assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager']);
   const lookups=api.queries.filter(({sql})=>sql.includes('FROM master_records'));

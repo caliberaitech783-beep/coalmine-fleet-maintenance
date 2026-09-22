@@ -14,7 +14,9 @@ test('server WhatsApp delivery is enabled through the shared runtime switch',()=
 
 test('request alerts and daily updates use the shared immediate notification path with generic defaults enabled',()=>{
   assert.match(server,/async function addTicketNotifications\(client,recipients,reference,message,workflowTemplate,\{whatsapp=true,whatsappRecipients=null,workflowType='',site=''\}=\{\}\)/);
-  assert.match(server,/if\(whatsapp\)\{[\s\S]*?await genericWhatsAppAlertLogins[\s\S]*?await sendWhatsAppNotifications/);
+  // The audience is still chosen the same way; only the wait moved off the reply.
+  assert.match(server,/if\(whatsapp\)deferWhatsAppNotifications\(logins,reference,message,workflowTemplate,\{workflowType,site,whatsappRecipients\}\);/);
+  assert.match(server,/setImmediate\(\(\)=>\{[\s\S]*?await genericWhatsAppAlertLogins[\s\S]*?await sendWhatsAppNotifications/);
   assert.match(server,/templateKey:'requestOpened'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'opened'/);
   assert.match(server,/templateKey:'requestClosed'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'closed'/);
   assert.match(server,/templateKey:'requestVerified'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'verified'/);
