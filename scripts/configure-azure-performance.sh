@@ -70,12 +70,20 @@ route_body="$(jq -n --argjson source "$source_route" '
   | .properties |= with_entries(select(.value != null))
 ')"
 
-az rest \
+route_update_output=""
+if ! route_update_output="$(az rest \
   --method put \
   --url "${endpoint_id}/routes/static-assets?api-version=2024-09-01" \
   --headers 'Content-Type=application/json' \
   --body "$route_body" \
-  --output none
+  --output none 2>&1)"; then
+  if grep -q 'AuthorizationFailed' <<<"$route_update_output"; then
+    echo "::warning title=Front Door cache permission required::App Service Always On and HTTP/2 were applied, but the deployment identity needs Microsoft.Cdn/profiles/afdEndpoints/routes/write to create the static-assets route. Continuing the application deployment without edge caching."
+    exit 0
+  fi
+  printf '%s\n' "$route_update_output" >&2
+  exit 1
+fi
 
 configured_route="$(az rest --method get --url "${endpoint_id}/routes/static-assets?api-version=2024-09-01")"
 jq -e '
