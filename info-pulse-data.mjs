@@ -86,13 +86,10 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
   })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
 }
 
-const IST_OFFSET_MS = 330 * 60_000;
+export const PRODUCTION_FIRST_TRIP_ROLLOUT_START_IST = '2026-09-21 00:00:00';
 
 export function productionFirstTripCutoffMs(now = Date.now()) {
-  const value = now instanceof Date ? now.getTime() : Number(now);
-  const safeNow = Number.isFinite(value) ? value : Date.now();
-  const istNow = new Date(safeNow + IST_OFFSET_MS);
-  return Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() - 1, 0, 0, 0) - IST_OFFSET_MS;
+  return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_START_IST);
 }
 
 export function isProductionFirstTripPending(request = {}, options = {}) {
@@ -102,8 +99,11 @@ export function isProductionFirstTripPending(request = {}, options = {}) {
   if (status === 'verified' || verificationStatus === 'verified' || String(verifiedAt || '').trim()) return false;
   const closedValue = request.closedAt ?? request.closed_at;
   const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
+  const startedValue = request.start ?? request.startedAt ?? request.started_at ?? request.createdAt ?? request.created_at;
+  const startedAt = startedValue instanceof Date ? startedValue.getTime() : parseIstTimestamp(startedValue);
   const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;
-  return status === 'closed' && Number.isFinite(closedAt) && closedAt >= productionFirstTripCutoffMs(options.now) && !String(productionFirstTripAt || '').trim();
+  const cutoff = productionFirstTripCutoffMs(options.now);
+  return status === 'closed' && Number.isFinite(closedAt) && Number.isFinite(startedAt) && closedAt >= cutoff && startedAt >= cutoff && !String(productionFirstTripAt || '').trim();
 }
 
 // Production action queue after Maintenance makes the asset on road. These rows

@@ -23,6 +23,7 @@ const panelCode = (await transformWithOxc(panelSource, 'daily-updates-list.jsx',
 const panelBindings = {React, useSyncExternalStore: React.useSyncExternalStore, ...dailyUpdatesOrder, formatDisplayDateTime: dates.formatDisplayDateTime};
 const {DailyUpdatesPanel} = new Function("DateInput", ...Object.keys(panelBindings), panelCode + '; return {DailyUpdatesPanel};')(DateInput, ...Object.values(panelBindings));
 const NOW = Date.parse('2026-09-16T11:00:00+05:30');
+const ROLLOUT_NOW = Date.parse('2026-09-22T11:00:00+05:30');
 function descendants(tree, predicate) {
   const result = [];
   const visit = node => {
@@ -50,7 +51,7 @@ const REQUESTS = [
   {ref: 'REQ-W1', door: 'W1', site: 'Majri OB', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise', overdueReason: 'Gear box sent to workshop', dailyRemarks: [{createdAt: '2026-09-16 08:00', remark: 'Opened gear box', delayReason: 'Spares not in stock'}]},
   {ref: 'REQ-J9', door: 'J9', site: 'Jayant OB', equipmentGroup: 'DRILL MACHINE', status: 'Open', start: '2026-09-16 02:00', complaint: 'Compressor fault'},
   {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OB', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
-  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-09 08:00', closedAt: '2026-09-15 08:00', complaint: 'Brake liner broken'},
+  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-21 08:00', closedAt: '2026-09-21 09:00', complaint: 'Brake liner broken'},
   {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OB', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
 ];
 function harness() {
@@ -188,15 +189,15 @@ test('clicking a KPI card narrows the list to that tier, renumbers it, and BD ba
 });
 
 test('production users and production managers see the first-trip pending Info Pulse tab only for their queue', () => {
-  const production = render({session: {role: 'normal', assignedRole: 'Production User'}});
+  const production = render({session: {role: 'normal', assignedRole: 'Production User'}, now: ROLLOUT_NOW});
   assert.equal(byLabel(production, 'First trip pending: 1').props['aria-pressed'], false);
-  assert.equal(byLabel(render(), 'First trip pending: 1'), undefined);
-  assert.equal(byLabel(render({session: {role: 'normal', assignedRole: 'Maintenance User'}}), 'First trip pending: 1'), undefined);
-  assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Manager', managerRoles: ['Production Manager']}}}), 'First trip pending: 1'));
+  assert.equal(byLabel(render({now: ROLLOUT_NOW}), 'First trip pending: 1'), undefined);
+  assert.equal(byLabel(render({session: {role: 'normal', assignedRole: 'Maintenance User'}, now: ROLLOUT_NOW}), 'First trip pending: 1'), undefined);
+  assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Manager', managerRoles: ['Production Manager']}}, now: ROLLOUT_NOW}), 'First trip pending: 1'));
   const app = harness();
-  let tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}});
+  let tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}, now: ROLLOUT_NOW});
   byLabel(tree, 'First trip pending: 1').props.onClick();
-  tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}});
+  tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}, now: ROLLOUT_NOW});
   assert.equal(byLabel(tree, 'First trip pending: 1').props['aria-pressed'], true);
   assert.deepEqual(vehicles(byLabel(tree, 'First trip pending records, oldest pending first')), ['S55']);
   assert.match(html(tree), /Vehicle\/equipment first-trip entry pending after Maintenance made on road/);
