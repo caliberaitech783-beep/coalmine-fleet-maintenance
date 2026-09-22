@@ -130,6 +130,7 @@ import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
+import {startVisiblePoll} from "./visible-poll.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
 import {
@@ -6148,7 +6149,6 @@ function SessionMessageInbox({session}) {
   useEffect(()=>{
     if(!session?.token){setMessages([]);return undefined;}
     const controller=new AbortController();
-    let timer;
     const load=async()=>{
       try{
         const headers={Authorization:`Bearer ${session.token}`};
@@ -6166,10 +6166,9 @@ function SessionMessageInbox({session}) {
           ...(Array.isArray(announcementResult.announcements)?announcementResult.announcements:[]).map((item)=>({...item,kind:'announcement'})),
         ]);
       }catch(loadError){if(loadError.name!=='AbortError')console.warn('Session message check failed.',loadError);}
-      finally{if(!controller.signal.aborted)timer=window.setTimeout(load,3000);}
     };
-    void load();
-    return()=>{controller.abort();window.clearTimeout(timer);};
+    const stopPolling=startVisiblePoll(load,3000);
+    return()=>{controller.abort();stopPolling();};
   },[session?.token]);
   const current=messages[0];
   if(!current)return null;

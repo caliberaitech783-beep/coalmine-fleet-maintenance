@@ -4273,29 +4273,40 @@ async function createMaintenanceReminderNotifications(){
   const {rows:requests}=await pool.query(`SELECT reference,site FROM maintenance_requests WHERE status<>'Closed' AND started_at<=NOW()-INTERVAL '1 day'`);
   if(!requests.length)return;
   const {rows:users}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const people=users.map((row)=>row.record_data||{}).map((user)=>({user,login:String(user.login||'').trim().toLowerCase()}))
+    .filter(({login})=>login).map((person)=>({...person,profile:resolveMobileAccess({user:person.user}),scope:userSiteScope(person.user)}));
+  const logins=[],references=[],messages=[],keys=[];
   for(const request of requests){
-    const recipients=[];
-    for(const row of users){
-      const user=row.record_data||{};
-      const login=String(user.login||'').trim().toLowerCase();
-      if(!login)continue;
-      const profile=resolveMobileAccess({user});
-      const siteMatches=reportScopeIncludesSite(userSiteScope(user),request.site);
-      if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,request.site))recipients.push(login);
+    const recipients=new Set();
+    for(const {user,login,profile,scope} of people){
+      if(profile.assignedRole==='Maintenance User'&&reportScopeIncludesSite(scope,request.site))recipients.add(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.add(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,request.site))recipients.add(login);
     }
-    const newRecipients=[];
     const message=`${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`;
-    for(const login of [...new Set(recipients)]){
-      const key=`maintenance-reminder:${day}:${slot}:${request.reference}:${login}`;
-      const inserted=await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
-        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) WHERE notification_key IS NOT NULL DO NOTHING RETURNING id`,[login,request.reference,message,key]);
-      if(inserted.rowCount)newRecipients.push(login);
+    for(const login of recipients){
+      logins.push(login);references.push(request.reference);messages.push(message);
+      keys.push(`maintenance-reminder:${day}:${slot}:${request.reference}:${login}`);
     }
-    // Maintenance reminders remain available in-app. WhatsApp request traffic is
-    // delivered only through the scheduled consolidated report.
   }
+  if(!keys.length)return;
+  // One statement instead of one round trip per reminder. Maintenance reminders
+  // remain in-app; WhatsApp request traffic goes only through the scheduled report.
+  await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
+    SELECT * FROM unnest($1::text[],$2::text[],$3::text[],$4::text[])
+    ON CONFLICT (notification_key) WHERE notification_key IS NOT NULL DO NOTHING`,[logins,references,messages,keys]);
+}
+
+// Reminder keys are per day and slot, and every insert wakes waiting clients
+// through pg_notify, so notification polls need not rebuild them each time.
+const MAINTENANCE_REMINDER_INTERVAL_MS=60_000;
+let maintenanceReminderRun=null,maintenanceReminderStartedAt=0;
+function scheduleMaintenanceReminderNotifications(now=Date.now()){
+  if(maintenanceReminderRun||now-maintenanceReminderStartedAt<MAINTENANCE_REMINDER_INTERVAL_MS)return;
+  maintenanceReminderStartedAt=now;
+  maintenanceReminderRun=createMaintenanceReminderNotifications().catch((error)=>{
+    console.error('Maintenance reminder notification generation failed.',error);
+  }).finally(()=>{maintenanceReminderRun=null});
 }
 
 const waitForNotification=createNotificationFeed(pool);
@@ -4304,9 +4315,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
   res.set('Cache-Control','private, no-store');
   res.vary('Authorization');
   try{
-    await createMaintenanceReminderNotifications().catch((error)=>{
-      console.error('Maintenance reminder notification generation failed.',error);
-    });
+    scheduleMaintenanceReminderNotifications();
     const login=String(req.session.login||'').trim().toLowerCase();
     // Subscribe before reading: an insert between the read and wait cannot be lost.
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
@@ -6325,6 +6334,9 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
+// Vite fingerprints every file under /assets, so a deploy changes the URL and
+// browsers may keep these for a year. index.html is still revalidated.
+app.use('/assets',express.static(path.join(staticRoot,'assets'),{immutable:true,maxAge:'1y'}));
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
 app.use((error,req,res,next)=>{

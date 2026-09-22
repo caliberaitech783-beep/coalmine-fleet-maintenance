@@ -4,6 +4,7 @@ import {record as recordRemoteSession, Replayer} from "rrweb";
 import {AlertTriangle, CheckCircle2, Eye, Hand, MonitorUp, MousePointer2, ShieldCheck, X} from "lucide-react";
 import "rrweb/dist/style.css";
 import "./remote-assistance.css";
+import {startVisiblePoll} from "./visible-poll.mjs";
 
 const ASSISTANCE_POLL_MS=2000;
 const COMMAND_POLL_MS=700;
@@ -105,19 +106,21 @@ export function RemoteAssistanceAgent({session}){
   const [,setClock]=useState(0);
   const commandCursor=useRef(0);
   const eventQueue=useRef([]);
+  const assistanceRef=useRef(null);
+  assistanceRef.current=assistance;
   const recordingActive=Boolean(assistance&&["Approved","Active"].includes(assistance.status));
   useEffect(()=>{
     if(!session?.token){setAssistance(null);return undefined;}
-    const controller=new AbortController();let timer;
+    const controller=new AbortController();
     const poll=async()=>{
       try{
         const result=await assistanceJson("/api/remote-assistance/current",{token:session.token,signal:controller.signal});
         if(!controller.signal.aborted)setAssistance(result.assistance||null);
       }catch(pollError){if(pollError.name!=="AbortError"&&pollError.status!==401)console.warn("Remote assistance check failed.",pollError);}
-      finally{if(!controller.signal.aborted)timer=window.setTimeout(poll,ASSISTANCE_POLL_MS);}
     };
-    void poll();
-    return()=>{controller.abort();window.clearTimeout(timer);};
+    // An open assistance session keeps its status live even in a background tab.
+    const stopPolling=startVisiblePoll(poll,ASSISTANCE_POLL_MS,{keepPolling:()=>Boolean(assistanceRef.current)});
+    return()=>{controller.abort();stopPolling();};
   },[session?.token]);
   useEffect(()=>{
     if(!assistance?.expiresAt)return undefined;
