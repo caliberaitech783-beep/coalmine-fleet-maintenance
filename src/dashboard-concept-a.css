@@ -1947,8 +1947,9 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-stage-pipeline-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1180px;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 .mine-stage-pipeline-table :is(th, td) {
   padding: 10px 12px;
@@ -1971,6 +1972,12 @@ button.mine-primary-kpi-card:focus-visible,
   min-width: 165px;
   background: var(--mine-panel);
 }
+.mine-stage-pipeline-table th:nth-child(1),
+.mine-stage-pipeline-table td:nth-child(1) { width: 16%; }
+.mine-stage-pipeline-table th:nth-child(2),
+.mine-stage-pipeline-table td:nth-child(2) { width: 24%; }
+.mine-stage-pipeline-table th:nth-child(n+3),
+.mine-stage-pipeline-table td:nth-child(n+3) { width: 10%; text-align: center; }
 .mine-stage-pipeline-table th:first-child { background: #f6f8fc; }
 .mine-stage-pipeline-table tr.total td { background: #f7f5fb; font-weight: 900; }
 .mine-stage-pipeline-table tr.total td:first-child { background: #f7f5fb; }
@@ -1979,7 +1986,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-stage-mix {
   display: grid;
   grid-template-columns: var(--stage-mix);
-  min-width: 180px;
+  width: 100%;
+  min-width: 220px;
   height: 12px;
   overflow: hidden;
   border-radius: 999px;
@@ -1987,6 +1995,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-stage-mix i { display: block; min-width: 2px; }
 .mine-stage-pipeline-table button {
+  width: 100%;
   min-width: 58px;
   min-height: 34px;
   border: 0;
