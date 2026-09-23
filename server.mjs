@@ -3075,11 +3075,17 @@ app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-app.get('/api/whatsapp-alert-history',requireSuper,async(_req,res,next)=>{
+app.get('/api/whatsapp-alert-history',requireSuper,async(req,res,next)=>{
   try{
+    // Optional from/to (ISO) widen the window for usage reviews; without them the newest 1,000 rows are returned as before.
+    const from=req.query?.from?new Date(String(req.query.from)):null,to=req.query?.to?new Date(String(req.query.to)):null;
+    if((from&&Number.isNaN(from.getTime()))||(to&&Number.isNaN(to.getTime())))return res.status(400).json({error:'Enter valid from and to dates.'});
+    const ranged=Boolean(from||to);
     const {rows}=await pool.query(`SELECT id,report_type AS "reportType",target_name AS "targetName",
       report_level AS "reportLevel",recipient_name AS "recipientName",recipient_phone AS "recipientPhone",
-      status,created_at AS "createdAt" FROM whatsapp_alert_history ORDER BY created_at DESC LIMIT 1000`);
+      status,created_at AS "createdAt" FROM whatsapp_alert_history
+      WHERE ($1::timestamptz IS NULL OR created_at>=$1) AND ($2::timestamptz IS NULL OR created_at<$2)
+      ORDER BY created_at DESC LIMIT $3`,[from,to,ranged?200000:1000]);
     res.json(rows);
   }catch(error){next(error)}
 });
