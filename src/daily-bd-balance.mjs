@@ -45,9 +45,10 @@ export function bdBalanceChange(opening, closing) {
   return {delta, percent, direction: delta > 0 ? 'increase' : delta < 0 ? 'decrease' : 'steady'};
 }
 
-export function dailyBdRecordsForMetric(records, from, to, metric) {
+export function dailyBdRecordsForMetric(records, from, to, metric, options = {}) {
+  const matchesShift = typeof options.matchesShift === 'function' ? options.matchesShift : () => true;
   if (metric === 'active-balance' || metric === 'idle') {
-    return dailyBdRecordsForMetric(records, from, to, 'balance').filter(record => {
+    return dailyBdRecordsForMetric(records, from, to, 'balance', options).filter(record => {
       const idle = ['idle', 'ideal'].includes(String(record.status || '').trim().toLowerCase());
       return metric === 'idle' ? idle : !idle;
     });
@@ -55,7 +56,8 @@ export function dailyBdRecordsForMetric(records, from, to, metric) {
   const {entries, excluded} = prepareDailyBdRequests(records);
   if (metric === 'undated') return excluded;
   if (!recordedBreakdownRangeLength(from, to)) return [];
-  return entries.filter(({opened, closed}) => {
+  return entries.filter(({record, opened, closed}) => {
+    if (!matchesShift(record, metric)) return false;
     if (metric === 'open') return opened < from && (!closed || closed >= from);
     if (metric === 'incoming') return opened >= from && opened <= to;
     if (metric === 'outgoing') return Boolean(closed) && closed >= from && closed <= to;
@@ -64,16 +66,17 @@ export function dailyBdRecordsForMetric(records, from, to, metric) {
   }).map(({record}) => record);
 }
 
-export function buildDailyBdBalance(records, from, to, splitIdle = false) {
+export function buildDailyBdBalance(records, from, to, splitIdle = false, options = {}) {
+  const matchesShift = typeof options.matchesShift === 'function' ? options.matchesShift : () => true;
   const count = recordedBreakdownRangeLength(from, to);
   const {entries, excluded} = prepareDailyBdRequests(records);
   if (!count) return {days: [], totals: null, excluded};
   const intake = new Map(), closures = new Map();
   let opening = 0;
-  for (const {opened, closed} of entries) {
-    if (opened < from && (!closed || closed >= from)) opening++;
-    if (opened >= from && opened <= to) intake.set(opened, (intake.get(opened) || 0) + 1);
-    if (closed && closed >= from && closed <= to) closures.set(closed, (closures.get(closed) || 0) + 1);
+  for (const {record, opened, closed} of entries) {
+    if (matchesShift(record, 'open') && opened < from && (!closed || closed >= from)) opening++;
+    if (matchesShift(record, 'incoming') && opened >= from && opened <= to) intake.set(opened, (intake.get(opened) || 0) + 1);
+    if (matchesShift(record, 'outgoing') && closed && closed >= from && closed <= to) closures.set(closed, (closures.get(closed) || 0) + 1);
   }
   const totals = {open: opening, incoming: 0, outgoing: 0, balance: opening};
   const days = Array.from({length: count}, (_, index) => {
@@ -88,7 +91,7 @@ export function buildDailyBdBalance(records, from, to, splitIdle = false) {
   const result = {days, totals: {...totals, ...bdBalanceChange(totals.open, totals.balance)}, excluded};
   if (!splitIdle) return result;
   const separate = (row, start, end) => {
-    const idle = dailyBdRecordsForMetric(records, start, end, 'idle').length;
+    const idle = dailyBdRecordsForMetric(records, start, end, 'idle', options).length;
     const balance = row.balance - idle;
     return {...row, balance, idle, ...bdBalanceChange(row.open, balance)};
   };

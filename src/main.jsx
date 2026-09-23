@@ -1558,6 +1558,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestHasSelectedDashboardShift = (record = {}) => dashboardShift === "all" || [
     record.start,record.createdAt,record.acceptedAt,record.inProgressAt,record.closedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,record.idealRequestedAt,record.idealApprovedAt,
   ].some((value)=>requestMatchesDashboardShift(record,value));
+  const dashboardMovementShiftTimestamp = (record = {}, metric = "") => {
+    if (metric === "outgoing") return record.closedAt || record.completedAt;
+    if (metric === "idle") return record.idealRequestedAt || record.idleRequestedAt || record.start || record.startedAt || record.createdAt;
+    return record.start || record.startedAt || record.createdAt;
+  };
+  const requestMatchesMovementShift = (record = {}, metric = "") => dashboardShift === "all" || requestMatchesDashboardShift(record, dashboardMovementShiftTimestamp(record, metric));
   const availableRegions=subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -1619,6 +1625,23 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const throughputRequests = locationBreakdowns.filter(inThroughputScope);
   const throughputEquipment = visibleEquipment.filter(inThroughputScope);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
+  const movementRequestRowsForShift = (records, start, end, metric = "all", type = "") => movementRequestRows(records, start, end, metric, type)
+    .filter((record) => requestMatchesMovementShift(record, metric));
+  const breakdownMovementForRangeForShift = (records, startDate = "", endDate = "") => Object.fromEntries(["open", "incoming", "outgoing", "balance"].map((metric) => [
+    metric, movementRequestRowsForShift(records, startDate, endDate, metric).length,
+  ]));
+  const dailyBreakdownMovementForShift = (records = [], startDate = "", endDate = "") => {
+    if (!startDate || !endDate || startDate > endDate) return [];
+    const rows = [];
+    const cursor = new Date(`${startDate}T12:00:00`);
+    const end = new Date(`${endDate}T12:00:00`);
+    while (cursor <= end) {
+      const date = [cursor.getFullYear(), String(cursor.getMonth() + 1).padStart(2, "0"), String(cursor.getDate()).padStart(2, "0")].join("-");
+      rows.push({ date, ...breakdownMovementForRangeForShift(records, date, date) });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return rows;
+  };
   // Availability follows the site-wise To date; today (or no date) is the live fleet status.
   const availabilityDate = breakdownSummaryTo === todayKey ? "" : breakdownSummaryTo;
   const availabilityDateLabel = formatDisplayDate(availabilityDate || todayKey);
@@ -1642,12 +1665,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const breakdownSiteSummary = throughputSites.map((site) => {
     const siteRequests = throughputRequests.filter((record) => recordBelongsToSite(record, site));
-    return { site, ...breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey) };
+    return { site, ...breakdownMovementForRangeForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey) };
   });
   // Match the linked request list, including authorized historical/unassigned sites.
-  const breakdownMovementTotals = breakdownMovementForRange(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
+  const breakdownMovementTotals = breakdownMovementForRangeForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
   // Match the open balance card: retain carryover, exclude closed and idle cases.
-  const breakdownTypeSummary = breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"));
+  const breakdownTypeSummary = dashboardShift === "all"
+    ? breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"))
+    : breakdownTypeShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"));
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
@@ -1661,9 +1686,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartDate = new Date(`${breakdownDetailEndKey}T12:00:00`);
   breakdownDetailStartDate.setDate(breakdownDetailStartDate.getDate() - (Math.max(1, breakdownDetailDays) - 1));
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
-  const breakdownDetailRows = dailyBreakdownMovement(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRows(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"));
+  const breakdownDetailRows = dailyBreakdownMovementForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailTotals = breakdownMovementForRangeForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"));
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
@@ -1859,7 +1884,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("balance:")) {
       const [metric, from, to, site] = key.slice(8).split("|");
       const records = site ? locationBreakdowns.filter((record) => recordBelongsToSite(record, site)) : locationBreakdowns;
-      return requestAssetRows(dailyBdRecordsForMetric(records, from, to, metric).map((record) => metric === "undated" ? record : ({
+      return requestAssetRows(dailyBdRecordsForMetric(records, from, to, metric, { matchesShift: requestMatchesMovementShift }).map((record) => metric === "undated" ? record : ({
         ...record,
         start: [record.start, record.startedAt, record.createdAt].find((value) => requestDateKey(value)),
         closedAt: [record.closedAt, record.completedAt].find((value) => requestDateKey(value)),
@@ -1903,7 +1928,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     // Site is already known from the panel that opened this, so these keys carry it.
     if (key.startsWith("site-repair:")) {
       const [site, type] = key.slice(12).split("|");
-      return requestAssetRows(movementRequestRows(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance").filter((record) => recordBelongsToSite(record, site)
+      return requestAssetRows(movementRequestRowsForShift(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance").filter((record) => recordBelongsToSite(record, site)
         && normalizedBreakdownType(record.category || record.repairType || record.type) === type));
     }
     if (key.startsWith("site-status:")) {
@@ -1917,7 +1942,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("movement:")) {
       const [metric, start, end, site, type] = key.slice(9).split("|");
       const records = site ? throughputRequests.filter((record) => recordBelongsToSite(record, site)) : throughputRequests;
-      return requestAssetRows(movementRequestRows(records, start, end, metric, type));
+      return requestAssetRows(movementRequestRowsForShift(records, start, end, metric, type));
     }
     if (key.startsWith("trend:")) {
       const [, kind, date] = key.split(":");
@@ -2030,7 +2055,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // Each section's export table: its Export menu offers it, and the whole dashboard's Excel workbook has a sheet
   // per section (both Tracking Vehicle Throughput tabs) after the KPI sheet. Tables are built only when asked for.
   const fleetSectionTable = () => fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: liveFleetCounts, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel });
-  const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
+  const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
   const lifecycleSectionTable = () => requestLifecycleExport({ trend: requestLifecycleTrend, readings: requestLifecycleReadings, place: requestLifecycleSite || requestLifecycleRegion?.code || dashboardScopeLabel, rangeLabel: requestLifecycleRangeLabel });
   const trendSectionTable = () => breakdownTrendExport({ trend: breakdownTrend, place: activeTrendSite === "all" ? dashboardScopeLabel : activeTrendSite, from: breakdownTrendStartKey, to: breakdownTrendAnchorKey, total: breakdownTrendTotal, average: breakdownTrendAverage });
   const dashboardExcelSheets = () => [
@@ -2098,7 +2123,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
+        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
         {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><h2>Tracking Vehicle Throughput</h2></div>
@@ -2112,13 +2137,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <div id="throughput-region-date-filters" hidden={throughputFiltersHidden} ref={throughputFiltersRef} className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
             <label><span>Region</span><select aria-label="Vehicle throughput region" value={selectedThroughputRegion?.code || "all"} onChange={(event) => { setThroughputRegion(event.target.value); setThroughputSite("all"); setRoadFocusSite(""); }}><option value="all">All regions</option>{throughputRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>
             {selectedThroughputRegion && <label><span>Site</span><select aria-label="Vehicle throughput site" value={activeThroughputSite} onChange={(event) => { setThroughputSite(event.target.value); setRoadFocusSite(""); }}><option value="all">All sites</option>{throughputSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}
+            {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Vehicle throughput shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>}
             <label><span>From date</span><DateInput aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><DateInput aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
             <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-{[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Idle Vehicles", value: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
+{[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
             <section {...cardAction(movementKey("active-balance"), "All open BD balance types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
               <header><div><b>BD Type Mix</b><small>Open BD balance · all six maintenance types</small></div><span>Percentage share of open BD balance</span></header>
@@ -2242,7 +2268,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <button type="button" className="dashboard-breakdown-road-shortcut" onClick={() => openRoadAvailabilityForSite(breakdownDetailSite)}><Gauge />Availability count <ChevronRight /></button>
         </div>
         <div className="dashboard-breakdown-detail-kpis">
-          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }, { label: "Idle Vehicles", value: movementRequestRows(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
+          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
         </div>
         <section {...cardAction(movementKey("active-balance", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} open BD balance types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of open BD balance`}>
           <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of open BD balance</span></header>
