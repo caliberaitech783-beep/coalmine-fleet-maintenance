@@ -93,7 +93,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
   equipmentRecords=equipmentRecords.map(record=>normalizeOperationalSiteFields({...record,door:equipmentDoorNumber(record)}));
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);
   const report = (category, title, description, columns, rows, dateValue = r => r.start) => ({category,title,description,columns,rows,dateValue,emptyMessage:'No matching records for this report'});
-  const shiftTime = (row, value, emptyValue = 'Not recorded') => shiftRecords.length
+  const shiftTime = (row, value, emptyValue = '') => shiftRecords.length
     ? formatShiftDateTime(value,{site:row.reportSite||row.site||row.currentLocation||row.location,shifts:shiftRecords,emptyValue})
     : (clean(value)||emptyValue);
   const open = requests.filter(r => ['open','in progress','awaiting parts'].includes(status(r)) && !r.closedAt);
@@ -129,11 +129,11 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       // Location leads, then asset identifiers; job reference and closure type close the row in both the report and its exports.
       site,
       ...base.slice(0,4).filter(column => column.key !== 'chassis'),
-      col('submittedAt','Production submission',r => shiftTime(r,r.start)),
-      col('acceptedAt','Maintenance acceptance',r => shiftTime(r,acceptanceTime(r))),
-      col('closedAt','Request closure / on-road approval',r => shiftTime(r,r.closedAt)),
-      col('firstTripAt','Actual first trip',r => shiftTime(r,summaryTimingRow(r).firstTripAt)),
-      col('verifiedAt','MIS verified at',r => shiftTime(r,r.verifiedAt)),
+      col('submittedAt','Production submission',r => shiftTime(r,r.start,'Not recorded')),
+      col('acceptedAt','Maintenance acceptance',r => shiftTime(r,acceptanceTime(r),'Not recorded')),
+      col('closedAt','Request closure / on-road approval',r => shiftTime(r,r.closedAt,'Not recorded')),
+      col('firstTripAt','Actual first trip',r => shiftTime(r,summaryTimingRow(r).firstTripAt,'Not recorded')),
+      col('verifiedAt','MIS verified at',r => shiftTime(r,r.verifiedAt,'Not recorded')),
       ...base.slice(4),
       col('waitingTat','Waiting: submission to acceptance',r => summaryDuration(r,'waiting')),
       col('maintenanceTat','Maintenance: acceptance to closure',r => summaryDuration(r,'maintenance')),
@@ -146,7 +146,7 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
     ],requests.filter(r => r.verifiedAt),r => r.start || r.createdAt),
     report('production', REPORT_TITLES[15], 'Closed/on-road vehicles with Production first-trip/work-start timing beside MIS first-trip verification timing.', [
       ...productionLead,
-      col('closedAt','Maintenance On Road Date & Time',r => shiftTime(r,r.closedAt)),
+      col('closedAt','Maintenance On Road Date & Time',r => shiftTime(r,r.closedAt,'Not recorded')),
       col('productionFirstTripAt','Production First Trip / Work Start Time',r => shiftTime(r,productionFirstTrip(r),'Pending')),
       col('productionFirstTripBy','Production accepted by',r => clean(r.productionFirstTripBy) || 'Pending'),
       col('misFirstTripAt','MIS First Trip Time',r => shiftTime(r,firstTrip(r),'Pending')),
