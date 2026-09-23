@@ -81,6 +81,8 @@ test('the shared popup polls announcements with direct messages and stays until 
 test('administrators compose announcements from the User Sessions page and can review or withdraw recent ones', () => {
   const composer = source.slice(source.indexOf('function AnnouncementComposer('), source.indexOf('function SessionMessageInbox('));
   assert.match(composer, /fetch\('\/api\/announcements',\{method:'POST'/);
+  assert.match(composer, /'Content-Type':'text\/plain; charset=utf-8'/, 'announcement bodies avoid Azure Front Door JSON inspection');
+  assert.match(composer, /responseText\.replace\(\//, 'non-JSON edge failures surface a useful status/error');
   assert.match(composer, /maxLength="2000"/);
   assert.match(composer, /\{message\.length\} \/ 2,000 characters/);
   assert.match(composer, /Send to all users/);

@@ -6149,9 +6149,11 @@ function AnnouncementComposer({session,onClose,onSent}) {
     if(!text){setError('Write the announcement before sending.');return;}
     setSending(true);setError("");
     try{
-      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text})});
-      const result=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(result.error||'Could not send the announcement.');
+      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text})});
+      const responseText=await response.text();
+      let result={};
+      try{result=responseText?JSON.parse(responseText):{};}catch{}
+      if(!response.ok)throw new Error(result.error||responseText.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,160)||`Could not send the announcement. HTTP ${response.status}`);
       onSent?.(result);
     }catch(sendError){setError(sendError.message||'Could not send the announcement.');}
     finally{setSending(false);}
