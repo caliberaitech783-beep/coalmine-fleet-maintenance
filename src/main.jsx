@@ -1469,6 +1469,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     {title: "Request Lifecycle", selector: ".mine-request-lifecycle"},
     {title: "Breakdown Trend", selector: ".mine-breakdown-trend"},
     {title: "Overall Fleet Performance", selector: ".mine-fleet-performance"},
+    {title: "Vehicle Stage Pipeline", selector: ".mine-stage-pipeline"},
   ];
   const showDashboardCard = (card) => {
     setCardSearchOpen(false);
@@ -1492,6 +1493,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardShift, setDashboardShift] = useState("all");
   const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
   const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
+  const [stagePipelineRegion, setStagePipelineRegion] = useState("all");
+  const [stagePipelineSite, setStagePipelineSite] = useState("all");
+  const [stagePipelineShift, setStagePipelineShift] = useState("all");
+  const [stagePipelineFrom, setStagePipelineFrom] = useState("");
+  const [stagePipelineTo, setStagePipelineTo] = useState("");
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState(() => localDateKey(new Date()));
@@ -1865,6 +1871,83 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.production, day.closed, day.verified, day.idle, day.opened, day.mis]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
   const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
+  const stagePipelineStages = [
+    { key: "offroad", label: "Off road / request", shortLabel: "Request", className: "request" },
+    { key: "acceptance", label: "Acceptance", shortLabel: "Acceptance", className: "acceptance" },
+    { key: "onroad", label: "On road", shortLabel: "On road", className: "onroad" },
+    { key: "productionFirstTrip", label: "First trip production verification", shortLabel: "Production first trip", className: "production" },
+    { key: "misFirstTrip", label: "First trip MIS verification", shortLabel: "MIS first trip", className: "mis" },
+    { key: "idle", label: "Idle Vehicles", shortLabel: "Idle", className: "idle" },
+  ];
+  const stagePipelineField = (...values) => values.map((value) => String(value || "").trim()).find(Boolean) || "";
+  const stagePipelineRequestStage = (record = {}) => {
+    const status = String(record.status || "").trim().toLowerCase();
+    if (["idle", "ideal"].includes(status)) return "idle";
+    if (["verified"].includes(status) || String(record.verifiedAt || "").trim()) return "";
+    const stages = {
+      acceptedAt: stagePipelineField(record.acceptedAt, record.accepted_at),
+      closedAt: stagePipelineField(record.closedAt, record.closed_at, record.completedAt),
+      productionFirstTripAt: stagePipelineField(record.productionFirstTripAt, record.production_first_trip_at, record.productionFirstTripDate ? `${record.productionFirstTripDate} ${record.productionFirstTripTime || "00:00:00"}` : ""),
+      misFirstTripAt: stagePipelineField(record.firstTripAt, record.first_trip_at, record.firstTripDate ? `${record.firstTripDate} ${record.firstTripTime || "00:00:00"}` : ""),
+      verifiedAt: stagePipelineField(record.verifiedAt, record.verified_at),
+    };
+    if (!stages.acceptedAt && !stages.closedAt) return "offroad";
+    if (!stages.closedAt) return "acceptance";
+    if (!stages.productionFirstTripAt) return "onroad";
+    if (!stages.misFirstTripAt) return "productionFirstTrip";
+    if (!stages.verifiedAt) return "misFirstTrip";
+    return "";
+  };
+  const stagePipelineStageTimestamp = (record = {}, stage = "") => {
+    if (stage === "offroad") return stagePipelineField(record.start, record.startedAt, record.createdAt);
+    if (stage === "acceptance") return stagePipelineField(record.acceptedAt, record.accepted_at, record.start, record.startedAt, record.createdAt);
+    if (stage === "onroad") return stagePipelineField(record.closedAt, record.closed_at, record.completedAt);
+    if (stage === "productionFirstTrip") return stagePipelineField(record.productionFirstTripAt, record.production_first_trip_at, record.productionFirstTripDate ? `${record.productionFirstTripDate} ${record.productionFirstTripTime || "00:00:00"}` : "");
+    if (stage === "misFirstTrip") return stagePipelineField(record.firstTripAt, record.first_trip_at, record.firstTripDate ? `${record.firstTripDate} ${record.firstTripTime || "00:00:00"}` : "");
+    if (stage === "idle") return stagePipelineField(record.idealRequestedAt, record.idleRequestedAt, record.closedAt, record.closed_at, record.start, record.startedAt, record.createdAt);
+    return "";
+  };
+  const stagePipelineSelectedRegion = availableRegions.find((region) => region.code === stagePipelineRegion);
+  const stagePipelineRegionSites = stagePipelineSelectedRegion?.sites || trendAvailableSites;
+  const stagePipelineSiteOptions = [...new Set(stagePipelineRegionSites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
+  const activeStagePipelineSite = stagePipelineSite === "all" || stagePipelineSiteOptions.includes(stagePipelineSite) ? stagePipelineSite : "all";
+  const stagePipelineScopeSites = activeStagePipelineSite === "all" ? stagePipelineSiteOptions : [activeStagePipelineSite];
+  const stagePipelineMatchesShift = (record = {}, stage = "") => stagePipelineShift === "all" || timestampMatchesShift(stagePipelineStageTimestamp(record, stage), { site: record.site || record.reportSite || record.currentLocation || record.location, shifts: shiftRecords, shift: stagePipelineShift });
+  const stagePipelineMatchesDate = (record = {}, stage = "") => {
+    if (!stagePipelineFrom && !stagePipelineTo) return true;
+    const date = requestDateKey(stagePipelineStageTimestamp(record, stage));
+    if (!date) return false;
+    return (!stagePipelineFrom || date >= stagePipelineFrom) && (!stagePipelineTo || date <= stagePipelineTo);
+  };
+  const stagePipelineRequests = scopedBreakdowns.filter((record) => {
+    const stage = stagePipelineRequestStage(record);
+    return stage
+      && stagePipelineScopeSites.some((site) => recordBelongsToSite(record, site))
+      && stagePipelineMatchesShift(record, stage)
+      && stagePipelineMatchesDate(record, stage);
+  });
+  const stagePipelineRows = stagePipelineSiteOptions.map((site) => {
+    const stageCounts = Object.fromEntries(stagePipelineStages.map((stage) => [stage.key, stagePipelineRequests.filter((record) => recordBelongsToSite(record, site) && stagePipelineRequestStage(record) === stage.key).length]));
+    return { site, counts: stageCounts, total: Object.values(stageCounts).reduce((sum, value) => sum + value, 0) };
+  }).filter((row) => row.total > 0 || stagePipelineSiteOptions.length <= 8);
+  const stagePipelineTotals = Object.fromEntries(stagePipelineStages.map((stage) => [stage.key, stagePipelineRequests.filter((record) => stagePipelineRequestStage(record) === stage.key).length]));
+  const stagePipelineTotal = Object.values(stagePipelineTotals).reduce((sum, value) => sum + value, 0);
+  const stagePipelineDisplayRows = [...stagePipelineRows, { site: "All sites", siteKey: "all", counts: stagePipelineTotals, total: stagePipelineTotal }];
+  const stagePipelineKey = (stage, site = "all") => `stage-pipeline:${stage}|${encodeURIComponent(site || "all")}`;
+  const stagePipelineDateLabel = stagePipelineFrom || stagePipelineTo ? formatDisplayDateRange(stagePipelineFrom || stagePipelineTo, stagePipelineTo || stagePipelineFrom) : "All dates";
+  const stagePipelineScopeLabel = activeStagePipelineSite !== "all" ? activeStagePipelineSite : stagePipelineSelectedRegion?.code || "All regions";
+  const stagePipelineShiftLabel = stagePipelineShift === "all" ? "All shifts" : dashboardShiftOptions.find((shift) => shift.key === stagePipelineShift)?.label || stagePipelineShift;
+  const resetStagePipelineDates = () => { setStagePipelineFrom(""); setStagePipelineTo(""); };
+  const stagePipelineExportColumns = [
+    { key: "site", label: "Site", value: (row) => row.site },
+    { key: "total", label: "Total", value: (row) => row.total },
+    ...stagePipelineStages.map((stage) => ({ key: stage.key, label: stage.label, value: (row) => row.counts[stage.key] || 0 })),
+  ];
+  const stagePipelineSectionTable = () => ({
+    title: `Vehicle Stage Pipeline · ${stagePipelineScopeLabel} · ${stagePipelineShiftLabel} · ${stagePipelineDateLabel}`,
+    columns: stagePipelineExportColumns,
+    rows: stagePipelineDisplayRows,
+  });
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
     return {
@@ -1961,6 +2044,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const [, kind, date] = key.split(":");
       return requestAssetRows(kind === "forecast" ? forecastBasisRows(trendRequestsForShift, breakdownTrendAnchorKey, dashboardRecordDate) : recordedTrendRows(trendRequestsForShift, actualTrendDays, dashboardRecordDate, kind === "actual" ? date : ""));
     }
+    if (key.startsWith("stage-pipeline:")) {
+      const [stage, siteValue = "all"] = key.slice(15).split("|");
+      const site = decodeURIComponent(siteValue || "all");
+      return requestAssetRows(stagePipelineRequests.filter((record) => (site === "all" || recordBelongsToSite(record, site)) && stagePipelineRequestStage(record) === stage));
+    }
     if (key.startsWith("event:")) {
       const [, event, date] = key.split(":");
       if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
@@ -1973,7 +2061,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return [];
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
-  const requestDrilldownKey = (key = "") => key === "open-cases" || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
+  const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
   const fleetDrilldownRequests = (key = "") => key === "fleet-breakdown:account" ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
@@ -1993,10 +2081,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
   const movementDrilldownParts = assetDrilldown.startsWith("movement:") ? assetDrilldown.slice(9).split("|") : assetDrilldown.startsWith("balance:") ? assetDrilldown.slice(8).split("|") : [];
   const siteTotalDrilldownParts = assetDrilldown.startsWith("site-total:") ? assetDrilldown.slice(11).split("|") : [];
+  const stagePipelineDrilldownParts = assetDrilldown.startsWith("stage-pipeline:") ? assetDrilldown.slice(15).split("|") : [];
+  const stagePipelineDrilldownStage = stagePipelineStages.find((stage) => stage.key === stagePipelineDrilldownParts[0]);
+  const stagePipelineDrilldownSite = stagePipelineDrilldownParts.length ? decodeURIComponent(stagePipelineDrilldownParts[1] || "all") : "";
   // These Total Fleet chart lists already name their single site in the modal title.
   const hideFleetChartLocation = ["site-total:", "site:", "offroad-site:"].some((prefix) => assetDrilldown.startsWith(prefix));
   const hideFleetChartCategory = /^(?:site-total|offroad-site):.+\|(equipment|vehicles)$/.test(assetDrilldown);
-  const initialDrilldownSite = siteScopedSite || siteTotalDrilldownParts[0] || movementDrilldownParts[3] || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
+  const initialDrilldownSite = siteScopedSite || siteTotalDrilldownParts[0] || movementDrilldownParts[3] || (stagePipelineDrilldownSite && stagePipelineDrilldownSite !== "all" ? stagePipelineDrilldownSite : "") || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
   const initialDrilldownRegion = assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("balance:") || assetDrilldown.startsWith("trend:");
@@ -2008,12 +2099,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
     : "";
+  const stagePipelineDrilldownTitle = stagePipelineDrilldownStage ? `${stagePipelineDrilldownSite === "all" ? "All sites" : stagePipelineDrilldownSite} · ${stagePipelineDrilldownStage.label}` : "";
   const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown === "fleet-breakdown:account" ? "All assigned sites · " : assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] + " · " + (assetDrilldown.endsWith("|vehicles") ? "Vehicles · " : assetDrilldown.endsWith("|equipment") ? "Equipment · " : "") : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}BD Balance` : "";
   // The account count opens the breakdown fleet across every assigned site.
   const siteTotalDrilldownTitle = assetDrilldown.startsWith("category-group:")
     ? `${assetDrilldown.slice(15).split("|").slice(1).join("|")} · ${assetDrilldown.startsWith("category-group:vehicle|") ? "Vehicles" : "Equipment"}`
     : siteTotalDrilldownParts.length ? `${siteTotalDrilldownParts[0]} · ${siteTotalDrilldownParts[1] === "vehicles" ? "Vehicle" : "Equipment"} records` : "";
-  const assetDrilldownTitle = siteTotalDrilldownTitle || fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${formatDisplayDate(lifecycleDrilldownParts[2])}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
+  const assetDrilldownTitle = siteTotalDrilldownTitle || fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || stagePipelineDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${formatDisplayDate(lifecycleDrilldownParts[2])}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
   const dashboardScopeLabel = dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || (restrictToScope ? "All assigned locations" : "All regions");
   const dashboardPeriodLabel = breakdownSummaryPeriodLabel;
   const dashboardExportRows = [
@@ -2081,6 +2173,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         { name: "Availability Count", ...throughputSectionTable("road") },
         { name: "Request Lifecycle", ...lifecycleSectionTable() },
         breakdownTrend.length > 0 && { name: "Breakdown trend", ...trendSectionTable() },
+        { name: "Stage Pipeline", ...stagePipelineSectionTable() },
       ]),
     ]),
   ].filter(Boolean);
@@ -2250,7 +2343,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div className="mine-request-lifecycle-end-controls">
                 <label><span>To</span><DateInput aria-label="Request lifecycle to date" value={requestTrendTo || requestTrendEndKey} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
                 <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
-                {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Request lifecycle shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}>{dashboardShiftOptions.map((shift) => <option key={shift.value} value={shift.value}>{shift.label}</option>)}</select></label>}
+                {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Request lifecycle shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}
               </div>
               {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
             </div>
@@ -2322,7 +2415,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {!showOemBreakdowns && <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>{dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Breakdown trend shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}>{dashboardShiftOptions.map((shift) => <option key={shift.value} value={shift.value}>{shift.label}</option>)}</select></label>}<label className="mine-trend-anchor"><span>From</span><DateInput aria-label="Breakdown trend from date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><DateInput aria-label="Breakdown trend to date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-summary-row"><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div>{equipmentLoaded && breakdownTrend.length > 0 && <ExportMenu {...trendSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button>{equipmentLoaded && <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>}</div></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>{dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Breakdown trend shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}<label className="mine-trend-anchor"><span>From</span><DateInput aria-label="Breakdown trend from date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><DateInput aria-label="Breakdown trend to date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-summary-row"><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div>{equipmentLoaded && breakdownTrend.length > 0 && <ExportMenu {...trendSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button>{equipmentLoaded && <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>}</div></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b aria-label="Breakdown trend selected period">From: {formatDisplayDate(breakdownTrendStartKey)} · To: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendPeriodDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }}><b>{day.count}</b></i></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendPeriodDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
@@ -2338,6 +2431,30 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-performance-state" />}
       </article>
       </section>}
+      {!showOemBreakdowns && <article className="mine-panel mine-stage-pipeline" aria-label="Site-wise vehicle stage pipeline">
+        <header><div><span className="mine-eyebrow">Workflow bottlenecks</span><h2>Vehicle Stage Pipeline</h2><p>{stagePipelineScopeLabel} · {stagePipelineShiftLabel} · {stagePipelineDateLabel}</p></div><div className="mine-stage-pipeline-controls"><label><span>Region</span><select aria-label="Vehicle stage pipeline region" value={stagePipelineRegion} onChange={(event) => { setStagePipelineRegion(event.target.value); setStagePipelineSite("all"); }}><option value="all">All regions</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><label><span>Site</span><select aria-label="Vehicle stage pipeline site" value={activeStagePipelineSite} onChange={(event) => setStagePipelineSite(event.target.value)}><option value="all">All sites</option>{stagePipelineSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>{dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Vehicle stage pipeline shift" value={stagePipelineShift} onChange={(event) => setStagePipelineShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}<label><span>From</span><DateInput aria-label="Vehicle stage pipeline from date" max={stagePipelineTo || todayKey} value={stagePipelineFrom} onChange={(event) => setStagePipelineFrom(event.target.value)} /></label><label><span>To</span><DateInput aria-label="Vehicle stage pipeline to date" min={stagePipelineFrom || undefined} max={todayKey} value={stagePipelineTo} onChange={(event) => setStagePipelineTo(event.target.value)} /></label><button type="button" className="mine-stage-pipeline-reset" onClick={resetStagePipelineDates}>Reset dates</button>{equipmentLoaded && <ExportMenu {...stagePipelineSectionTable()} className="mine-stage-pipeline-export" label="Actions" printSection />}</div><strong>{equipmentLoaded ? stagePipelineTotal.toLocaleString() : "—"} in pipeline</strong></header>
+        {equipmentLoaded ? <div className="mine-stage-pipeline-body">
+          <div className="mine-stage-pipeline-table-wrap">
+            <table className="mine-stage-pipeline-table">
+              <thead><tr><th>Site</th><th>Stage mix</th>{stagePipelineStages.map((stage) => <th key={stage.key}>{stage.label}</th>)}</tr></thead>
+              <tbody>{stagePipelineDisplayRows.map((row) => {
+                const siteKey = row.siteKey || row.site;
+                const total = row.total || 0;
+                const mix = stagePipelineStages.map((stage) => `${total ? Math.max(0, row.counts[stage.key] || 0) : 1}fr`).join(" ");
+                return <tr key={siteKey} className={siteKey === "all" ? "total" : ""}>
+                  <td><b>{row.site}</b><span>{total.toLocaleString()} asset{total === 1 ? "" : "s"}</span></td>
+                  <td><div className="mine-stage-mix" style={{ "--stage-mix": mix }}>{stagePipelineStages.map((stage) => <i key={stage.key} className={stage.className} title={`${stage.label}: ${(row.counts[stage.key] || 0).toLocaleString()}`} />)}</div></td>
+                  {stagePipelineStages.map((stage) => {
+                    const value = row.counts[stage.key] || 0;
+                    return <td key={stage.key}><button type="button" className={stage.className} disabled={!value} onClick={() => openAssetDrilldown(stagePipelineKey(stage.key, siteKey))} aria-label={`${row.site}: ${value} ${stage.label}`}>{value.toLocaleString()}</button></td>;
+                  })}
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
+          <div className="mine-stage-pipeline-legend">{stagePipelineStages.map((stage) => <span key={stage.key}><i className={stage.className} />{stage.shortLabel}</span>)}</div>
+        </div> : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-stage-pipeline-state" />}
+      </article>}
     </div>
   );
 }
