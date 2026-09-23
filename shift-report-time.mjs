@@ -3,6 +3,8 @@ import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {normalizeShiftRecord} from './shift-master.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 
+export const ALL_SHIFTS_KEY = 'all';
+
 const clean = value => String(value ?? '').trim();
 const secondsOfDay = value => {
   const [hour, minute, second = '0'] = clean(value).split(':').map(Number);
@@ -27,6 +29,16 @@ function safeShiftRecords(records = []) {
   }).filter((record) => record.status !== 'Inactive');
 }
 
+export function shiftFilterOptions(records = []) {
+  const options = new Map();
+  for (const shift of safeShiftRecords(records)) {
+    const key = clean(shift.shiftCode).toUpperCase();
+    if (!key || options.has(key)) continue;
+    options.set(key,{key,label:`${key} Shift`});
+  }
+  return [...options.values()].sort((a,b)=>a.key.localeCompare(b.key,undefined,{numeric:true}));
+}
+
 function shiftCoversTime(shift, value) {
   const time = localSecondOfDay(value), start = secondsOfDay(shift.startTime), end = secondsOfDay(shift.endTime);
   if (!Number.isFinite(time) || !Number.isFinite(start) || !Number.isFinite(end)) return false;
@@ -44,6 +56,13 @@ export function resolveShiftForTimestamp(value, {site = '', shifts = []} = {}) {
   const candidates = safeShiftRecords(shifts)
     .filter((shift) => canonicalSiteName(shift.site) === siteKey && shiftEffectiveForDate(shift, value));
   return candidates.find((shift) => shiftCoversTime(shift, value)) || null;
+}
+
+export function timestampMatchesShift(value, {site = '', shifts = [], shift = ALL_SHIFTS_KEY} = {}) {
+  const selected = clean(shift).toUpperCase();
+  if (!selected || selected.toLowerCase() === ALL_SHIFTS_KEY) return true;
+  const resolved = resolveShiftForTimestamp(value,{site,shifts});
+  return clean(resolved?.shiftCode).toUpperCase() === selected;
 }
 
 export function formatShiftDateTime(value, {site = '', shifts = [], emptyValue = 'Not recorded'} = {}) {

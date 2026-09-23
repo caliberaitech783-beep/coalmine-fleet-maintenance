@@ -5882,6 +5882,12 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       FROM maintenance_requests
       WHERE lower(trim(status)) <> 'closed'
         OR (started_at < $1 AND (closed_at IS NULL OR closed_at >= $1))`,[countDay.openingAt]);
+    const {rows:shiftRows}=await pool.query(`SELECT id,record_data FROM master_records
+      WHERE master_name='Shift Master' ORDER BY created_at ASC`);
+    const shiftRecords=shiftRows.map(({id,record_data})=>({
+      id,
+      ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
+    })).filter(row=>!scope.restrictToScope||!Array.isArray(scope.allowedSites)||!scope.allowedSites.length||scope.allowedSites.some(site=>String(site||'').trim().toLowerCase()===String(row.site||'').trim().toLowerCase()));
     const activeFleetRequests=fleetRequests.filter(row=>row.currentlyActive??String(row.status||'').trim().toLowerCase()!=='closed');
     const openingFleetRequests=fleetRequests.filter(row=>row.openAtMidnight).map(row=>({...row,status:row.midnightStatus}));
     const fleetSnapshot=dashboardFleetSnapshot(records,activeFleetRequests);
@@ -5896,6 +5902,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
     const payload={
       records:scopedFleet,
       scope,
+      shiftRecords,
       breakdownCountChange,
       nextCountDayAt:countDay.nextMidnightAt.toISOString(),
     };

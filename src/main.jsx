@@ -80,7 +80,7 @@ import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../depar
 import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
-import { formatShiftDateTime } from "../shift-report-time.mjs";
+import { ALL_SHIFTS_KEY, formatShiftDateTime, shiftFilterOptions, timestampMatchesShift } from "../shift-report-time.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
@@ -1084,6 +1084,7 @@ function availabilityPercentFromCounts(row = {}) {
 function useDashboardEquipment() {
   const [records, setRecords] = useState([]);
   const [scope, setScope] = useState(null);
+  const [shiftRecords, setShiftRecords] = useState([]);
   const [breakdownCountChange, setBreakdownCountChange] = useState(null);
   const [nextCountDayAt, setNextCountDayAt] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -1100,6 +1101,7 @@ function useDashboardEquipment() {
       loadedFleetScope.current = {token: authToken, loaded: false};
       setRecords([]);
       setScope(null);
+      setShiftRecords([]);
       setBreakdownCountChange(null);
       setNextCountDayAt("");
       setUpdatedAt(0);
@@ -1143,6 +1145,7 @@ function useDashboardEquipment() {
         setRecords(data.records);
         setScope(data.scope);
         setLoaded(true);
+        setShiftRecords(Array.isArray(data.shiftRecords) ? data.shiftRecords : []);
         setLoadError("");
         setUpdatedAt(Date.now());
       })
@@ -1152,6 +1155,7 @@ function useDashboardEquipment() {
             loadedFleetScope.current.loaded = false;
             setRecords([]);
             setScope(null);
+            setShiftRecords([]);
             setBreakdownCountChange(null);
             setNextCountDayAt("");
             setUpdatedAt(0);
@@ -1174,7 +1178,7 @@ function useDashboardEquipment() {
     const timer = window.setTimeout(() => setLoadAttempt((attempt) => attempt + 1), Math.max(0, Date.parse(nextCountDayAt) - Date.now() + 250));
     return () => window.clearTimeout(timer);
   }, [sameSession, nextCountDayAt]);
-  return {records: sameSession ? records : [], scope: sameSession ? scope : null, breakdownCountChange: sameSession ? breakdownCountChange : null, loaded: sameSession && loaded, loadError: sameSession ? loadError : "", updatedAt: sameSession ? updatedAt : 0, retry: () => setLoadAttempt((attempt) => attempt + 1)};
+  return {records: sameSession ? records : [], scope: sameSession ? scope : null, shiftRecords: sameSession ? shiftRecords : [], breakdownCountChange: sameSession ? breakdownCountChange : null, loaded: sameSession && loaded, loadError: sameSession ? loadError : "", updatedAt: sameSession ? updatedAt : 0, retry: () => setLoadAttempt((attempt) => attempt + 1)};
 }
 
 function FleetDataState({ error = "", retry, className = "" }) {
@@ -1450,7 +1454,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     window.addEventListener('resize', updateOffset);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
   }, []);
-  const {records:equipmentRecords,scope:equipmentScope,breakdownCountChange,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
+  const {records:equipmentRecords,scope:equipmentScope,shiftRecords,breakdownCountChange,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
@@ -1485,6 +1489,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   }, []);
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
+  const [dashboardShift, setDashboardShift] = useState("all");
   const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
   const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
@@ -1529,6 +1534,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardRangeActive = Boolean(dashboardFrom && dashboardTo);
   const dashboardIsLive = !dashboardTo || dashboardTo === todayKey;
   const filteredDateLabel = !dashboardRangeActive ? "All time" : dashboardFrom === dashboardTo ? formatDisplayDate(dashboardTo) : formatDisplayDateRange(dashboardFrom, dashboardTo);
+  const shiftOptionsForDashboard = typeof shiftFilterOptions === "function" ? shiftFilterOptions : () => [];
+  const timestampMatchesDashboardShift = typeof timestampMatchesShift === "function" ? timestampMatchesShift : (_value, {shift = "all"} = {}) => !shift || shift === "all";
+  const dashboardShiftOptions = useMemo(() => shiftOptionsForDashboard(shiftRecords), [shiftRecords]);
+  useEffect(() => {
+    if (dashboardShift === "all" || dashboardShiftOptions.some((option) => option.key === dashboardShift)) return;
+    setDashboardShift("all");
+  }, [dashboardShift, dashboardShiftOptions.map((option) => option.key).join("|")]);
+  const dashboardShiftLabel = dashboardShiftOptions.find((option) => option.key === dashboardShift)?.label || "All shifts";
+  const dashboardShiftDetail = dashboardShift === "all" ? "" : `; ${dashboardShiftLabel}`;
   const updateDashboardRange = (bound, value) => {
     if (!value) { setDashboardFrom(""); setDashboardTo(""); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
@@ -1540,6 +1554,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const restrictToScope=equipmentScope?.restrictToScope===true;
   const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
   const scopedBreakdowns=equipmentLoaded?(normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests):[];
+  const requestMatchesDashboardShift = (record = {}, value) => timestampMatchesDashboardShift(value,{site:record.site||record.reportSite||record.currentLocation||record.location,shifts:shiftRecords,shift:dashboardShift});
+  const requestHasSelectedDashboardShift = (record = {}) => dashboardShift === "all" || [
+    record.start,record.createdAt,record.acceptedAt,record.inProgressAt,record.closedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,record.idealRequestedAt,record.idealApprovedAt,
+  ].some((value)=>requestMatchesDashboardShift(record,value));
   const availableRegions=subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -1553,13 +1571,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     const {assetIndex} = resolveEquipment(request);
     return assetIndex === null ? undefined : visibleEquipment[assetIndex];
   };
-  const locationBreakdowns = selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
+  const locationBreakdowns = selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site)) && requestHasSelectedDashboardShift(record)) : scopedBreakdowns.filter(requestHasSelectedDashboardShift);
   const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardFrom, dashboardTo);
   const visibleBreakdowns = historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
-  const breakdownCountReady = equipmentLoaded && Boolean(breakdownCountChange);
+  const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
@@ -1732,7 +1750,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setDashboardOem(filters.oem);
     setOemDrilldownKind("breakdown");
   };
-  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardOem("all"); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
+  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
   // Derive the open list from the current filters and data on every render.
   const oemSelection = createOemBreakdownSelection(oemChart);
   const oemDrilldown = oemDrilldownKind ? {
@@ -1966,19 +1984,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Fleet", metric: "Off road", value: kpis.offRoad, scope: dashboardScopeLabel, details: "Unavailable for operations" },
     { section: "Fleet", metric: "Idle", value: kpis.idle, scope: dashboardScopeLabel, details: "Available but not utilized" },
     { section: "Fleet", metric: "Overall availability", value: `${availabilityPercent}%`, scope: dashboardScopeLabel, details: `${availableFleet} on-road and idle assets` },
-    { section: "Breakdown movement", metric: "BD Open", value: breakdownMovementTotals.open, scope: dashboardPeriodLabel, details: throughputScopeLabel },
-    { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: throughputScopeLabel },
-    { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: throughputScopeLabel },
-    { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: throughputScopeLabel },
-    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance` })),
+    { section: "Breakdown movement", metric: "BD Open", value: breakdownMovementTotals.open, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
+    { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
+    { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
+    { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
+    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance${dashboardShiftDetail}` })),
     ...breakdownSiteSummary.map((site) => {
       const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
       return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${availabilityPercentFromCounts(road)}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
     }),
-    { section: "Request lifecycle", metric: "Opened", value: requestLifecycleRows.opened.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
-    { section: "Request lifecycle", metric: "Closed", value: requestLifecycleRows.closed.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
-    { section: "Request lifecycle", metric: "MIS verified", value: requestLifecycleRows.verified.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
-    { section: "Request lifecycle", metric: "Idle", value: requestLifecycleRows.idle.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
+    { section: "Request lifecycle", metric: "Opened", value: requestLifecycleRows.opened.length, scope: requestLifecycleRangeLabel, details: `${dashboardScopeLabel}${dashboardShiftDetail}` },
+    { section: "Request lifecycle", metric: "Closed", value: requestLifecycleRows.closed.length, scope: requestLifecycleRangeLabel, details: `${dashboardScopeLabel}${dashboardShiftDetail}` },
+    { section: "Request lifecycle", metric: "MIS verified", value: requestLifecycleRows.verified.length, scope: requestLifecycleRangeLabel, details: `${dashboardScopeLabel}${dashboardShiftDetail}` },
+    { section: "Request lifecycle", metric: "Idle", value: requestLifecycleRows.idle.length, scope: requestLifecycleRangeLabel, details: `${dashboardScopeLabel}${dashboardShiftDetail}` },
   ];
   const openAssetDrilldown = (key) => {
     setBreakdownDayReturnSite("");
@@ -2030,7 +2048,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   ].filter(Boolean);
   // The whole dashboard: PDF and Smart Print capture it as it is on screen; Excel has every section.
   const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Export dashboard" dashboardPdf />;
-  const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><DateInput aria-label="Dashboard from date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><DateInput aria-label="Dashboard to date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => setDashboardOem(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
+  const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-shift-filter"><span>Shift Master</span><select aria-label="Shift Master" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label><label className="mine-date-filter"><span>From</span><DateInput aria-label="Dashboard from date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><DateInput aria-label="Dashboard to date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => setDashboardOem(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}{dashboardShift !== "all" ? ` · ${dashboardShiftLabel}` : ""}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
@@ -6542,6 +6560,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [availabilityFrom, setAvailabilityFrom] = useState(() => `${indiaDateTimeInputValue(new Date()).slice(0,7)}-01`);
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
+  const [selectedReportShift, setSelectedReportShift] = useState(ALL_SHIFTS_KEY);
   const [offRoadAge, setOffRoadAge] = useState("all");
   const [showAllAcceptances, setShowAllAcceptances] = useState(false);
   const [reportNow, setReportNow] = useState(() => new Date());
@@ -6579,6 +6598,25 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportSite: displaySiteName(request.site || equipment?.currentLocation || equipment?.location),
     };
   }), [requests, equipmentByReference]);
+  const reportShiftOptions = useMemo(() => shiftFilterOptions(shiftRecords), [shiftRecords]);
+  useEffect(() => {
+    if (selectedReportShift === ALL_SHIFTS_KEY || reportShiftOptions.some((option) => option.key === selectedReportShift)) return;
+    setSelectedReportShift(ALL_SHIFTS_KEY);
+  }, [selectedReportShift, reportShiftOptions.map((option) => option.key).join("|")]);
+  const rowShiftSite = (row = {}) => row.reportSite || row.site || row.currentLocation || row.location || row.destination || row.source;
+  const eventMatchesSelectedReportShift = (row, value, shift = selectedReportShift) => timestampMatchesShift(value,{site:rowShiftSite(row),shifts:shiftRecords,shift});
+  const requestMatchesSelectedReportShift = (row, shift = selectedReportShift) => shift === ALL_SHIFTS_KEY || [
+    row.start,row.createdAt,row.acceptedAt,row.inProgressAt,row.closedAt,row.verifiedAt,row.firstTripAt,row.productionFirstTripAt,row.arrivalFlaggedAt,row.misFlaggedAt,row.idealRequestedAt,row.idealApprovedAt,
+  ].some((value) => eventMatchesSelectedReportShift(row,value,shift));
+  const shiftFilterExemptReports = new Set(["Report for On Road / Off Road & Idle","Vehicle Transfer Report","Total Equipment / Vehicle Location Wise","Total Fleet"]);
+  const reportRowsForShift = (report, rows, shift = selectedReportShift) => shift === ALL_SHIFTS_KEY ? rows : rows.filter((row) => {
+    if (shiftFilterExemptReports.has(report?.title)) return true;
+    const value = report?.dateValue?.(row);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim())) return true;
+    if (!Number.isFinite(indiaDateTimeEpoch(value))) return true;
+    return eventMatchesSelectedReportShift(row,value,shift);
+  });
+  const shiftScopedReportRequests = selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row));
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
   const formatTimestamp = (value, row = {}) => shiftRecords?.length
     ? formatShiftDateTime(value,{site:row.reportSite||row.site||row.currentLocation||row.location,shifts:shiftRecords,emptyValue:"—"})
@@ -6722,7 +6760,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
     {category: "maintenance", title: VEHICLE_REPAIR_HISTORY_REPORT, description: "Complete breakdown and repair history for a selected vehicle, including the reported problem and work completed.", rows: vehicleHistoryReportRows, columns: repairHistoryColumns, dateValue: (row) => row.closedAt || row.start, emptyMessage: "No repair history is available for the selected vehicle", vehicleHistoryFilter: true},
-    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
+    ...buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
       columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
@@ -6742,12 +6780,12 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
   const invalidReportRange = Boolean(reportFrom && reportTo && !validReportDateRange(reportFrom, reportTo));
-  const selectedReportRows = invalidReportRange ? [] : (selectedReport?.rows || []).filter(row => {
+  const selectedReportRows = invalidReportRange ? [] : reportRowsForShift(selectedReport,(selectedReport?.rows || []).filter(row => {
     if (selectedReport.title === "Open Off road Cases" && offRoadAge === "ten" && !olderThanTenDays(row, reportNow)) return false;
     if (selectedReport.title === "Availability Report" || (!reportFrom && !reportTo)) return true;
     const timestamp = indiaDateTimeEpoch(selectedReport.dateValue?.(row));
     return Number.isFinite(timestamp) && (!reportFrom || timestamp >= indiaDateTimeEpoch(reportFrom)) && (!reportTo || timestamp <= indiaDateTimeEpoch(reportTo));
-  });
+  }));
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
@@ -6877,9 +6915,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
-        const filteredRows = report.title === "Availability Report"
-          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
-          : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
+        const zipRequests = selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row,selectedReportShift));
+        const filteredRows = reportRowsForShift(report,report.title === "Availability Report"
+          ? buildDepartmentReports({requests:zipRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
+          : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo), selectedReportShift);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetch("/api/exports/pdf", {
           method: "POST",
@@ -7061,6 +7100,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
       {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
+      {selectedReport && reportShiftOptions.length > 0 && <div className="mobile-tabs report-shift-tabs" aria-label="Shift Master filter">
+        <button type="button" className={selectedReportShift === ALL_SHIFTS_KEY ? "active" : ""} onClick={() => setSelectedReportShift(ALL_SHIFTS_KEY)}>All shifts</button>
+        {reportShiftOptions.map((option) => <button type="button" key={option.key} className={selectedReportShift === option.key ? "active" : ""} onClick={() => setSelectedReportShift(option.key)}>{option.label}</button>)}
+      </div>}
       {selectedReport?.title === "Open Off road Cases" && <div className="mobile-tabs" aria-label="Off-road age filter">
         <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
         <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>
