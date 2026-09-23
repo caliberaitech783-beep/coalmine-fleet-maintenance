@@ -26,6 +26,7 @@ import * as displayDates from "../date-time-format.mjs";
 import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
 import {isDurationColumn, compareDurationValues} from "../src/duration-sort.mjs";
 import * as sectionExport from "../src/dashboard-section-export.mjs";
+import {requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function Dashboard("), source.indexOf("const PRODUCTION_REQUEST_COLUMNS"));
@@ -189,6 +190,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    requestsVisibleToDashboard,
     encodeDateRange, parseDateRange,
     FilterableHeader() {},
     openHourlyBreakdownTab() {},
