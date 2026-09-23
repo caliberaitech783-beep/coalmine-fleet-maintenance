@@ -6472,7 +6472,6 @@ function ReportSection({ title, description, category = "general", icon: ReportI
           <span className="generated-report-icon"><ReportIcon aria-hidden="true" /></span>
           <div>
             <h2>{title}</h2>
-            <p>{description}</p>
           </div>
         </div>
         <div className="generated-report-heading-actions">
