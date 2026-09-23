@@ -6,6 +6,16 @@ import { indiaDateTimeEpoch } from "./report-date-range.mjs";
 export const DUDHICHUA_OPERATIONAL_HIDE_CUTOFF = "2026-09-23T05:04:18Z";
 const OPERATIONAL_ROLES = new Set(["Production User", "Maintenance User", "MIS User"]);
 
+// Dashboard-only exclusion also applies to administrators, without changing
+// their underlying request feed, workspaces, history or stored records.
+export function requestsVisibleToDashboard(rows = []) {
+  return rows.filter((row) => {
+    if (canonicalSiteName(row?.site) !== "dudhichua ob") return true;
+    const created = indiaDateTimeEpoch(row?.createdAt);
+    return !Number.isFinite(created) || created > Date.parse(DUDHICHUA_OPERATIONAL_HIDE_CUTOFF);
+  });
+}
+
 export const MIS_HIDDEN_REQUEST_REFERENCES = new Set([
   "REQ-1787994776734",
   "REQ-1787994588710",
@@ -35,12 +45,9 @@ export function requestsVisibleGlobally(rows = []) {
 
 // Apply the same exclusions to authenticated MIS users and embedded MIS workspaces.
 export function requestsVisibleToSession(rows = [], session = {}) {
-  const globallyVisibleRows = requestsVisibleGlobally(rows).filter((row) => {
-    if (session?.role !== "normal" || !OPERATIONAL_ROLES.has(session?.assignedRole)) return true;
-    if (canonicalSiteName(row?.site) !== "dudhichua ob") return true;
-    const created = indiaDateTimeEpoch(row?.createdAt);
-    return !Number.isFinite(created) || created > Date.parse(DUDHICHUA_OPERATIONAL_HIDE_CUTOFF);
-  });
+  const visibleRows = requestsVisibleGlobally(rows);
+  const globallyVisibleRows = session?.role === "normal" && OPERATIONAL_ROLES.has(session?.assignedRole)
+    ? requestsVisibleToDashboard(visibleRows) : visibleRows;
   if (session?.role !== "normal" || session?.assignedRole !== "MIS User") return globallyVisibleRows;
   return requestsVisibleToMisWorkspace(globallyVisibleRows, true);
 }

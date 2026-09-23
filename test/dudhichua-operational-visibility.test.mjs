@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { requestsVisibleToSession, requestsVisibleGlobally } from "../mis-request-visibility.mjs";
+import { requestsVisibleToSession, requestsVisibleGlobally, requestsVisibleToDashboard } from "../mis-request-visibility.mjs";
+import { readFileSync } from "node:fs";
 
 const oldRows = ["Open", "Accepted", "In progress", "Closed", "Idle", "Ideal", "Verified"].map((status, i) => ({ ref: `REQ-OLD-${i}`, site: "Dudhichua OB", createdAt: "2026-09-22 15:00:00", status }));
 const keep = [
@@ -8,6 +9,14 @@ const keep = [
   { site: "Dudhichua East OB", createdAt: "2026-09-22 15:00:00" },
   { site: "Majri OB", createdAt: "2026-09-22 15:00:00" },
 ];
+test("dashboard excludes old Dudhichua rows while the Admin feed retains them", () => {
+  const adminRows = requestsVisibleToSession([...oldRows, ...keep], {role:"super"});
+  assert.deepEqual(adminRows, [...oldRows, ...keep]);
+  assert.deepEqual(requestsVisibleToDashboard(adminRows), keep);
+  assert.deepEqual(adminRows, [...oldRows, ...keep]);
+  const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(source, /function Dashboard\([\s\S]*?const requests = useMemo\(\(\) => requestsVisibleToDashboard\(sourceRequests\), \[sourceRequests\]\);/);
+});
 test("existing Dudhichua requests of every status are hidden only from the three operational roles", () => {
   for (const assignedRole of ["Production User", "Maintenance User", "MIS User"]) {
     assert.deepEqual(requestsVisibleToSession([...oldRows, ...keep], { role: "normal", assignedRole }), keep);

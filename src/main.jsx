@@ -116,7 +116,7 @@ import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
 import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
-import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
+import {requestsVisibleToMisWorkspace, requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
 import {startVisiblePoll} from "./visible-poll.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
@@ -1417,7 +1417,8 @@ function oemChartPlotSpace(article) {
   }
   return Math.round(room - axisChrome - below - OEM_CHART_VIEWPORT_GAP);
 }
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
+  const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
   useEffect(() => {
