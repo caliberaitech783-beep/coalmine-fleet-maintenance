@@ -5686,7 +5686,6 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
     if(!reportScopeIncludesSite(scope,request.site))throw Object.assign(new Error('This request belongs to a different production location.'),{status:403});
     if(String(request.status||'').trim()!=='Closed'||!request.closed_at)throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
-    if(request.verified_at||String(request.verification_status||'').trim()==='Verified')throw Object.assign(new Error('Production first-trip entry is already closed because MIS verification is completed.'),{status:409});
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
@@ -5744,13 +5743,10 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
-    const productionFirstTripRequired=isProductionFirstTripRequired(existing);
-    if(productionFirstTripRequired&&!String(existing.productionFirstTripAt||'').trim())return res.status(409).json({error:'Production first-trip entry is pending. Complete the Production first-trip entry before MIS verification.'});
     if(!firstTripDone)return res.status(400).json({error:'MIS first-trip confirmation is mandatory before completing verification.'});
     const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
     if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
-    if(isProductionFirstTripRequired(before)&&!String(before.productionFirstTripAt||'').trim())throw Object.assign(new Error('Production first-trip entry is pending. Complete the Production first-trip entry before MIS verification.'),{status:409});
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';

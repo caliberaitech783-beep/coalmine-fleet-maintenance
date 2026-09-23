@@ -5,12 +5,13 @@ import {PRODUCTION_FIRST_TRIP_ROLLOUT_IST, PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL, 
 
 const istLabel = (ms) => new Date(ms + 330 * 60_000).toISOString().slice(0, 19);
 
-test('production first trip API follows the MIS pending queue lifecycle', () => {
+test('production first trip API stays open after MIS verification', () => {
   const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const route = server.slice(server.indexOf("app.patch('/api/requests/:reference/production-first-trip'"), server.indexOf("app.patch('/api/requests/:reference/verify'"));
   assert.equal(istLabel(productionFirstTripCutoffMs()), '2026-09-22T00:00:00');
   assert.match(route, /isProductionFirstTripRequired\(request\)/);
-  assert.match(route, /MIS verification is completed/);
+  assert.doesNotMatch(route, /MIS verification is completed/);
+  assert.doesNotMatch(route, /request\.verified_at\|\|/);
   assert.match(route, /Production first trip can be recorded only after Maintenance makes the vehicle on road\./);
   assert.match(route, /Production first-trip entry is available only for requests generated on or after \$\{PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL\}\./);
 });

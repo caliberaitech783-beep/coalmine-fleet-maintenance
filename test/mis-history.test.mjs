@@ -14,7 +14,8 @@ test("MIS queues use lifecycle state, not the closer, verifier or historical ref
         const verified = {...row, verifiedBy, verifiedAt: "2026-09-08 14:00:00"};
         assert.equal(visibleInMisRequests(verified), false);
         assert.equal(visibleInMisHistory(verified), true);
-        assert.equal(visibleInMisHistory({...verified, start: "2999-01-01 00:00:00"}), false);
+        // MIS history does not wait for the Production first-trip entry.
+        assert.equal(visibleInMisHistory({...verified, start: "2999-01-01 00:00:00"}), true);
         assert.equal(visibleInMisHistory({...verified, productionFirstTripAt: "2026-09-08 13:45:00"}), true);
       }
     }

@@ -1275,7 +1275,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const verifiedRequests = closedRequests.filter(visibleInMisHistory);
   const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
-  const productionFirstTripRows=productionManagerView?closedRequests.filter((row)=>visibleInMisRequests(row)&&isProductionFirstTripPending(row)):[];
+  const productionFirstTripRows=productionManagerView?closedRequests.filter((row)=>isProductionFirstTripPending(row)):[];
   const productionFirstTripReportRows=productionManagerView?closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim()):[];
   // Earliest request start in the counted intake, so the card says from which date the total runs.
   const maintenanceIntakeSince = scopedRequests.map((request) => String(request.start || "").trim()).filter(Boolean).sort()[0] || "";
@@ -10162,7 +10162,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
-  const productionFirstTripRows=closedRequests.filter((row)=>visibleInMisRequests(row)&&isProductionFirstTripPending(row));
+  const productionFirstTripRows=closedRequests.filter((row)=>isProductionFirstTripPending(row));
   const productionFirstTripReportRows=closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim());
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
