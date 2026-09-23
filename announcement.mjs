@@ -3,7 +3,7 @@
  * Each user sees it as a blocking popup until they close it. Closing is
  * remembered per user (not per device), so it never reappears elsewhere.
  */
-export const ANNOUNCEMENT_MAX_LENGTH = 500;
+export const ANNOUNCEMENT_MAX_LENGTH = 2000;
 export const ANNOUNCEMENT_ACTIVE_DAYS = 30;
 
 export function normalizeAnnouncement(value = "") {

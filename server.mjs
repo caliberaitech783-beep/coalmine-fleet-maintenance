@@ -741,6 +741,7 @@ async function migrate(){
       withdrawn_at TIMESTAMPTZ,
       withdrawn_by TEXT NOT NULL DEFAULT ''
     );
+    ALTER TABLE announcements ALTER COLUMN message TYPE TEXT;
     CREATE TABLE IF NOT EXISTS announcement_acknowledgements (
       announcement_id BIGINT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
       reader_key TEXT NOT NULL,

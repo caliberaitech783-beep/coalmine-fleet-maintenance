@@ -16,11 +16,12 @@ const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('../src/user-sessions.css', import.meta.url), 'utf8');
 const routeOf = (start) => server.slice(server.indexOf(start), server.indexOf('\napp.', server.indexOf(start) + start.length));
 
-test('announcement text is trimmed, required and capped at 500 characters', () => {
+test('announcement text is trimmed, required and capped at 2,000 characters', () => {
   assert.equal(normalizeAnnouncement('  Site closed tomorrow.\r\nReport at 8 AM.  '), 'Site closed tomorrow.\nReport at 8 AM.');
   assert.equal(announcementValidationError('   '), 'Write the announcement before sending.');
-  assert.equal(announcementValidationError('x'.repeat(ANNOUNCEMENT_MAX_LENGTH + 1)), 'Keep the announcement within 500 characters.');
+  assert.equal(announcementValidationError('x'.repeat(ANNOUNCEMENT_MAX_LENGTH + 1)), 'Keep the announcement within 2000 characters.');
   assert.equal(announcementValidationError('Safety briefing at 9 AM in the workshop.'), '');
+  assert.equal(announcementValidationError('प्रोडक्शन यूज़र के लिए पहली ट्रिप का वेरिफिकेशन जरूरी है।'.repeat(20)), '');
   assert.equal(ANNOUNCEMENT_ACTIVE_DAYS, 30);
 });
 
@@ -62,6 +63,7 @@ test('pending announcements exclude withdrawn ones, ones already closed by this 
   assert.match(acknowledge, /ON CONFLICT DO NOTHING/, 'closing twice is harmless');
   assert.match(acknowledge, /withdrawn_at IS NULL/, 'a withdrawn announcement cannot be acknowledged');
   assert.match(server, /CREATE TABLE IF NOT EXISTS announcements \(/);
+  assert.match(server, /ALTER TABLE announcements ALTER COLUMN message TYPE TEXT;/);
   assert.match(server, /PRIMARY KEY \(announcement_id, reader_key\)/);
 });
 
@@ -79,7 +81,8 @@ test('the shared popup polls announcements with direct messages and stays until 
 test('administrators compose announcements from the User Sessions page and can review or withdraw recent ones', () => {
   const composer = source.slice(source.indexOf('function AnnouncementComposer('), source.indexOf('function SessionMessageInbox('));
   assert.match(composer, /fetch\('\/api\/announcements',\{method:'POST'/);
-  assert.match(composer, /maxLength="500"/);
+  assert.match(composer, /maxLength="2000"/);
+  assert.match(composer, /\{message\.length\} \/ 2,000 characters/);
   assert.match(composer, /Send to all users/);
   assert.match(composer, /window\.confirm\('Withdraw this announcement\?/);
   assert.match(composer, /closed by \{Number\(row\.acknowledgedCount\|\|0\)\.toLocaleString\('en-IN'\)\}/);

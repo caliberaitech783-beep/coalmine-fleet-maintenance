@@ -6169,8 +6169,8 @@ function AnnouncementComposer({session,onClose,onSent}) {
   return <Modal title="Announce to all users" close={onClose}>
     <form className="form announcement-compose" onSubmit={send}>
       <div className="session-message-recipient"><span><Users /></span><div><small>Send to</small><b>All users</b><p>Every signed-in user sees this as a popup until they close it. Users who sign in later also see it, for 30 days.</p></div></div>
-      <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="500" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone..." /></label>
-      <div className="session-message-compose-meta"><span>{message.length} / 500 characters</span>{error&&<b role="alert">{error}</b>}</div>
+      <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="2000" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone..." /></label>
+      <div className="session-message-compose-meta"><span>{message.length} / 2,000 characters</span>{error&&<b role="alert">{error}</b>}</div>
       <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||!message.trim()}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
     </form>
     {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}><p>{row.message}</p><small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
