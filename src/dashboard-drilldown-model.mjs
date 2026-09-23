@@ -1,11 +1,12 @@
 import { canonicalSiteName, equipmentSiteName, recordBelongsToSite } from "../site-location.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
+import { equipmentDoorNumber } from "../equipment-door.mjs";
 
 export const equipmentGroupLabel = (record = {}) => equipmentGroupValue(record, normalizeEquipmentGroup(record.itemName || record.category) || "Unclassified");
 export const equipmentCategoryLabel = (record = {}) => ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())
   ? "Total vehicles"
   : ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()) ? "Total equipment" : "Unclassified";
-export const equipmentMachineLabel = (record = {}) => String(record.door || record.registration || record.reg || record.manufacturerSerialNo || record.chassisNo || record.equipmentName || "Unidentified").trim() || "Unidentified";
+export const equipmentMachineLabel = (record = {}) => String(equipmentDoorNumber(record) || record.door || record.registration || record.reg || record.manufacturerSerialNo || record.chassisNo || record.equipmentName || "Unidentified").trim() || "Unidentified";
 
 const filterOrder = ["region", "site", "category", "group", "machine"];
 const recordSite = (record) => Object.hasOwn(record, "requestSite") ? String(record.requestSite || "").trim() : equipmentSiteName(record);

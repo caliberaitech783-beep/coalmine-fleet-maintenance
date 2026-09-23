@@ -1,5 +1,6 @@
 import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
 import {requestMeterReadings} from './request-equipment.mjs';
+import {equipmentDoorNumber} from './equipment-door.mjs';
 import {requestStatusLabel} from './src/request-status.mjs';
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
@@ -229,6 +230,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
     return {
       ...record,
+      door: equipmentDoorNumber(record) || record.door || '',
       requestReference: current ? String(current.ref || current.reference || "") : "",
       requestStatus,
       requestIdleAt: String(current?.idealRequestedAt || "").trim() || String(current?.idleRequestedAt || "").trim(),

@@ -1804,7 +1804,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       ...(equipment || {}),
       id: `${request.ref || request.reference || request.id || "request"}-${index}`,
       equipmentName: equipment?.equipmentName || request.equipment || request.door || "Unclassified equipment",
-      door: equipment?.door || request.door || "",
+      door: requestEquipmentDetails(equipment || {}).door || request.door || "",
       category: equipment?.category || request.equipmentCategory || "Unclassified",
       group: equipmentGroupValue(equipment || {}) || normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Unclassified",
       make: equipment?.make || request.make || "",

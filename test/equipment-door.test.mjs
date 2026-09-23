@@ -2,9 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {equipmentDoorNumber,requestsWithDoorNumbers} from '../equipment-door.mjs';
 import {requestEquipmentDetails} from '../request-equipment.mjs';
+import {equipmentMachineLabel} from '../src/dashboard-drilldown-model.mjs';
+import {fleetAssetRequestDetails} from '../dashboard-equipment-metrics.mjs';
+import {readFileSync} from 'node:fs';
 
 const tanker={door:'',reg:'MP66ZD0582',equipmentName:'WT22 - MP66ZD0582',chassisNo:'MAT569006P3J27912',site:'Jayant OB'};
 const tipper={door:'',reg:'2328929',equipmentName:'V316 - 2328929',chassisNo:'YV2XBZ0G9R8986479L26'};
+test('BD sheet, fleet drilldowns and printable table use the master door label',()=>{
+  for(const record of [tanker,tipper]){
+    assert.equal(equipmentMachineLabel(record),record.equipmentName);
+    assert.equal(equipmentMachineLabel({...record,door:record.reg}),record.equipmentName);
+    const [row]=fleetAssetRequestDetails([record],[]);
+    assert.equal(row.door,record.equipmentName);
+    assert.equal(equipmentMachineLabel(row),record.equipmentName);
+  }
+  const ui=readFileSync(new URL('../src/dashboard-record-browser.jsx',import.meta.url),'utf8');
+  assert.match(ui,/equipmentMachineLabel\(record\)/);
+  const dashboard=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.ok(dashboard.includes('door: requestEquipmentDetails(equipment || {}).door || request.door'));
+});
 test('imported fleet labels take priority over registration for new requests',()=>{
   for(const record of [tanker,tipper]){
     assert.equal(equipmentDoorNumber(record),record.equipmentName);
