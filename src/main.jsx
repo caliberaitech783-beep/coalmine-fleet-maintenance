@@ -1017,7 +1017,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             })}
           </div>
         </div>}
-        {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (
+        {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports" && name !== "CD").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}
             data-nav={n.toLowerCase()}
@@ -1038,6 +1038,16 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
           </div>
         </div>}
+        {visibleNav.filter(([name]) => name === "CD").map(([n, I]) => (
+          <div className="nav-config-row" key={n}><button
+            className={`header-nav-item${active === n ? " active" : ""}`}
+            data-nav={n.toLowerCase()}
+            onClick={() => selectPage(n)}
+          >
+            <span className="header-nav-icon" aria-hidden="true"><I /></span>
+            <span className="nav-label">C-Dir</span>
+          </button></div>
+        ))}
       </nav>
       <div className="user">
         <span className="header-user-copy">
