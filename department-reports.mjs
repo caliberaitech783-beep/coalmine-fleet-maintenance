@@ -1,4 +1,5 @@
 import {requestStatusLabel} from './src/request-status.mjs';
+import {requestsWithDoorNumbers, equipmentDoorNumber} from './equipment-door.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {equipmentGroupValue} from './equipment-group.mjs';
 import {elapsedLabel} from './report-metrics.mjs';
@@ -87,8 +88,8 @@ export function availabilityRows(equipment, requests, from, to, now = new Date()
 }
 
 export function buildDepartmentReports({requests = [], equipmentRecords = [], transferRecords = [], from, to, now = new Date(), showAllAcceptances = false} = {}) {
-  requests=requests.map(normalizeOperationalSiteFields);
-  equipmentRecords=equipmentRecords.map(normalizeOperationalSiteFields);
+  requests=requestsWithDoorNumbers(requests,equipmentRecords).map(normalizeOperationalSiteFields);
+  equipmentRecords=equipmentRecords.map(record=>normalizeOperationalSiteFields({...record,door:equipmentDoorNumber(record)}));
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);
   const report = (category, title, description, columns, rows, dateValue = r => r.start) => ({category,title,description,columns,rows,dateValue,emptyMessage:'No matching records for this report'});
   const open = requests.filter(r => ['open','in progress','awaiting parts'].includes(status(r)) && !r.closedAt);

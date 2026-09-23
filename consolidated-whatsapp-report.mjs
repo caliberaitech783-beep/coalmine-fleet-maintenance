@@ -1,4 +1,5 @@
 import {canonicalSiteName} from './site-location.mjs';
+import {requestsWithDoorNumbers} from './equipment-door.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {displaySiteName} from './region-scope.mjs';
 import {requestStatusLabel} from './src/request-status.mjs';
@@ -52,6 +53,7 @@ const requestKeys=(request={})=>[request.door,request.equipment,request.chassis]
 const equipmentKeys=(record={})=>[record.door,record.registration,record.reg,record.equipmentName,record.itemName,record.chassisNo,record.manufacturerSerialNo].map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean);
 
 export function attachRequestOems(requests=[],equipmentRecords=[]){
+  requests=requestsWithDoorNumbers(requests,equipmentRecords);
   const equipmentByKey=new Map();
   for(const record of equipmentRecords)for(const key of equipmentKeys(record))if(!equipmentByKey.has(key))equipmentByKey.set(key,record);
   return requests.map((request)=>{

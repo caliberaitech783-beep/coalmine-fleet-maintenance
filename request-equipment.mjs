@@ -1,5 +1,6 @@
 import { equipmentGroupValue } from './equipment-group.mjs';
 import { matchesSmartSearch } from './smart-search.mjs';
+import { equipmentDoorNumber, createRequestDoorResolver } from './equipment-door.mjs';
 
 function text(value) {
   return String(value ?? "").trim();
@@ -25,13 +26,7 @@ export function requestEquipmentDetails(record = {}) {
     text(record.manufacturerSerialNo) ||
     (record.id != null ? `Equipment ${record.id}` : "");
   const reg = text(record.registration) || text(record.reg);
-  const door =
-    text(record.door) ||
-    reg ||
-    text(record.equipmentName) ||
-    text(record.itemName) ||
-    text(record.manufacturerSerialNo) ||
-    equipment;
+  const door = equipmentDoorNumber(record);
   return {
     equipment,
     group: equipmentGroupValue(record),
@@ -64,7 +59,7 @@ export function requestWithEquipmentMasterDetails(request = {}, records = []) {
   }
   const details = requestEquipmentDetails(equipment || {});
   return {
-    ...request,
+    ...createRequestDoorResolver(records)(request),
     make: details.make || text(request.make),
     model: details.model || text(request.model),
   };

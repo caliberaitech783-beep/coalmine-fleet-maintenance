@@ -17,6 +17,7 @@ import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
+import {requestsWithDoorNumbers} from './equipment-door.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -4676,6 +4677,8 @@ async function syncTemporaryRequestDrivers(){
 
 async function attachDailyRemarks(rows,client=pool){
   if(!rows.length)return rows;
+  const {rows:equipmentRows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`);
+  rows=requestsWithDoorNumbers(rows,equipmentRows.map(row=>row.record_data));
   const refs=rows.map((row)=>row.ref);
   const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
     author_login AS "authorLogin",author_name AS "authorName",to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"

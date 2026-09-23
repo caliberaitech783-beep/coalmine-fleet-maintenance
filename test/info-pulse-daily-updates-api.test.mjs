@@ -6,6 +6,7 @@ import {buildInfoPulseBreakdowns} from '../info-pulse-data.mjs';
 import {scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {approvedDelayedReason} from '../delayed-reason.mjs';
+import {requestsWithDoorNumbers} from '../equipment-door.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
 const helper = server.slice(server.indexOf('async function attachDailyRemarks('), server.indexOf('async function requestWorkflowWhatsAppLogins('));
@@ -22,6 +23,7 @@ async function load({sites = ['Sasti OB'], failRemarks = false, cached = false} 
   ];
   const pool = {query: async (sql, values) => {
     queries.push({sql, values});
+    if (sql.includes('FROM master_records')) return {rows:[]};
     if (!sql.includes('FROM maintenance_daily_remarks')) return {rows};
     if (failRemarks) throw new Error('History unavailable');
     return {rows:[
@@ -31,7 +33,7 @@ async function load({sites = ['Sasti OB'], failRemarks = false, cached = false} 
   }};
   let handler, body, failure, cacheNamespace;
   const deps = {
-    pool, infoPulseProjection:'reference AS ref', requireSession(){}, approvedDelayedReason,
+    pool, infoPulseProjection:'reference AS ref', requireSession(){}, approvedDelayedReason,requestsWithDoorNumbers,
     app:{get(path, ...handlers){handler=handlers.at(-1);}},
     currentDashboardAuthorization:async()=>({session:{role:'super'}, user:{}}),
     infoPulseRequestScope:()=>({sites:sites.map(canonicalSiteName), restrictToScope:true}), scopeInfoPulseRequests,
@@ -48,7 +50,7 @@ test('Info Pulse returns saved daily history through the actual route and attach
     const {queries,body,failure,cacheNamespace}=await load({cached});
     assert.equal(failure,undefined);
     assert.deepEqual(body.requests.map(row=>row.ref),['WITH-UPDATES','EMPTY']);
-    assert.deepEqual(queries[1].values,[['WITH-UPDATES','EMPTY']], 'history lookup follows both visibility filters');
+    assert.deepEqual(queries.find(query=>query.sql.includes('FROM maintenance_daily_remarks')).values,[['WITH-UPDATES','EMPTY']], 'history lookup follows both visibility filters');
     const row=buildInfoPulseBreakdowns(body.requests).find(row=>row.request.ref==='WITH-UPDATES');
     const updates=pulseDailyUpdates(row.request.dailyRemarks);
     assert.equal(updates.length,2);

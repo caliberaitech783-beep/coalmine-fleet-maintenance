@@ -1,4 +1,5 @@
 import {requestStatusLabel} from './src/request-status.mjs';
+import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {equipmentGroupValue,normalizeEquipmentGroup} from './equipment-group.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
@@ -149,8 +150,8 @@ function table(title,department,description,columns,rows){
 }
 
 export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],now=new Date()}={}){
-  requests=requests.map(normalizeOperationalSiteFields);
-  equipmentRecords=equipmentRecords.map(normalizeOperationalSiteFields);
+  requests=requestsWithDoorNumbers(requests,equipmentRecords).map(normalizeOperationalSiteFields);
+  equipmentRecords=equipmentRecords.map(record=>normalizeOperationalSiteFields({...record,door:equipmentDoorNumber(record)}));
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);
   const reportRequests=enrichRequests(requests,equipmentRecords);
   const inOutRows=buildInOutReportRows(reportRequests,{today:now});
