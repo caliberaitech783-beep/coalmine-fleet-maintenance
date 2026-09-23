@@ -3994,15 +3994,17 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
 }
 
 async function directorReportSourceData(){
-  const [{rows:requestRows},{rows:equipmentRows},{rows:transferRows}]=await Promise.all([
+  const [{rows:requestRows},{rows:equipmentRows},{rows:transferRows},{rows:shiftRows}]=await Promise.all([
     pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`),
     pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC`),
     pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at ASC`),
+    pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC`),
   ]);
   return {
     requests:await attachDailyRemarks(requestsVisibleGlobally(requestRows)),
     equipmentRecords:equipmentRows.map(({id,record_data})=>({id,...record_data})),
     transferRecords:transferRows.map(({id,record_data})=>({id,...record_data})),
+    shiftRecords:shiftRows.map(({id,record_data})=>({id,...record_data})),
   };
 }
 
@@ -4018,6 +4020,7 @@ function sourceDataForSites(sourceData,siteAccess=''){
     requests:sourceData.requests.filter((request)=>includesSite(request.site||request.reportSite)),
     equipmentRecords:sourceData.equipmentRecords.filter((record)=>includesSite(record.currentLocation||record.location||record.site)),
     transferRecords:sourceData.transferRecords.filter((record)=>includesSite(record.destination||record.currentLocation||record.location||record.source)),
+    shiftRecords:(sourceData.shiftRecords||[]).filter((record)=>includesSite(record.site)),
   };
 }
 
@@ -4051,7 +4054,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),report
   }
   const selectedTitles=reportTitles?new Set(reportTitles):null;
   const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
-  if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[]},siteAccess).requests;
+  if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[],shiftRecords:sourceData.shiftRecords||[]},siteAccess).requests;
   const tables=buildDirectorReportTables(sourceData).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
@@ -5914,11 +5917,13 @@ app.get('/api/reports/master-data',requireSession,async(req,res,next)=>{
     if(!allowed)return res.status(403).json({error:'Your assigned role is not authorized to view reports.'});
     const scope=dashboardEquipmentScope(session,user);
     if(!dashboardEquipmentScopeIsUsable(scope))return res.status(409).json({error:'No report site is assigned to this account. Contact an administrator.'});
-    const {rows}=await pool.query(`SELECT id,master_name,record_data FROM master_records WHERE master_name IN ('Equipment master','Vehicle transfers') ORDER BY created_at ASC`);
+    const {rows}=await pool.query(`SELECT id,master_name,record_data FROM master_records WHERE master_name IN ('Equipment master','Vehicle transfers','Shift Master') ORDER BY created_at ASC`);
     const equipment=rows.filter(row=>row.master_name==='Equipment master').map(row=>({id:row.id,...row.record_data}));
     const transfers=rows.filter(row=>row.master_name==='Vehicle transfers').map(row=>({id:row.id,...row.record_data}));
+    const shifts=rows.filter(row=>row.master_name==='Shift Master').map(row=>({id:row.id,...row.record_data}));
     const transferRecords=transfers.filter(row=>!scope.restrictToScope||[row.source,row.destination].some(site=>reportScopeIncludesSite({sites:scope.allowedSites},site)));
-    res.json({equipmentRecords:scopeDashboardEquipmentRecords(equipment,session,user,scope),transferRecords});
+    const shiftRecords=shifts.filter(row=>!scope.restrictToScope||reportScopeIncludesSite({sites:scope.allowedSites},row.site));
+    res.json({equipmentRecords:scopeDashboardEquipmentRecords(equipment,session,user,scope),transferRecords,shiftRecords});
   }catch(error){next(error)}
 });
 

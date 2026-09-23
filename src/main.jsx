@@ -80,6 +80,7 @@ import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../depar
 import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
+import { formatShiftDateTime } from "../shift-report-time.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
@@ -6501,8 +6502,8 @@ function withTimelineLinks(columns, token) {
     : column);
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
-  const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],loading:true,error:""});
-  const {equipmentRecords,transferRecords} = reportMasterData;
+  const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
+  const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/reports/master-data",{signal:controller.signal,cache:"no-store",headers:{Authorization:`Bearer ${session?.token || authToken}`}})
@@ -6511,7 +6512,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         if(!response.ok) throw new Error(data.error || "Could not load report master data.");
         if(!Array.isArray(data.equipmentRecords)||!Array.isArray(data.transferRecords)) throw new Error("Invalid report master data response.");
         if(!controller.signal.aborted) setReportMasterData({...data,loading:false,error:""});
-      }).catch(error => {if(!controller.signal.aborted) setReportMasterData({equipmentRecords:[],transferRecords:[],loading:false,error:error.message});});
+      }).catch(error => {if(!controller.signal.aborted) setReportMasterData({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:false,error:error.message});});
     return () => controller.abort();
   },[session?.token]);
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
@@ -6579,7 +6580,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     };
   }), [requests, equipmentByReference]);
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
-  const formatTimestamp = (value) => formatDisplayDateTime(value);
+  const formatTimestamp = (value, row = {}) => shiftRecords?.length
+    ? formatShiftDateTime(value,{site:row.reportSite||row.site||row.currentLocation||row.location,shifts:shiftRecords,emptyValue:"—"})
+    : formatDisplayDateTime(value);
   const reportRequestStatus = requestStatusLabel;
   const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
   const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
@@ -6627,7 +6630,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "category", label: "Category", value: (request) => request.equipmentGroup || request.category || request.type},
     {key: "status", label: "Status", value: reportRequestStatus, sortValue: (request) => requestStatusSortRank(reportRequestStatus(request)), render: (request) => <Status>{reportRequestStatus(request)}</Status>},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
-    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
+    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start,request), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start,request)},
   ];
   const idleVehicleColumns = [
     {...requestColumns.find((column) => column.key === "site"), render: (request) => <b>{request.reportSite || "—"}</b>},
@@ -6636,13 +6639,13 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const closureColumns = [
     ...requestColumns,
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
-    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
   ];
   const misColumns = [
     ...closureColumns,
     {key: "verifiedBy", label: "MIS user", value: (request) => request.verifiedBy},
-    {key: "verifiedAt", label: "MIS verified at", value: (request) => formatTimestamp(request.verifiedAt), sortValue: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
-    {key: "firstTripAt", label: "First trip time", value: firstTripTimestamp, render: (request) => formatTimestamp(firstTripTimestamp(request))},
+    {key: "verifiedAt", label: "MIS verified at", value: (request) => formatTimestamp(request.verifiedAt,request), sortValue: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt,request)},
+    {key: "firstTripAt", label: "First trip time", value: (request) => formatTimestamp(firstTripTimestamp(request),request), sortValue: firstTripTimestamp, render: (request) => formatTimestamp(firstTripTimestamp(request),request)},
   ];
   const fleetColumns = [
     {key: "location", label: "Location", value: (record) => record.reportSite, render: (record) => <b>{record.reportSite || "—"}</b>},
@@ -6667,8 +6670,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
     {key: "model", label: "Model", value: (request) => request.reportModel},
     {key: "complaint", label: "Reason / Complaint", value: (request) => request.complaint || "—"},
-    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
-    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start,request), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start,request)},
+    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
     {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
     {key: "reference", label: "Job reference", value: (request) => request.ref},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
@@ -6690,7 +6693,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {category: "maintenance", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
       ...idleVehicleColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
-      {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+      {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
     ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
     {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp. Status shows Pending when maintenance has not accepted an open request within 24 hours; TAT is closed at minus opened at.", rows: recentBreakdownRows, columns: recentBreakdownColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
     {category: "production", title: "Off Road to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
@@ -6719,7 +6722,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
     {category: "maintenance", title: VEHICLE_REPAIR_HISTORY_REPORT, description: "Complete breakdown and repair history for a selected vehicle, including the reported problem and work completed.", rows: vehicleHistoryReportRows, columns: repairHistoryColumns, dateValue: (row) => row.closedAt || row.start, emptyMessage: "No repair history is available for the selected vehicle", vehicleHistoryFilter: true},
-    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
+    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
       columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
@@ -6875,7 +6878,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
         const filteredRows = report.title === "Availability Report"
-          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
+          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
           : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetch("/api/exports/pdf", {

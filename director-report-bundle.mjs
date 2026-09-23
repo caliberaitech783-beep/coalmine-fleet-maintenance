@@ -6,6 +6,7 @@ import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows,isIdleRequest} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
 import {reportTime12} from './report-time-format.mjs';
+import {formatShiftDateTime} from './shift-report-time.mjs';
 import {recentBreakdownStatus,reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
@@ -149,7 +150,7 @@ function table(title,department,description,columns,rows){
   return {title,pdfTitle:reportPdfHeading(title,rows),department,description,columns,rows:rows.map((row)=>columns.map((column)=>cell(typeof column.value==='function'?column.value(row):row[column.key])))};
 }
 
-export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],now=new Date()}={}){
+export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],shiftRecords=[],now=new Date()}={}){
   requests=requestsWithDoorNumbers(requests,equipmentRecords).map(normalizeOperationalSiteFields);
   equipmentRecords=equipmentRecords.map(record=>normalizeOperationalSiteFields({...record,door:equipmentDoorNumber(record)}));
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);
@@ -168,6 +169,9 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
   const transferRows=enrichRequests(transferRecords.map((record)=>({...record,chassis:record.chassisNo||record.manufacturerSerialNo||''})),equipmentRecords).map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:displaySiteName(record.destination||record.currentLocation||record.location)}));
   const locationWiseRows=locationCountRows(equipmentRecords);
   const recentBreakdownRows=[...reportRequests].sort((a,b)=>latestTime(b)-latestTime(a)).slice(0,250);
+  const shiftTime=(request,value,emptyValue='-')=>shiftRecords.length
+    ? formatShiftDateTime(value,{site:request.reportSite||request.site||request.currentLocation||request.location,shifts:shiftRecords,emptyValue})
+    : cell(value);
   const requestColumns=[
     {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},
     {key:'equipment',label:'Equipment / vehicle',value:(request)=>request.reportEquipment},
@@ -178,10 +182,10 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'category',label:'Category',value:(request)=>request.equipmentGroup||request.category||request.type},
     {key:'status',label:'Status',value:requestStatusLabel},
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
-    {key:'started',label:'Opened at',value:(request)=>request.start},
+    {key:'started',label:'Opened at',value:(request)=>shiftTime(request,request.start)},
   ];
-  const closureColumns=[...requestColumns,{key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},{key:'closedAt',label:'Closed at',value:(request)=>request.closedAt}];
-  const misColumns=[...closureColumns,{key:'verifiedBy',label:'MIS user',value:(request)=>request.verifiedBy},{key:'verifiedAt',label:'MIS verified at',value:(request)=>request.verifiedAt},{key:'firstTripAt',label:'First trip time',value:firstTripTimestamp}];
+  const closureColumns=[...requestColumns,{key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},{key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)}];
+  const misColumns=[...closureColumns,{key:'verifiedBy',label:'MIS user',value:(request)=>request.verifiedBy},{key:'verifiedAt',label:'MIS verified at',value:(request)=>shiftTime(request,request.verifiedAt)},{key:'firstTripAt',label:'First trip time',value:(request)=>shiftTime(request,firstTripTimestamp(request))}];
   const idleVehicleColumns=[requestColumns.find((column)=>column.key==='site'),...requestColumns.filter((column)=>!['site','equipment'].includes(column.key))];
   const fleetColumns=[
     {key:'location',label:'Location',value:(record)=>record.reportSite},
@@ -206,8 +210,8 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'door',label:'Door no.',value:(request)=>request.reportDoor},
     {key:'model',label:'Model',value:(request)=>request.reportModel},
     {key:'complaint',label:'Reason / Complaint',value:(request)=>request.complaint||'—'},
-    {key:'started',label:'Opened at',value:(request)=>request.start},
-    {key:'closedAt',label:'Closed at',value:(request)=>request.closedAt},
+    {key:'started',label:'Opened at',value:(request)=>shiftTime(request,request.start)},
+    {key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)},
     {key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)},
     {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
@@ -222,21 +226,21 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     table(DIRECTOR_REPORT_TITLES[5],'General','Location-wise count of equipment, vehicles, and total fleet records.',[
       {key:'location',label:'Location',value:(row)=>row.location},{key:'equipment',label:'Equipment',value:(row)=>row.equipment},{key:'vehicles',label:'Vehicles',value:(row)=>row.vehicles},{key:'total',label:'Total equipment / vehicle',value:(row)=>row.total},
     ],locationWiseRows),
-    table(DIRECTOR_REPORT_TITLES[6],'Maintenance','Idle breakdown requests and idle fleet records that need follow-up.',[...idleVehicleColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'closedAt',label:'Maintenance close / idle at',value:(request)=>request.closedAt}],idleRequestRows),
+    table(DIRECTOR_REPORT_TITLES[6],'Maintenance','Idle breakdown requests and idle fleet records that need follow-up.',[...idleVehicleColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'closedAt',label:'Maintenance close / idle at',value:(request)=>shiftTime(request,request.closedAt)}],idleRequestRows),
     table(DIRECTOR_REPORT_TITLES[7],'General','Latest breakdown cases by recorded workflow timestamp. Status shows Pending when maintenance has not accepted an open request within 24 hours; TAT is closed at minus opened at.',recentBreakdownColumns,recentBreakdownRows),
     table(DIRECTOR_REPORT_TITLES[8],'Production','Elapsed time from Production off-road marking to MIS verification.',[...misColumns,{key:'prodToMis',label:'Prod to MIS verification',value:(request)=>elapsedLabel(request.start,request.verifiedAt)}],elapsedRows.filter((row)=>row.start&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[9],'Maintenance','Turnaround time from Production opening to Maintenance close.',[...closureColumns,{key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)}],elapsedRows.filter((row)=>row.start&&row.closedAt)),
     table(DIRECTOR_REPORT_TITLES[10],'Maintenance','Elapsed time from Maintenance close to MIS verification.',[...misColumns,{key:'maintToMis',label:'Maintenance close to MIS verification',value:(request)=>elapsedLabel(request.closedAt,request.verifiedAt)}],elapsedRows.filter((row)=>row.closedAt&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[11],'Maintenance','Idle request to manager on-road approval, separate from later MIS verification.',[...closureColumns,
-      {key:'idealRequestedAt',label:'Idle requested at',value:(request)=>request.idealRequestedAt},
+      {key:'idealRequestedAt',label:'Idle requested at',value:(request)=>shiftTime(request,request.idealRequestedAt)},
       {key:'idealRequestedBy',label:'Idle requested by',value:(request)=>request.idealRequestedBy},
-      {key:'idealApprovedAt',label:'Manager on-road approval at',value:(request)=>request.idealApprovedAt},
+      {key:'idealApprovedAt',label:'Manager on-road approval at',value:(request)=>shiftTime(request,request.idealApprovedAt)},
       {key:'idealApprovedBy',label:'Approved by manager',value:(request)=>request.idealApprovedBy},
       {key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},
       {key:'idleTime',label:'Idle to PM verification time',value:(request)=>elapsedLabel(request.idealRequestedAt,request.idealApprovedAt)}],idleRequestRows),
     table(DIRECTOR_REPORT_TITLES[12],'MIS','Comparison of MIS verification against first-trip confirmation for idle cases.',[...misColumns,{key:'firstTripDone',label:'First trip done',value:(request)=>request.firstTripDone?'Yes':'No'},{key:'misToFirstTrip',label:'MIS to first trip',value:(request)=>elapsedLabel(request.verifiedAt,firstTripTimestamp(request))}],idleRequestRows.filter((row)=>row.verifiedAt||firstTripTimestamp(row))),
     table(DIRECTOR_REPORT_TITLES[13],'General',IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_COLUMNS,inOutRows),
-    ...buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,now,from:`${indiaDateTimeInputValue(now).slice(0,7)}-01`,to:indiaDateTimeInputValue(now).slice(0,10)})
+    ...buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,shiftRecords,now,from:`${indiaDateTimeInputValue(now).slice(0,7)}-01`,to:indiaDateTimeInputValue(now).slice(0,10)})
       .filter(report=>report.title!=='Vehicle Transfer Report')
       .map(report=>table(report.title,report.category==='general'?'General':report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
   ];

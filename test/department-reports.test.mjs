@@ -66,6 +66,19 @@ test('general summary uses only verified requests with non-overlapping stages an
   assert.equal(cell(report,'returnToWorkTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01'}),'Not recorded');
   assert.doesNotMatch(report.description,/sum of these three intervals, including their overlap/);
 });
+test('shift master timings are shown beside report event timestamps when shift records are supplied',()=>{
+  const row={ref:'shifted',site:'Sasti OB',status:'Closed',start:'2026-09-23 08:00:00',acceptedAt:'2026-09-23 09:00:00',closedAt:'2026-09-23 17:00:00',firstTripAt:'2026-09-23 22:30:00',verifiedAt:'2026-09-23 22:45:00'};
+  const shifts=[
+    {site:'Sasti OB',shiftName:'Shift A',startTime:'05:00:00',endTime:'13:00:00'},
+    {site:'Sasti OB',shiftName:'Shift B',startTime:'13:00:00',endTime:'21:00:00'},
+    {site:'Sasti OB',shiftName:'Shift C',startTime:'21:00:00',endTime:'05:00:00'},
+  ];
+  const report=buildDepartmentReports({requests:[row],shiftRecords:shifts}).find(r=>r.title==='Summary Report');
+  assert.equal(cell(report,'submittedAt',row),'A Shift · 8:00:00 AM 23-09-2026');
+  assert.equal(cell(report,'acceptedAt',row),'A Shift · 9:00:00 AM 23-09-2026');
+  assert.equal(cell(report,'closedAt',row),'B Shift · 5:00:00 PM 23-09-2026');
+  assert.equal(cell(report,'firstTripAt',row),'C Shift · 10:30:00 PM 23-09-2026');
+});
 test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
