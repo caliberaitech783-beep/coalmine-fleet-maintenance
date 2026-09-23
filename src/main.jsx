@@ -1665,7 +1665,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const breakdownSiteSummary = throughputSites.map((site) => {
     const siteRequests = throughputRequests.filter((record) => recordBelongsToSite(record, site));
-    return { site, ...breakdownMovementForRangeForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey) };
+    return {
+      site,
+      ...(dashboardShift === "all"
+        ? breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)
+        : breakdownMovementForRangeForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)),
+    };
   });
   // Match the linked request list, including authorized historical/unassigned sites.
   const breakdownMovementTotals = breakdownMovementForRangeForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);

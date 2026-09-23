@@ -11,6 +11,7 @@ import {timestampMatchesShift} from '../shift-report-time.mjs';
 const MOVEMENT_BARS = DAILY_BD_METRICS.filter(({key}) => key === 'incoming' || key === 'outgoing');
 const DAILY_BD_ALL_SHIFTS = 'all';
 const signedCount = value => `${value > 0 ? '+' : ''}${value.toLocaleString()}`;
+// Shift filtering follows the event behind each movement metric.
 const metricShiftTimestamp = (record = {}, metric = '') => {
   if (metric === 'outgoing') return record.closedAt || record.completedAt;
   if (metric === 'idle') return record.idealRequestedAt || record.idleRequestedAt || record.start || record.startedAt || record.createdAt;
