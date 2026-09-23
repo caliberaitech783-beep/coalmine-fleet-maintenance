@@ -6204,6 +6204,7 @@ function SessionMessageInbox({session}) {
         ]);
       }catch(loadError){if(loadError.name!=='AbortError')console.warn('Session message check failed.',loadError);}
     };
+    void load();
     const stopPolling=startVisiblePoll(load,3000);
     return()=>{controller.abort();stopPolling();};
   },[session?.token]);

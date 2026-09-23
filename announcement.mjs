@@ -17,11 +17,26 @@ export function announcementValidationError(value = "") {
   return "";
 }
 
-/** The key an acknowledgement is stored under: the login, or the name when a record has no login. */
+function addReaderKey(keys, value, prefix = "") {
+  const key = String(value || "").trim().toLowerCase();
+  if (key && !keys.includes(`${prefix}${key}`)) keys.push(`${prefix}${key}`);
+}
+
+/** All durable keys this session may be known by, newest first. */
+export function announcementReaderKeys(session = {}) {
+  const keys = [];
+  addReaderKey(keys, session?.login);
+  addReaderKey(keys, session?.username);
+  addReaderKey(keys, session?.userLogin);
+  addReaderKey(keys, session?.loginName);
+  addReaderKey(keys, session?.name, "name:");
+  if (!keys.length) addReaderKey(keys, session?.sessionId, "session:");
+  return keys.length ? keys : ["session:anonymous"];
+}
+
+/** The primary key an acknowledgement is stored under. */
 export function announcementReaderKey(session = {}) {
-  const login = String(session?.login || "").trim().toLowerCase();
-  if (login) return login;
-  return `name:${String(session?.name || "").trim().toLowerCase()}`;
+  return announcementReaderKeys(session)[0];
 }
 
 /** Direct messages first (they name one person), then announcements, oldest first. */

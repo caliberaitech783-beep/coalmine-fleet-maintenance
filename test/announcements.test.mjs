@@ -5,6 +5,7 @@ import {
   ANNOUNCEMENT_ACTIVE_DAYS,
   ANNOUNCEMENT_MAX_LENGTH,
   announcementReaderKey,
+  announcementReaderKeys,
   announcementValidationError,
   inboxDismissPath,
   inboxItems,
@@ -28,7 +29,8 @@ test('announcement text is trimmed, required and capped at 2,000 characters', ()
 test('acknowledgements are keyed per user login, falling back to the name, so closing once covers every device', () => {
   assert.equal(announcementReaderKey({ login: ' Ramesh.Kumar ', name: 'Ramesh Kumar' }), 'ramesh.kumar');
   assert.equal(announcementReaderKey({ login: '', name: 'Ramesh Kumar' }), 'name:ramesh kumar');
-  assert.equal(announcementReaderKey({}), 'name:');
+  assert.equal(announcementReaderKey({ sessionId: 'abc-123' }), 'session:abc-123');
+  assert.deepEqual(announcementReaderKeys({ login: 'Ramesh', username: 'rk', name: 'Ramesh Kumar' }), ['ramesh', 'rk', 'name:ramesh kumar']);
 });
 
 test('the inbox shows direct messages before announcements and closes each through its own route', () => {
@@ -56,8 +58,8 @@ test('only Admin and Super Admin can send, list or withdraw announcements; every
 test('pending announcements exclude withdrawn ones, ones already closed by this user, and ones older than 30 days', () => {
   const pending = routeOf("app.get('/api/announcements/pending',");
   assert.match(pending, /a\.withdrawn_at IS NULL AND a\.created_at>NOW\(\)-make_interval\(days => \$2::int\)/);
-  assert.match(pending, /NOT EXISTS \(SELECT 1 FROM announcement_acknowledgements k WHERE k\.announcement_id=a\.id AND k\.reader_key=\$1\)/);
-  assert.match(pending, /\[announcementReaderKey\(req\.session\),ANNOUNCEMENT_ACTIVE_DAYS\]/);
+  assert.match(pending, /NOT EXISTS \(SELECT 1 FROM announcement_acknowledgements k WHERE k\.announcement_id=a\.id AND k\.reader_key=ANY\(\$1::text\[\]\)\)/);
+  assert.match(pending, /\[announcementReaderKeys\(req\.session\),ANNOUNCEMENT_ACTIVE_DAYS\]/);
   assert.match(pending, /req\.audit=false;/, 'the 3-second poll is not written to the audit trail');
   const acknowledge = routeOf("app.patch('/api/announcements/:announcementId/acknowledge',");
   assert.match(acknowledge, /ON CONFLICT DO NOTHING/, 'closing twice is harmless');
@@ -70,6 +72,7 @@ test('pending announcements exclude withdrawn ones, ones already closed by this 
 test('the shared popup polls announcements with direct messages and stays until the user closes it', () => {
   const inbox = source.slice(source.indexOf('function SessionMessageInbox('), source.indexOf('function UserSessionsPage('));
   assert.match(inbox, /fetch\('\/api\/session-messages',\{cache:'no-store',signal:controller\.signal,headers\}\),\n\s+fetch\('\/api\/announcements\/pending',\{cache:'no-store',signal:controller\.signal,headers\}\),/);
+  assert.match(inbox, /void load\(\);\n\s+const stopPolling=startVisiblePoll\(load,3000\);/, 'checks pending announcements immediately when a user signs in or comes online');
   assert.match(inbox, /\.map\(\(item\)=>\(\{\.\.\.item,kind:'message'\}\)\),\n\s+\.\.\.\(Array\.isArray\(announcementResult\.announcements\)/, 'direct messages come first');
   assert.match(inbox, /const isAnnouncement=current\.kind==='announcement';/);
   assert.match(inbox, /isAnnouncement\?`\/api\/announcements\/\$\{encodeURIComponent\(current\.id\)\}\/acknowledge`:`\/api\/session-messages\/\$\{encodeURIComponent\(current\.id\)\}\/dismiss`/);

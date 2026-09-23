@@ -36,7 +36,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
-import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
+import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
@@ -2262,8 +2262,8 @@ app.get('/api/announcements/pending',requireSession,async(req,res,next)=>{
     const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt"
       FROM announcements a
       WHERE a.withdrawn_at IS NULL AND a.created_at>NOW()-make_interval(days => $2::int)
-        AND NOT EXISTS (SELECT 1 FROM announcement_acknowledgements k WHERE k.announcement_id=a.id AND k.reader_key=$1)
-      ORDER BY a.created_at ASC,a.id ASC`,[announcementReaderKey(req.session),ANNOUNCEMENT_ACTIVE_DAYS]);
+        AND NOT EXISTS (SELECT 1 FROM announcement_acknowledgements k WHERE k.announcement_id=a.id AND k.reader_key=ANY($1::text[]))
+      ORDER BY a.created_at ASC,a.id ASC`,[announcementReaderKeys(req.session),ANNOUNCEMENT_ACTIVE_DAYS]);
     req.audit=false;
     res.set('Cache-Control','no-store');
     res.json({announcements:rows});
