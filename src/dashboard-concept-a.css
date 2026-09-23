@@ -1863,6 +1863,9 @@ button.mine-primary-kpi-card:focus-visible,
   margin-top: 7px;
   overflow: hidden;
   border-top: 3px solid #7b55c7;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
 }
 .mine-stage-pipeline > header {
   display: flex;
@@ -1947,7 +1950,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-stage-pipeline-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
