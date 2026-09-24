@@ -97,6 +97,7 @@ import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
+  requestEquipmentCreationDetails,
   requestEquipmentGroupOptions,
   requestEquipmentMeterType,
   requestEquipmentRecordsForGroup,
@@ -5239,7 +5240,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
     v = findRequestEquipment(groupRecords, equipmentId),
-    equipmentDetails = requestEquipmentDetails(v || {}),
+    equipmentDetails = requestEquipmentCreationDetails(v || {}),
     door = equipmentDetails.door,
     currentLocation = equipmentDetails.site || (displaySiteSelection(assignedLocation).length === 1 ? assignedLocation : "");
   const [requestTime, setRequestTime] = useState(systemTime);
@@ -5359,7 +5360,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         ref: "REQ-" + Date.now(),
         equipment: equipmentDetails.equipment,
         equipmentGroup: equipmentDetails.group || equipmentGroup,
-        door: fd.get("door"),
+        door: equipmentDetails.door,
         site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
         subCategory: String(fd.get("subCategory") || "").trim(),
@@ -5376,6 +5377,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         driverNameSource: driverLookup.name.trim() ? (driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : "Manual") : "",
         meterType,
       };
+    if (!request.door) {
+      alert("The selected equipment has no door, registration or chassis identifier. Contact the admin team to update Equipment Master before creating this request.");
+      return;
+    }
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
       return;

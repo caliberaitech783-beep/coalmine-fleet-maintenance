@@ -68,6 +68,14 @@ export function requestEquipmentDetails(record = {}) {
   };
 }
 
+// Report labels deliberately omit registration/chassis values. Creation still
+// needs a stable identifier for a selected asset without a separate fleet label.
+// Use only identifiers from that selected master record, never a generic model.
+export function requestEquipmentCreationDetails(record = {}) {
+  const details = requestEquipmentDetails(record);
+  return {...details, door: details.door || text(record.door) || details.reg || details.chassis};
+}
+
 export function requestWithEquipmentMasterDetails(request = {}, records = []) {
   const lookup = requestEquipmentLookup(records);
   let equipment = null;
