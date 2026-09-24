@@ -18,5 +18,5 @@ test('API includes Maintenance User in assigned-site scope and UI filters before
   const source = readFileSync(new URL('../src/main.jsx', import.meta.url),'utf8');
   assert.match(server, /if\(req.session.role==='normal'\)\{[\s\S]*scopedSite=userSiteScope\(operationalUser\)/);
   assert.match(source, /!embedded&&isMaintenance\?recordsForSite\(requests,assignedLocation\):misWorkspaceRequests/);
-  assert.match(source, /const requestRows=siteRequests.map/);
+  assert.match(source, /const requestRows=useMemo\(\(\)=>siteRequests\.map/);
 });

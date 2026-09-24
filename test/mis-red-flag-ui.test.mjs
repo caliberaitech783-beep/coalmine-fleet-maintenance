@@ -46,6 +46,9 @@ function harness(){
     return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];
   };
   const scope={React:{...React,useId:()=> 'test-controls'},useState:state,useRef:value=>state(()=>({current:value}))[0],useEffect:()=>{},TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
+    useMemo: factory=>factory(),
+    WORKFLOW_INITIAL_RENDER_ROWS: Number(source.match(/const WORKFLOW_INITIAL_RENDER_ROWS = (\d+)/)[1]),
+    WORKFLOW_RENDER_BATCH: Number(source.match(/const WORKFLOW_RENDER_BATCH = (\d+)/)[1]),
     ...equipment,
     Modal:({title,children})=>React.createElement('section',{},React.createElement('h1',{},title),children),
     ActionsTable:({children})=>React.createElement('table',{},children),

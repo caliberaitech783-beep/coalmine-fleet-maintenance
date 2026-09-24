@@ -11,8 +11,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showReason \? \[\["complaint", "Breakdown reason"\]\]/);
   assert.match(source,/\["status", "Status"\]/);
   assert.match(source,/Closed history/);
-  assert.match(source,/activeRequests=requestRows\.filter[\s\S]*!=="closed"/);
-  assert.match(source,/historyRows=isMis\?closedRequests/);
+  assert.match(source,/activeRequests=useMemo\(\(\)=>requestRows\.filter[\s\S]*!=="closed"/);
+  assert.match(source,/historyRows=useMemo\(\(\)=>isMis\?closedRequests/);
   assert.match(source,/showReason && <th>Reason<\/th>/);
   assert.match(source,/showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text=\{row\.complaint\} language=\{row\.complaintLanguage\} \/><\/div>\{row\.complaintMediaAvailable && <ComplaintMediaView[^>]+\/>\}<\/td>/);
   assert.match(source,/showCreatedBy && <th>Created by<\/th>/);

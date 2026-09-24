@@ -39,7 +39,7 @@ test("persisted historical references follow the explicit MIS exclusions", () =>
   }
   assert.deepEqual(requestsVisibleToMisWorkspace([{ref:"REQ-1787759984730",status:"Closed"}],true),[]);
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /const requestRows=siteRequests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\);/);
+  assert.match(source, /const requestRows=useMemo\(\(\)=>siteRequests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\),\[siteRequests,equipmentRecords\]\);/);
   assert.doesNotMatch(source, /visibleInOperationalUserRequests/);
-  assert.match(source, /const siteRequests=!embedded&&isMaintenance\?recordsForSite\(requests,assignedLocation\):misWorkspaceRequests;/);
+  assert.match(source, /const siteRequests=useMemo\(\(\)=>!embedded&&isMaintenance\?recordsForSite\(requests,assignedLocation\):misWorkspaceRequests,\[embedded,isMaintenance,requests,assignedLocation,misWorkspaceRequests\]\);/);
 });
