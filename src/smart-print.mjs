@@ -249,9 +249,9 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;})
       .finally(()=>{exporting=false;render();});
   };
-  // One Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
-  const exportButtons=onExport&&!snapshot&&!exportOnly?[button('Export',()=>{
-    if(currentReport().chosen.length)askChoice('Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
+  // One Smart Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
+  const exportButtons=onExport&&!snapshot&&!exportOnly?[button('Smart Export',()=>{
+    if(currentReport().chosen.length)askChoice('Smart Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
   },footer,'smart-print-export')]:[];
   const directExportButton=exportOnly&&exportName?button(`Download ${exportName}`,()=>runExport(exportFormat),footer,'primary'):null;
   const printButton=exportOnly?null:button(snapshot?'Print as shown on screen':'Print current selection',printSelection,footer,'primary');

@@ -16,7 +16,7 @@ test("dashboard PDF reports an unavailable dashboard without downloading", async
 
 test("both KPI exports opt into visual PDF without changing ordinary table exports", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.equal((source.match(/label="Export (?:KPIs|dashboard)" dashboardPdf/g) || []).length, 2, "the manager KPI export and the whole fleet dashboard export");
+  assert.equal((source.match(/label="Smart Export" dashboardPdf/g) || []).length, 2, "the manager KPI export and the whole fleet dashboard export");
   assert.match(source, /dashboardPdf = false/);
   assert.match(source, /if \(dashboardPdf\) \{[\s\S]*?downloadDashboardPdf[\s\S]*?return;\s*\}/);
   assert.match(source, /fetch\("\/api\/exports\/pdf"/);

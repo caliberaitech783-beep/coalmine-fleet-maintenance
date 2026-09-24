@@ -11,8 +11,7 @@ test("all dashboard families expose Print, PDF, and Excel for their scoped KPI d
   assert.match(source, /const dashboardExportRows = \[/);
   assert.match(source, /title=\{`\$\{title\} dashboard KPI report`\}/);
   assert.match(source, /title="Fleet control dashboard" columns=\{dashboardKpiExportColumns\} rows=\{dashboardExportRows\} excelSheets=\{dashboardExcelSheets\}/);
-  assert.equal((source.match(/label="Export KPIs"/g) || []).length, 1, "the manager dashboard");
-  assert.equal((source.match(/label="Export dashboard"/g) || []).length, 1, "the fleet dashboard exports the whole dashboard");
+  assert.equal((source.match(/label="Smart Export"/g) || []).length, 2, "the manager and fleet dashboards expose smart export");
   assert.match(source, /Download as PDF/);
   assert.match(source, /Download as Excel/);
   assert.match(source, /<Printer \/> Smart Print/);

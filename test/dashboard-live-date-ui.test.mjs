@@ -1112,7 +1112,7 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   const sectionMenus = findAll(tree, (node) => node.props.className === "mine-section-export");
   assert.equal(sectionMenus.length, 4);
   assert.ok(sectionMenus.every((node) => node.props.printSection === true), "every section prints as it is on screen");
-  const dashboardMenu = () => findAll(tree, (node) => node.props.label === "Export dashboard");
+  const dashboardMenu = () => findAll(tree, (node) => node.props.label === "Smart Export");
   assert.equal(dashboardMenu().length, 1, "one whole-dashboard menu in the open banner");
   const [menu] = dashboardMenu();
   assert.equal(menu.props.title, "Fleet control dashboard");
@@ -1130,7 +1130,7 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   assert.deepEqual(names(), ["KPIs", "Total Fleet", "Daily BD balance", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
   // A collapsed banner keeps the same whole-dashboard menu beside its eye toggle.
   const banner = findAll(tree, (node) => node.props.collapsedAction)[0];
-  assert.equal(banner.props.collapsedAction.props.label, "Export dashboard");
+  assert.equal(banner.props.collapsedAction.props.label, "Smart Export");
   assert.equal(banner.props.collapsedAction.props.className, "dashboard-banner-export");
   assert.equal(banner.props.collapsedAction.props.excelSheets().length, 7);
   // The OEM BD view shows only the fleet chart, so its workbook is the KPIs and the OEM table.

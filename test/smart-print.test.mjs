@@ -116,9 +116,9 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent||n.children[0]?.children[1]?.textContent),['Sr. No.','Job reference','Door','Secret','Status']);
   assert.equal(nodes.filter(n=>n.className==='smart-print-column-off').length,3);
   assert.deepEqual(nodes.filter(n=>n.tag==='tr'&&n.className==='highlight-row').length,1);
-  // A single Export button asks only for the format; exports never ask for a page size.
-  assert.equal(nodes.filter(n=>n.tag==='button'&&/^Export/.test(n.textContent)).length,1);
-  nodes.find(n=>n.textContent==='Export').onclick();
+  // A single Smart Export button asks only for the format; exports never ask for a page size.
+  assert.equal(nodes.filter(n=>n.tag==='button'&&/^Smart Export/.test(n.textContent)).length,1);
+  nodes.find(n=>n.textContent==='Smart Export').onclick();
   assert.equal(exported.length,0);
   assert.deepEqual(all(body.children.at(-1)).filter(n=>n.tag==='button'&&['PDF','Excel (.xlsx)'].includes(n.textContent)).map(n=>n.textContent),['PDF','Excel (.xlsx)']);
   assert.equal(all(body.children.at(-1)).some(n=>/^A[34] · /.test(n.textContent)),false);
@@ -128,7 +128,7 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(exported[0].columns,[columns[2],columns[0],columns[3]]);
   assert.equal(exported[0].rows,rows);
   assert.equal(exported[0].highlightRow,highlightRow);
-  nodes.find(n=>n.textContent==='Export').onclick();
+  nodes.find(n=>n.textContent==='Smart Export').onclick();
   assert.equal(exported.length,1);
   all(body.children.at(-1)).find(n=>n.textContent==='PDF').onclick();
   await new Promise(resolve=>setTimeout(resolve));
