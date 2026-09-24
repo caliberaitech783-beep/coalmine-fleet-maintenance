@@ -4519,6 +4519,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
       const {rows}=await pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
         COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination','') AS site,
         COALESCE(r.door_number,transfer.record_data->>'door',transfer.record_data->>'equipment','') AS door,
+        COALESCE(r.requester_role,'') AS "requesterRole",
         COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' END,'') AS "ticketCategory",
         to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
         FROM crm_notifications n

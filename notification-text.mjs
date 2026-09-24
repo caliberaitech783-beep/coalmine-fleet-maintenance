@@ -54,7 +54,12 @@ export function notificationCategory(item = {}) {
   if (!ticketCategory) {
     const message = value(item.message);
     if (/^Request(?:\s+\S+)?\s+(?:was\s+)?verified\b/i.test(message)) key = 'mis';
-    else if (/^Request(?:\s+\S+)?\s+(?:was\s+)?opened\b/i.test(message)) key = 'production';
+    else if (/^Request(?:\s+\S+)?\s+(?:was\s+)?opened\b/i.test(message)) {
+      const requesterRole = value(item.requesterRole).toLowerCase();
+      if (requesterRole.includes('maintenance')) key = 'maintenance';
+      else if (requesterRole.includes('mis')) key = 'mis';
+      else key = 'production';
+    }
     else if (/^Request(?:\s+\S+)?\s+(?:closed\b|was\s+(?:closed\b|marked\s+Idle\b|approved\s+on\s+road\b))/i.test(message)
       || /^Idle status for request\s+\S+\s+was cancelled\b/i.test(message)
       || /^\d{1,2}:\d{2}\s+reminder:\s+add today[’']s maintenance update\b/i.test(message)

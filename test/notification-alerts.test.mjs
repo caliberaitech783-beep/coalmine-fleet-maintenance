@@ -52,6 +52,9 @@ test('notification categories follow the historical workflow event, not current 
   for (const [message, expected] of examples) {
     assert.equal(notificationCategory({message, status: 'Closed', verifiedAt: '2026-09-10 12:00'}).key, expected, message);
   }
+  assert.equal(notificationCategory({message: 'Request REQ-2 opened.', requesterRole: 'Maintenance User'}).key, 'maintenance');
+  assert.equal(notificationCategory({message: 'Request REQ-3 opened.', requesterRole: 'MIS User'}).key, 'mis');
+  assert.equal(notificationCategory({message: 'Request REQ-4 opened.', requesterRole: 'Production User'}).key, 'production');
   for (const label of ['Production', 'Maintenance', 'MIS']) assert.equal(notificationCategory({ticketCategory: ` ${label} `, message: 'User created ticket TKT-1.'}).label, label);
   assert.equal(notificationCategory({ticketCategory: 'General', message: 'Ticket TKT-1 was resolved by MIS.'}).key, 'other');
   assert.equal(notificationCategory({}).key, 'other');
@@ -196,5 +199,6 @@ test('UI wires all toasts to exact-entry navigation and sounds outside state upd
   assert.match(server,/AFTER INSERT ON crm_notifications/);
   assert.match(server,/pg_notify\('bdms_notifications',NEW.recipient_login\)/);
   assert.match(server,/app.get\('\/api\/notifications',requireSession/);
+  assert.match(server,/COALESCE\(r\.requester_role,''\) AS "requesterRole"/);
   assert.match(server,/WHERE n.recipient_login=\$1/);
 });
