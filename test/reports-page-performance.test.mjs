@@ -11,6 +11,11 @@ test("Reports page resolves road status as one indexed fleet snapshot", () => {
   assert.doesNotMatch(reportsPage, /reportRoadStatus: roadStatusLabel\(record, reportRequests\)/);
 });
 
+test("Reports normalize imported door labels before building vehicle history", () => {
+  assert.match(reportsPage, /requestsWithDoorNumbers\(requests, equipmentRecords\)\.map/);
+  assert.match(reportsPage, /reportDoor: request\.door \|\| equipmentDoorNumber\(equipment \|\| \{\}\)/);
+});
+
 test("Reports page memoizes expensive derived collections", () => {
   assert.match(reportsPage, /const fleetStatusRows = useMemo\(/);
   assert.match(reportsPage, /const departmentReports = useMemo\(\(\) => buildDepartmentReports/);

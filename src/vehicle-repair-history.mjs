@@ -1,9 +1,14 @@
 import { canonicalSiteName } from "../site-location.mjs";
+import { equipmentDoorNumber } from "../equipment-door.mjs";
 
 const clean = (value) => String(value ?? "").trim();
 const normalize = (value) => clean(value).toLowerCase().replace(/\s+/g, " ");
 const requestHistoryIndexCache = new WeakMap();
 const transferIndexCache = new WeakMap();
+
+function vehicleDoor(record = {}) {
+  return clean(equipmentDoorNumber({ ...record, door: record.reportDoor || record.door }));
+}
 
 function requestTime(request = {}) {
   const value = clean(request.closedAt || request.start || request.verifiedAt).replace(" ", "T");
@@ -49,7 +54,7 @@ function intervalLabel(milliseconds) {
 
 export function vehicleHistoryKey(request = {}) {
   const references = [
-    ["door", request.reportDoor || request.door],
+    ["door", vehicleDoor(request)],
     ["chassis", request.chassis || request.chassisNo || request.manufacturerSerialNo],
     ["registration", request.reg || request.registrationNumber],
   ];
@@ -164,10 +169,12 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
   const histories = requestHistoryIndex(requests);
   const vehicles = new Map();
   const add = (record, source = "master") => {
-    const key = vehicleHistoryKey(record);
+    const door = vehicleDoor(record);
+    const normalizedRecord = door ? { ...record, door, reportDoor: door } : record;
+    const key = vehicleHistoryKey(normalizedRecord);
     if (!key) return;
     const existing = vehicles.get(key) || {};
-    vehicles.set(key, source === "master" ? { ...existing, ...record } : { ...record, ...existing });
+    vehicles.set(key, source === "master" ? { ...existing, ...normalizedRecord } : { ...normalizedRecord, ...existing });
   };
   equipmentRecords.forEach((record) => add(record, "master"));
   requests.forEach((record) => add(record, "request"));
@@ -176,7 +183,7 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
     const latest = history.at(-1) || {};
     const latestTransfer = latestTransferForVehicle(transfers, { ...vehicle, ...latest }) || {};
     const latestDriver = history.findLast((request) => clean(request.driverName || request.driver)) || {};
-    const door = clean(vehicle.door || vehicle.reportDoor || latest.reportDoor || latest.door);
+    const door = vehicleDoor(vehicle) || vehicleDoor(latest);
     return {
       ...vehicle,
       ...latest,
@@ -186,7 +193,9 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
       reportMake: clean(vehicle.make || vehicle.reportMake || latest.reportMake || latest.make),
       reportModel: clean(vehicle.model || vehicle.modelNo || vehicle.reportModel || latest.reportModel || latest.model),
       reportSite: clean(vehicle.currentLocation || vehicle.location || vehicle.reportSite || latest.reportSite || latest.site || latestTransfer.destination),
-      driverName: clean(latest.driverName || latest.driver || latestDriver.driverName || latestDriver.driver || latestTransfer.driver),
+      driverName: clean(latest.driverName || latest.driver || latestDriver.driverName || latestDriver.driver
+        || vehicle.driverName || vehicle.driver || vehicle.operatorName || vehicle.operator
+        || latestTransfer.driverName || latestTransfer.driver || latestTransfer.operatorName || latestTransfer.operator),
       registrationNumber: clean(vehicle.reg || vehicle.registrationNumber || latest.reg),
       chassisNumber: clean(vehicle.chassisNo || vehicle.manufacturerSerialNo || latest.chassis || latest.chassisNo),
       breakdownCount: history.length,

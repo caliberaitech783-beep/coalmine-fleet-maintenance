@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
+import { requestsWithDoorNumbers } from "../equipment-door.mjs";
 import {
   latestCompletedVehicleRepair,
   vehicleBreakdownHistoryRows,
@@ -51,6 +52,28 @@ test("fleet, month ranking, and common remarks aggregate each vehicle without lo
   assert.equal(monthly[0].breakdowns.length, 2);
   const remarks = vehicleCommonRemarkRows([], detailed);
   assert.equal(remarks.find((row) => row.reportDoor === "V-173").breakdownReason, "Hydraulic leak");
+});
+
+test("imported vehicle labels populate door and join their recorded driver history", () => {
+  const equipment = [{
+    door: "", reg: "2329890", equipmentName: "V326 - 2329890", chassisNo: "YV2XBZ0GXR8986510L26",
+    make: "VOLVO", model: "FMX500E", currentLocation: "Jayant OB",
+  }];
+  const history = requestsWithDoorNumbers([{
+    ref: "REQ-V326", door: "2329890", reg: "2329890", chassis: "YV2XBZ0GXR8986510L26",
+    driverName: "Ravi Kumar", start: "2026-09-20 09:00", status: "Closed",
+  }], equipment);
+  const [vehicle] = vehicleFleetRows(equipment, history);
+  assert.equal(vehicle.reportDoor, "V326 - 2329890");
+  assert.equal(vehicle.driverName, "Ravi Kumar");
+  assert.equal(vehicle.breakdownCount, 1);
+});
+
+test("a transfer driver remains available when a vehicle has no breakdown history", () => {
+  const equipment = [{door: "", equipmentName: "D61-07220", chassisNo: "7220", currentLocation: "Gauri Pauni OB (2nd)"}];
+  const [vehicle] = vehicleFleetRows(equipment, [], [{equipment: "D61-07220", driver: "Suresh", transferDate: "2026-09-18"}]);
+  assert.equal(vehicle.reportDoor, "D61-07220");
+  assert.equal(vehicle.driverName, "Suresh");
 });
 
 test("large vehicle histories are indexed instead of rescanned for every vehicle", () => {

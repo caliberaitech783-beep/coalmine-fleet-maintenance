@@ -54,6 +54,7 @@ import { prepareXlsxExportSheets } from "./xlsx-daily-updates.mjs";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
+import { equipmentDoorNumber, requestsWithDoorNumbers } from "../equipment-door.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import {
@@ -6860,26 +6861,26 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       else if (records.get(reference) !== record) records.set(reference, null);
     };
     equipmentRecords.forEach((record) => {
-      [record.manufacturerSerialNo, record.chassisNo, record.door, record.reg, record.equipmentName]
+      [record.manufacturerSerialNo, record.chassisNo, record.door, equipmentDoorNumber(record), record.reg, record.equipmentName]
         .forEach((value) => addReference(value, record));
     });
     return records;
   }, [equipmentRecords]);
-  const reportRequests = useMemo(() => requests.map((request) => {
+  const reportRequests = useMemo(() => requestsWithDoorNumbers(requests, equipmentRecords).map((request) => {
     const equipment = [request.chassis, request.door, request.reg, request.equipment]
       .map((value) => equipmentByReference.get(String(value || "").trim().toLowerCase()))
       .find(Boolean);
     return {
       ...request,
       reportEquipment: request.equipment || request.door || equipment?.equipmentName || "",
-      reportDoor: request.door || equipment?.door || "",
+      reportDoor: request.door || equipmentDoorNumber(equipment || {}) || "",
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
       equipmentGroup: normalizeEquipmentGroup(request.equipmentGroup) || equipmentGroupValue(equipment || {}),
       reportSite: displaySiteName(request.site || equipment?.currentLocation || equipment?.location),
     };
-  }), [requests, equipmentByReference]);
+  }), [requests, equipmentRecords, equipmentByReference]);
   const reportShiftOptions = useMemo(() => shiftFilterOptions(shiftRecords), [shiftRecords]);
   useEffect(() => {
     if (selectedReportShift === ALL_SHIFTS_KEY || reportShiftOptions.some((option) => option.key === selectedReportShift)) return;
