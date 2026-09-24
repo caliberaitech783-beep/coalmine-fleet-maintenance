@@ -9,11 +9,13 @@
 .mine-oem-site-section .dashboard-record-summary h4 { color: var(--brand-purple, #522e90); font-size: 17px; }
 .mine-oem-site-section .dashboard-record-summary > span { font-weight: 700; }
 .mine-oem-modal .mine-oem-detail-search { flex-wrap: wrap; }
+.mine-oem-modal .mine-oem-detail-search .mine-oem-inline-search { flex: 1 1 360px; min-width: 280px; }
 @media (max-width: 700px) {
   .mine-oem-site-tables { padding: 8px; }
   .mine-oem-modal .mine-oem-detail-context { padding: 6px 10px; font-size: 12px; gap: 4px; }
   .mine-oem-modal .mine-oem-detail-search { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px 10px; }
   .mine-oem-modal .mine-oem-detail-search label { min-width: 0; width: 100%; }
+  .mine-oem-modal .mine-oem-detail-search .mine-oem-inline-search { grid-column: 1 / -1; min-width: 0; }
   .mine-oem-modal .mine-oem-detail-search :is(input,select) { min-width: 0; width: 100%; font-size: 12px; }
   .mine-oem-site-section .dashboard-record-summary { padding: 10px; }
   .mine-oem-site-section .dashboard-record-summary h4 { font-size: 15px; }

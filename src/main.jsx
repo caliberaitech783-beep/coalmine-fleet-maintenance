@@ -3518,16 +3518,31 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
       }
     }, 50);
   };
-  const downloadExcel = () => runDownload("Preparing Excel report...", () => {
-    const sheets = excelSheets?.();
-    recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:sheets ? `${sheets.length} sheets` : `${rows.length} records`});
-    if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, prepareXlsxExportSheets({ title, sheets, formatCell: exportCellText })), exportFileName(title, "xlsx"));
-    else {
-      const exportRows = buildExportRows();
-      downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
+  const smartExport = (format) => {
+    setOpen(false);
+    openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, formatCell: exportCellText, exportFormat: format, exportOnly: true });
+  };
+  const downloadExcel = () => {
+    if (!excelSheets) {
+      smartExport("xlsx");
+      return;
     }
-  });
-  const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
+    runDownload("Preparing Excel report...", () => {
+      const sheets = excelSheets?.();
+      recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:sheets ? `${sheets.length} sheets` : `${rows.length} records`});
+      if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, prepareXlsxExportSheets({ title, sheets, formatCell: exportCellText })), exportFileName(title, "xlsx"));
+      else {
+        const exportRows = buildExportRows();
+        downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
+      }
+    });
+  };
+  const downloadPdf = () => {
+    if (!dashboardPdf) {
+      smartExport("pdf");
+      return;
+    }
+    runDownload("Preparing PDF report...", async () => {
       recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
       if (dashboardPdf) {
         const {downloadDashboardPdf} = await import("./dashboard-pdf.mjs");
@@ -3545,7 +3560,8 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
         throw new Error(details.error || "Could not create the PDF report.");
       }
       downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
-  });
+    });
+  };
   const printReport = () => {
     setOpen(false);
     if (printSection) {
@@ -5896,18 +5912,6 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
-function CaliberDirectoryPage() {
-  return (
-    <section className="caliber-directory-page" aria-label="Caliber Directory">
-      <iframe
-        title="Caliber Directory"
-        src="/cd/caliber-directory.html"
-        loading="eager"
-      />
-    </section>
-  );
-}
-
 const reportCategoryTabs = [
   {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports.", icon: FileBarChart},
   {id: "production", label: "Production report", description: "Submitted requests, maintenance acceptance, and no-remark cases.", icon: Gauge},
@@ -9136,6 +9140,17 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
         </tbody>
       </ActionsTable>
     </div>{remainingWorkflowRows > 0 && <div className="workflow-table-load-more" role="status"><span>Showing {visibleWorkflowRows.length} of {sortedRows.length} records</span><button type="button" onClick={() => setVisibleRowLimit((limit) => Math.min(limit + WORKFLOW_RENDER_BATCH, sortedRows.length))}>Show next {Math.min(WORKFLOW_RENDER_BATCH, remainingWorkflowRows)}</button></div>}</>
+  );
+}
+function CaliberDirectoryPage() {
+  return (
+    <section className="caliber-directory-page" aria-label="Caliber Directory">
+      <iframe
+        title="Caliber Directory"
+        src="/cd/caliber-directory.html"
+        loading="eager"
+      />
+    </section>
   );
 }
 

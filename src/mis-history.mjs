@@ -1,3 +1,5 @@
+import {isProductionFirstTripRequired} from "../info-pulse-data.mjs";
+
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 const hasProductionFirstTrip = (row = {}) => Boolean(String(row.productionFirstTripAt ?? row.production_first_trip_at ?? "").trim());
 
@@ -8,5 +10,5 @@ export function visibleInMisRequests(row = {}) {
 }
 
 export function visibleInMisHistory(row = {}) {
-  return normalize(row.status) === "closed" && Boolean(normalize(row.verifiedAt)) && hasProductionFirstTrip(row);
+  return normalize(row.status) === "closed" && Boolean(normalize(row.verifiedAt)) && (!isProductionFirstTripRequired(row) || hasProductionFirstTrip(row));
 }

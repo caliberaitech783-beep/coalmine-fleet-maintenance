@@ -202,3 +202,22 @@ test('UI wires all toasts to exact-entry navigation and sounds outside state upd
   assert.match(server,/COALESCE\(r\.requester_role,''\) AS "requesterRole"/);
   assert.match(server,/WHERE n.recipient_login=\$1/);
 });
+
+test('resolved ticket alerts stay visible until the user closes or opens them', () => {
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(source,/function isResolvedTicketNotification\(item\)/);
+  assert.match(source,/function resolvedTicketDismissKey\(session\)/);
+  assert.match(source,/function readDismissedResolvedTickets\(session\)/);
+  assert.match(source,/\/\^ticket\\b\[\\s\\S\]\*\\bwas resolved\\b\/\.test\(message\)/);
+  assert.match(source,/const \[alerts, setAlerts\] = useState\(\[\]\), \[resolvedTicketAlerts, setResolvedTicketAlerts\] = useState\(\[\]\)/);
+  assert.match(source,/dismissedResolvedRef\.current = readDismissedResolvedTickets\(session\)/);
+  assert.match(source,/showResolvedTicketAlerts\(next\)/);
+  assert.match(source,/!item\.isRead && !dismissedResolvedRef\.current\.has\(String\(item\.id\)\)/);
+  assert.match(source,/const transient = fresh\.filter\(\(item\) => !isResolvedTicketNotification\(item\)\)/);
+  assert.match(source,/saveDismissedResolvedTickets\(session, dismissedResolvedRef\.current\)/);
+  assert.match(source,/if \(persistent\) return undefined;[\s\S]*window\.setTimeout\(\(\) => onDismiss\(id\), 15000\)/);
+  assert.match(source,/resolvedTicketAlerts\.map\(\(item\) => <IncomingNotification key=\{item.id\}[\s\S]*persistent \/>/);
+  assert.match(source,/This will stay here until you close it\./);
+  const styles=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  assert.match(styles,/\.incoming-notification\.persistent-ticket-resolution/);
+});

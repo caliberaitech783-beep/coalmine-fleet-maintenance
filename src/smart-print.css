@@ -29,6 +29,11 @@
 .smart-print-sheet h4 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
 .smart-print-sheet p { margin: 0 0 12px; color: #65758b; font-size: 12px; }
 .smart-print-sheet th { background: #10284c; color: #fff; font-size: 11px; text-transform: uppercase; }
+.smart-print-header-check { display: inline-flex; align-items: center; gap: 7px; min-width: max-content; cursor: pointer; }
+.smart-print-header-check input { width: 15px; height: 15px; margin: 0; accent-color: #522e90; flex: 0 0 auto; }
+.smart-print-header-check input:disabled { cursor: not-allowed; }
+.smart-print-column-off { opacity: .42; text-decoration: line-through; }
+.smart-print-sheet td.smart-print-column-off { background: #f8fafc; color: #8b98aa; }
 .smart-print-sheet tbody tr:nth-child(even) { background: #f6f8fb; }
 .smart-print-sheet tr.highlight-row td { background: #f8caca; }
 .smart-print-dialog { position: fixed; }
@@ -68,6 +73,7 @@
 :root[data-theme="dark"] .smart-print-sheet :is(th, td) { border-color: #d7dfeb; }
 :root[data-theme="dark"] .smart-print-sheet th { background: #10284c; color: #fff; }
 :root[data-theme="dark"] .smart-print-sheet td { background: #fff; color: #17233c; }
+:root[data-theme="dark"] .smart-print-sheet td.smart-print-column-off { background: #f8fafc; color: #8b98aa; }
 :root[data-theme="dark"] .smart-print-sheet tbody tr:nth-child(even) td { background: #f6f8fb; }
 :root[data-theme="dark"] .smart-print-sheet tr.highlight-row td { background: #f8caca; }
 :root[data-theme="dark"] .smart-print-sheet td :is(b, strong) { color: inherit; }

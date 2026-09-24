@@ -114,7 +114,7 @@ export function printFitScale(contentWidth,availableWidth,minimum=.3) {
 let smartPrintExporter;
 export function setSmartPrintExporter(exporter) {smartPrintExporter=exporter;}
 
-export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??''),snapshot=''}) {
+export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??''),snapshot='',exportFormat='',exportOnly=false}) {
   const options=printColumnOptions(columns);
   let selected=normalizePrintColumnIds(options,options.map(option=>option.id)),layouts=[],storage,key;
   let storageError='';
@@ -127,24 +127,23 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     layouts=validPrintLayouts(JSON.parse(storage.getItem(key)||'[]'));
   }catch{storageError='Layouts cannot be saved in this browser right now. You can still customize and print.';}
   const previousFocus=document.activeElement;
-  const dialog=document.createElement('dialog');dialog.className='smart-print-dialog';dialog.setAttribute('aria-label','Smart Print');
+  const exportName=exportFormat==='pdf'?'PDF':exportFormat==='xlsx'?'Excel':'';
+  const dialog=document.createElement('dialog');dialog.className='smart-print-dialog';dialog.setAttribute('aria-label',exportOnly?'Smart Export':'Smart Print');
   const make=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
   const button=(text,action,parent,className)=>{const node=make('button',text,className);node.type='button';node.onclick=action;parent.append(node);return node;};
   const close=()=>{dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus();};
   const header=make('header');
   const back=button('←',close,header);back.setAttribute('aria-label','Back');
-  const heading=make('div');heading.append(make('h2','Smart Print'),make('p',title));header.append(heading);
+  const heading=make('div');heading.append(make('h2',exportOnly?'Smart Export':'Smart Print'),make('p',title));header.append(heading);
   const closeButton=button('×',close,header);closeButton.setAttribute('aria-label','Close Smart Print');dialog.append(header);
   const body=make('div',undefined,'smart-print-body');dialog.append(body);
   // A snapshot (a dashboard) prints as it is on screen, so there are no columns to choose.
-  body.append(make('p',snapshot||'Choose the columns to print. Save the selection with a report name, then print it directly from Saved report layouts.'));
+  body.append(make('p',snapshot||'Tick columns in the preview header. All columns are selected by default and the same selection is used for Smart Print, PDF and Excel.'));
   const controls=make('div',undefined,'smart-print-controls');body.append(controls);
   const layoutLabel=make('label','Saved report layouts');const layoutSelect=make('select');layoutLabel.append(layoutSelect);controls.append(layoutLabel);
   const notice=make('p',snapshot?'':storageError,'smart-print-notice');notice.setAttribute('role','status');
   const updateLayouts=(number='')=>{layoutSelect.replaceChildren();const placeholder=make('option','Custom selection');placeholder.value='';layoutSelect.append(placeholder);for(const layout of layouts){const option=make('option',layout.name||`Layout ${layout.number}`);option.value=String(layout.number);layoutSelect.append(option);}layoutSelect.value=String(number);};
   updateLayouts();
-  const checks=make('div',undefined,'smart-print-columns');checks.setAttribute('role','group');checks.setAttribute('aria-label','Columns to print');
-  const checkboxes=[];
   const preview=make('div',undefined,'smart-print-preview');
   const footer=make('footer');dialog.append(footer);
   const count=make('span');footer.append(count);
@@ -251,11 +250,12 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       .finally(()=>{exporting=false;render();});
   };
   // One Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
-  const exportButtons=onExport&&!snapshot?[button('Export',()=>{
+  const exportButtons=onExport&&!snapshot&&!exportOnly?[button('Export',()=>{
     if(currentReport().chosen.length)askChoice('Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
   },footer,'smart-print-export')]:[];
-  const printButton=button(snapshot?'Print as shown on screen':'Print current selection',printSelection,footer,'primary');
-  const printSavedButton=button('Print saved layout',printSelection,controls,'smart-print-saved-print');
+  const directExportButton=exportOnly&&exportName?button(`Download ${exportName}`,()=>runExport(exportFormat),footer,'primary'):null;
+  const printButton=exportOnly?null:button(snapshot?'Print as shown on screen':'Print current selection',printSelection,footer,'primary');
+  const printSavedButton=exportOnly?null:button('Print saved layout',printSelection,controls,'smart-print-saved-print');
   const deleteSavedButton=button('Delete saved layout',()=>{
     try{
       const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
@@ -276,24 +276,47 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       preview.replaceChildren(make('h3','Print preview'),make('p','The finished pages are shown after you choose the paper and printer. Nothing prints until you click Print there.'));
       return;
     }
-    for(const {input,id} of checkboxes)input.checked=selected.includes(id);
-    const {chosen,appendices}=printableReport();printButton.disabled=!chosen.length;
+    const {chosen,appendices}=printableReport();if(printButton)printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
-    printSavedButton.disabled=!savedSelected;
+    if(printSavedButton)printSavedButton.disabled=!savedSelected;
     deleteSavedButton.disabled=!savedSelected||Boolean(storageError);
-    printButton.hidden=savedSelected;
-    printButton.disabled=!chosen.length||exporting;printSavedButton.disabled=!savedSelected||exporting;
+    if(printButton){printButton.hidden=savedSelected;printButton.disabled=!chosen.length||exporting;}
+    if(printSavedButton)printSavedButton.disabled=!savedSelected||exporting;
+    if(directExportButton)directExportButton.disabled=!chosen.length||exporting;
     for(const exportButton of exportButtons)exportButton.disabled=!chosen.length||exporting;
     count.textContent=`${chosen.length} of ${options.length} columns · ${rows.length} records`;
-    preview.replaceChildren(make('h3','Print preview — first 5 records'));
+    preview.replaceChildren(make('h3',exportOnly?`Export preview — first 5 records`:'Print preview — first 5 records'));
     if(!chosen.length){preview.append(make('p','Select at least one column.'));return;}
-    // Mirror the final output: report name, record count, the automatic Sr. No. column and highlighted rows.
+    // Header ticks stay visible for every available column, so an unchecked column can be selected again.
     const previewRows=rows.slice(0,5);
-    const serial=withSerialColumn(chosen.map(column=>({key:column.key,label:String(column.label||'')})),previewRows.map(row=>chosen.map(column=>formatCell(column.value?.(row)))));
+    const previewOptions=[
+      ...options.filter(jobReferenceOption),
+      ...options.filter(option=>!jobReferenceOption(option)),
+    ];
+    const previewColumns=compactSmartPrintColumns(previewOptions.map(option=>option.column));
+    const serial=withSerialColumn(previewColumns.map(column=>({key:column.key,label:String(column.label||'')})),previewRows.map(row=>previewColumns.map(column=>formatCell(column.value?.(row)))));
     const sheet=make('div',undefined,'smart-print-sheet');
     sheet.append(make('h4',currentReport().reportTitle),make('p',`${rows.length.toLocaleString('en-IN')} record${rows.length===1?'':'s'} · complete update history prints in the Daily Updates section and exports to its Excel sheet`));
-    const table=make('table'),thead=make('thead'),tr=make('tr');for(const column of serial.columns)tr.append(make('th',column.label));thead.append(tr);table.append(thead);
-    const tbody=make('tbody');serial.rows.forEach((cells,index)=>{const line=make('tr',undefined,highlightRow?.(previewRows[index])?'highlight-row':'');for(const cell of cells)line.append(make('td',cell));tbody.append(line);});
+    const table=make('table'),thead=make('thead'),tr=make('tr');
+    const serialAlreadyPresent=serial.columns.length===previewOptions.length;
+    if(!serialAlreadyPresent)tr.append(make('th',serial.columns[0]?.label||'Sr. No.'));
+    previewOptions.forEach((option)=>{
+      const checked=selected.includes(option.id),header=make('th',undefined,checked?'':'smart-print-column-off'),label=make('label',undefined,'smart-print-header-check'),input=make('input');
+      input.type='checkbox';input.checked=checked;if(jobReferenceOption(option)){input.disabled=true;label.title='Job reference is mandatory in every print layout.';}
+      input.onchange=()=>{selected=normalizePrintColumnIds(options,input.checked?[...selected,option.id]:selected.filter(id=>id!==option.id));layoutSelect.value='';render();};
+      label.append(input,make('span',option.label));header.append(label);tr.append(header);
+    });
+    thead.append(tr);table.append(thead);
+    const tbody=make('tbody');serial.rows.forEach((cells,index)=>{
+      const line=make('tr',undefined,highlightRow?.(previewRows[index])?'highlight-row':'');
+      cells.forEach((cell,cellIndex)=>{
+        const td=make('td',cell);
+        const optionIndex=serialAlreadyPresent?cellIndex:cellIndex-1;
+        if(optionIndex>=0&&!selected.includes(previewOptions[optionIndex]?.id))td.className='smart-print-column-off';
+        line.append(td);
+      });
+      tbody.append(line);
+    });
     if(!serial.rows.length){const line=make('tr'),cell=make('td','No records available');cell.colSpan=serial.columns.length;line.append(cell);tbody.append(line);}
     table.append(tbody);sheet.append(table);preview.append(sheet);
     for(const appendix of appendices){
@@ -322,9 +345,8 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     }catch(error){notice.textContent=error?.message||'Could not save the layout. Browser storage may be unavailable.';}
   },controls);save.disabled=Boolean(storageError);
   layoutSelect.onchange=()=>{const layout=layouts.find(item=>String(item.number)===layoutSelect.value);if(layout)selected=normalizePrintColumnIds(options,layout.columns.filter(id=>options.some(option=>option.id===id)));render();};
-  for(const option of options){const label=make('label'),input=make('input');input.type='checkbox';input.checked=true;if(jobReferenceOption(option)){input.disabled=true;label.title='Job reference is mandatory in every print layout.';}input.onchange=()=>{selected=normalizePrintColumnIds(options,input.checked?[...selected,option.id]:selected.filter(id=>id!==option.id));layoutSelect.value='';render();};label.append(input,make('span',option.label));checks.append(label);checkboxes.push({input,id:option.id});}
-  body.append(notice,checks,preview);dialog.append(pagePrompt);
-  if(snapshot){controls.hidden=true;checks.hidden=true;}
+  body.append(notice,preview);dialog.append(pagePrompt);
+  if(snapshot)controls.hidden=true;
   // Keep keyboard navigation in this native top-layer dialog, even when it was
   // launched from a modal with its own document-level focus trap.
   dialog.addEventListener('keydown',event=>event.stopPropagation());

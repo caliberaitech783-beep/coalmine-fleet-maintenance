@@ -97,10 +97,11 @@ export function productionFirstTripCutoffMs() {
   return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_IST);
 }
 
-export function isProductionFirstTripRequired(request = {}) {
+export function isProductionFirstTripRequired(request = {}, options = {}) {
   const requestStart = request.start ?? request.startedAt ?? request.started_at;
   const startedAt = requestStart instanceof Date ? requestStart.getTime() : parseIstTimestamp(requestStart);
-  return Number.isFinite(startedAt) && startedAt >= productionFirstTripCutoffMs();
+  const cutoff = options.cutoffMs ?? productionFirstTripCutoffMs(options.now);
+  return Number.isFinite(startedAt) && startedAt >= cutoff;
 }
 
 export function isProductionFirstTripPending(request = {}, options = {}) {

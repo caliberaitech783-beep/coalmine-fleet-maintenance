@@ -80,6 +80,7 @@ test('dialog prompts for a report name, restores it, prints it, and can delete i
   assert.equal(printed[0].pageSize,'A3');
   openSmartPrint(config);nodes=all(body.children.at(-1));
   const select=nodes.find(n=>n.tag==='select');select.value='1';select.onchange();
+  nodes=all(body.children.at(-1));
   assert.deepEqual(nodes.filter(n=>n.tag==='input').map(n=>n.checked),[true,false]);
   nodes.find(n=>n.textContent==='Delete saved layout').onclick();
   assert.equal(JSON.parse(data.get([...data.keys()].find(key=>key.startsWith('bdms:smart-print:')))).length,0);
@@ -107,13 +108,13 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   openSmartPrint({title:'Report',columns,rows,highlightRow,onPrint(){},onExport:args=>{exported.push(args);}});
   let nodes=all(body.children.at(-1));
   const checks=nodes.filter(n=>n.tag==='input');
-  checks[1].checked=false;checks[1].onchange();
   checks[2].checked=false;checks[2].onchange();
+  checks[0].checked=false;checks[0].onchange();
   nodes=all(body.children.at(-1));
-  assert.equal(checks[2].disabled,true,'Job reference cannot be unchecked');
-  // The preview shows the automatic Sr. No. column, only the chosen columns in table order, and highlighted rows.
-  assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent),['Sr. No.','Job reference','Door','Status']);
-  assert.deepEqual(nodes.filter(n=>n.tag==='td').map(n=>n.textContent),['1','REQ-1','24','Open','2','REQ-2','25','Closed']);
+  assert.equal(checks[0].disabled,true,'Job reference cannot be unchecked');
+  // The preview header carries all column ticks; unchecked columns are marked but excluded from the export.
+  assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent||n.children[0]?.children[1]?.textContent),['Sr. No.','Job reference','Door','Secret','Status']);
+  assert.equal(nodes.filter(n=>n.className==='smart-print-column-off').length,3);
   assert.deepEqual(nodes.filter(n=>n.tag==='tr'&&n.className==='highlight-row').length,1);
   // A single Export button asks only for the format; exports never ask for a page size.
   assert.equal(nodes.filter(n=>n.tag==='button'&&/^Export/.test(n.textContent)).length,1);
@@ -134,6 +135,38 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.equal(exported[1].format,'pdf');assert.equal(exported[1].pageSize,undefined);
   assert.deepEqual(exported[1].columns,[columns[2],columns[0],columns[3]]);
   assert.match(all(body.children.at(-1)).find(n=>n.className==='smart-print-notice').textContent,/PDF export downloaded with 3 columns and 2 records/);
+ } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+test('direct smart export opens with header ticks and one download action',async()=>{
+ class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.value='';}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  setAttribute(name,value){this[name]=value;} addEventListener(){} showModal(){} close(){} remove(){}
+ }
+ const body=new Element('body'), data=new Map([['nerveCenterSession',JSON.stringify({login:'tester'})]]);
+ const storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+ const oldDocument=globalThis.document,oldWindow=globalThis.window;
+ globalThis.document={body,createElement:tag=>new Element(tag)};
+ globalThis.window={localStorage:storage,sessionStorage:storage};
+ const all=node=>[node,...node.children.flatMap(all)];
+ try {
+  const exported=[];
+  const columns=[{label:'Door',value:r=>r.door},{label:'Status',value:r=>r.status}],rows=[{door:'24',status:'Open'}];
+  openSmartPrint({title:'Report',columns,rows,onPrint:()=>assert.fail('direct export should not print'),onExport:args=>exported.push(args),exportFormat:'xlsx',exportOnly:true});
+  let nodes=all(body.children.at(-1));
+  assert.equal(nodes.find(n=>n.tag==='h2').textContent,'Smart Export');
+  assert.equal(nodes.some(n=>n.textContent==='Print current selection'),false);
+  assert.equal(nodes.some(n=>n.textContent==='Export'),false);
+  assert.equal(nodes.some(n=>n.textContent==='Download Excel'),true);
+  const checks=nodes.filter(n=>n.tag==='input');
+  assert.deepEqual(checks.map(input=>input.checked),[true,true]);
+  checks[1].checked=false;checks[1].onchange();
+  nodes=all(body.children.at(-1));
+  nodes.find(n=>n.textContent==='Download Excel').onclick();
+  await new Promise(resolve=>setTimeout(resolve));
+  assert.equal(exported[0].format,'xlsx');
+  assert.deepEqual(exported[0].columns,[columns[0]]);
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
 test('wide reports are scaled down to the page and never enlarged',()=>{
@@ -267,7 +300,6 @@ test('a dashboard snapshot skips the column picker but keeps paper, printer, pag
   let nodes=all(body.children.at(-1));
   assert.ok(nodes.some(n=>n.textContent===snapshot),'the dialog says the dashboard prints as shown');
   assert.equal(nodes.find(n=>n.className==='smart-print-controls').hidden,true,'no saved column layouts');
-  assert.equal(nodes.find(n=>n.className==='smart-print-columns').hidden,true,'no KPI columns to tick');
   assert.equal(nodes.some(n=>n.textContent==='Export'),false);
   assert.equal(nodes.some(n=>n.textContent==='Print preview — first 5 records'),false,'no KPI table preview');
   const print=nodes.find(n=>n.textContent==='Print as shown on screen');
