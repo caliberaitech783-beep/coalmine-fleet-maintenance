@@ -210,6 +210,12 @@ textarea {
   box-shadow: 0 24px 70px #0009;
 }
 :root[data-theme="dark"] .modal > header { border-color: var(--line); }
+:root[data-theme="dark"] .delete-selected-warning { background: #2a171d; border-color: #70404a; color: #ffb2ba; }
+:root[data-theme="dark"] .delete-selected-list { background: #0d1829; border-color: var(--line); }
+:root[data-theme="dark"] .delete-selected-list li { border-color: var(--line); }
+:root[data-theme="dark"] .delete-selected-list li::before { background: #382234; color: #f0a6ce; }
+:root[data-theme="dark"] .delete-selected-reason textarea { background: #0d1829; border-color: #34435a; color: #d7e0ed; }
+:root[data-theme="dark"] .delete-selected-error { background: #2a171d; border-color: #70404a; color: #ffb2ba; }
 :root[data-theme="dark"] .details { background: var(--line); border-color: var(--line); }
 :root[data-theme="dark"] .details div { background: #111d30; }
 :root[data-theme="dark"] .detailhead .truckicon,

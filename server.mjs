@@ -6304,6 +6304,24 @@ app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+app.delete('/api/masters/:master/selected',requireSuper,async(req,res,next)=>{
+  try{
+    const master=decodeURIComponent(req.params.master);
+    if(master!=='Equipment master')return res.status(403).json({error:'Selected-record deletion is only available for Equipment master.'});
+    const reason=String(req.get(AUDIT_REASON_HEADER)||'').trim();
+    if(!reason)return res.status(400).json({error:'A deletion reason is required for the Audit Trail.'});
+    if(!Array.isArray(req.body?.ids)||!req.body.ids.length)return res.status(400).json({error:'Select at least one equipment record to delete.'});
+    const ids=[...new Set(req.body.ids.map(Number))];
+    if(ids.length>10000||ids.some(id=>!Number.isSafeInteger(id)||id<=0))return res.status(400).json({error:'The selected equipment records are invalid.'});
+    const result=await pool.query(
+      'DELETE FROM master_records WHERE master_name=$1 AND id=ANY($2::bigint[])',
+      [master,ids]
+    );
+    req.audit={eventType:'Master data',module:master,action:'Delete selected records',targetType:master,targetReference:`${result.rowCount} records`,changedFields:[]};
+    res.json({deleted:result.rowCount});
+  }catch(error){next(error)}
+});
+
 app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);

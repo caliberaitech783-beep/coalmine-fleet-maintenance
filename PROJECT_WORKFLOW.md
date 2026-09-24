@@ -152,6 +152,7 @@ Every generic master supports:
 - CSV import with template download and drag-and-drop dropzone;
 - CSV export;
 - Delete all;
+- Equipment Master-only filtered deletion with a complete record review, Audit Trail reason, and explicit confirmation;
 - row edit and delete where the page exposes actions.
 
 Import behavior is master-specific:
@@ -309,6 +310,7 @@ All protected calls use `Authorization: Bearer <session-token>`.
 | PUT | `/api/masters/:master/:id` | Super User | Edit a master row |
 | DELETE | `/api/masters/:master/:id` | Super User | Delete one master row |
 | DELETE | `/api/masters/:master/all` | Super User | Delete all rows in a master |
+| DELETE | `/api/masters/:master/selected` | Super User | Delete selected filtered Equipment Master rows |
 | GET | `/api/whatsapp-alert-history` | Super User | Load prepared alert history |
 | POST | `/api/whatsapp-alert-history` | Super User | Record a prepared alert |
 

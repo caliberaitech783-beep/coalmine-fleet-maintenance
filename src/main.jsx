@@ -4129,16 +4129,21 @@ function MultiTextField({ name, label, value = "" }) {
   );
 }
 
-function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
+function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelected, selectedRecords = [], onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
     [dragActive, setDragActive] = useState(false),
     [syncingOracle, setSyncingOracle] = useState(false),
+    [deletingSelected, setDeletingSelected] = useState(false),
+    [deleteSelectedReason, setDeleteSelectedReason] = useState(""),
+    [deleteSelectedError, setDeleteSelectedError] = useState(""),
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
-    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : formatMasterFieldValue(key, record[key]) })) || [];
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : formatMasterFieldValue(key, record[key]) })) || [],
+    selectedEquipmentRecords = [...new Map(selectedRecords.filter((record) => record.id).map((record) => [String(record.id), record])).values()],
+    selectedRecordCount = selectedEquipmentRecords.length;
   if (!fields) return null;
   const saveManual = async (e) => {
     e.preventDefault();
@@ -4246,6 +4251,29 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
       setSyncingOracle(false);
     }
   };
+  const openDeleteSelectedReview = () => {
+    setDeleteSelectedReason("");
+    setDeleteSelectedError("");
+    setMode("delete-selected");
+  };
+  const deleteSelected = async () => {
+    const reason = deleteSelectedReason.trim();
+    if (!onDeleteSelected || !selectedRecordCount || deletingSelected) return;
+    if (!reason) {
+      setDeleteSelectedError("Enter a reason for the Audit Trail before deleting these records.");
+      return;
+    }
+    setDeleteSelectedError("");
+    setDeletingSelected(true);
+    try {
+      await onDeleteSelected(selectedEquipmentRecords, reason);
+      setMode(null);
+    } catch (error) {
+      setDeleteSelectedError(error.message || "Could not delete the selected equipment records.");
+    } finally {
+      setDeletingSelected(false);
+    }
+  };
   return (
     <>
       <div className="master-actions">
@@ -4257,6 +4285,11 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
         {onDeleteAll && (
           <button className="secondary danger" onClick={onDeleteAll}>
             <Trash2 /> Delete all
+          </button>
+        )}
+        {name === "Equipment master" && onDeleteSelected && (
+          <button className="secondary danger" type="button" onClick={openDeleteSelectedReview} disabled={!selectedRecordCount || deletingSelected} title="Review and delete every saved record matching the current Equipment Master filters">
+            <Trash2 /> {deletingSelected ? "Deleting..." : `Delete selected (${selectedRecordCount})`}
           </button>
         )}
         {name === "Privilege" && onSaveAll && (
@@ -4274,6 +4307,39 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           Add record
         </button>
       </div>
+      {mode === "delete-selected" && (
+        <Modal title={`Review ${selectedRecordCount} selected equipment record${selectedRecordCount === 1 ? "" : "s"}`} close={() => !deletingSelected && setMode(null)} className="delete-selected-modal">
+          <div className="delete-selected-review">
+            <div className="delete-selected-warning" role="alert">
+              <Trash2 />
+              <div>
+                <strong>Are you sure you want to delete all of the records listed below?</strong>
+                <span>This permanently deletes {selectedRecordCount} record{selectedRecordCount === 1 ? "" : "s"} matching the current filters and cannot be undone.</span>
+              </div>
+            </div>
+            <ol className="delete-selected-list" aria-label="Equipment records selected for deletion">
+              {selectedEquipmentRecords.map((record) => {
+                const equipmentName = record.equipmentName || record.door || record.reg || record.manufacturerSerialNo || `Equipment record ${record.id}`;
+                const details = [
+                  record.currentLocation || record.location ? `Location: ${record.currentLocation || record.location}` : "",
+                  record.manufacturerSerialNo ? `Serial: ${record.manufacturerSerialNo}` : "",
+                  record.chassisNo ? `Chassis: ${record.chassisNo}` : "",
+                  equipmentGroupValue(record) ? `Group: ${equipmentGroupValue(record)}` : "",
+                ].filter(Boolean);
+                return <li key={record.id}><b>{equipmentName}</b><span>{details.join(" · ") || "No additional equipment details"}</span></li>;
+              })}
+            </ol>
+            <label className="delete-selected-reason">Reason for deletion *<textarea value={deleteSelectedReason} onChange={(event) => setDeleteSelectedReason(event.target.value)} maxLength="500" placeholder="Enter the reason recorded in the Audit Trail" disabled={deletingSelected} /></label>
+            {deleteSelectedError && <p className="delete-selected-error" role="alert">{deleteSelectedError}</p>}
+            <footer className="delete-selected-actions">
+              <button type="button" className="secondary" onClick={() => setMode(null)} disabled={deletingSelected}>Cancel</button>
+              <button type="button" className="primary delete-selected-confirm" onClick={deleteSelected} disabled={deletingSelected || !selectedRecordCount || !deleteSelectedReason.trim()}>
+                <Trash2 /> {deletingSelected ? "Deleting selected records..." : "Yes, delete selected"}
+              </button>
+            </footer>
+          </div>
+        </Modal>
+      )}
       {mode === "manual" && (
         <Modal title={"Add to " + name} close={() => setMode(null)}>
           <form className="form master-form" onSubmit={saveManual}>
@@ -4510,6 +4576,7 @@ function Equipment({
   onEdit,
   onDelete,
   onDeleteAll,
+  onDeleteSelected,
 }) {
   const [q, setQ] = useState(""),
     [road, setRoad] = useState(initialFilter),
@@ -4629,7 +4696,7 @@ function Equipment({
             · {rows.length} records shown
           </p>
         </div>
-        <MasterActions name="Equipment master" records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name="Equipment master" records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} onDeleteSelected={onDeleteSelected} selectedRecords={rows} />
       </header>
       <div className="toolbar">
         <div>
@@ -7869,7 +7936,22 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
     setRecords([]);
     alert(`${details.deleted ?? records.length} records deleted successfully.`);
   };
-  return [records, add, loaded, edit, remove, removeAll, loadError, () => setLoadAttempt((attempt) => attempt + 1)];
+  const removeSelected = async (selectedRecords = [], reason = "") => {
+    const ids = [...new Set(selectedRecords.map((record) => Number(record.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
+    if (!ids.length) throw new Error("No saved equipment records match the current filters.");
+    if (!reason.trim()) throw new Error("A deletion reason is required for the Audit Trail.");
+    const response = await fetch(`/api/masters/${encodeURIComponent(name)}/selected`, {
+      method: "DELETE",
+      headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason.trim()},
+      body: JSON.stringify({ids}),
+    });
+    const details = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(details.error || "Could not delete the selected equipment records.");
+    const deletedIds = new Set(ids);
+    setRecords((current) => current.filter((record) => !deletedIds.has(Number(record.id))));
+    alert(`${details.deleted ?? ids.length} selected equipment record${(details.deleted ?? ids.length) === 1 ? "" : "s"} deleted successfully.`);
+  };
+  return [records, add, loaded, edit, remove, removeAll, loadError, () => setLoadAttempt((attempt) => attempt + 1), removeSelected];
 }
 function MetaWhatsAppSetup() {
   const [employees] = useMasterRecords("Users & employees");
@@ -8264,7 +8346,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 };
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
-  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords("Equipment master", vehicles);
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad, onDeleteSelected] = useMasterRecords("Equipment master", vehicles);
   if (loadError && !loaded) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
@@ -8279,6 +8361,7 @@ Equipment = function EquipmentWithData(props) {
       onEdit={(id, record) => onEdit(id, normalizeEquipmentRecord(record))}
       onDelete={onDelete}
       onDeleteAll={onDeleteAll}
+      onDeleteSelected={onDeleteSelected}
     />
   );
 };
