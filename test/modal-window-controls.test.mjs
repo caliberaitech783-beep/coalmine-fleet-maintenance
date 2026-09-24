@@ -17,5 +17,5 @@ test("shared dialogs offer Back and Close through the same guarded close callbac
 test("dialogs can be resized from the corner on desktop", () => {
   assert.match(css, /\.modal\{resize:both;min-width:min\(340px,100vw\);min-height:160px;max-width:100vw\}/);
   assert.match(css, /\.modal\{[^}]*overflow:auto/, "the resize handle needs a non-visible overflow");
-  assert.match(css, /@media\(max-width:520px\)\{\.modal\{resize:none\}\}/);
+  assert.match(css, /@media\(max-width:520px\)\{\.modal\{resize:none;min-width:0;width:100%;max-width:100%\}\}/);
 });

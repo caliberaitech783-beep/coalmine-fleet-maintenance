@@ -1,5 +1,7 @@
-/* Hide the locale-ordered native text and paint data-dmy (day-first) over it. */
-input.dmy-date-input { position: relative; }
+/* Hide the locale-ordered native text and paint data-dmy (day-first) over it.
+   DateInput only adds this class for desktop Chromium. The media-query fallback
+   below also protects unusual mobile Chromium builds that report desktop UA data. */
+input.dmy-date-input { position: relative; min-width: 0; max-width: 100%; overflow: hidden; }
 input.dmy-date-input::-webkit-datetime-edit,
 input.dmy-date-input::-webkit-datetime-edit-fields-wrapper,
 input.dmy-date-input::-webkit-datetime-edit-text,
@@ -20,3 +22,17 @@ input.dmy-date-input::before {
 }
 input.dmy-date-input[data-empty]::before { opacity: .55; }
 input.dmy-date-input:not(:disabled):not([readonly]) { cursor: pointer; }
+
+@media (hover: none), (pointer: coarse) {
+  input.dmy-date-input::-webkit-datetime-edit,
+  input.dmy-date-input::-webkit-datetime-edit-fields-wrapper,
+  input.dmy-date-input::-webkit-datetime-edit-text,
+  input.dmy-date-input::-webkit-datetime-edit-day-field,
+  input.dmy-date-input::-webkit-datetime-edit-month-field,
+  input.dmy-date-input::-webkit-datetime-edit-year-field,
+  input.dmy-date-input::-webkit-datetime-edit-hour-field,
+  input.dmy-date-input::-webkit-datetime-edit-minute-field,
+  input.dmy-date-input::-webkit-datetime-edit-second-field,
+  input.dmy-date-input::-webkit-datetime-edit-ampm-field { color: inherit; }
+  input.dmy-date-input::before { content: none; }
+}

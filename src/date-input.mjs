@@ -12,8 +12,18 @@ export function formatDayFirstInputValue(value, type = "date") {
 // Native date inputs render in the browser's locale (mm/dd/yyyy on US systems).
 // DateInput keeps the native picker and value format (yyyy-mm-dd) but paints the
 // visible text day-first through a ::before overlay fed by data-dmy (date-input.css).
-// Only Chromium paints ::before on inputs; elsewhere the native text is left alone.
-const overlaySupported = typeof navigator !== "undefined" && Boolean(navigator.userAgentData);
+// Chromium's mobile date control is implemented differently across Android builds:
+// some versions paint the native segments above generated input content, producing
+// multiple dates on top of each other. Keep the overlay desktop-only and let touch
+// devices use their reliable native representation.
+export function dateInputOverlaySupported(browserNavigator = typeof navigator === "undefined" ? null : navigator) {
+  if (!browserNavigator?.userAgentData) return false;
+  if (browserNavigator.userAgentData.mobile === true) return false;
+  if (browserNavigator.maxTouchPoints > 0) return false;
+  return !/Android|Mobile|iPhone|iPad|iPod/i.test(String(browserNavigator.userAgent || ""));
+}
+
+const overlaySupported = dateInputOverlaySupported();
 
 const DateInput = forwardRef(function DateInput({ type = "date", className, value, defaultValue, onChange, onClick, ...props }, ref) {
   const controlled = value !== undefined;
