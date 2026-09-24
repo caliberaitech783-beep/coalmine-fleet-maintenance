@@ -1119,7 +1119,7 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   assert.equal(menu.props.dashboardPdf, true, "PDF and Smart Print capture the dashboard as it is");
   assert.equal(menu.props.className, "dashboard-export-trigger");
   const names = () => dashboardMenu()[0].props.excelSheets().map((sheet) => sheet.name);
-  assert.deepEqual(names(), ["KPIs", "Total Fleet", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend", "Stage Pipeline"]);
+  assert.deepEqual(names(), ["KPIs", "Total Fleet", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
   const sheets = menu.props.excelSheets();
   assert.ok(sheets.every((sheet) => sheet.title && Array.isArray(sheet.columns) && Array.isArray(sheet.rows)));
   assert.match(sheets[2].title, /^Tracking Vehicle Throughput · Site-wise BD Movement · /);
@@ -1127,12 +1127,12 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   // The Daily BD balance chart hands its current table over; the workbook then includes it after Total Fleet.
   const chart = findAll(tree, (node) => node.props.exportRef && node.props.onInspect)[0];
   chart.props.exportRef.current = {title: "Daily BD balance · test", columns: [{label: "Date", value: (row) => row.date}], rows: [{date: "19-09-2026"}]};
-  assert.deepEqual(names(), ["KPIs", "Total Fleet", "Daily BD balance", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend", "Stage Pipeline"]);
+  assert.deepEqual(names(), ["KPIs", "Total Fleet", "Daily BD balance", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
   // A collapsed banner keeps the same whole-dashboard menu beside its eye toggle.
   const banner = findAll(tree, (node) => node.props.collapsedAction)[0];
   assert.equal(banner.props.collapsedAction.props.label, "Export dashboard");
   assert.equal(banner.props.collapsedAction.props.className, "dashboard-banner-export");
-  assert.equal(banner.props.collapsedAction.props.excelSheets().length, 8);
+  assert.equal(banner.props.collapsedAction.props.excelSheets().length, 7);
   // The OEM BD view shows only the fleet chart, so its workbook is the KPIs and the OEM table.
   button(byLabel(tree, "Fleet chart view"), "OEM BD").props.onClick();
   tree = view.render();
