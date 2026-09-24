@@ -5754,12 +5754,10 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
-    if(!String(existing.productionFirstTripAt||'').trim())return res.status(409).json({error:'Production first-trip entry is pending. Complete the Production first-trip entry before MIS verification.'});
     if(!firstTripDone)return res.status(400).json({error:'MIS first-trip confirmation is mandatory before completing verification.'});
     const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
     if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
-    if(!String(before.productionFirstTripAt||'').trim())throw Object.assign(new Error('Production first-trip entry is pending. Complete the Production first-trip entry before MIS verification.'),{status:409});
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';

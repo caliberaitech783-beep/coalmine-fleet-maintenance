@@ -150,10 +150,12 @@ test('valid close and MIS first-trip capture keep actual event time separate fro
   assert.ok(new Date(verify.audits[0][0].newValue)<new Date(verify.audits[0][1].newValue));
 });
 
-test('MIS verification waits for Production first-trip entry and MIS first-trip confirmation',async()=>{
+test('MIS verification does not wait for Production first-trip entry but needs MIS first-trip confirmation',async()=>{
   const withoutProductionTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),productionFirstTripAt:''}});
-  assert.equal((await withoutProductionTrip.call()).status,409);
-  assert.equal(withoutProductionTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
+  const independent=await withoutProductionTrip.call();
+  assert.equal(independent.status,200);
+  assert.doesNotMatch(String(independent.body?.error||''),/Production first-trip/);
+  assert.equal(withoutProductionTrip.queries.some(row=>row.sql.startsWith('UPDATE')),true);
   const withoutMisTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
   assert.equal((await withoutMisTrip.call({firstTripDone:false})).status,400);
   assert.equal(withoutMisTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
