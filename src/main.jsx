@@ -6917,7 +6917,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       .sort((left, right) => sortCollator.compare(left, right));
   }, [breakdownRegion, reportRequests]);
   const maximumVehicleBreakdownRows = useMemo(() => vehicleBreakdownSummaryRows(reportRequests, {month: breakdownMonth, sites: breakdownRegionSites, site: breakdownSite}), [reportRequests, breakdownMonth, breakdownRegion, breakdownSite]);
-  const vehicleCommonRemarksRows = useMemo(() => vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords), [equipmentRecords, reportRequests, transferRecords]);
+  const vehicleCommonRemarksRows = useMemo(() => vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows), [equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows]);
   const fleetStatusRows = equipmentRecords.map((record, index) => ({
     ...record,
     reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,

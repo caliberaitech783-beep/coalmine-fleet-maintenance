@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import {
   latestCompletedVehicleRepair,
   vehicleBreakdownHistoryRows,
@@ -50,4 +51,23 @@ test("fleet, month ranking, and common remarks aggregate each vehicle without lo
   assert.equal(monthly[0].breakdowns.length, 2);
   const remarks = vehicleCommonRemarkRows([], detailed);
   assert.equal(remarks.find((row) => row.reportDoor === "V-173").breakdownReason, "Hydraulic leak");
+});
+
+test("large vehicle histories are indexed instead of rescanned for every vehicle", () => {
+  const equipment = Array.from({length: 400}, (_, index) => ({door: `V-${index}`, equipmentName: `Vehicle ${index}`, currentLocation: "Sasti OB"}));
+  const history = Array.from({length: 6000}, (_, index) => ({
+    ref: `REQ-${index}`,
+    door: `V-${index % equipment.length}`,
+    start: `2026-${String(1 + (index % 9)).padStart(2, "0")}-${String(1 + (index % 27)).padStart(2, "0")} 09:00`,
+    status: index % 4 ? "Closed" : "Open",
+    complaint: `Problem ${index % 20}`,
+  }));
+  const startedAt = performance.now();
+  const fleet = vehicleFleetRows(equipment, history, []);
+  const remarks = vehicleCommonRemarkRows(equipment, history, [], fleet);
+  const elapsed = performance.now() - startedAt;
+  assert.equal(fleet.length, equipment.length);
+  assert.equal(remarks.length, equipment.length);
+  assert.equal(fleet.reduce((total, vehicle) => total + vehicle.breakdownCount, 0), history.length);
+  assert.ok(elapsed < 2000, `large history aggregation took ${Math.round(elapsed)} ms`);
 });

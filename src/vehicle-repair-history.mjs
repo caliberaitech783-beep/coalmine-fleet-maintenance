@@ -2,6 +2,8 @@ import { canonicalSiteName } from "../site-location.mjs";
 
 const clean = (value) => String(value ?? "").trim();
 const normalize = (value) => clean(value).toLowerCase().replace(/\s+/g, " ");
+const requestHistoryIndexCache = new WeakMap();
+const transferIndexCache = new WeakMap();
 
 function requestTime(request = {}) {
   const value = clean(request.closedAt || request.start || request.verifiedAt).replace(" ", "T");
@@ -48,19 +50,41 @@ function intervalLabel(milliseconds) {
 export function vehicleHistoryKey(request = {}) {
   const references = [
     ["door", request.reportDoor || request.door],
-    ["chassis", request.chassis || request.manufacturerSerialNo],
+    ["chassis", request.chassis || request.chassisNo || request.manufacturerSerialNo],
     ["registration", request.reg || request.registrationNumber],
   ];
   const match = references.find(([, value]) => normalize(value));
   return match ? `${match[0]}:${normalize(match[1])}` : "";
 }
 
+function vehicleTargetKey(vehicle = {}) {
+  return typeof vehicle === "string" ? vehicle : vehicleHistoryKey(vehicle);
+}
+
+function requestHistoryIndex(requests = []) {
+  if (!Array.isArray(requests)) return new Map();
+  const cached = requestHistoryIndexCache.get(requests);
+  if (cached) return cached;
+  const index = new Map();
+  for (const request of requests) {
+    const key = vehicleHistoryKey(request);
+    if (!key) continue;
+    const group = index.get(key) || [];
+    group.push(request);
+    index.set(key, group);
+  }
+  for (const group of index.values()) group.sort((left, right) => breakdownTime(left) - breakdownTime(right));
+  requestHistoryIndexCache.set(requests, index);
+  return index;
+}
+
+function chronologicalVehicleHistory(requests = [], vehicle = {}) {
+  const targetKey = vehicleTargetKey(vehicle);
+  return targetKey ? requestHistoryIndex(requests).get(targetKey) || [] : [];
+}
+
 export function vehicleRepairHistoryRows(requests = [], vehicle = {}) {
-  const targetKey = typeof vehicle === "string" ? vehicle : vehicleHistoryKey(vehicle);
-  if (!targetKey) return [];
-  return requests
-    .filter((request) => vehicleHistoryKey(request) === targetKey)
-    .sort((left, right) => requestTime(right) - requestTime(left));
+  return [...chronologicalVehicleHistory(requests, vehicle)].sort((left, right) => requestTime(right) - requestTime(left));
 }
 
 export function vehicleRepairHistoryOptions(requests = []) {
@@ -89,9 +113,8 @@ export function latestCompletedVehicleRepair(requests = [], vehicle = {}) {
 }
 
 export function vehicleBreakdownHistoryRows(requests = [], vehicle = {}) {
-  const chronological = vehicleRepairHistoryRows(requests, vehicle)
-    .map((request) => ({ request, timestamp: breakdownTime(request) }))
-    .sort((left, right) => left.timestamp - right.timestamp);
+  const chronological = chronologicalVehicleHistory(requests, vehicle)
+    .map((request) => ({ request, timestamp: breakdownTime(request) }));
   return chronological.map(({ request, timestamp }, index) => {
     const previousTimestamp = chronological[index - 1]?.timestamp || 0;
     const gapMilliseconds = index && timestamp && previousTimestamp ? timestamp - previousTimestamp : null;
@@ -104,18 +127,41 @@ export function vehicleBreakdownHistoryRows(requests = [], vehicle = {}) {
   });
 }
 
-function latestRequestForVehicle(requests = [], vehicle = {}) {
-  return vehicleBreakdownHistoryRows(requests, vehicle).at(-1) || null;
+function vehicleAliases(vehicle = {}) {
+  return [...new Set([
+    vehicle.reportDoor, vehicle.door, vehicle.reg, vehicle.registrationNumber,
+    vehicle.equipment, vehicle.equipmentName, vehicle.reportEquipment, vehicle.chassis, vehicle.chassisNo, vehicle.manufacturerSerialNo,
+  ].map(normalize).filter(Boolean))];
 }
 
-function transferMatchesVehicle(transfer = {}, vehicle = {}) {
-  const values = [vehicle.reportDoor, vehicle.door, vehicle.reg, vehicle.registrationNumber, vehicle.equipmentName, vehicle.reportEquipment]
-    .map(normalize).filter(Boolean);
-  return [transfer.door, transfer.reg, transfer.registrationNumber, transfer.equipment, transfer.equipmentName, transfer.chassisNo, transfer.manufacturerSerialNo]
-    .map(normalize).filter(Boolean).some((value) => values.includes(value));
+function latestTransferIndex(transfers = []) {
+  if (!Array.isArray(transfers)) return new Map();
+  const cached = transferIndexCache.get(transfers);
+  if (cached) return cached;
+  const index = new Map();
+  for (const transfer of transfers) {
+    const timestamp = breakdownTime(transfer);
+    for (const alias of vehicleAliases(transfer)) {
+      const current = index.get(alias);
+      if (!current || timestamp > current.timestamp) index.set(alias, { transfer, timestamp });
+    }
+  }
+  transferIndexCache.set(transfers, index);
+  return index;
+}
+
+function latestTransferForVehicle(transfers = [], vehicle = {}) {
+  const index = latestTransferIndex(transfers);
+  let latest = null;
+  for (const alias of vehicleAliases(vehicle)) {
+    const candidate = index.get(alias);
+    if (candidate && (!latest || candidate.timestamp >= latest.timestamp)) latest = candidate;
+  }
+  return latest?.transfer || null;
 }
 
 export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers = []) {
+  const histories = requestHistoryIndex(requests);
   const vehicles = new Map();
   const add = (record, source = "master") => {
     const key = vehicleHistoryKey(record);
@@ -126,12 +172,10 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
   equipmentRecords.forEach((record) => add(record, "master"));
   requests.forEach((record) => add(record, "request"));
   return [...vehicles.entries()].map(([vehicleKey, vehicle]) => {
-    const history = vehicleRepairHistoryRows(requests, vehicleKey);
-    const latest = latestRequestForVehicle(requests, vehicleKey) || {};
-    const latestTransfer = transfers
-      .filter((transfer) => transferMatchesVehicle(transfer, { ...vehicle, ...latest }))
-      .sort((left, right) => breakdownTime(right) - breakdownTime(left))[0] || {};
-    const latestDriver = history.find((request) => clean(request.driverName || request.driver)) || {};
+    const history = histories.get(vehicleKey) || [];
+    const latest = history.at(-1) || {};
+    const latestTransfer = latestTransferForVehicle(transfers, { ...vehicle, ...latest }) || {};
+    const latestDriver = history.findLast((request) => clean(request.driverName || request.driver)) || {};
     const door = clean(vehicle.door || vehicle.reportDoor || latest.reportDoor || latest.door);
     return {
       ...vehicle,
@@ -152,13 +196,14 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
 }
 
 export function vehicleBreakdownSummaryRows(requests = [], { month = "", sites = null, site = "" } = {}) {
+  const allowedSites = Array.isArray(sites) ? new Set(sites.map(canonicalSiteName)) : null;
+  const selectedSite = site ? canonicalSiteName(site) : "";
   const filtered = requests.filter((request) => {
     const requestMonth = breakdownMonth(request);
     const requestSite = canonicalSiteName(request.reportSite || request.site);
-    const allowedSites = Array.isArray(sites) ? sites.map(canonicalSiteName) : null;
     return (!month || requestMonth === month)
-      && (!allowedSites || allowedSites.includes(requestSite))
-      && (!site || requestSite === canonicalSiteName(site));
+      && (!allowedSites || allowedSites.has(requestSite))
+      && (!selectedSite || requestSite === selectedSite);
   });
   const groups = new Map();
   for (const request of filtered) {
@@ -194,10 +239,12 @@ function commonComplaint(history = []) {
   return [...complaints.values()].sort((left, right) => right.count - left.count)[0] || { label: "", count: 0 };
 }
 
-export function vehicleCommonRemarkRows(equipmentRecords = [], requests = [], transfers = []) {
-  return vehicleFleetRows(equipmentRecords, requests, transfers).map((vehicle) => {
-    const history = vehicleRepairHistoryRows(requests, vehicle.vehicleKey);
-    const latest = latestRequestForVehicle(requests, vehicle.vehicleKey) || {};
+export function vehicleCommonRemarkRows(equipmentRecords = [], requests = [], transfers = [], preparedFleetRows = null) {
+  const histories = requestHistoryIndex(requests);
+  const fleetRows = Array.isArray(preparedFleetRows) ? preparedFleetRows : vehicleFleetRows(equipmentRecords, requests, transfers);
+  return fleetRows.map((vehicle) => {
+    const history = histories.get(vehicle.vehicleKey) || [];
+    const latest = history.at(-1) || {};
     const common = commonComplaint(history);
     const latestRemark = (latest.dailyRemarks || [])[0];
     const open = history.filter((request) => !["closed", "verified"].includes(normalize(request.status)) && !clean(request.closedAt)).length;
