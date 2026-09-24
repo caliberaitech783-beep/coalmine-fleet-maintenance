@@ -6601,6 +6601,9 @@ function productionFirstTripTimestamp(request) {
 }
 function roadStatusLabel(record, requests = []) {
   const status = liveEquipmentRoadStatus(record, requests);
+  return roadStatusDisplayLabel(status);
+}
+function roadStatusDisplayLabel(status) {
   return status === "onroad" ? "On road" : status === "offroad" ? "Off road" : status === "idle" ? "Idle" : "Status not set";
 }
 function locationCountRows(records = []) {
@@ -6824,7 +6827,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportScheduleOwner, setReportScheduleOwner] = useState({ name: "", login: "" });
   const reportAdministrator = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const [reportAccess, setReportAccess] = useState({ canManageAll: reportAdministrator, allowedDesignationKeys: [], allowedReports: [] });
-  const [reportAccessLoaded, setReportAccessLoaded] = useState(false);
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
@@ -6896,17 +6898,19 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     if (!Number.isFinite(indiaDateTimeEpoch(value))) return true;
     return eventMatchesSelectedReportShift(row,value,shift);
   });
-  const shiftScopedReportRequests = selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row));
-  const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
+  const shiftScopedReportRequests = useMemo(() => selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row)), [reportRequests, selectedReportShift, shiftRecords]);
+  const { elapsedRows, openBreakdownRows, closedBreakdownRows, misVerificationRows, idleRequestRows } = useMemo(() => ({
+    elapsedRows: reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt),
+    openBreakdownRows: reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed"),
+    closedBreakdownRows: reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed"),
+    misVerificationRows: reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim()),
+    idleRequestRows: reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() === "idle" || String(request.idleReason || "").trim()),
+  }), [reportRequests]);
   const formatTimestamp = (value, row = {}) => shiftRecords?.length
     ? formatShiftDateTime(value,{site:row.reportSite||row.site||row.currentLocation||row.location,shifts:shiftRecords,emptyValue:"—"})
     : formatDisplayDateTime(value);
   const reportRequestStatus = requestStatusLabel;
   const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
-  const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
-  const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
-  const misVerificationRows = reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim());
-  const idleRequestRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() === "idle" || String(request.idleReason || "").trim());
   const vehicleHistoryReportRows = useMemo(() => vehicleFleetRows(equipmentRecords, reportRequests, transferRecords), [equipmentRecords, reportRequests, transferRecords]);
   const breakdownRegionSites = breakdownRegion === "all" ? null : REGION_DATA.find((region) => region.code === breakdownRegion)?.sites || [];
   const breakdownSiteOptions = useMemo(() => {
@@ -6918,17 +6922,20 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   }, [breakdownRegion, reportRequests]);
   const maximumVehicleBreakdownRows = useMemo(() => vehicleBreakdownSummaryRows(reportRequests, {month: breakdownMonth, sites: breakdownRegionSites, site: breakdownSite}), [reportRequests, breakdownMonth, breakdownRegion, breakdownSite]);
   const vehicleCommonRemarksRows = useMemo(() => vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows), [equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows]);
-  const fleetStatusRows = equipmentRecords.map((record, index) => ({
-    ...record,
-    reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,
-    reportEquipment: record.equipmentName || record.equipment || record.door || "",
-    reportDoor: record.door || "",
-    reportMake: record.make || "",
-    reportModel: record.model || record.modelNo || "",
-    reportSite: displaySiteName(record.currentLocation || record.location),
-    reportRoadStatus: roadStatusLabel(record, reportRequests),
-  }));
-  const transferRows = transferRecords.map((record, index) => {
+  const fleetStatusRows = useMemo(() => {
+    const roadStatuses = liveEquipmentRoadStatuses(equipmentRecords, reportRequests);
+    return equipmentRecords.map((record, index) => ({
+      ...record,
+      reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,
+      reportEquipment: record.equipmentName || record.equipment || record.door || "",
+      reportDoor: record.door || "",
+      reportMake: record.make || "",
+      reportModel: record.model || record.modelNo || "",
+      reportSite: displaySiteName(record.currentLocation || record.location),
+      reportRoadStatus: roadStatusDisplayLabel(roadStatuses[index]),
+    }));
+  }, [equipmentRecords, reportRequests]);
+  const transferRows = useMemo(() => transferRecords.map((record, index) => {
     const asset = [record.door, record.chassisNo, record.manufacturerSerialNo, record.equipment, record.equipmentName]
       .map((value) => equipmentByReference.get(String(value || "").trim().toLowerCase()))
       .find(Boolean);
@@ -6939,11 +6946,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportEquipment: record.equipment || record.equipmentName || record.door || "",
       reportSite: displaySiteName(record.destination || record.currentLocation || record.location),
     };
-  });
-  const locationWiseRows = locationCountRows(equipmentRecords);
-  const recentBreakdownRows = [...reportRequests]
+  }), [transferRecords, equipmentByReference]);
+  const locationWiseRows = useMemo(() => locationCountRows(equipmentRecords), [equipmentRecords]);
+  const recentBreakdownRows = useMemo(() => [...reportRequests]
     .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
-    .slice(0, 250);
+    .slice(0, 250), [reportRequests]);
   const requestColumns = [
     {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
@@ -7069,16 +7076,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
+  const departmentReports = useMemo(() => buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
+    ...report,
+    // Department reports return plain status text; render it as the same coloured pill the other reports use.
+    columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
+  })), [shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, reportFrom, availabilityFrom, reportTo, availabilityTo, reportNow, showAllAcceptances]);
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
     {category: "vehicle-history", title: VEHICLE_HISTORY_REPORT, description: "Every vehicle with its door number, latest available driver, make, model, location, identity details, and lifetime breakdown count. Select a door number for the complete chronology.", rows: vehicleHistoryReportRows, columns: vehicleHistoryOverviewColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available in the equipment master or request history", rowKey: (row) => `vehicle-${row.vehicleKey}`},
     {category: "vehicle-history", title: MAXIMUM_VEHICLE_BREAKDOWN_REPORT, description: "Month-wise repeat-breakdown ranking. Narrow the result by region and site, then select a count to see every time and reason.", rows: maximumVehicleBreakdownRows, columns: maximumBreakdownColumns, dateValue: (row) => row.breakdowns.at(-1)?.start, emptyMessage: "No vehicle breakdowns match the selected month and location", rowKey: (row) => `maximum-${row.vehicleKey}`, breakdownScopeFilter: true},
     {category: "vehicle-history", title: VEHICLE_COMMON_REMARK_REPORT, description: "One operational summary per vehicle using the latest driver and maintenance note, current notice, site, and the most frequently recorded breakdown reason.", rows: vehicleCommonRemarksRows, columns: vehicleCommonRemarkColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available for the common-remarks summary", rowKey: (row) => `remark-${row.vehicleKey}`},
-    ...buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
-      ...report,
-      // Department reports return plain status text; render it as the same coloured pill the other reports use.
-      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
-    })),
+    ...departmentReports,
   ].map((report) => ({
     ...report,
     columns: report.columns.map((column) => column.key === "door" ? {
@@ -7124,7 +7132,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       });
       setUserScheduleCustomised(Boolean(details.userSchedule));
     }
-    setReportAccessLoaded(true);
   };
   const loadReportScheduleDetails = async (scope = reportScheduleScope) => {
     const response = await fetch(`/api/report-schedule-settings${scope === "personal" ? "?scope=personal" : ""}`, { headers: { Authorization: `Bearer ${session?.token || authToken}` } });
@@ -7134,21 +7141,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     return details;
   };
   useEffect(() => {
-    let active = true;
-    fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${session?.token || authToken}` } })
-      .then(async (response) => {
-        const details = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(details.error || "Could not load report access.");
-        if (active) applyReportScheduleDetails(details);
-      })
-      .catch((error) => { if (active) console.error(error); })
-      .finally(() => { if (active) setReportAccessLoaded(true); });
-    return () => { active = false; };
-  }, [session?.token]);
-  useEffect(() => {
-    if (!reportAccessLoaded || availableReportCategories.some((category) => category.id === activeReportCategory)) return;
+    if (availableReportCategories.some((category) => category.id === activeReportCategory)) return;
     if (availableReportCategories[0]) setActiveReportCategory(availableReportCategories[0].id);
-  }, [reportAccessLoaded, activeReportCategory, availableReportCategories.map((category) => category.id).join("|")]);
+  }, [activeReportCategory, availableReportCategories.map((category) => category.id).join("|")]);
   const openReportSchedules = async (scope = "personal") => {
     setReportScheduleScope(scope);
     setDirectorTimingOpen(true);
@@ -7270,9 +7265,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
-          {reportAdministrator && reportAccessLoaded && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
-          <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")} disabled={!reportAccessLoaded}><Clock /> My report schedule</button>
-          <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
+          {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
+          <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>
+          <button type="button" className="primary" onClick={openReportZip} disabled={!accessibleReportGroups.length}><Download /> Download reports ZIP</button>
         </div>
       </header>
       {directorTimingOpen && createPortal(
@@ -7394,7 +7389,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         })}
       </div>
       {reportVehicleHistoryTarget ? <VehicleRepairHistoryPage vehicle={reportVehicleHistoryTarget} rows={reportRequests} backLabel="Back to reports" onBack={() => setReportVehicleHistoryTarget(null)} /> : <>
-      {!reportAccessLoaded ? <div className="reports-section reports-empty-definition"><div className="reports-section-heading"><div><h2>Loading assigned reports…</h2><p>Your report access is being prepared.</p></div></div></div> : activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
+      {activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
         {activeReports.map((report) => (
           <button
             key={report.title}

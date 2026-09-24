@@ -20,7 +20,7 @@ test("WhatsApp delivery settings has one administrator entry in Reports", async 
   assert.match(source, /if \(name === "Report Setting"\) name = "Reports"/);
   assert.doesNotMatch(source, /active === "Report Setting"[\s\S]*?<WhatsAppReportSettingsDialog/);
   const reportsPage = source.slice(source.indexOf("function ReportsPage("), source.indexOf("function MasterPage("));
-  assert.match(reportsPage, /reportAdministrator && reportAccessLoaded && <WhatsAppReportSettingsButton/);
+  assert.match(reportsPage, /reportAdministrator && <WhatsAppReportSettingsButton/);
   assert.match(reportsPage, /onOpenReportSchedules=\{\(target\) => openReportSchedules/);
   assert.match(reportsPage, /<Clock \/> My report schedule/);
 });
