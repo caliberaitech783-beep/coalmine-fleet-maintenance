@@ -56,7 +56,13 @@ import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldo
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
-import { latestCompletedVehicleRepair, vehicleHistoryKey, vehicleRepairHistoryOptions, vehicleRepairHistoryRows } from "./vehicle-repair-history.mjs";
+import {
+  latestCompletedVehicleRepair,
+  vehicleBreakdownHistoryRows,
+  vehicleBreakdownSummaryRows,
+  vehicleCommonRemarkRows,
+  vehicleFleetRows,
+} from "./vehicle-repair-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
@@ -4043,6 +4049,7 @@ function applyUserRoleDefaults(record) {
       record.tabAccess = [...tabs].join(" | ");
       record.dashboardAccess = "Dashboard";
       const departmentReportLabels = new Set(["Reports", "General Report"]);
+      departmentReportLabels.add("Vehicle History Report");
       if (!selectedManagerRoles.length || selectedManagerRoles.includes("Production Manager")) departmentReportLabels.add("Production report");
       if (!selectedManagerRoles.length || selectedManagerRoles.includes("Maintenance Manager")) departmentReportLabels.add("Maintenance report");
       if (!selectedManagerRoles.length || selectedManagerRoles.includes("MIS Manager")) departmentReportLabels.add("MIS Report");
@@ -5956,8 +5963,11 @@ const reportCategoryTabs = [
   {id: "production", label: "Production report", description: "Submitted requests, maintenance acceptance, and no-remark cases.", icon: Gauge},
   {id: "maintenance", label: "Maintenance report", description: "Repair turnaround, open off-road cases, and availability. Oracle utilization pending.", icon: Wrench},
   {id: "mis", label: "MIS Report", description: "Verification, first-trip mismatch, transfers, fleet, and daily in/out reports.", icon: ShieldCheck},
+  {id: "vehicle-history", label: "Vehicle History Report", description: "Fleet history, repeat breakdown analysis, and common maintenance remarks.", icon: History},
 ];
-const VEHICLE_REPAIR_HISTORY_REPORT = "Vehicle Repair History";
+const VEHICLE_HISTORY_REPORT = "Vehicle History";
+const MAXIMUM_VEHICLE_BREAKDOWN_REPORT = "Maximum Vehicle Breakdown";
+const VEHICLE_COMMON_REMARK_REPORT = "Vehicle Common Remarks";
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
 function reportScheduleKind(schedule) {
@@ -6569,7 +6579,7 @@ function reportCategoryIdsForUser(permissions = {}, session = {}) {
   if (adminLevel === "Manager" && (!roleText || roleText.includes("project manager") || roleText.includes("director"))) {
     return reportCategoryTabs.map((category) => category.id);
   }
-  const categoryIds = new Set(["general"]);
+  const categoryIds = new Set(["general", "vehicle-history"]);
   if (roleText.includes("production")) categoryIds.add("production");
   if (roleText.includes("maintenance")) categoryIds.add("maintenance");
   if (roleText.includes("mis")) categoryIds.add("mis");
@@ -6609,54 +6619,104 @@ const VEHICLE_HISTORY_OPEN_EVENT = "nerve-center:open-vehicle-history";
 function openVehicleRepairHistory(record) {
   window.dispatchEvent(new CustomEvent(VEHICLE_HISTORY_OPEN_EVENT, {detail: record}));
 }
-function vehicleRepairHistoryColumns(onVehicleHistory) {
+function vehicleRepairHistoryColumns(onRequestProcess) {
   return [
-    {key: "door", label: "Door no.", value: (request) => request.reportDoor || request.door, render: (request) => {
-      const door = request.reportDoor || request.door;
-      return door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (onVehicleHistory) onVehicleHistory(request); else openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</a> : "—";
-    }},
-    {key: "reference", label: "Job reference", value: (request) => request.ref},
-    {key: "equipment", label: "Equipment group", value: (request) => normalizeEquipmentGroup(request.equipmentGroup) || request.reportEquipment || request.equipment},
-    {key: "make", label: "Make", value: (request) => request.reportMake || request.make},
-    {key: "model", label: "Model", value: (request) => request.reportModel || request.model},
-    {key: "site", label: "Location", value: (request) => request.reportSite || request.site},
-    {key: "category", label: "Repair category", value: (request) => request.category || request.type},
-    {key: "complaint", label: "Reported problem", value: (request) => request.complaint},
-    {key: "maintenanceWork", label: "Work completed", value: (request) => request.maintenanceWork},
-    {key: "openedAt", label: "Opened at", value: (request) => formatTwelveHourDateTime(request.start), sortValue: (request) => request.start, render: (request) => formatTwelveHourDateTime(request.start)},
-    {key: "closedAt", label: "Closed at", value: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—", sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
-    {key: "tat", label: "TAT", value: (request) => request.hours || elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt)},
+    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => request.ref && onRequestProcess ? <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)} aria-label={`View complete process for ${request.ref}`}><Activity />{request.ref}</button> : <b>{request.ref || "—"}</b>},
+    {key: "nextBreakdown", label: "Time since previous breakdown", value: (request) => request.timeSincePreviousBreakdown, sortValue: (request) => request.gapMilliseconds ?? -1, render: (request) => request.breakdownSequence === 1 ? "—" : <strong>{request.timeSincePreviousBreakdown || "—"}</strong>},
+    {key: "complaint", label: "Breakdown problem / reason", value: (request) => request.complaint || request.category},
+    {key: "site", label: "Breakdown location", value: (request) => request.reportSite || request.site},
+    {key: "driver", label: "Driver at that time", value: (request) => request.driverName || request.driver},
+    {key: "openedAt", label: "Breakdown opened", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "closedAt", label: "Maintenance closed", value: (request) => request.closedAt, sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
+    {key: "tat", label: "Downtime / TAT", value: (request) => request.hours || elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt)},
+    {key: "repair", label: "Work completed", value: (request) => request.maintenanceWork},
     {key: "status", label: "Status", value: requestStatusLabel, sortValue: (request) => requestStatusSortRank(requestStatusLabel(request)), render: (request) => <Status>{requestStatusLabel(request)}</Status>},
-    {key: "openingMeter", label: "Opening KMR/HMR", value: (request) => requestMeterReadingLabel(request, "opening")},
-    {key: "closingMeter", label: "Closing KMR/HMR", value: (request) => requestMeterReadingLabel(request, "closing")},
-    {key: "maintenanceUser", label: "Maintenance user", value: (request) => request.closedBy},
-    {key: "dailyUpdates", label: "Daily updates", value: (request) => dailyUpdatesExportText(request.dailyRemarks, { category: request.category })},
   ];
 }
+
+function RequestProcessModal({ request, onClose }) {
+  if (!request) return null;
+  const stages = [
+    {label: "Production request opened", time: request.start, user: request.owner || request.requesterLogin, detail: request.complaint},
+    {label: "Maintenance completed", time: request.closedAt, user: request.closedBy, detail: request.maintenanceWork},
+    {label: "MIS verified", time: request.verifiedAt, user: request.verifiedBy, detail: request.verifiedAt ? "Closure verified by MIS" : "Awaiting MIS verification"},
+    {label: "First trip confirmed", time: firstTripTimestamp(request), user: request.firstTripBy, detail: request.firstTripDone ? "Vehicle returned to operation" : "Not recorded"},
+  ];
+  const detailRows = [
+    ["Door number", request.reportDoor || request.door], ["Vehicle / equipment", request.reportEquipment || request.equipment || request.equipmentGroup],
+    ["Make / model", [request.reportMake || request.make, request.reportModel || request.model].filter(Boolean).join(" / ")], ["Driver", request.driverName || request.driver],
+    ["Location", request.reportSite || request.site], ["Repair category", request.category || request.type],
+    ["Opening KMR/HMR", requestMeterReadingLabel(request, "opening")], ["Closing KMR/HMR", requestMeterReadingLabel(request, "closing")],
+    ["Expected completion", request.expectedCompletionAt ? formatTwelveHourDateTime(request.expectedCompletionAt) : ""], ["Current status", requestStatusLabel(request)],
+  ];
+  return <Modal title={`Complete request process · ${request.ref || "Request"}`} close={onClose} className="request-process-modal">
+    <div className="request-process-content">
+      <section className="request-process-timeline" aria-label="Request workflow timeline">
+        {stages.map((stage, index) => <article key={stage.label} className={stage.time ? "complete" : "pending"}>
+          <span>{stage.time ? <CheckCircle2 /> : <Clock />}</span>
+          <div><small>Step {index + 1}</small><h4>{stage.label}</h4><b>{stage.time ? formatTwelveHourDateTime(stage.time) : "Pending"}</b><p>{[stage.user, stage.detail].filter(Boolean).join(" · ") || "No additional information recorded"}</p></div>
+        </article>)}
+      </section>
+      <section className="request-process-details"><h4>Request information</h4><dl>{detailRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl></section>
+      <section className="request-process-notes"><h4>Maintenance updates</h4><div><b>Reported problem</b><p>{request.complaint || "—"}</p></div><div><b>Work completed</b><p>{request.maintenanceWork || "—"}</p></div><div><b>Daily remarks</b><MaintenanceRemarks remarks={request.dailyRemarks} category={request.category} /></div></section>
+    </div>
+  </Modal>;
+}
+
+function BreakdownOccurrencesModal({ summary, onClose, onRequestProcess }) {
+  const rows = summary?.breakdowns || [];
+  const columns = [
+    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)}><Activity />{request.ref || "View request"}</button>},
+    {key: "opened", label: "Breakdown time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "reason", label: "Breakdown reason", value: (request) => request.complaint || request.category},
+    {key: "location", label: "Location", value: (request) => request.reportSite || request.site},
+    {key: "driver", label: "Driver", value: (request) => request.driverName || request.driver},
+    {key: "status", label: "Status", value: requestStatusLabel, sortValue: (request) => requestStatusSortRank(requestStatusLabel(request)), render: (request) => <Status>{requestStatusLabel(request)}</Status>},
+  ];
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
+  if (!summary) return null;
+  const vehicle = summary.reportDoor || summary.reportEquipment || "Vehicle";
+  return <Modal title={`${vehicle} · ${rows.length} breakdown${rows.length === 1 ? "" : "s"}`} close={onClose} className="breakdown-occurrences-modal">
+    <div className="breakdown-occurrences-header"><div><History /><span><b>Breakdown occurrences</b><small>Each recorded visit in the selected month and location scope</small></span></div><ExportMenu title={`${vehicle} breakdown occurrences`} columns={columns} rows={rows} /></div>
+    <div className="reports-detail-table emptytable"><ReportTable title={`${vehicle} breakdown occurrences`} layoutKey="Vehicle Breakdown Occurrences" rows={rows} columns={columns} visibleColumnKeys={visibleColumnKeys} onVisibleColumnsChange={setVisibleColumnKeys} emptyMessage="No matching breakdowns" rowKey={(request, index) => request.ref || index} /></div>
+  </Modal>;
+}
+
 function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Back to maintenance" }) {
-  const historyRows = vehicleRepairHistoryRows(rows, vehicle);
+  const historyRows = vehicleBreakdownHistoryRows(rows, vehicle);
   const latestRepair = latestCompletedVehicleRepair(rows, vehicle);
-  const vehicleDetails = historyRows[0] || vehicle || {};
+  const vehicleDetails = { ...(historyRows.at(-1) || {}), ...(typeof vehicle === "object" && vehicle ? vehicle : {}) };
   const door = vehicleDetails.reportDoor || vehicleDetails.door || "Vehicle";
   const equipment = normalizeEquipmentGroup(vehicleDetails.equipmentGroup) || vehicleDetails.reportEquipment || vehicleDetails.equipment || "Equipment details not available";
   const model = vehicleDetails.reportModel || vehicleDetails.model || "";
-  const completedRepairs = historyRows.filter((request) => String(request.status || "").toLowerCase() === "closed" || (request.closedAt && request.maintenanceWork));
-  const columns = vehicleRepairHistoryColumns();
+  const completedRepairs = historyRows.filter((request) => ["closed", "verified"].includes(String(request.status || "").toLowerCase()) || request.closedAt);
+  const [requestProcessTarget, setRequestProcessTarget] = useState(null);
+  const columns = vehicleRepairHistoryColumns(setRequestProcessTarget);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
+  const averageRepeatGap = historyRows.length > 1 ? historyRows.slice(1).reduce((sum, row) => sum + (row.gapMilliseconds || 0), 0) / (historyRows.length - 1) : 0;
+  const averageRepeatDays = Math.floor(averageRepeatGap / 86400000);
+  const averageRepeatHours = Math.round((averageRepeatGap % 86400000) / 3600000);
+  const averageRepeatLabel = averageRepeatGap ? [averageRepeatDays ? `${averageRepeatDays}d` : "", `${averageRepeatHours}h`].filter(Boolean).join(" ") : "No repeat breakdown";
+  const identity = [
+    ["Make", vehicleDetails.reportMake || vehicleDetails.make], ["Model", model], ["Driver", vehicleDetails.driverName || vehicleDetails.driver],
+    ["Current location", vehicleDetails.reportSite || vehicleDetails.site || vehicleDetails.currentLocation], ["Registration", vehicleDetails.reg || vehicleDetails.registrationNumber],
+    ["Chassis / serial no.", vehicleDetails.chassis || vehicleDetails.chassisNo || vehicleDetails.manufacturerSerialNo], ["Equipment group", equipment], ["Latest status", requestStatusLabel(vehicleDetails)],
+  ];
   return <section className="vehicle-history-page" aria-labelledby="vehicle-history-title">
     <header className="vehicle-history-header">
       <div className="vehicle-history-heading">
         <button type="button" className="vehicle-history-back" onClick={onBack}><ArrowLeft /> {backLabel}</button>
         <span><History /></span>
-        <div><small>Breakdown &amp; repair history</small><h1 id="vehicle-history-title">Door no. {door}</h1><p>{[equipment, model].filter(Boolean).join(" · ")}</p></div>
+        <div><small>Complete vehicle history</small><h1 id="vehicle-history-title">Door no. {door}</h1><p>{[equipment, vehicleDetails.reportMake || vehicleDetails.make, model].filter(Boolean).join(" · ")}</p></div>
       </div>
-      <div className="vehicle-history-header-actions"><div ref={setTableToolbarTarget} /><ExportMenu title={`${VEHICLE_REPAIR_HISTORY_REPORT} - ${door}`} columns={columns} rows={historyRows} label="Download history" /></div>
+      <div className="vehicle-history-header-actions"><div ref={setTableToolbarTarget} /><ExportMenu title={`${VEHICLE_HISTORY_REPORT} - ${door}`} columns={columns} rows={historyRows} label="Download history" disabled={!historyRows.length} /></div>
     </header>
+    <dl className="vehicle-history-identity">{identity.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl>
     <div className="vehicle-history-summary">
-      <article><History /><span><small>Total maintenance visits</small><b>{historyRows.length}</b></span></article>
+      <article><History /><span><small>Total breakdowns</small><b>{historyRows.length}</b></span></article>
       <article><CheckCircle2 /><span><small>Completed repairs</small><b>{completedRepairs.length}</b></span></article>
-      <article><Clock /><span><small>Last repair closed</small><b>{latestRepair?.closedAt ? formatTwelveHourDateTime(latestRepair.closedAt) : "No completed repair"}</b></span></article>
+      <article><Clock /><span><small>Average time between breakdowns</small><b>{averageRepeatLabel}</b></span></article>
     </div>
     <article className={`vehicle-last-repair${latestRepair ? "" : " empty"}`}>
       <div className="vehicle-last-repair-title"><Wrench /><span><small>What was done last time</small><h2>{latestRepair ? latestRepair.maintenanceWork || "Work details were not recorded" : "No completed repair has been recorded"}</h2></span></div>
@@ -6668,13 +6728,15 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
       </dl>}
     </article>
     <div className="vehicle-history-table">
-      <div className="vehicle-history-table-title"><div><h2>Complete history</h2><p>Newest visit first, including the current open breakdown if one exists.</p></div><span>{historyRows.length} record{historyRows.length === 1 ? "" : "s"}</span></div>
-      <div className="reports-detail-table emptytable"><ReportTable title={`${VEHICLE_REPAIR_HISTORY_REPORT} - ${door}`} layoutKey="Vehicle Repair History Detail" columns={columns} visibleColumnKeys={visibleColumnKeys} onVisibleColumnsChange={setVisibleColumnKeys} rows={historyRows} emptyMessage="No maintenance history is available for this vehicle" rowKey={(request, index) => request.ref || `${door}-${index}`} toolbarTarget={tableToolbarTarget} toolbarPortal /></div>
+      <div className="vehicle-history-table-title"><div><h2>Complete breakdown history</h2><p>Oldest to newest. The interval shows how long after the previous breakdown this vehicle returned.</p></div><span>{historyRows.length} record{historyRows.length === 1 ? "" : "s"}</span></div>
+      <div className="reports-detail-table emptytable"><ReportTable title={`${VEHICLE_HISTORY_REPORT} - ${door}`} layoutKey="Vehicle History Detail" columns={columns} visibleColumnKeys={visibleColumnKeys} onVisibleColumnsChange={setVisibleColumnKeys} rows={historyRows} emptyMessage="No maintenance history is available for this vehicle" rowKey={(request, index) => request.ref || `${door}-${index}`} toolbarTarget={tableToolbarTarget} toolbarPortal /></div>
     </div>
+    {requestProcessTarget && <RequestProcessModal request={requestProcessTarget} onClose={() => setRequestProcessTarget(null)} />}
   </section>;
 }
-function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
+  const [searchQuery, setSearchQuery] = useState(query);
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
   const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   return (
@@ -6684,6 +6746,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
           <span className="generated-report-icon"><ReportIcon aria-hidden="true" /></span>
           <div>
             <h2>{title}</h2>
+            <p>{description}</p>
           </div>
         </div>
         <div className="generated-report-heading-actions">
@@ -6692,11 +6755,13 @@ function ReportSection({ title, description, category = "general", icon: ReportI
           <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} className="secondary" label="Generate" />
         </div>
       </div>
+      {controls}
+      {!children && <div className="generated-report-search"><label><Search /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search this report" aria-label={`Search ${title}`} /></label><span>{rows.length.toLocaleString("en-IN")} record{rows.length === 1 ? "" : "s"}</span></div>}
       {children || (
         <div className="reports-detail-table emptytable">
           <ReportTable
             layoutKey={title}
-            query={query}
+            query={searchQuery}
             rows={rows}
             rowKey={rowKey}
             rowClassName={rowClassName}
@@ -6763,8 +6828,12 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
-  const [vehicleHistorySelection, setVehicleHistorySelection] = useState("");
   const [reportVehicleHistoryTarget, setReportVehicleHistoryTarget] = useState(null);
+  const [reportRequestProcessTarget, setReportRequestProcessTarget] = useState(null);
+  const [breakdownOccurrencesTarget, setBreakdownOccurrencesTarget] = useState(null);
+  const [breakdownMonth, setBreakdownMonth] = useState(() => indiaDateTimeInputValue(new Date()).slice(0, 7));
+  const [breakdownRegion, setBreakdownRegion] = useState("all");
+  const [breakdownSite, setBreakdownSite] = useState("");
   const [reportZipFrom, setReportZipFrom] = useState(() => indiaDateTimeInputValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
@@ -6838,11 +6907,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
   const misVerificationRows = reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim());
   const idleRequestRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() === "idle" || String(request.idleReason || "").trim());
-  const vehicleHistoryOptions = useMemo(() => vehicleRepairHistoryOptions(reportRequests), [reportRequests]);
-  const selectedVehicleHistoryOption = vehicleHistoryOptions.find((option) => option.key === vehicleHistorySelection);
-  const vehicleHistoryReportRows = vehicleHistorySelection
-    ? vehicleRepairHistoryRows(reportRequests, vehicleHistorySelection)
-    : reportRequests.filter((request) => vehicleHistoryKey(request));
+  const vehicleHistoryReportRows = useMemo(() => vehicleFleetRows(equipmentRecords, reportRequests, transferRecords), [equipmentRecords, reportRequests, transferRecords]);
+  const breakdownRegionSites = breakdownRegion === "all" ? null : REGION_DATA.find((region) => region.code === breakdownRegion)?.sites || [];
+  const breakdownSiteOptions = useMemo(() => {
+    const configured = breakdownRegion === "all" ? REGION_DATA.flatMap((region) => region.sites) : breakdownRegionSites;
+    const recorded = reportRequests.map((request) => request.reportSite || request.site).filter(Boolean);
+    return [...new Set([...configured, ...recorded])]
+      .filter((site) => !breakdownRegionSites || breakdownRegionSites.some((allowed) => displaySiteName(allowed) === displaySiteName(site)))
+      .sort((left, right) => sortCollator.compare(left, right));
+  }, [breakdownRegion, reportRequests]);
+  const maximumVehicleBreakdownRows = useMemo(() => vehicleBreakdownSummaryRows(reportRequests, {month: breakdownMonth, sites: breakdownRegionSites, site: breakdownSite}), [reportRequests, breakdownMonth, breakdownRegion, breakdownSite]);
+  const vehicleCommonRemarksRows = useMemo(() => vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords), [equipmentRecords, reportRequests, transferRecords]);
   const fleetStatusRows = equipmentRecords.map((record, index) => ({
     ...record,
     reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,
@@ -6926,7 +7001,33 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
   ];
-  const repairHistoryColumns = vehicleRepairHistoryColumns(setReportVehicleHistoryTarget);
+  const vehicleHistoryOverviewColumns = [
+    {key: "door", label: "Door number", value: (record) => record.reportDoor, render: (record) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(record)} aria-label={`Open complete history for ${record.reportDoor || record.reportEquipment}`}><History />{record.reportDoor || "View history"}</button>},
+    {key: "driver", label: "Current / latest driver", value: (record) => record.driverName},
+    {key: "make", label: "Make", value: (record) => record.reportMake},
+    {key: "model", label: "Model", value: (record) => record.reportModel},
+    {key: "location", label: "Current location", value: (record) => record.reportSite},
+    {key: "equipment", label: "Vehicle / equipment", value: (record) => record.reportEquipment},
+    {key: "registration", label: "Registration no.", value: (record) => record.registrationNumber},
+    {key: "chassis", label: "Chassis / serial no.", value: (record) => record.chassisNumber},
+    {key: "breakdowns", label: "Total breakdowns", value: (record) => record.breakdownCount, sortValue: (record) => record.breakdownCount, render: (record) => <strong>{record.breakdownCount}</strong>},
+    {key: "latest", label: "Latest breakdown", value: (record) => record.latestBreakdownAt, sortValue: (record) => record.latestBreakdownAt, render: (record) => record.latestBreakdownAt ? formatTwelveHourDateTime(record.latestBreakdownAt) : "No breakdown recorded"},
+  ];
+  const maximumBreakdownColumns = [
+    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <b>{row.reportDoor || row.reportEquipment || "—"}</b>},
+    {key: "count", label: "Number of breakdowns", value: (row) => row.breakdownCount, sortValue: (row) => row.breakdownCount, render: (row) => <button type="button" className="breakdown-count-link" onClick={() => setBreakdownOccurrencesTarget(row)} aria-label={`View ${row.breakdownCount} breakdowns for ${row.reportDoor || row.reportEquipment}`}>{row.breakdownCount}<Eye /></button>},
+    {key: "equipment", label: "Vehicle / equipment", value: (row) => row.reportEquipment},
+    {key: "site", label: "Latest location", value: (row) => row.reportSite},
+    {key: "latestReason", label: "Latest breakdown reason", value: (row) => row.breakdowns.at(-1)?.complaint || row.breakdowns.at(-1)?.category},
+  ];
+  const vehicleCommonRemarkColumns = [
+    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(row)}><History />{row.reportDoor || row.reportEquipment || "View history"}</button>},
+    {key: "driver", label: "Driver", value: (row) => row.driverName},
+    {key: "notice", label: "Notice", value: (row) => row.notice, render: (row) => <span className={`vehicle-notice${row.notice.includes("open") ? " attention" : ""}`}>{row.notice}</span>},
+    {key: "remark", label: "Latest maintenance remark", value: (row) => row.remark},
+    {key: "site", label: "Site", value: (row) => row.reportSite},
+    {key: "reason", label: "Common breakdown reason", value: (row) => row.breakdownReason, render: (row) => row.breakdownReason ? <span>{row.breakdownReason}{row.commonReasonCount > 1 ? <small className="reason-frequency">Repeated {row.commonReasonCount} times</small> : null}</span> : "—"},
+  ];
   const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
     {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No closed maintenance cases available"},
@@ -6970,7 +7071,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
-    {category: "maintenance", title: VEHICLE_REPAIR_HISTORY_REPORT, description: "Complete breakdown and repair history for a selected vehicle, including the reported problem and work completed.", rows: vehicleHistoryReportRows, columns: repairHistoryColumns, dateValue: (row) => row.closedAt || row.start, emptyMessage: "No repair history is available for the selected vehicle", vehicleHistoryFilter: true},
+    {category: "vehicle-history", title: VEHICLE_HISTORY_REPORT, description: "Every vehicle with its door number, latest available driver, make, model, location, identity details, and lifetime breakdown count. Select a door number for the complete chronology.", rows: vehicleHistoryReportRows, columns: vehicleHistoryOverviewColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available in the equipment master or request history", rowKey: (row) => `vehicle-${row.vehicleKey}`},
+    {category: "vehicle-history", title: MAXIMUM_VEHICLE_BREAKDOWN_REPORT, description: "Month-wise repeat-breakdown ranking. Narrow the result by region and site, then select a count to see every time and reason.", rows: maximumVehicleBreakdownRows, columns: maximumBreakdownColumns, dateValue: (row) => row.breakdowns.at(-1)?.start, emptyMessage: "No vehicle breakdowns match the selected month and location", rowKey: (row) => `maximum-${row.vehicleKey}`, breakdownScopeFilter: true},
+    {category: "vehicle-history", title: VEHICLE_COMMON_REMARK_REPORT, description: "One operational summary per vehicle using the latest driver and maintenance note, current notice, site, and the most frequently recorded breakdown reason.", rows: vehicleCommonRemarksRows, columns: vehicleCommonRemarkColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available for the common-remarks summary", rowKey: (row) => `remark-${row.vehicleKey}`},
     ...buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
@@ -7282,7 +7385,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             aria-selected={activeCategory.id === category.id}
             data-category={category.id}
             className={activeCategory.id === category.id ? "active" : ""}
-            onClick={() => { setReportVehicleHistoryTarget(null); setActiveReportCategory(category.id); }}
+            onClick={() => { setReportVehicleHistoryTarget(null); setBreakdownOccurrencesTarget(null); setReportRequestProcessTarget(null); setActiveReportCategory(category.id); }}
           >
             <span className="report-category-icon"><CategoryIcon aria-hidden="true" /></span>
             <span className="report-category-copy"><b>{category.label}</b><small>{category.description}</small></span>
@@ -7333,15 +7436,21 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />
             <span className="report-acceptance-track" aria-hidden="true" />
             <span>Show total</span>
-          </label> : selectedReport.vehicleHistoryFilter ? <div className="vehicle-history-report-filter">
-              <label><span><Truck /> Vehicle / door number</span><select value={vehicleHistorySelection} onChange={(event) => setVehicleHistorySelection(event.target.value)}><option value="">All vehicles</option>{vehicleHistoryOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>
-              <small>{selectedVehicleHistoryOption ? <>Showing <b>{selectedVehicleHistoryOption.door || selectedVehicleHistoryOption.label}</b></> : "Select a vehicle to download its history"}</small>
-            </div> : null}
+          </label> : null}
+          controls={selectedReport.breakdownScopeFilter ? <div className="vehicle-breakdown-scope-filter">
+            <label><span><CalendarDays /> Month</span><input type="month" value={breakdownMonth} onChange={(event) => { setBreakdownMonth(event.target.value); setBreakdownOccurrencesTarget(null); }} /></label>
+            <label><span><Network /> Region</span><select value={breakdownRegion} onChange={(event) => { setBreakdownRegion(event.target.value); setBreakdownSite(""); setBreakdownOccurrencesTarget(null); }}><option value="all">All regions</option>{REGION_DATA.map((region) => <option key={region.code} value={region.code}>{region.code} · {region.name}</option>)}</select></label>
+            <label><span><MapPin /> Site</span><select value={breakdownSite} onChange={(event) => { setBreakdownSite(event.target.value); setBreakdownOccurrencesTarget(null); }}><option value="">All sites</option>{breakdownSiteOptions.map((site) => <option key={site} value={site}>{displaySiteName(site)}</option>)}</select></label>
+            <button type="button" onClick={() => { setBreakdownMonth(indiaDateTimeInputValue(new Date()).slice(0, 7)); setBreakdownRegion("all"); setBreakdownSite(""); setBreakdownOccurrencesTarget(null); }}><RotateCcw /> Reset</button>
+            <p><b>{maximumVehicleBreakdownRows.length}</b> vehicle{maximumVehicleBreakdownRows.length === 1 ? "" : "s"} with breakdowns in this selection</p>
+          </div> : null}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
         />
       )}
       </>}
+      {breakdownOccurrencesTarget && <BreakdownOccurrencesModal summary={breakdownOccurrencesTarget} onClose={() => setBreakdownOccurrencesTarget(null)} onRequestProcess={setReportRequestProcessTarget} />}
+      {reportRequestProcessTarget && <RequestProcessModal request={reportRequestProcessTarget} onClose={() => setReportRequestProcessTarget(null)} />}
     </section>
   );
 }

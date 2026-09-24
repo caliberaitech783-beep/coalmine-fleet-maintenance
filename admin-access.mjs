@@ -27,6 +27,7 @@ export const ADMIN_REPORT_OPTIONS = [
   "Production report",
   "Maintenance report",
   "MIS Report",
+  "Vehicle History Report",
 ];
 
 export const ADMIN_SUBMENU_OPTIONS = {

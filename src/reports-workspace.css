@@ -27,6 +27,12 @@
   --report-soft: #f3effb;
 }
 
+.reports-page[data-report-category="vehicle-history"] {
+  --report-accent: #177c83;
+  --report-accent-strong: #0d5b61;
+  --report-soft: #eaf8f8;
+}
+
 .report-acceptance-toggle {
   position: relative;
   display: inline-flex;
@@ -122,6 +128,7 @@
 }
 
 .reports-category-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   margin: 16px 20px 0;
   padding: 0;
@@ -165,6 +172,11 @@
 .reports-category-tabs button[data-category="mis"] {
   --tab-accent: #7452b5;
   --tab-soft: #f3effb;
+}
+
+.reports-category-tabs button[data-category="vehicle-history"] {
+  --tab-accent: #177c83;
+  --tab-soft: #eaf8f8;
 }
 
 .reports-category-tabs button::after {
@@ -410,18 +422,324 @@
   background: #f8fafc;
 }
 
+.generated-report-search {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 20px;
+  border-bottom: 1px solid #dce3ec;
+  background: #f8fafc;
+}
+
+.generated-report-search label {
+  width: min(420px, 100%);
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d3dde9;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 11px;
+  color: #718096;
+}
+
+.generated-report-search label:focus-within {
+  border-color: var(--report-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--report-accent) 12%, transparent);
+}
+
+.generated-report-search svg { width: 15px; }
+
+.generated-report-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #243650;
+  font-size: 11px;
+}
+
+.generated-report-search > span {
+  margin-left: auto;
+  color: #718096;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.vehicle-breakdown-scope-filter {
+  display: grid;
+  grid-template-columns: minmax(145px, .7fr) minmax(210px, 1fr) minmax(190px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 13px 20px;
+  border-bottom: 1px solid #dce3ec;
+  background: var(--report-soft);
+}
+
+.vehicle-breakdown-scope-filter label > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--report-accent-strong);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.vehicle-breakdown-scope-filter label svg,
+.vehicle-breakdown-scope-filter button svg { width: 14px; }
+
+.vehicle-breakdown-scope-filter input,
+.vehicle-breakdown-scope-filter select,
+.vehicle-breakdown-scope-filter button {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--report-accent) 28%, #d5deea);
+  border-radius: 7px;
+  background: #fff;
+  padding: 8px 10px;
+  color: #243650;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.vehicle-breakdown-scope-filter button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-inline: 14px;
+  color: var(--report-accent-strong);
+}
+
+.vehicle-breakdown-scope-filter > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #66768b;
+  font-size: 9px;
+}
+
+.request-process-link,
+.breakdown-count-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px dashed currentColor;
+  background: transparent;
+  padding: 2px 0;
+  color: #2454c6;
+  font: inherit;
+  font-weight: 850;
+}
+
+.request-process-link svg,
+.breakdown-count-link svg { width: 13px; }
+
+.breakdown-count-link {
+  min-width: 38px;
+  justify-content: center;
+  color: #0d6970;
+  font-size: 12px;
+}
+
+.vehicle-notice {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #eaf7f1;
+  padding: 5px 8px;
+  color: #267b5d;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.vehicle-notice.attention {
+  background: #fff0e8;
+  color: #b45a23;
+}
+
+.reason-frequency {
+  display: block;
+  margin-top: 3px;
+  color: #177c83 !important;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.vehicle-history-identity {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border-bottom: 1px solid #dce3ec;
+  background: #dce3ec;
+}
+
+.vehicle-history-identity > div {
+  min-width: 0;
+  background: #fff;
+  padding: 12px 15px;
+}
+
+.vehicle-history-identity dt,
+.vehicle-history-identity dd { margin: 0; }
+
+.vehicle-history-identity dt {
+  color: #8290a5;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.vehicle-history-identity dd {
+  margin-top: 5px;
+  overflow: hidden;
+  color: #263a55;
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-process-modal,
+.breakdown-occurrences-modal { width: min(1120px, calc(100vw - 40px)); }
+
+.request-process-content {
+  padding: 18px;
+  background: #f6f8fb;
+}
+
+.request-process-timeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.request-process-timeline article {
+  min-width: 0;
+  display: flex;
+  gap: 9px;
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.request-process-timeline article > span {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #eaf7f1;
+  color: #23805f;
+}
+
+.request-process-timeline article.pending > span {
+  background: #f0f3f7;
+  color: #8190a5;
+}
+
+.request-process-timeline svg { width: 14px; }
+.request-process-timeline small,
+.request-process-timeline h4,
+.request-process-timeline b,
+.request-process-timeline p { display: block; margin: 0; }
+.request-process-timeline small { color: #8996a9; font-size: 7px; font-weight: 850; text-transform: uppercase; }
+.request-process-timeline h4 { margin-top: 3px; color: #243650; font-size: 10px; }
+.request-process-timeline b { margin-top: 6px; color: #177c83; font-size: 9px; }
+.request-process-timeline p { margin-top: 4px; color: #718096; font-size: 8px; line-height: 1.4; white-space: normal; }
+
+.request-process-details,
+.request-process-notes {
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.request-process-details > h4,
+.request-process-notes > h4 {
+  margin: 0;
+  padding: 11px 13px;
+  border-bottom: 1px solid #dbe3ed;
+  color: #243650;
+  font-size: 11px;
+}
+
+.request-process-details dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: #e5eaf1;
+}
+
+.request-process-details dl > div,
+.request-process-notes > div {
+  min-width: 0;
+  background: #fff;
+  padding: 11px 13px;
+}
+
+.request-process-details dt,
+.request-process-details dd { margin: 0; }
+.request-process-details dt,
+.request-process-notes > div > b { color: #8290a5; font-size: 8px; text-transform: uppercase; }
+.request-process-details dd { margin-top: 5px; color: #263a55; font-size: 10px; font-weight: 700; }
+.request-process-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.request-process-notes > h4 { grid-column: 1 / -1; }
+.request-process-notes > div + div { border-left: 1px solid #e5eaf1; }
+.request-process-notes p { margin: 5px 0 0; color: #53647b; font-size: 10px; line-height: 1.5; white-space: normal; }
+
+.breakdown-occurrences-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #dbe3ed;
+  background: #f8fafc;
+}
+
+.breakdown-occurrences-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.breakdown-occurrences-header > div:first-child > svg { width: 18px; color: #177c83; }
+.breakdown-occurrences-header b,
+.breakdown-occurrences-header small { display: block; }
+.breakdown-occurrences-header b { color: #243650; font-size: 11px; }
+.breakdown-occurrences-header small { margin-top: 3px; color: #718096; font-size: 8px; }
+.breakdown-occurrences-modal > .reports-detail-table { margin: 0; max-height: 60vh; overflow: auto; }
+
 @media (max-width: 1080px) {
   .reports-category-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .reports-category-tabs button:nth-child(2) {
+  .reports-category-tabs button:nth-child(even) {
     border-right: 0;
   }
 
-  .reports-category-tabs button:nth-child(-n+2) {
+  .reports-category-tabs button:nth-child(-n+4) {
     border-bottom: 1px solid #e4e9f0;
   }
+
+  .vehicle-breakdown-scope-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .request-process-timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .request-process-details dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
@@ -479,6 +797,24 @@
   .generated-report-section .reports-detail-table {
     margin: 12px;
   }
+
+  .generated-report-search {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 12px;
+  }
+
+  .generated-report-search label { width: 100%; }
+  .generated-report-search > span { margin-left: 0; }
+  .vehicle-breakdown-scope-filter { grid-template-columns: 1fr; padding: 12px; }
+  .vehicle-breakdown-scope-filter > p { grid-column: auto; }
+  .vehicle-history-identity,
+  .request-process-timeline,
+  .request-process-details dl,
+  .request-process-notes { grid-template-columns: 1fr; }
+  .request-process-notes > div + div { border-top: 1px solid #e5eaf1; border-left: 0; }
+  .breakdown-occurrences-header { align-items: stretch; flex-direction: column; }
 }
 
 :root[data-theme="dark"] .reports-page {
@@ -491,7 +827,11 @@
 :root[data-theme="dark"] .reports-category-tabs,
 :root[data-theme="dark"] .report-name-tabs,
 :root[data-theme="dark"] .generated-report-section .reports-section-heading,
-:root[data-theme="dark"] .generated-report-section .reports-detail-table {
+:root[data-theme="dark"] .generated-report-section .reports-detail-table,
+:root[data-theme="dark"] .vehicle-breakdown-scope-filter,
+:root[data-theme="dark"] .generated-report-search,
+:root[data-theme="dark"] .vehicle-history-identity,
+:root[data-theme="dark"] .breakdown-occurrences-header {
   background: #142136;
   border-color: #2c415e;
 }
@@ -559,6 +899,30 @@
   border-color: #36516f;
   color: #dce7f7;
 }
+
+:root[data-theme="dark"] .generated-report-search label,
+:root[data-theme="dark"] .vehicle-breakdown-scope-filter input,
+:root[data-theme="dark"] .vehicle-breakdown-scope-filter select,
+:root[data-theme="dark"] .vehicle-breakdown-scope-filter button,
+:root[data-theme="dark"] .vehicle-history-identity > div,
+:root[data-theme="dark"] .request-process-timeline article,
+:root[data-theme="dark"] .request-process-details,
+:root[data-theme="dark"] .request-process-notes,
+:root[data-theme="dark"] .request-process-details dl > div,
+:root[data-theme="dark"] .request-process-notes > div {
+  border-color: #36516f;
+  background: #17253a;
+  color: #eef3fb;
+}
+
+:root[data-theme="dark"] .generated-report-search input,
+:root[data-theme="dark"] .vehicle-history-identity dd,
+:root[data-theme="dark"] .request-process-timeline h4,
+:root[data-theme="dark"] .request-process-details > h4,
+:root[data-theme="dark"] .request-process-notes > h4,
+:root[data-theme="dark"] .request-process-details dd { color: #eef3fb; }
+
+:root[data-theme="dark"] .request-process-content { background: #101b2c; }
 
 /* In and Out Report net movement column */
 .in-out-net.positive { color: #b42318; }

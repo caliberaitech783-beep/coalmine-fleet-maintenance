@@ -4,10 +4,10 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("all users receive General Reports plus every report for their department", () => {
+test("all users receive General and Vehicle History reports plus every report for their department", () => {
   assert.match(source, /function reportCategoryIdsForUser/);
   assert.match(source, /\["Admin", "Super Admin"\]\.includes\(adminLevel\)/);
-  assert.match(source, /const categoryIds = new Set\(\["general"\]\)/);
+  assert.match(source, /const categoryIds = new Set\(\["general", "vehicle-history"\]\)/);
   assert.match(source, /roleText\.includes\("production"\)[\s\S]*categoryIds\.add\("production"\)/);
   assert.match(source, /roleText\.includes\("maintenance"\)[\s\S]*categoryIds\.add\("maintenance"\)/);
   assert.match(source, /roleText\.includes\("mis"\)[\s\S]*categoryIds\.add\("mis"\)/);

@@ -24,14 +24,21 @@ test("shared workflow, master, dashboard, and hourly tables use the vehicle hist
   assert.match(hourlySource, /window\.dispatchEvent\(new CustomEvent\("nerve-center:open-vehicle-history"/);
 });
 
-test("maintenance reports include selectable and downloadable vehicle repair history", () => {
-  assert.match(source, /title: VEHICLE_REPAIR_HISTORY_REPORT/);
+test("reports include a dedicated vehicle history category with three downloadable sub-reports", () => {
+  assert.match(source, /id: "vehicle-history", label: "Vehicle History Report"/);
+  assert.match(source, /title: VEHICLE_HISTORY_REPORT/);
+  assert.match(source, /title: MAXIMUM_VEHICLE_BREAKDOWN_REPORT/);
+  assert.match(source, /title: VEHICLE_COMMON_REMARK_REPORT/);
   assert.match(source, /vehicleHistoryReportRows/);
-  assert.match(source, /setVehicleHistorySelection/);
+  assert.match(source, /setBreakdownMonth/);
+  assert.match(source, /setBreakdownRegion/);
+  assert.match(source, /setBreakdownSite/);
   assert.match(source, /column\.key === "door"/);
   assert.match(source, /setReportVehicleHistoryTarget\(record\)/);
   assert.match(source, /backLabel="Back to reports"/);
   assert.match(source, /label="Generate"/);
   assert.match(source, /label="Download history"/);
   assert.match(source, /label: "Work completed"/);
+  assert.match(source, /label: "Time since previous breakdown"/);
+  assert.match(source, /RequestProcessModal/);
 });
