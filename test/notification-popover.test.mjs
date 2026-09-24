@@ -31,3 +31,12 @@ test("notification menu contains a close control and isolated scrolling list",()
   const theme=fs.readFileSync(new URL("../src/theme.css",import.meta.url),"utf8");
   assert.match(theme,/data-theme="dark"[^\n]*\.notification-popover[^\n]*background:#111d30!important/);
 });
+
+test("notification menu becomes a viewport-safe modal on mobile screens",()=>{
+  const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
+  const mobile=fs.readFileSync(new URL("../src/mobile-compat.css",import.meta.url),"utf8");
+  assert.match(source,/className="notification-scrim"/);
+  assert.match(source,/aria-haspopup="dialog"/);
+  assert.match(mobile,/@media \(max-width: 900px\) \{[\s\S]*\.notification-scrim \{[\s\S]*position: fixed !important;[\s\S]*z-index: 299 !important/);
+  assert.match(mobile,/@media \(max-width: 900px\) \{[\s\S]*\.normal \.notification-popover,[\s\S]*bottom: max\(10px, env\(safe-area-inset-bottom\)\);[\s\S]*z-index: 300/);
+});

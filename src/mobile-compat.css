@@ -75,6 +75,9 @@ body {
 .notification-popover {
   max-height: min(520px, calc(100dvh - 110px));
 }
+.notification-scrim {
+  display: none;
+}
 @media (max-width: 700px) {
   .normal .notification-popover {
     position: fixed;
@@ -153,6 +156,35 @@ button {
 }
 
 @media (max-width: 900px) {
+  .notification-scrim {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 299 !important;
+    display: block !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #0713268f !important;
+    backdrop-filter: blur(2px);
+  }
+
+  .normal .notification-popover,
+  .app .notification-popover {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    z-index: 300;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    border-radius: 14px;
+  }
+
   .normal > header {
     padding-top: max(10px, env(safe-area-inset-top));
     padding-right: max(12px, env(safe-area-inset-right));
