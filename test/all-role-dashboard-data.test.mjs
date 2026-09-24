@@ -14,7 +14,7 @@ test("only production starts a second site-wide dashboard feed", () => {
   assert.match(normal, /watchRequestRefresh\(\(\)=>loader\.load\(session\?\.token\|\|authToken\),\{win:window,doc:document,initial:true\}\)/);
   assert.match(normal, /const needsDedicatedDashboardFeed = !embedded && mobileRole === "Production User"/);
   assert.match(normal, /if \(!needsDedicatedDashboardFeed\) return undefined/);
-  assert.match(normal, /if \(!\['dashboard','reports'\]\.includes\(section\)\) return undefined/);
+  assert.match(normal, /if \(!\['dashboard','reports','profile'\]\.includes\(section\)\) return undefined/);
   assert.match(normal, /\},\[session\?\.token,needsDedicatedDashboardFeed,section\]\)/);
   assert.match(normal, /const dashboardRequests=needsDedicatedDashboardFeed \? dashboardState\.records : requests/);
   assert.match(normal, /stop\(\);loader\.cancel\(\);dashboardLoader\.current=null/);

@@ -37,10 +37,10 @@ test("large authenticated feeds use compression and conditional private response
   assert.match(main, /response\.status === 304/);
 });
 
-test("only production dashboard and reports use the dedicated site-wide poller", () => {
+test("production dashboard, reports and first-trip workspace share the site-wide poller", () => {
   const normal = main.slice(main.indexOf("function Normal("), main.indexOf("function App("));
   assert.match(normal, /if \(!needsDedicatedDashboardFeed\) return undefined/);
-  assert.match(normal, /if \(!\['dashboard','reports'\]\.includes\(section\)\) return undefined/);
+  assert.match(normal, /if \(!\['dashboard','reports','profile'\]\.includes\(section\)\) return undefined/);
   assert.match(normal, /\[session\?\.token,needsDedicatedDashboardFeed,section\]/);
 });
 

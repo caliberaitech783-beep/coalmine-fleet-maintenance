@@ -10307,7 +10307,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const refreshWorkspace = async () => {
     if (workspaceRefreshing || !onRefreshRequests) return;
     setWorkspaceRefreshing(true);
-    try { await onRefreshRequests(); }
+    try { await Promise.all([onRefreshRequests(), ...(needsDedicatedDashboardFeed ? [refreshDashboardRequests()] : [])]); }
     catch {}
     finally { setWorkspaceRefreshing(false); }
   };
@@ -10368,7 +10368,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     if (!needsDedicatedDashboardFeed) return undefined;
-    if (!['dashboard','reports'].includes(section)) return undefined;
+    if (!['dashboard','reports','profile'].includes(section)) return undefined;
     const loader=createDashboardRequestLoader({onState:setDashboardState});
     dashboardLoader.current=loader;
     const stop=watchRequestRefresh(()=>loader.load(session?.token||authToken),{win:window,doc:document,initial:true});
@@ -10416,7 +10416,14 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     catch (error) { if (!requireArrivalReason(remarking, error)) alert(error.message); }
   };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); setCreatedRequestRef("Vehicle Verified"); };
-  const saveProductionFirstTrip = async (payload) => { await onUpdateRequest(productionFirstTrip.ref, payload, "production-first-trip"); setProductionFirstTrip(null); setCreatedRequestRef("Production first trip recorded"); setTab("productionFirstTrip"); };
+  const saveProductionFirstTrip = async (payload) => {
+    const saved = await onUpdateRequest(productionFirstTrip.ref, payload, "production-first-trip");
+    if (needsDedicatedDashboardFeed && saved) setDashboardState((current) => current.token === session?.token
+      ? {...current, records: current.records.map((row) => row.ref === saved.ref ? saved : row)} : current);
+    setProductionFirstTrip(null);
+    setCreatedRequestRef("Production first trip recorded");
+    setTab("productionFirstTrip");
+  };
   const saveMisFlag = async (payload) => { await onUpdateRequest(misFlagging.ref, payload, "mis-flag"); setMisFlagging(null); };
   const saveArrivalFlag = async (payload) => {
     const saved = await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag");
@@ -10473,8 +10480,13 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const visibleRows=useMemo(()=>isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests,[isMis,closedRequests,activeRequests]);
   const historyRows=useMemo(()=>isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests,[isMis,isProduction,isMaintenance,closedRequests]);
   const idleRows=useMemo(()=>requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase())),[requestRows]);
-  const productionFirstTripRows=useMemo(()=>closedRequests.filter((row)=>visibleInMisRequests(row)&&isProductionFirstTripPending(row)),[closedRequests]);
-  const productionFirstTripReportRows=useMemo(()=>closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[closedRequests]);
+  // First-trip work belongs to the site team, not only the request creator.
+  // The dedicated feed is authorized by the API for the user's assigned sites.
+  const productionFirstTripSourceRows=useMemo(()=>needsDedicatedDashboardFeed
+    ? (dashboardRequestsReady ? recordsForSite(dashboardRequests,assignedLocation).map((row)=>requestWithEquipmentMasterDetails(row,equipmentRecords)) : [])
+    : closedRequests,[needsDedicatedDashboardFeed,dashboardRequestsReady,dashboardRequests,assignedLocation,equipmentRecords,closedRequests]);
+  const productionFirstTripRows=useMemo(()=>productionFirstTripSourceRows.filter(isProductionFirstTripPending),[productionFirstTripSourceRows]);
+  const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
@@ -10517,7 +10529,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} equipmentRecords={equipmentRecords} close={() => setVerifying(null)} onSave={verifyRequest} />}
-    {productionFirstTrip && <ProductionFirstTripForm request={requests.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}
+    {productionFirstTrip && <ProductionFirstTripForm request={productionFirstTripSourceRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}
     {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
     {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => {setArrivalFlagging(null);setArrivalFlagNextAction(null);}} onSave={saveArrivalFlag} />}
   </div>;

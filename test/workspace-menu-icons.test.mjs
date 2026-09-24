@@ -109,7 +109,7 @@ test('operational, manager and workspace navigation get the graphical treatment 
   for(const key of ['requests','create','productionFirstTrip','verify','history','idle','close'])assert.match(tabs,new RegExp(`<button data-nav="${key}" `),key);
   assert.match(tabs,/>Requests<\/button>/,'tab text unchanged');
   assert.match(source,/const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows\.length>0/,'only Production Managers lock request creation while first trips are pending');
-  assert.match(source,/const productionFirstTripRows=useMemo\(\(\)=>closedRequests\.filter\(\(row\)=>visibleInMisRequests\(row\)&&isProductionFirstTripPending\(row\)\),\[closedRequests\]\);/,'first trip tabs use the shared MIS pending queue rule');
+  assert.match(source,/const productionFirstTripRows=useMemo\(\(\)=>productionFirstTripSourceRows\.filter\(isProductionFirstTripPending\),\[productionFirstTripSourceRows\]\);/,'first trip tabs use the site-wide production pending queue');
   assert.match(source,/className=\{`primary\$\{createLockedByFirstTrip\?" create-locked-by-first-trip":""\}`\}/,'create button carries the manager-only locked state');
   assert.match(source,/first-trip-pending-tab first-trip-pending-alert/,'first trip tab flashes while pending');
   const manager=source.match(/<div className="mobile-tabs manager-queue-tabs"[\s\S]*?<\/div>/)[0];
