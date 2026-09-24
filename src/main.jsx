@@ -77,7 +77,6 @@ import { createPortal } from "react-dom";
 import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
 import { calculateBreakdownDaysUntilClose, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
 import { delayedReasonsForRepairType } from "../delayed-reason.mjs";
-import { breakdownSubCategoryNames } from "../breakdown-sub-category.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { requestDeletable } from "../request-deletion.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
@@ -5266,16 +5265,11 @@ function readMeterEvidence(file) {
     reader.readAsDataURL(file);
   });
 }
-function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, subCategoryRecords = [], subCategoriesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
-    [selectedSubCategory, setSelectedSubCategory] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
-    [category, setCategory] = useState(""),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // The Breakdown type asks for a sub-category from the Breakdown Sub-Category master.
-  const needsSubCategory = normalizedBreakdownType(category) === "Breakdown",
-    subCategoryOptions = needsSubCategory ? breakdownSubCategoryNames(subCategoryRecords) : [];
   const [openedAt] = useState(() => new Date());
   const {date: systemDate, time: systemTime} = indiaWorkflowDateTimeParts(openedAt);
   const locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
@@ -5405,7 +5399,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         door: equipmentDetails.door,
         site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
-        subCategory: String(fd.get("subCategory") || "").trim(),
         complaint: fd.get("complaint"),
         complaintAudio: fd.get("complaintAudio"),
         complaintLanguage: fd.get("complaintLanguage"),
@@ -5488,8 +5481,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <select
               name="category"
               required
-              value={category}
-              onChange={(event) => { setCategory(event.target.value); setSelectedSubCategory(""); }}
+              defaultValue=""
               disabled={!repairTypesLoaded || !repairTypeRecords.length}
               aria-busy={!repairTypesLoaded}
             >
@@ -5510,20 +5502,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               {!repairTypeRecords.some(record => /^others?$/i.test(String(record.repairType || "").trim())) && <option value="Other">Other</option>}
             </select>
           </label>
-          {needsSubCategory && (
-            <SearchableSelect
-              label="Breakdown sub-category"
-              name="subCategory"
-              required
-              value={selectedSubCategory}
-              onChange={setSelectedSubCategory}
-              options={subCategoryOptions}
-              loading={!subCategoriesLoaded}
-              disabled={!subCategoriesLoaded || !subCategoryOptions.length}
-              placeholder="Search and select breakdown sub-category"
-              emptyText="No matching sub-category. Try another word, or choose Others."
-            />
-          )}
           <div>
             <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
               group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
@@ -5578,7 +5556,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
             {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
-          <SpeechComplaint key={`${category}|${selectedSubCategory}`} initialText={needsSubCategory && !/^others?$/i.test(selectedSubCategory) ? selectedSubCategory : ""} />
+          <SpeechComplaint />
           <ComplaintMediaInputs />
         </div>
         {v && (
@@ -10473,7 +10451,6 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const [equipmentRecords, , equipmentLoaded, , , , , refreshEquipmentRecords] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
   const needsRequestFormMasters=show||Boolean(editing)||Boolean(closing)||Boolean(remarking);
   const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master",[],{enabled:needsRequestFormMasters});
-  const [subCategoryRecords, , subCategoriesLoaded] = useMasterRecords("Breakdown Sub-Category",[],{enabled:needsRequestFormMasters});
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     if (!needsDedicatedDashboardFeed) return undefined;
@@ -10633,7 +10610,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
       </>}
       </div>}
     </main>
-    {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} subCategoryRecords={subCategoryRecords} subCategoriesLoaded={subCategoriesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
+    {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}

@@ -25,7 +25,7 @@ const guideDefinitions = {
       "Accept a vehicle and flag arrival",
       "Diagnosis and expected time to complete",
       "Daily updates and delay reasons",
-      "Breakdown sub-category",
+      "Breakdown type and complaint",
       "Close a request and hand over to MIS",
       "Idle vehicles, Make on road and history",
       "Notifications, reports and Smart Print",

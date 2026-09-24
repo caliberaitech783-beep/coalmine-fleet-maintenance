@@ -48,7 +48,7 @@ test("department user guides list the full clip coverage", () => {
     assert.equal(new Set(guide.topics).size, guide.topics.length, `${role} topics must be unique`);
   }
   assert.ok(userGuideForRole("Production User").topics.includes("Ask for a correction"));
-  assert.ok(userGuideForRole("Maintenance User").topics.includes("Breakdown sub-category"));
+  assert.ok(userGuideForRole("Maintenance User").topics.includes("Breakdown type and complaint"));
   assert.ok(userGuideForRole("MIS User").topics.includes("First trip and trip card upload"));
 });
 

@@ -48,29 +48,23 @@ test('it is a Masters sub menu that administrators can add to, edit and delete, 
   assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:['Equipment master']},'Breakdown Sub-Category'),false);
 });
 
-test('the create request form loads the master and the server stores the chosen sub-category with the request',()=>{
-  assert.match(client,/import \{ breakdownSubCategoryNames \} from "\.\.\/breakdown-sub-category\.mjs";/);
-  assert.match(client,/useMasterRecords\("Breakdown Sub-Category",\[\],\{enabled:needsRequestFormMasters\}\)/,'the request page lazily loads the Breakdown Sub-Category master when a form opens');
-  assert.match(client,/<MaintenanceForm normal[^>]*subCategoryRecords=\{subCategoryRecords\} subCategoriesLoaded=\{subCategoriesLoaded\}/);
+test('the create request form no longer loads, shows, prefills, or submits a breakdown sub-category',()=>{
+  assert.doesNotMatch(client,/import \{ breakdownSubCategoryNames \} from "\.\.\/breakdown-sub-category\.mjs";/);
+  assert.doesNotMatch(client,/useMasterRecords\("Breakdown Sub-Category"/,'the request page does not load this master');
   const form=client.slice(client.indexOf('function MaintenanceForm('),client.indexOf('function Subsidiaries('));
-  assert.match(form,/normalizedBreakdownType\(category\) === "Breakdown"/,'only the Breakdown type asks for a sub-category');
-  assert.match(form, /<SearchableSelect[\s\S]*?name="subCategory"[\s\S]*?value=\{selectedSubCategory\}[\s\S]*?onChange=\{setSelectedSubCategory\}/);
-  assert.doesNotMatch(form,/<select\n\s+name="subCategory"/,'the plain dropdown is gone');
-  assert.match(form,/subCategory: String\(fd\.get\("subCategory"\) \|\| ""\)\.trim\(\),/);
+  assert.doesNotMatch(form,/subCategory|sub-category/i);
+  assert.match(form,/<SpeechComplaint \/>/,'the complaint remains an independent required field');
+  const createRoute=server.slice(server.indexOf("app.post('/api/requests',"),server.indexOf("app.patch('/api/requests/",server.indexOf("app.post('/api/requests',")));
+  assert.doesNotMatch(createRoute,/subCategory|sub_category/,'new requests do not accept or store a sub-category');
   assert.match(server,/ADD COLUMN IF NOT EXISTS sub_category TEXT NOT NULL DEFAULT ''/);
-  assert.match(server,/category, sub_category AS "subCategory", complaint,/,'requests return the stored sub-category');
-  assert.match(server,/category='Maintenance request',subCategory='',complaint,/);
-  assert.match(server,/const storedSubCategory=String\(subCategory\|\|''\)\.trim\(\)\.slice\(0,200\);/);
-  assert.match(server,/superior_name,site,category,sub_category,complaint,/);
-  assert.match(server,/\$9,\$10,\$11,\$23,\$12,\$13,\$22,\$14/,'the sub-category is bound to the new insert parameter');
-  assert.match(server,/storedComplaintLanguage,storedSubCategory\]\);/);
+  assert.match(server,/category, sub_category AS "subCategory", complaint,/,'historical sub-category values remain readable');
 });
 
-test('request creators receive the Breakdown Sub-Category master from /api/masters',()=>{
+test('request creation no longer grants implicit access to the Breakdown Sub-Category master',()=>{
   const route=server.slice(server.indexOf("app.get('/api/masters',"),server.indexOf("app.post('/api/masters/",server.indexOf("app.get('/api/masters',")));
-  assert.match(route,/if\(row\.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes\)continue;/,'production users who can pick a repair type also get its sub-categories');
-  assert.match(route,/\['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row\.master_name\)/);
-  assert.match(route,/const subCategoryForRequests=row\.master_name==='Breakdown Sub-Category'&&canViewRepairTypes;/,'admin-level request creators get it even when the master is not ticked for them');
+  assert.doesNotMatch(route,/subCategoryForRequests/);
+  assert.doesNotMatch(route,/\['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'\]/);
+  assert.match(route,/masterAccessAllows\(req\.session\.permissions,row\.master_name\)/,'administrators still receive masters through their normal master permission');
 });
 
 test('the server seeds the list once and never re-creates rows an administrator removed',()=>{
