@@ -28,10 +28,10 @@
 .mine-fleet-chart-toggle .mine-fleet-view-option button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .mine-fleet-chart-toggle .mine-fleet-view-option > .mine-fleet-toggle-count:hover { text-decoration: underline; text-underline-offset: 4px; }
 .mine-oem-detail-search .mine-oem-local-filter { min-width: 140px; }
-@media (max-width: 1180px) {
+@media (max-width: 1180px), (hover: none) and (pointer: coarse) {
   .mine-dashboard > .dashboard-filter-bar { align-items: stretch; }
   .mine-dashboard > .dashboard-filter-bar > div:first-child { flex-basis: 100%; }
-  .mine-dashboard > .dashboard-filter-bar .mine-head-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(165px, 100%), 1fr)); width: 100%; margin-top: 0; }
+  .mine-dashboard > .dashboard-filter-bar .mine-head-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; margin-top: 0; }
   .mine-dashboard > .dashboard-filter-bar .mine-head-actions > label,
   .mine-dashboard > .dashboard-filter-bar .mine-head-actions :is(input, select) { width: 100%; min-width: 0; }
   .mine-dashboard > .dashboard-filter-bar .mine-updated { min-height: 40px; justify-content: center; }

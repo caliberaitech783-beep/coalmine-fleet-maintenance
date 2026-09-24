@@ -20,7 +20,7 @@ test("notification loading never opens the dropdown on login or polling", () => 
 test("notification menu contains a close control and isolated scrolling list",()=>{
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const styles=fs.readFileSync(new URL("../src/style.css",import.meta.url),"utf8");
-  assert.match(source,/className="notification-popover" role="dialog"/);
+  assert.match(source,/className=\{`notification-popover\$\{notificationOverlayMode \? " notification-popover-mobile" : ""\}`\} role="dialog"/);
   assert.match(source,/aria-label="Close notifications"/);
   assert.match(source,/className="notification-list"/);
   assert.match(styles,/\.notification-popover\{[^}]*display:flex;[^}]*overflow:hidden/);
@@ -32,11 +32,14 @@ test("notification menu contains a close control and isolated scrolling list",()
   assert.match(theme,/data-theme="dark"[^\n]*\.notification-popover[^\n]*background:#111d30!important/);
 });
 
-test("notification menu becomes a viewport-safe modal on mobile screens",()=>{
+test("notification menu becomes a portaled modal on narrow or touch screens",()=>{
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const mobile=fs.readFileSync(new URL("../src/mobile-compat.css",import.meta.url),"utf8");
   assert.match(source,/className="notification-scrim"/);
   assert.match(source,/aria-haspopup="dialog"/);
-  assert.match(mobile,/@media \(max-width: 900px\) \{[\s\S]*\.notification-scrim \{[\s\S]*position: fixed !important;[\s\S]*z-index: 299 !important/);
-  assert.match(mobile,/@media \(max-width: 900px\) \{[\s\S]*\.normal \.notification-popover,[\s\S]*bottom: max\(10px, env\(safe-area-inset-bottom\)\);[\s\S]*z-index: 300/);
+  assert.match(source,/window\.matchMedia\("\(max-width: 1250px\), \(hover: none\) and \(pointer: coarse\)"\)/);
+  assert.match(source,/createPortal\(<div className="notification-overlay">[\s\S]*\{notificationPanel\}<\/div>, document\.body\)/);
+  assert.match(source,/!centerRef\.current\?\.contains\(event\.target\) && !panelRef\.current\?\.contains\(event\.target\)/);
+  assert.match(mobile,/\.notification-overlay \{[\s\S]*position: fixed;[\s\S]*z-index: 20000/);
+  assert.match(mobile,/\.notification-overlay > \.notification-popover-mobile \{[\s\S]*bottom: max\(10px, env\(safe-area-inset-bottom\)\);[\s\S]*z-index: 1/);
 });

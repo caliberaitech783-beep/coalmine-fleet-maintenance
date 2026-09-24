@@ -10007,6 +10007,7 @@ function NotificationBell({ session, onOpenEntry }) {
   const [siteFilter, setSiteFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
+  const [notificationOverlayMode, setNotificationOverlayMode] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1250px), (hover: none) and (pointer: coarse)").matches);
   const [alerts, setAlerts] = useState([]), [resolvedTicketAlerts, setResolvedTicketAlerts] = useState([]);
   const soundRef = useRef(null), playedRef = useRef(new Set());
   const dismissedResolvedRef = useRef(new Set());
@@ -10014,8 +10015,16 @@ function NotificationBell({ session, onOpenEntry }) {
   const [bellSound, setBellSound] = useState(() => loadNotificationSound());
   const bellSoundRef = useRef(bellSound);
   bellSoundRef.current = bellSound;
-  const centerRef = useRef(null), triggerRef = useRef(null), entryControllerRef = useRef(null), entrySequenceRef = useRef(0), onOpenEntryRef = useRef(onOpenEntry);
+  const centerRef = useRef(null), panelRef = useRef(null), triggerRef = useRef(null), entryControllerRef = useRef(null), entrySequenceRef = useRef(0), onOpenEntryRef = useRef(onOpenEntry);
   onOpenEntryRef.current = onOpenEntry;
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const query = window.matchMedia("(max-width: 1250px), (hover: none) and (pointer: coarse)");
+    const update = () => setNotificationOverlayMode(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   // A silent initial snapshot followed by authenticated long polling. PostgreSQL
   // wakes the pending request immediately after any notification type is saved.
   useEffect(() => {
@@ -10082,7 +10091,7 @@ function NotificationBell({ session, onOpenEntry }) {
   useEffect(() => {
     if (!open) return undefined;
     const closeOutside = (event) => {
-      if (!centerRef.current?.contains(event.target)) setOpen(false);
+      if (!centerRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) setOpen(false);
     };
     const closeWithEscape = (event) => {
       if (event.key !== "Escape") return;
@@ -10160,19 +10169,21 @@ function NotificationBell({ session, onOpenEntry }) {
     entrySequenceRef.current += 1;
     entryControllerRef.current?.abort();
   }, []);
+  const notificationPanel = <div ref={panelRef} className={`notification-popover${notificationOverlayMode ? " notification-popover-mobile" : ""}`} role="dialog" aria-modal={notificationOverlayMode ? "true" : undefined} aria-label="Notifications">
+    <header><b>Notifications</b><div><span>{visibleItems.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header>
+    <div className="notification-filters">
+      <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+      <label className="notification-site-filter notification-category-filter">Filter by category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories ({siteItems.length})</option>{categoryOptions.map(category => <option key={category.key} value={category.key}>{category.label} ({category.count})</option>)}</select></label>
+      <label className="notification-site-filter notification-sound-filter">Bell sound<span className="notification-sound-controls"><select value={bellSound} onChange={(event) => { const next = saveNotificationSound(event.target.value); setBellSound(next); playNotificationSound(next); }}>{NOTIFICATION_SOUNDS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select><button type="button" className="notification-sound-play" onClick={() => playNotificationSound(bellSound)} aria-label="Play the selected bell sound" title="Play the selected bell sound"><Volume2 /></button></span><small>{NOTIFICATION_SOUNDS.find((option) => option.id === bellSound)?.hint}</small></label>
+    </div>
+    <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{categoryFilter ? "No notifications for these filters." : siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
+  </div>;
   return <>
     <div className="notification-center" ref={centerRef}>
       <button ref={triggerRef} type="button" className={unread > 0 ? "ringing" : ""} onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open} aria-haspopup="dialog"><BellRingIcon ringing={unread > 0} />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
-      {open && <><button type="button" className="notification-scrim" onClick={() => setOpen(false)} aria-label="Close notifications" /><div className="notification-popover" role="dialog" aria-label="Notifications">
-        <header><b>Notifications</b><div><span>{visibleItems.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header>
-        <div className="notification-filters">
-          <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
-          <label className="notification-site-filter notification-category-filter">Filter by category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories ({siteItems.length})</option>{categoryOptions.map(category => <option key={category.key} value={category.key}>{category.label} ({category.count})</option>)}</select></label>
-          <label className="notification-site-filter notification-sound-filter">Bell sound<span className="notification-sound-controls"><select value={bellSound} onChange={(event) => { const next = saveNotificationSound(event.target.value); setBellSound(next); playNotificationSound(next); }}>{NOTIFICATION_SOUNDS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select><button type="button" className="notification-sound-play" onClick={() => playNotificationSound(bellSound)} aria-label="Play the selected bell sound" title="Play the selected bell sound"><Volume2 /></button></span><small>{NOTIFICATION_SOUNDS.find((option) => option.id === bellSound)?.hint}</small></label>
-        </div>
-        <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{categoryFilter ? "No notifications for these filters." : siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
-      </div></>}
+      {open && !notificationOverlayMode && notificationPanel}
     </div>
+    {open && notificationOverlayMode && createPortal(<div className="notification-overlay"><button type="button" className="notification-scrim" onClick={() => setOpen(false)} aria-label="Close notifications" />{notificationPanel}</div>, document.body)}
     {(alerts.length > 0 || resolvedTicketAlerts.length > 0) && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{resolvedTicketAlerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} persistent />)}{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
     <NotificationEntryDialog state={entryState} onClose={closeEntry} token={session.token} />
   </>;
