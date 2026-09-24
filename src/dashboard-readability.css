@@ -165,23 +165,6 @@
 .mine-dashboard .mine-performance-legend { gap: 10px; }
 .mine-dashboard .mine-performance-legend span { grid-template-columns: auto minmax(0, 1fr); }
 .mine-dashboard .mine-performance-legend b { grid-column: 2; }
-.mine-dashboard > .mine-stage-pipeline {
-  display: block;
-  inline-size: 100%;
-  max-inline-size: none;
-  box-sizing: border-box;
-}
-.mine-dashboard .mine-stage-pipeline-body,
-.mine-dashboard .mine-stage-pipeline-table-wrap,
-.mine-dashboard .mine-stage-pipeline-table {
-  inline-size: 100%;
-  max-inline-size: none;
-  box-sizing: border-box;
-}
-.mine-dashboard .mine-stage-pipeline-table {
-  min-inline-size: 100%;
-}
-
 /* The manager's role dashboard is separate from the shared fleet dashboard. */
 .manager-dashboard .manager-dashboard-head { gap: 18px; flex-wrap: wrap; }
 .manager-dashboard .manager-dashboard-head p,
