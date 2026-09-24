@@ -65,10 +65,10 @@ test('Admin sessions get Delete and Delete selected in every workspace table; Ma
   assert.match(normal,/const administratorSession = session\?\.role === "super" && \["admin", "super admin"\]\.includes\(String\(permissions\.adminLevel \|\| ""\)\.trim\(\)\.toLowerCase\(\)\)/);
   assert.match(normal,/const canDeleteRow = \(row\) => requestDeletable\(row, \{ administrator: administratorSession \}\)/);
   assert.match(normal,/const adminDeleteProps = administratorSession \? \{ onDelete: deleteRequest, onDeleteSelected: deleteSelectedRequests, canDeleteRow \} : \{\}/);
-  assert.match(normal,/isProduction && tab === "requests"[^\n]*columnOrder=\{PRODUCTION_REQUEST_COLUMNS\} \{\.\.\.adminDeleteProps\} \/>/,'Production workspace active requests');
+  assert.match(normal,/isProduction && tab === "requests"[^\n]*columnOrder=\{PRODUCTION_REQUEST_COLUMNS\}[^\n]*\{\.\.\.adminDeleteProps\} \/>/,'Production workspace active requests');
   assert.match(normal,/isMaintenance && tab === "requests"[^\n]*onDelete=\{permissions\.deleteRequests \? deleteRequest : null\} canDeleteRow=\{canDeleteRow\} onDeleteSelected=\{deleteSelectedRequests\}[^\n]*\/>/,'Maintenance active requests');
   assert.match(normal,/isMaintenance && tab === "close"[^\n]*\{\.\.\.adminDeleteProps\}[^\n]*\/>/,'Maintenance close list');
-  assert.equal((normal.match(/onMisFlag=\{permissions\.verifyRequests \? setMisFlagging : null\} \{\.\.\.adminDeleteProps\} \/>/g)||[]).length,2,'MIS awaiting verification and Verify lists');
+  assert.equal((normal.match(/onMisFlag=\{permissions\.verifyRequests \? setMisFlagging : null\}(?: showUserRole)? \{\.\.\.adminDeleteProps\} \/>/g)||[]).length,2,'MIS awaiting verification and Verify lists');
   assert.match(normal,/tab === "idle"[^\n]*rows=\{idleRows\}[^\n]*\{\.\.\.adminDeleteProps\} \/>/,'Idle vehicles (on-road approval queue)');
   assert.match(normal,/tab === "history"[^\n]*<MobileWorkflowTable rows=\{historyRows\}[^\n]*\{\.\.\.adminDeleteProps\} \/>/,'closed history for the MIS-verification stage');
   assert.match(normal,/A deletion reason is required for the Audit Trail\./);

@@ -38,7 +38,7 @@ test('pre-v2 saved routing migrates once while retaining pauses, reminders, sche
     input.reminders={offRoad:{enabled:false,hours:13},idle:{enabled:false,hours:5}};
     input.crm={enabled:false,days:[1,3,5],times:['06:25','09:15','12:40','15:05','18:35','22:50'],recipientRoles:[],sendEmpty:false,format:'links'};
     input.channels={hierarchyReports:false,ticketCreated:false,ticketResolved:false,dailyUpdate:false,passwordResetOtp:false,manualReports:false};
-    input.quietHours={enabled:true,start:'23:40',end:'04:25'};
+    input.quietHours={enabled:true,start:'23:40',end:'04:25',allowedPurposes:['requestOpened']};
     input.templates.requestOpened={variant:'brief',body:''};
     input.templates.dailyUpdate={variant:'custom',body:'Saved wording {{1}} {{2}} {{3}} {{4}}'};
     input.templates.consolidatedRequestReport={variant:'detailed',body:''};
@@ -376,4 +376,19 @@ test('all consolidated previews include file links and individual alerts remain 
     }
   const alert=previewReportTemplate('requestOpened',reportTemplateChoices('requestOpened')[0].body);
   assert.match(alert,/REQ-/);assert.doesNotMatch(alert,/reports\/crm/);
+});
+
+test('quiet hours let only the ticked important messages through at night',()=>{
+  const settings=defaultWhatsAppReportSettings(),night=new Date('2026-09-08T18:30:00Z'),morning=new Date('2026-09-09T01:30:00Z');
+  assert.deepEqual(settings.quietHours.allowedPurposes,[]);
+  settings.quietHours={enabled:true,start:'22:00',end:'07:00',allowedPurposes:['requestOpened']};
+  assert.equal(whatsappSettingsValidationError(settings),'');
+  assert.equal(whatsappPurposeEnabled(settings,'requestOpened',night),true);
+  for(const purpose of ['requestClosed','requestIdle','idleReminder','offRoadEscalation','dailyUpdate','consolidatedRequestReport'])
+    assert.equal(whatsappPurposeEnabled(settings,purpose,night),false,purpose);
+  assert.equal(whatsappPurposeEnabled(settings,'requestClosed',morning),true);
+  settings.events.opened.enabled=false;
+  assert.equal(whatsappPurposeEnabled(settings,'requestOpened',night),false,'an allowed message still obeys its own switch');
+  assert.deepEqual(normalizeWhatsAppReportSettings({...settings,quietHours:{...settings.quietHours,allowedPurposes:['requestOpened','bogus','requestOpened']}}).quietHours.allowedPurposes,['requestOpened']);
+  assert.match(whatsappSettingsValidationError({...settings,quietHours:{...settings.quietHours,allowedPurposes:['bogus']}}),/quiet hours/);
 });

@@ -23,6 +23,17 @@ export const PURPOSE_OPTIONS = [
   {key:'manualReports',label:'Manual report send',group:'Manual reports'},
   ...SINGLE_REPORT_TEMPLATE_PURPOSES,
 ];
+// Messages an administrator may still allow through during quiet hours.
+// Password reset OTPs are never paused, so they are not listed here.
+export const QUIET_HOUR_PURPOSE_OPTIONS = [
+  {key:'requestOpened',label:'Opened / Off Road (new breakdown)'},
+  {key:'offRoadEscalation',label:'Off Road escalation'},
+  {key:'requestIdle',label:'Marked Idle'},
+  {key:'idleReminder',label:'Idle reminder'},
+  {key:'requestClosed',label:'Closed / On Road'},
+  {key:'dailyUpdate',label:'Daily maintenance update'},
+];
+const quietHourPurposes=new Set(QUIET_HOUR_PURPOSE_OPTIONS.map(option=>option.key));
 export const validWhatsAppTime = value => typeof value==='string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const unique = values => [...new Set(values)];
 const object = value => value && typeof value==='object' && !Array.isArray(value) ? value : {};
@@ -35,7 +46,7 @@ export function defaultWhatsAppReportSettings() {
     reminders:{offRoad:{enabled:true,hours:4},idle:{enabled:true,hours:1}},
     crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:[...DEFAULT_CRM_REPORT_ROLES],sendEmpty:true,format:'links'},
     channels:{hierarchyReports:true,ticketCreated:true,ticketResolved:true,dailyUpdate:true,passwordResetOtp:true,manualReports:true},
-    quietHours:{enabled:false,start:'22:00',end:'07:00'},
+    quietHours:{enabled:false,start:'22:00',end:'07:00',allowedPurposes:[]},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:isSingleReportPurpose(key)?'inherit':'standard',body:''}])),
   };
 }
@@ -56,7 +67,8 @@ export function normalizeWhatsAppReportSettings(input={}) {
       recipientRoles:!migrateLegacyRouting&&Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>DEFAULT_CRM_REPORT_ROLES.includes(role))):defaults.crm.recipientRoles,
       sendEmpty:bool(crm.sendEmpty,true),format:'links'},
     channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,migrateLegacyRouting&&['ticketCreated','ticketResolved','dailyUpdate'].includes(key)?true:bool(channels[key],fallback)])),
-    quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end},
+    quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end,
+      allowedPurposes:Array.isArray(quiet.allowedPurposes)?unique(quiet.allowedPurposes.filter(purpose=>quietHourPurposes.has(purpose))):[]},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:validReportTemplateVariant(key,templates[key]?.variant)?templates[key].variant:defaults.templates[key].variant,body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
   };
 }
@@ -71,6 +83,7 @@ export function whatsappSettingsValidationError(input) {
   if(crm.enabled&&(!crm.days.length||!crm.times.length||!crm.recipientRoles.length))return 'Choose at least one CRM day, time and recipient role, or turn CRM reports off.';
   const quiet=input.quietHours;
   if(!quiet||typeof quiet.enabled!=='boolean'||!validWhatsAppTime(quiet.start)||!validWhatsAppTime(quiet.end)||quiet.enabled&&quiet.start===quiet.end)return 'Quiet hours need different valid start and end times.';
+  if(quiet.allowedPurposes!==undefined&&(!Array.isArray(quiet.allowedPurposes)||quiet.allowedPurposes.some(purpose=>!quietHourPurposes.has(purpose))))return 'Choose valid messages to allow during quiet hours.';
   for(const key of Object.keys(defaultWhatsAppReportSettings().channels))if(typeof input.channels?.[key]!=='boolean')return 'Choose the delivery switches for each message type.';
   for(const {key} of PURPOSE_OPTIONS){const template=input.templates?.[key];if(!template||!validReportTemplateVariant(key,template.variant)||typeof template.body!=='string'||template.body.length>1024)return 'Choose a valid template style with at most 1,024 characters.';}
   return '';
@@ -85,7 +98,7 @@ export function isWhatsAppQuietTime(settings,now=new Date()) {
 export function whatsappPurposeEnabled(settings,purpose='',now=new Date()) {
   if(!settings.enabled)return false;
   if(purpose==='passwordResetOtp')return settings.channels.passwordResetOtp;
-  if(isWhatsAppQuietTime(settings,now))return false;
+  if(isWhatsAppQuietTime(settings,now)&&!(settings.quietHours.allowedPurposes||[]).includes(purpose))return false;
   const event=EVENT_OPTIONS.find(option=>option.purpose===purpose);
   if(event)return settings.events[event.key].enabled;
   if(purpose==='offRoadEscalation')return settings.reminders.offRoad.enabled&&settings.events.opened.enabled;
