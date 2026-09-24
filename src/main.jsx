@@ -2435,7 +2435,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <header><div><span className="mine-eyebrow">Workflow bottlenecks</span><h2>Vehicle Stage Pipeline</h2><p>{stagePipelineScopeLabel} · {stagePipelineShiftLabel} · {stagePipelineDateLabel}</p></div><div className="mine-stage-pipeline-controls"><label><span>Region</span><select aria-label="Vehicle stage pipeline region" value={stagePipelineRegion} onChange={(event) => { setStagePipelineRegion(event.target.value); setStagePipelineSite("all"); }}><option value="all">All regions</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><label><span>Site</span><select aria-label="Vehicle stage pipeline site" value={activeStagePipelineSite} onChange={(event) => setStagePipelineSite(event.target.value)}><option value="all">All sites</option>{stagePipelineSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>{dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Vehicle stage pipeline shift" value={stagePipelineShift} onChange={(event) => setStagePipelineShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}<label><span>From</span><DateInput aria-label="Vehicle stage pipeline from date" max={stagePipelineTo || todayKey} value={stagePipelineFrom} onChange={(event) => setStagePipelineFrom(event.target.value)} /></label><label><span>To</span><DateInput aria-label="Vehicle stage pipeline to date" min={stagePipelineFrom || undefined} max={todayKey} value={stagePipelineTo} onChange={(event) => setStagePipelineTo(event.target.value)} /></label><button type="button" className="mine-stage-pipeline-reset" onClick={resetStagePipelineDates}>Reset dates</button>{equipmentLoaded && <ExportMenu {...stagePipelineSectionTable()} className="mine-stage-pipeline-export" label="Actions" printSection />}</div><strong>{equipmentLoaded ? stagePipelineTotal.toLocaleString() : "—"} in pipeline</strong></header>
         {equipmentLoaded ? <div className="mine-stage-pipeline-body">
           <div className="mine-stage-pipeline-table-wrap">
-            <table className="mine-stage-pipeline-table">
+            <ActionsTable className="mine-stage-pipeline-table" toolbarPortal showRowNumbers={false} preserveColumnOrder>
               <thead><tr><th>Site</th><th>Stage mix</th>{stagePipelineStages.map((stage) => <th key={stage.key}>{stage.label}</th>)}</tr></thead>
               <tbody>{stagePipelineDisplayRows.map((row) => {
                 const siteKey = row.siteKey || row.site;
@@ -2450,7 +2450,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                   })}
                 </tr>;
               })}</tbody>
-            </table>
+            </ActionsTable>
           </div>
           <div className="mine-stage-pipeline-legend">{stagePipelineStages.map((stage) => <span key={stage.key}><i className={stage.className} />{stage.shortLabel}</span>)}</div>
         </div> : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-stage-pipeline-state" />}

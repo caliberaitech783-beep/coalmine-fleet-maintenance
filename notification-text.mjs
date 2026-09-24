@@ -55,6 +55,8 @@ export function notificationCategory(item = {}) {
     const message = value(item.message);
     if (/^Request(?:\s+\S+)?\s+(?:was\s+)?verified\b/i.test(message)) key = 'mis';
     else if (/^Request(?:\s+\S+)?\s+(?:was\s+)?opened\b/i.test(message)) {
+      // Opening alerts belong to the saved creator department; later alerts
+      // continue to follow the department responsible for that workflow event.
       const requesterRole = value(item.requesterRole).toLowerCase();
       if (requesterRole.includes('maintenance')) key = 'maintenance';
       else if (requesterRole.includes('mis')) key = 'mis';
