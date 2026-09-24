@@ -36,3 +36,11 @@ test('the chip rows are graphical: gradient selection with underline, count badg
   assert.match(css,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css,/:root\[data-theme="dark"\] \.dashboard-record-tabs, :root\[data-theme="dark"\] \.dashboard-record-level-tabs \{/,'night mode variant');
 });
+
+test('phone record browsers scroll the controls away with the table',()=>{
+  assert.match(css,/@media \(max-width: 700px\), \(hover: none\) and \(pointer: coarse\) \{/,'phone portrait and landscape layouts use the mobile scroller');
+  assert.match(css,/\.dashboard-asset-modal \.dashboard-record-browser \{\s*display: block;\s*overflow-x: hidden;\s*overflow-y: auto;/,'the whole browser owns vertical scrolling');
+  assert.match(css,/\.dashboard-record-controls \{\s*max-height: none;\s*overflow: visible;/,'filter controls leave the viewport instead of becoming a fixed pane');
+  assert.match(css,/\.dashboard-record-results \{\s*display: block;\s*min-height: auto;\s*overflow: visible;/,'results grow naturally inside the shared scroller');
+  assert.match(css,/\.dashboard-record-browser \.dashboard-asset-list \{\s*flex: none;\s*min-height: auto;\s*overflow-x: auto;\s*overflow-y: visible;/,'the table keeps horizontal scrolling without trapping vertical scrolling');
+});

@@ -154,6 +154,34 @@
   .dashboard-record-topline > .dashboard-record-level { flex-basis: 100%; }
   .dashboard-record-toolbar-row > .dashboard-fleet-search { flex-basis: 100%; min-width: 0; margin-left: 0; padding: 6px 10px; }
 }
+
+/* On phones the controls and table must share one vertical scroller. Keeping
+   the table as its own flex scroller pins the date/actions block in place and
+   leaves room for only one record, especially in landscape orientation. */
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  .dashboard-asset-modal .dashboard-record-browser {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dashboard-record-controls {
+    max-height: none;
+    overflow: visible;
+  }
+  .dashboard-record-results {
+    display: block;
+    min-height: auto;
+    overflow: visible;
+  }
+  .dashboard-record-browser .dashboard-asset-list {
+    flex: none;
+    min-height: auto;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .dashboard-record-tabs button, .dashboard-record-level-tabs > button, .dashboard-record-tabs button::before, .dashboard-record-level-tabs > button::before, .dashboard-record-tabs button[aria-selected="true"]::after, .dashboard-record-level-tabs > button[aria-pressed="true"]::after,
   .dashboard-record-reset, .dashboard-record-reset svg, .dashboard-record-toolbar-row > .dashboard-fleet-search::before { animation: none !important; transition: none !important; }
