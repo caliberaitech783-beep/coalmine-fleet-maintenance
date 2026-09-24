@@ -176,9 +176,29 @@ export function liveEquipmentRoadStatus(record = {}, requests = []) {
   return matchingRoadStatus(record,requests,fleetAssetMatcher());
 }
 
-export function liveEquipmentMetrics(records = [], requests = []) {
-  const matches=fleetAssetMatcher();
-  const statuses = records.map((record) => matchingRoadStatus(record, requests, matches));
+// Resolve a complete fleet snapshot by indexing the master once, then walking
+// active requests once. This preserves ambiguous matches (all genuinely
+// matching candidates receive the status) without the former O(fleet*requests)
+// scan performed separately for every asset.
+export function liveEquipmentRoadStatuses(records = [], requests = []) {
+  const fixed = records.map((record) => ["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus));
+  const statuses = records.map((record, index) => fixed[index] ? record.dashboardRoadStatus : "onroad");
+  const resolve = createFleetAssetResolver(records);
+  for (const request of requests) {
+    const requestStatus = normalize(request.status);
+    if (requestStatus === "closed") continue;
+    const match = resolve(request);
+    if (!['matched', 'ambiguous'].includes(match.reason)) continue;
+    const status = ["ideal", "idle"].includes(requestStatus) ? "idle" : "offroad";
+    for (const index of match.candidateIndexes) {
+      if (fixed[index] || statuses[index] === "offroad") continue;
+      statuses[index] = status;
+    }
+  }
+  return statuses;
+}
+
+export function liveEquipmentMetrics(records = [], requests = [], statuses = liveEquipmentRoadStatuses(records, requests)) {
   const onRoad = statuses.filter((status) => status === "onroad").length;
   const offRoad = statuses.filter((status) => status === "offroad").length;
   const idle = statuses.filter((status) => status === "idle").length;

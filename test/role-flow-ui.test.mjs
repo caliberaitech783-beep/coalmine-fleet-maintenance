@@ -7,7 +7,7 @@ import { visibleInProductionHistory } from "../src/production-history.mjs";
 import { visibleInMaintenanceHistory } from "../src/maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mjs";
 import { isProductionFirstTripPending } from "../info-pulse-data.mjs";
-import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import * as requestEquipment from "../request-equipment.mjs";
@@ -59,7 +59,7 @@ function harness(name, extra = {}) {
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
-    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, managerRoleSelection, requestsVisibleToMisWorkspace,
+    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses, managerRoleSelection, requestsVisibleToMisWorkspace,
     isProductionFirstTripPending,
     requestWithEquipmentMasterDetails: row => row, equipmentGroupLabel: row => row.group,
     BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,

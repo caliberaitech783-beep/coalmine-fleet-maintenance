@@ -10,6 +10,35 @@ function equipmentReference(value) {
   return text(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+// Manager request lists can contain thousands of rows. Build the normalized
+// Equipment Master indexes once for each immutable records snapshot instead
+// of rescanning the full master for every request.
+const requestEquipmentLookupCache = new WeakMap();
+const emptyRequestEquipmentLookup = {
+  references: new Map(),
+  resolveDoor: (request) => request,
+};
+
+function requestEquipmentLookup(records = []) {
+  if (!Array.isArray(records) || !records.length) return emptyRequestEquipmentLookup;
+  const cached = requestEquipmentLookupCache.get(records);
+  if (cached) return cached;
+  const references = new Map();
+  for (const record of records) {
+    const details = requestEquipmentDetails(record);
+    const keys = new Set([details.chassis, details.door, details.reg, details.equipment, record.manufacturerSerialNo]
+      .map(equipmentReference)
+      .filter(Boolean));
+    for (const key of keys) {
+      if (!references.has(key)) references.set(key, new Set());
+      references.get(key).add(record);
+    }
+  }
+  const lookup = { references, resolveDoor: createRequestDoorResolver(records) };
+  requestEquipmentLookupCache.set(records, lookup);
+  return lookup;
+}
+
 export function findRequestEquipment(records = [], selectedId = "") {
   const id = text(selectedId);
   if (!id) return null;
@@ -40,26 +69,18 @@ export function requestEquipmentDetails(record = {}) {
 }
 
 export function requestWithEquipmentMasterDetails(request = {}, records = []) {
-  const recordReferences = records.map((record) => {
-    const details = requestEquipmentDetails(record);
-    return {
-      record,
-      keys: [details.chassis, details.door, details.reg, details.equipment, record.manufacturerSerialNo]
-        .map(equipmentReference)
-        .filter(Boolean),
-    };
-  });
+  const lookup = requestEquipmentLookup(records);
   let equipment = null;
   for (const requestKey of [request.chassis, request.door, request.reg, request.equipment].map(equipmentReference).filter(Boolean)) {
-    const matches = recordReferences.filter(({ keys }) => keys.includes(requestKey));
-    if (matches.length === 1) {
-      equipment = matches[0].record;
+    const matches = lookup.references.get(requestKey);
+    if (matches?.size === 1) {
+      equipment = matches.values().next().value;
       break;
     }
   }
   const details = requestEquipmentDetails(equipment || {});
   return {
-    ...createRequestDoorResolver(records)(request),
+    ...lookup.resolveDoor(request),
     make: details.make || text(request.make),
     model: details.model || text(request.model),
   };

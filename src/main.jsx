@@ -85,7 +85,7 @@ import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../re
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
@@ -1277,18 +1277,24 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const managerAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
   const restrictManagerScope=equipmentScope?.restrictToScope===true;
   const scopedRequests=equipmentLoaded?(managerAllowedSites?.length?requests.filter((request)=>managerAllowedSites.some((site)=>recordBelongsToSite(request,site))):restrictManagerScope?[]:requests):[];
-  const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
-  const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
-  const maintenanceActiveRequests = openRequests.filter((request) => !["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase()));
-  const fleet = liveEquipmentMetrics(siteEquipment, requestRows);
-  const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
-  const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
-  const offRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="offroad"),equipmentGroupLabel);
-  const idleTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="idle"),equipmentGroupLabel);
-  const onRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="onroad"),equipmentGroupLabel);
-  const closedRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() === "closed");
-  const verifiedRequests = closedRequests.filter(visibleInMisHistory);
-  const pendingVerification=closedRequests.filter(visibleInMisRequests);
+  const managerData=useMemo(()=>{
+    const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
+    const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
+    const maintenanceActiveRequests = openRequests.filter((request) => !["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase()));
+    const roadStatuses = liveEquipmentRoadStatuses(siteEquipment, requestRows);
+    const fleet = liveEquipmentMetrics(siteEquipment, requestRows, roadStatuses);
+    const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
+    const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
+    const equipmentWithStatus=(status)=>siteEquipment.filter((record,index)=>roadStatuses[index]===status);
+    const offRoadTypes=typeSummary(equipmentWithStatus("offroad"),equipmentGroupLabel);
+    const idleTypes=typeSummary(equipmentWithStatus("idle"),equipmentGroupLabel);
+    const onRoadTypes=typeSummary(equipmentWithStatus("onroad"),equipmentGroupLabel);
+    const closedRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() === "closed");
+    const verifiedRequests = closedRequests.filter(visibleInMisHistory);
+    const pendingVerification=closedRequests.filter(visibleInMisRequests);
+    return {requestRows,openRequests,maintenanceActiveRequests,roadStatuses,fleet,totalTypes,offRoadTypes,idleTypes,onRoadTypes,closedRequests,verifiedRequests,pendingVerification};
+  },[equipmentLoaded,equipmentRecords,equipmentScope,requests]);
+  const {requestRows,openRequests,maintenanceActiveRequests,roadStatuses,fleet,totalTypes,offRoadTypes,idleTypes,onRoadTypes,closedRequests,verifiedRequests,pendingVerification}=managerData;
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const productionFirstTripRows=productionManagerView?closedRequests.filter((row)=>isProductionFirstTripPending(row)):[];
   const productionFirstTripReportRows=productionManagerView?closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim()):[];
@@ -1342,7 +1348,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const managerDrilldownCard=cards.find(([, , , action])=>action?.key===managerDrilldown);
   const managerDrilldownAction=managerDrilldownCard?.[3];
   const managerFleetDrilldownRows=managerDrilldownAction?.kind==="fleet"
-    ? fleetAssetRequestDetails(managerDrilldownAction.key==="all"?siteEquipment:siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)===managerDrilldownAction.key),requestRows)
+    ? fleetAssetRequestDetails(managerDrilldownAction.key==="all"?siteEquipment:siteEquipment.filter((record,index)=>roadStatuses[index]===managerDrilldownAction.key),requestRows)
     : [];
   const managerRequestDrilldownRows=managerDrilldownAction?.kind==="requests"?(managerRequestDrilldowns[managerDrilldownAction.key]||[]):[];
   const title = activeManagerRole || "Manager";
@@ -3468,7 +3474,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
-  const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
+  const buildExportRows = () => rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
   useEffect(() => {
     if (!open) return undefined;
@@ -3514,7 +3520,10 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     const sheets = excelSheets?.();
     recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:sheets ? `${sheets.length} sheets` : `${rows.length} records`});
     if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, prepareXlsxExportSheets({ title, sheets, formatCell: exportCellText })), exportFileName(title, "xlsx"));
-    else downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
+    else {
+      const exportRows = buildExportRows();
+      downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
+    }
   });
   const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
       recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
@@ -3523,6 +3532,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
         await downloadDashboardPdf(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), exportFileName(title, "pdf"));
         return;
       }
+      const exportRows = buildExportRows();
       const response = await fetch("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },

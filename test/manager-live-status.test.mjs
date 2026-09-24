@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
-import { fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
@@ -58,7 +58,7 @@ function managerHarness(equipment, equipmentState = {}) {
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const scope = {
-    React, useState, fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, requestWithEquipmentMasterDetails,
+    React, useState, useMemo: (calculate) => calculate(), fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses, requestWithEquipmentMasterDetails,
     recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory, isProductionFirstTripPending,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
