@@ -540,13 +540,14 @@
     font-weight: 600 !important;
   }
 
-  .incoming-notification .notification-details {
+  .incoming-notification .notification-message.compact .notification-details {
     display: -webkit-box !important;
     overflow: hidden !important;
     font-size: 12px !important;
     line-height: 1.35 !important;
+    white-space: normal !important;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
   }
 
   .incoming-notification-link small {

@@ -10048,10 +10048,10 @@ function NotificationEntryDialog({ state, onClose, token }) {
   </Modal>, document.body);
 }
 
-function NotificationMessage({ item }) {
+function NotificationMessage({ item, compact = false }) {
   const {site, door, details} = notificationParts(item);
   const category = notificationCategory(item);
-  return <span className="notification-message"><span className="notification-meta"><strong className="notification-site">Site: {site}</strong><span className={`notification-category ${category.key}`}><i className="notification-category-dot" aria-hidden="true" />{category.label}</span></span><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
+  return <span className={`notification-message${compact ? " compact" : ""}`}><span className="notification-meta"><strong className="notification-site">Site: {site}</strong><span className={`notification-category ${category.key}`}><i className="notification-category-dot" aria-hidden="true" />{category.label}</span></span><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
 }
 
 function isResolvedTicketNotification(item) {
@@ -10085,7 +10085,7 @@ function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef, pe
     const timer = window.setTimeout(() => onDismiss(id), 15000);
     return () => window.clearTimeout(timer);
   }, [item.id, persistent]);
-  return <div className={`incoming-notification${persistent ? " persistent-ticket-resolution" : ""}`} role={persistent ? "alertdialog" : "status"} aria-live="polite" aria-modal={persistent ? "false" : undefined}><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>{persistent ? "Ticket resolved" : "New notification"}</b><NotificationMessage item={item} /><small>{persistent ? "This will stay here until you close it." : "Click for more details."}</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
+  return <div className={`incoming-notification${persistent ? " persistent-ticket-resolution" : ""}`} role={persistent ? "alertdialog" : "status"} aria-live="polite" aria-modal={persistent ? "false" : undefined}><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>{persistent ? "Ticket resolved" : "New notification"}</b><NotificationMessage item={item} compact />{persistent && <small>This will stay here until you close it.</small>}</span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
 }
 
 function NotificationBell({ session, onOpenEntry }) {
