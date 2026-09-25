@@ -37,19 +37,19 @@
 }
 
 .vehicle-history-heading small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
 .vehicle-history-heading h1 {
   margin-top: 2px;
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.15;
 }
 
 .vehicle-history-heading p {
   margin-top: 3px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
@@ -75,19 +75,19 @@
 .vehicle-history-header-actions .report-row-limit,
 .vehicle-history-header-actions .report-actions-trigger {
   height: 44px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-header-actions .report-row-limit > span,
 .vehicle-history-header-actions .report-row-limit select {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-header .export-menu-trigger {
   min-width: 190px;
   min-height: 44px;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-identity {
@@ -99,7 +99,7 @@
 }
 
 .vehicle-history-identity dt {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1.25;
   overflow: hidden;
@@ -109,7 +109,7 @@
 
 .vehicle-history-identity dd {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -139,14 +139,14 @@
 }
 
 .vehicle-history-summary small {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .vehicle-history-summary b {
   margin-top: 0;
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.25;
   text-align: right;
 }
@@ -166,13 +166,13 @@
 }
 
 .vehicle-last-repair-title small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
 .vehicle-last-repair-title h2 {
   margin-top: 3px;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.25;
 }
 
@@ -186,13 +186,13 @@
 }
 
 .vehicle-last-repair dt {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.25;
 }
 
 .vehicle-last-repair dd {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
@@ -206,19 +206,19 @@
 }
 
 .vehicle-history-table-title h2 {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.25;
 }
 
 .vehicle-history-table-title p {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
 .vehicle-history-table-title > span {
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .vehicle-history-table .report-table-filter-toolbar {
@@ -230,40 +230,40 @@
 .vehicle-history-table .report-row-limit,
 .vehicle-history-table .report-actions-trigger {
   height: 40px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-table .report-row-limit > span,
 .vehicle-history-table .report-row-limit select {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-table .report-filter-table {
   min-width: 1900px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vehicle-history-table .report-filter-table th {
   padding: 11px 14px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.3;
 }
 
 .vehicle-history-table .report-filter-table td {
   padding: 11px 14px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
 .vehicle-history-table .report-table-pagination {
   min-height: 42px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .vehicle-history-table .empty-state {
   padding: 20px !important;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 @media (max-width: 1050px) {
