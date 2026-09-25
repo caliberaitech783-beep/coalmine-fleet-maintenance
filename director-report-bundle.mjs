@@ -183,6 +183,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'status',label:'Status',value:requestStatusLabel},
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
     {key:'started',label:'Opened at',value:(request)=>shiftTime(request,request.start)},
+    {key:'expectedCompletionAt',label:'ETC',value:(request)=>shiftTime(request,request.expectedCompletionAt)},
   ];
   const closureColumns=[...requestColumns,{key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},{key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)}];
   const misColumns=[...closureColumns,{key:'verifiedBy',label:'MIS user',value:(request)=>request.verifiedBy},{key:'verifiedAt',label:'MIS verified at',value:(request)=>shiftTime(request,request.verifiedAt)},{key:'firstTripAt',label:'First trip time',value:(request)=>shiftTime(request,firstTripTimestamp(request))}];
@@ -211,6 +212,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'model',label:'Model',value:(request)=>request.reportModel},
     {key:'complaint',label:'Reason / Complaint',value:(request)=>request.complaint||'—'},
     {key:'started',label:'Opened at',value:(request)=>shiftTime(request,request.start)},
+    {key:'expectedCompletionAt',label:'ETC',value:(request)=>shiftTime(request,request.expectedCompletionAt)},
     {key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)},
     {key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)},
     {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},

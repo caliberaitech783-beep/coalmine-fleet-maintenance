@@ -321,7 +321,7 @@ test("the real browser and shared table render OEM controls and numbered exports
     const siteHtml = renderToStaticMarkup(h(Browser, props));
     assert.match(siteHtml, /<h4>WCL · Sasti OB<\/h4>/);
     assert.doesNotMatch(siteHtml, /Request site|Current location/);
-    const columnCount = requestRecords ? 13 : 9;
+    const columnCount = requestRecords ? 14 : 10;
     for (const model of exports) {
       assert.equal(model.columns.length, columnCount, "site column is removed from numbered print/export models");
       assert.ok(!model.columns.some(column => ["Request site", "Current location"].includes(column.label)));

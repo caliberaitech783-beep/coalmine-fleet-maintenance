@@ -131,8 +131,8 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
     /^status$/i,
     /^actions$/i,
     /^(?:started|production date and time)$/i,
-    /^days of breakdown$/i,
     /^etc$/i,
+    /^days of breakdown$/i,
     /^time left for etc$/i,
     /^(?:breakdown reason|reason of breakdown|reason)$/i,
     /^(?:breakdown type|type of breakdown|repair category)$/i,
@@ -157,7 +157,7 @@ export function closedTimeAfterStartedColumns(columns) {
   if (closed < 0 || !columns.some(isStarted)) return columns;
   const [column] = columns.splice(closed, 1);
   let target = columns.findIndex(isStarted) + 1;
-  if (labelOf(columns[target]) === "idle vehicle date") target += 1;
+  while (["etc", "idle vehicle date"].includes(labelOf(columns[target]))) target += 1;
   columns.splice(target, 0, column);
   return columns;
 }
@@ -184,6 +184,7 @@ export function jobReferenceColumnsLast(columns) {
 
 export function dateColumnsFirst(columns, statusFirst = true) {
   const isDate = ({ key, label }) => {
+    if (key === "etc" || label.trim().toLowerCase() === "etc") return true;
     if (/^(start|end|date|time|occurredAt|createdAt|updatedAt|closedAt|verifiedAt|firstTripAt|acceptedAt|arrivalFlaggedAt|misFlaggedAt)$/.test(key)) return true;
     const text = label.trim().toLowerCase();
     if (/\b(by|duration|waiting|delay|left|turn ?around|tat)\b/.test(text)) return false;

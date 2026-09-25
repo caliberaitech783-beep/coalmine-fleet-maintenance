@@ -255,6 +255,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       requestStatus,
       requestIdleAt: String(current?.idealRequestedAt || "").trim() || String(current?.idleRequestedAt || "").trim(),
       requestStart: current?.start || "—",
+      requestExpectedCompletion: current?.expectedCompletionAt || "—",
       requestClosed: "—",
       // Opening readings belong to the linked request, not the fleet's current meters.
       hmr: current ? openingReadings.HMR || undefined : record.hmr,

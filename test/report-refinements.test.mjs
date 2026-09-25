@@ -60,7 +60,7 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
     now,
   });
   const recent=tables.find(table=>table.title==='Recent Breakdown Cases');
-  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','complaint','started','closedAt','tat','reference','createdBy','closedBy']);
+  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','complaint','started','expectedCompletionAt','closedAt','tat','reference','createdBy','closedBy']);
   assert.equal(recent.columns.find(column=>column.key==='complaint').label,'Reason / Complaint');
   const cell=(row,key)=>row[recent.columns.findIndex(column=>column.key===key)];
   const pending=recent.rows.find(row=>cell(row,'reference')==='REQ-P');

@@ -14,9 +14,9 @@ test('Director report window runs daily at 7 PM India time',()=>{
 test('Director bundle builds all department reports and real xlsx output',()=>{
   const tables=buildDirectorReportTables({
     requests:[
-      {ref:'REQ-1',equipment:'EX-1',door:'D1',site:'Sasti OB',status:'Open',owner:'Production User',start:'2026-09-01 08:00',equipmentGroup:'Excavator'},
-      {ref:'REQ-2',equipment:'TR-1',door:'D2',site:'Jayant OB',status:'Closed',owner:'Production User',closedBy:'Maintenance User',start:'2026-09-01 09:00',closedAt:'2026-09-01 12:00',verifiedBy:'MIS User',verifiedAt:'2026-09-01 13:00',firstTripDone:true,firstTripAt:'2026-09-01 14:00'},
-      {ref:'REQ-3',equipment:'ID-1',door:'D3',site:'Majri OB',status:'Idle',owner:'Production User',idleReason:'No driver',start:'2026-09-01 10:00',closedAt:'2026-09-01 11:00'},
+      {ref:'REQ-1',equipment:'EX-1',door:'D1',site:'Sasti OB',status:'Open',owner:'Production User',start:'2026-09-01 08:00',expectedCompletionAt:'2026-09-01 18:00',equipmentGroup:'Excavator'},
+      {ref:'REQ-2',equipment:'TR-1',door:'D2',site:'Jayant OB',status:'Closed',owner:'Production User',closedBy:'Maintenance User',start:'2026-09-01 09:00',expectedCompletionAt:'2026-09-01 17:00',closedAt:'2026-09-01 12:00',verifiedBy:'MIS User',verifiedAt:'2026-09-01 13:00',firstTripDone:true,firstTripAt:'2026-09-01 14:00'},
+      {ref:'REQ-3',equipment:'ID-1',door:'D3',site:'Majri OB',status:'Idle',owner:'Production User',idleReason:'No driver',start:'2026-09-01 10:00',expectedCompletionAt:'2026-09-01 16:00',closedAt:'2026-09-01 11:00'},
     ],
     equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OB',make:'Komatsu'}],
     transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01'}],
@@ -41,6 +41,12 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.equal(tables.find((table)=>table.title==='Idle Vehicle Report').department,'Maintenance');
   assert.equal(tables.find((table)=>table.title==='On Road with first trip veri.').department,'MIS');
   assert.equal(tables.find((table)=>table.title==='Production vs MIS First Trip Report').department,'Production');
+  for (const table of tables.filter((item)=>item.columns.some((column)=>column.key==='started'))) {
+    const started=table.columns.findIndex((column)=>column.key==='started');
+    assert.equal(table.columns[started+1]?.key,'expectedCompletionAt',`${table.title} keeps ETC beside its breakdown time`);
+  }
+  const opened=tables.find((table)=>table.title==='Location wise opened BD');
+  assert.equal(opened.rows[0][opened.columns.findIndex((column)=>column.key==='expectedCompletionAt')],'2026-09-01 18:00');
   const roadStatus=tables.find((table)=>table.title==='Report for On Road / Off Road & Idle');
   assert.equal(roadStatus.rows[0][roadStatus.columns.findIndex((column)=>column.key==='roadStatus')],'Off road');
   const workbook=buildXlsxWorkbookBuffer(tables[0].title,tables[0].columns,tables[0].rows);

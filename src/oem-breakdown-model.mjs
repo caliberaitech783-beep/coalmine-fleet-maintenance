@@ -130,6 +130,7 @@ export function createOemBreakdownSelection(chart, selection = {}) {
     requestReference: request.ref?.startsWith("Asset ") ? "" : request.ref || "",
     requestStatus: requestStatusLabel(request),
     requestStart: request.start || request.startedAt || request.createdAt || "",
+    requestExpectedCompletion: request.expectedCompletionAt || "",
     requestClosed: request.closedAt || request.completedAt || "",
     repairCategory: request.category || "—",
     delayedReason: request.delayedReason || "—",

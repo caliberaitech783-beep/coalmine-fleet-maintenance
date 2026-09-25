@@ -121,9 +121,9 @@ test('every countdown on the page shares one ticker that stops with the last sub
 test('ETC and its countdown follow Days of breakdown in the maintenance lead layout', () => {
   const labels = ['Actions', 'Job reference', 'Door no.', 'Status', 'Started', 'Time left for ETC', 'ETC', 'Days of breakdown', 'Breakdown reason', 'Daily remarks'];
   const columns = labels.map((label, index) => ({label, index, key: label === 'ETC' ? 'etc' : label === 'Time left for ETC' ? 'etcRemaining' : `${index}:${label}`}));
-  assert.deepEqual(requestColumnsInWorkflowOrder(columns, true).map(column => column.label), ['Job reference', 'Door no.', 'Status', 'Actions', 'Started', 'Days of breakdown', 'ETC', 'Time left for ETC', 'Breakdown reason', 'Daily remarks']);
+  assert.deepEqual(requestColumnsInWorkflowOrder(columns, true).map(column => column.label), ['Job reference', 'Door no.', 'Status', 'Actions', 'Started', 'ETC', 'Days of breakdown', 'Time left for ETC', 'Breakdown reason', 'Daily remarks']);
   const dated = dateColumnsFirst([{key: 'etcRemaining', label: 'Time left for ETC'}, {key: 'etc', label: 'ETC'}, {key: 'start', label: 'Started'}], false);
-  assert.deepEqual(dated.map(column => column.key), ['start', 'etcRemaining', 'etc']);
+  assert.deepEqual(dated.map(column => column.key), ['etc', 'start', 'etcRemaining']);
 });
 
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -181,14 +181,18 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   const overdue = {...open, ref: 'REQ-ETC-2', expectedCompletionAt: '2026-09-18 11:50'};
   const unset = {...open, ref: 'REQ-ETC-3', expectedCompletionAt: ''};
   const {tree, html, exports, headers} = renderTable({rows: [open, overdue, unset], showActions: true, showEtc: true, exportTitle: 'Active Maintenance Requests'});
-  const daysIndex = headers.indexOf('Days of breakdown');
-  assert.deepEqual(headers.slice(daysIndex, daysIndex + 4), ['Days of breakdown', 'ETC', 'Time left for ETC', 'Daily remarks']);
+  const startedIndex = headers.indexOf('Started'), daysIndex = headers.indexOf('Days of breakdown');
+  assert.deepEqual(headers.slice(startedIndex, startedIndex + 2), ['Started', 'ETC']);
+  assert.deepEqual(headers.slice(daysIndex, daysIndex + 3), ['Days of breakdown', 'Time left for ETC', 'Daily remarks']);
   const cells = ref => children(children(tree, node => node.type === 'tr' && node.key === ref)[0], node => node.type === 'td' && node.props.className === 'etc-cell');
   assert.equal(cells(open.ref).length, 2);
   assert.equal(text(cells(open.ref)[0]), '18-09-2026 06:00:00 PM');
-  assert.match(html, /18-09-2026 06:00:00 PM<\/td><td class="etc-cell"><span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-2026 06:00:00 PM">4h 0m 0s left<\/span>/);
-  assert.match(html, /11:50:00 AM<\/td><td class="etc-cell"><span class="etc-countdown overdue"[^>]*>Overdue by 2h 10m 0s<\/span>/);
-  assert.match(html, /<td class="etc-cell">Not set<\/td><td class="etc-cell"><span class="etc-countdown none" data-state="none">Not set<\/span>/);
+  assert.match(html, /<td class="etc-cell">18-09-2026 06:00:00 PM<\/td>/);
+  assert.match(html, /<span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-2026 06:00:00 PM">4h 0m 0s left<\/span>/);
+  assert.match(html, /<td class="etc-cell">18-09-2026 11:50:00 AM<\/td>/);
+  assert.match(html, /<span class="etc-countdown overdue"[^>]*>Overdue by 2h 10m 0s<\/span>/);
+  assert.match(html, /<td class="etc-cell">—<\/td>/);
+  assert.match(html, /<span class="etc-countdown none" data-state="none">Not set<\/span>/);
   for (const columns of [exports.menu.columns, exports.print.columns]) {
     const etc = columns.find(column => column.key === 'etc'), remaining = columns.find(column => column.key === 'etcRemaining');
     assert.deepEqual([etc.label, remaining.label], ['ETC', 'Time left for ETC']);
@@ -198,19 +202,21 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   }
 });
 
-test('tables that do not opt in keep their columns, and the empty state spans the new ones', () => {
+test('every workflow table shows ETC while maintenance can additionally opt into the live countdown', () => {
   const plain = renderTable({rows: [open], showActions: true});
   assert.equal(plain.html.includes('Time left for ETC'), false);
   assert.equal(plain.html.includes('etc-countdown'), false);
-  assert.equal(plain.exports.menu.columns.some(column => column.key === 'etc'), false);
+  assert.equal(plain.exports.menu.columns.find(column => column.key === 'etc').value(open), '18-09-2026 06:00:00 PM');
+  assert.deepEqual(plain.headers.slice(plain.headers.indexOf('Started'), plain.headers.indexOf('Started') + 2), ['Started', 'ETC']);
   const colSpan = props => children(renderTable(props).tree, node => node.type === 'td' && node.props.className === 'empty-state')[0].props.colSpan;
-  assert.equal(colSpan({rows: [], showEtc: true}) - colSpan({rows: []}), 2);
+  assert.equal(colSpan({rows: [], showEtc: true}) - colSpan({rows: []}), 1);
 });
 
 test('the maintenance request and on-road tables opt into the ETC countdown', () => {
   assert.match(main, /isMaintenance && tab === "requests"[^\n]*<MobileWorkflowTable rows=\{activeRequests\}[^\n]*showAcceptanceStatus showEtc onFlagArrival=/);
   assert.match(main, /isMaintenance && tab === "close"[^\n]*<MobileWorkflowTable[^\n]*showInProgressStatus showEtc onFlagArrival=/);
   assert.doesNotMatch(main, /isMis && tab === "requests"[^\n]*showEtc/);
+  assert.match(tableSource, /const startedHeader = \(\) => <>\{workflowHeader\("start", startedLabel\)\}\{workflowHeader\("etc", "ETC"\)\}/);
   assert.match(main, /key === "etc" \? etcSortValue\(row\) : key === "etcRemaining" \? etcRemainingSortValue\(row, now\) : key === "breakdownDays"/);
   assert.match(main, /import EtcCountdown from "\.\/etc-countdown\.jsx";/);
 });

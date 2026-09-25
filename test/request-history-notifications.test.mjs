@@ -50,6 +50,6 @@ test("maintenance closed history shows closing time beside started time",()=>{
 test("MIS closed history labels production and maintenance timestamps", () => {
   assert.match(source,/startedLabel=\{isMis \? "Production date and time" : "Started"\}/);
   assert.match(source,/showClosedAt=\{isMaintenance \|\| isMis\}/);
-  assert.match(source,/const startedHeader = \(\) => <>\{workflowHeader\("start", startedLabel\)\}\{showIdleDate && workflowHeader\("idleDate", "Idle Vehicle Date"\)\}<\/>/);
+  assert.match(source,/const startedHeader = \(\) => <>\{workflowHeader\("start", startedLabel\)\}\{workflowHeader\("etc", "ETC"\)\}\{showIdleDate && workflowHeader\("idleDate", "Idle Vehicle Date"\)\}<\/>/);
   assert.match(source,/closedAtLabel=\{closedHistoryClosingLabel\}/);
 });

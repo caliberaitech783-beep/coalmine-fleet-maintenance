@@ -397,7 +397,7 @@ test("fleet lists carry each asset's current breakdown request or its live road 
   ];
   const requests = [
     { ref: "REQ-LATER", door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Accepted", start: "2026-09-10 09:00:00" },
-    { ref: "REQ-FIRST", door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Open", acceptedAt: "2026-09-09 08:10:00", start: "2026-09-09 08:00:00" },
+    { ref: "REQ-FIRST", door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Open", acceptedAt: "2026-09-09 08:10:00", start: "2026-09-09 08:00:00", expectedCompletionAt: "2026-09-09 18:00:00" },
     { ref: "REQ-IDLE", door: "S2", chassis: "CH02", site: "Majri II", status: "Idle", start: "2026-09-08 07:00:00" },
     { ref: "REQ-DONE", door: "S3", chassis: "CH03", site: "Majri II", status: "Closed", start: "2026-09-01 07:00:00", closedAt: "2026-09-02 07:00:00" },
   ];
@@ -410,4 +410,6 @@ test("fleet lists carry each asset's current breakdown request or its live road 
   ]);
   assert.deepEqual(rows.map(({ id }) => id), [1, 2, 3, 4], "asset order and identity are preserved");
   assert.equal(rows[0].chassisNo, "CH-01", "original asset fields stay on the row");
+  assert.equal(rows[0].requestExpectedCompletion, "2026-09-09 18:00:00", "the linked request exposes its ETC to fleet and BD Balance lists");
+  assert.equal(rows[2].requestExpectedCompletion, "—", "assets without an active request keep an explicit empty ETC");
 });

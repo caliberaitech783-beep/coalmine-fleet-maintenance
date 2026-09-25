@@ -1974,6 +1974,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       dailyRemarks: Array.isArray(request.dailyRemarks) ? request.dailyRemarks : [],
       requestIdleAt: request.idealRequestedAt || request.idleRequestedAt || "",
       requestStart: request.start || "—",
+      requestExpectedCompletion: request.expectedCompletionAt || "—",
       requestClosed: request.closedAt || request.completedAt || "—",
       requestVerified: request.verifiedAt || "—",
       requestFirstTrip: firstTripTimestamp(request) || "—",
@@ -2436,7 +2437,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "start", "status", "dailyRemarks", "ref", "createdBy", "requesterRole"];
+const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "start", "expectedCompletionAt", "status", "dailyRemarks", "ref", "createdBy", "requesterRole"];
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal, requestActions = null } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td> : null;
@@ -2455,6 +2456,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "category": return <td>{r.category}</td>;
     case "delayedReason": return <td>{r.delayedReason || "—"}</td>;
     case "start": return <td>{formatTwelveHourDateTime(r.start)}</td>;
+    case "expectedCompletionAt": return <td>{formatTwelveHourDateTime(r.expectedCompletionAt)}</td>;
     case "closedAt": return <td>{formatTwelveHourDateTime(r.closedAt)}</td>;
     case "hours": return <td>{r.hours}</td>;
     case "status": return <td><Status>{requestStatusLabel(r)}</Status></td>;
@@ -2506,7 +2508,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ...(showClosedAt ? [["closedAt", closedAtLabel]] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["expectedCompletionAt", "ETC"], ...(showClosedAt ? [["closedAt", closedAtLabel]] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
     ],
     orderedColumns = columnOrder ? [...columns.filter(([key]) => key === "requestAction"), ...columnOrder.map((orderKey) => columns.find(([key]) => key === orderKey)).filter(Boolean)] : columns,
@@ -2529,13 +2531,14 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         if (key === "closingHmr") return requestMeterReadings(row, "closing").HMR || "—";
         if (key === "closingKmr") return requestMeterReadings(row, "closing").KMR || "—";
         if (key === "start") return formatTwelveHourDateTime(row.start);
+        if (key === "expectedCompletionAt") return formatTwelveHourDateTime(row.expectedCompletionAt);
         if (key === "closedAt") return formatTwelveHourDateTime(row.closedAt);
         if (key === "audio") return row.complaintAudioAvailable || row.maintenanceAudioAvailable ? "Available" : "Not available";
         if (key === "dailyRemarks") return dailyUpdatesExportText(row.dailyRemarks, { category: row.category });
         return row[key];
       },
     })),
-    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model, showUserRole ? row.requesterRole : "") && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
+    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model, row.expectedCompletionAt, showUserRole ? row.requesterRole : "") && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
@@ -2586,6 +2589,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>{r.category}</td>
                 <td>{r.delayedReason || "—"}</td>
                 <td>{formatTwelveHourDateTime(r.start)}</td>
+                <td>{formatTwelveHourDateTime(r.expectedCompletionAt)}</td>
                 {showClosedAt && <td>{formatTwelveHourDateTime(r.closedAt)}</td>}
                 <td>{showBreakdownDays ? r.hours : <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={r.hours || "—"} />}</td>
                 <td>
@@ -2656,6 +2660,7 @@ const masterFields = {
     ["site", "Site location"],
     ["category", "Repair category"],
     ["start", "Started"],
+    ["expectedCompletionAt", "ETC"],
     ["hours", "Downtime"],
     ["status", "Status"],
     ["owner", "Responsibility"],
@@ -5893,17 +5898,17 @@ function Generic({ name, requests = [] }) {
           </div>
           <div className="emptytable">
             <ActionsTable>
-              <thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>Age</th><th>Status</th></tr></thead>
+              <thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>ETC</th><th>Age</th><th>Status</th></tr></thead>
               <tbody>
                 {visibleRequests.length ? visibleRequests.map((request) => {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
                       <td><b>{request.ref}</b></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
-                      <td>{request.start}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
+                      <td>{formatTwelveHourDateTime(request.start)}</td><td>{formatTwelveHourDateTime(request.expectedCompletionAt)}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
-                }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
+                }) : <tr><td colSpan="8" className="empty-state">No service or maintenance requests available</td></tr>}
               </tbody>
             </ActionsTable>
           </div>
@@ -6612,6 +6617,7 @@ function vehicleRepairHistoryColumns(onRequestProcess) {
     {key: "site", label: "Breakdown location", value: (request) => request.reportSite || request.site},
     {key: "driver", label: "Driver at that time", value: (request) => request.driverName || request.driver},
     {key: "openedAt", label: "Breakdown opened", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "closedAt", label: "Maintenance closed", value: (request) => request.closedAt, sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
     {key: "tat", label: "Downtime / TAT", value: (request) => request.hours || elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt)},
     {key: "repair", label: "Work completed", value: (request) => request.maintenanceWork},
@@ -6653,6 +6659,7 @@ function BreakdownOccurrencesModal({ summary, onClose, onRequestProcess }) {
   const columns = [
     {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)}><Activity />{request.ref || "View request"}</button>},
     {key: "opened", label: "Breakdown time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "reason", label: "Breakdown reason", value: (request) => request.complaint || request.category},
     {key: "location", label: "Location", value: (request) => request.reportSite || request.site},
     {key: "driver", label: "Driver", value: (request) => request.driverName || request.driver},
@@ -6944,6 +6951,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "status", label: "Status", value: reportRequestStatus, sortValue: (request) => requestStatusSortRank(reportRequestStatus(request)), render: (request) => <Status>{reportRequestStatus(request)}</Status>},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start,request), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start,request)},
+    {key: "expectedCompletionAt", label: "ETC", value: (request) => formatTimestamp(request.expectedCompletionAt,request), sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTimestamp(request.expectedCompletionAt,request)},
   ];
   const idleVehicleColumns = [
     {...requestColumns.find((column) => column.key === "site"), render: (request) => <b>{request.reportSite || "—"}</b>},
@@ -6984,6 +6992,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "model", label: "Model", value: (request) => request.reportModel},
     {key: "complaint", label: "Reason / Complaint", value: (request) => request.complaint || "—"},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start,request), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start,request)},
+    {key: "expectedCompletionAt", label: "ETC", value: (request) => formatTimestamp(request.expectedCompletionAt,request), sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTimestamp(request.expectedCompletionAt,request)},
     {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
     {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
     {key: "reference", label: "Job reference", value: (request) => request.ref},
@@ -7001,6 +7010,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "chassis", label: "Chassis / serial no.", value: (record) => record.chassisNumber},
     {key: "breakdowns", label: "Total breakdowns", value: (record) => record.breakdownCount, sortValue: (record) => record.breakdownCount, render: (record) => <strong>{record.breakdownCount}</strong>},
     {key: "latest", label: "Latest breakdown", value: (record) => record.latestBreakdownAt, sortValue: (record) => record.latestBreakdownAt, render: (record) => record.latestBreakdownAt ? formatTwelveHourDateTime(record.latestBreakdownAt) : "No breakdown recorded"},
+    {key: "expectedCompletionAt", label: "Latest ETC", value: (record) => record.expectedCompletionAt, sortValue: (record) => record.expectedCompletionAt, render: (record) => formatTwelveHourDateTime(record.expectedCompletionAt)},
   ];
   const maximumBreakdownColumns = [
     {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <b>{row.reportDoor || row.reportEquipment || "—"}</b>},
@@ -9123,6 +9133,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   const showIdleDate = rows.some(row => ["idle", "ideal"].includes(String(row.status || "").toLowerCase())) || idleDateFilter;
   const idleDateColumn = {key: "idleDate", label: "Idle Vehicle Date", value: row => (row.idealRequestedAt || row.idleRequestedAt) ? formatTwelveHourDateTime(row.idealRequestedAt || row.idleRequestedAt, true) : "Not recorded"};
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
+  const etcColumn = {key: "etc", label: "ETC", value: (row) => row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "—"};
   const filterColumns = [
     ...(showAcceptedTime ? [{key: "acceptedTime", label: "Arrival wait", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
@@ -9148,7 +9159,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ...(showReason ? [{key: "complaint", label: "Breakdown reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(showUserRole ? [{key: "requesterRole", label: "User role", value: (row) => row.requesterRole || "—"}] : []),
-    ...(startedFirst ? [startedColumn, ...(showIdleDate ? [idleDateColumn] : []), ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn, ...(showIdleDate ? [idleDateColumn] : [])]),
+    ...(startedFirst ? [startedColumn, etcColumn, ...(showIdleDate ? [idleDateColumn] : []), ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn, etcColumn, ...(showIdleDate ? [idleDateColumn] : [])]),
     ...(showClosedAt ? [{key: "closedAt", label: closedAtLabel, value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
     ...(showArrivalFlagData ? [
       {key: "arrivalFlaggedAt", label: "Red flag raised", value: (row) => formatTwelveHourDateTime(row.arrivalFlaggedAt)},
@@ -9160,10 +9171,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ] : []),
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
     {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysUntilClose(row.start, row.closedAt, now)},
-    ...(showEtc ? [
-      {key: "etc", label: "ETC", value: (row) => row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "—"},
-      {key: "etcRemaining", label: "Time left for ETC", value: (row) => etcCountdown(row, now).summary},
-    ] : []),
+    ...(showEtc ? [{key: "etcRemaining", label: "Time left for ETC", value: (row) => etcCountdown(row, now).summary}] : []),
     {key: "dailyRemarks", label: "Daily remarks", value: (row) => dailyUpdatesExportText(row.dailyRemarks, { category: row.category })},
     ...(showWorkCompletion ? [{key: "maintenanceWork", label: "Work completion action taken", value: (row) => row.maintenanceWork}] : []),
     ...(showMeterData ? [
@@ -9184,7 +9192,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   // Exports and prints follow the on-screen layout: the closing time sits beside Started when the table asks for it.
   if (closedTimeAfterStarted) closedTimeAfterStartedColumns(filterColumns);
   const filteredRows = (idleDateFilter ? filterRecordsByDate(rows, idleDateRange, row => row.idealRequestedAt || row.idleRequestedAt) : rows).filter((row) => {
-    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, showUserRole ? row.requesterRole : "", row.acceptedBy, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
+    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.expectedCompletionAt, showUserRole ? row.requesterRole : "", row.acceptedBy, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "productionPerson" ? row.owner || row.requesterLogin : key === "maintenanceAcceptedBy" ? row.acceptedBy : key === "maintenanceClosedBy" ? row.closedBy : key === "etc" ? etcSortValue(row) : key === "etcRemaining" ? etcRemainingSortValue(row, now) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
@@ -9204,10 +9212,10 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
   const lateAcceptanceHighlight = highlightLateAcceptance ? requestAcceptedLate : undefined;
-  const startedHeader = () => <>{workflowHeader("start", startedLabel)}{showIdleDate && workflowHeader("idleDate", "Idle Vehicle Date")}</>;
+  const startedHeader = () => <>{workflowHeader("start", startedLabel)}{workflowHeader("etc", "ETC")}{showIdleDate && workflowHeader("idleDate", "Idle Vehicle Date")}</>;
   const closedByHeader = () => showClosedBy && workflowHeader("closedBy", "Closed by");
   const verifiedHeaders = () => <>{showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && <>{workflowHeader("verifiedAt", "Verified date & time")}{workflowHeader("firstTripAt", "First trip time")}</>}</>;
-  const startedCell = (row) => <><td>{formatTwelveHourDateTime(row.start)}</td>{showIdleDate && <td>{idleDateColumn.value(row)}</td>}</>;
+  const startedCell = (row) => <><td>{formatTwelveHourDateTime(row.start)}</td><td className="etc-cell">{etcColumn.value(row)}</td>{showIdleDate && <td>{idleDateColumn.value(row)}</td>}</>;
   const closedByCell = (row) => showClosedBy && <td>{row.closedBy || "—"}</td>;
   const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <><td>{formatTwelveHourDateTime(row.verifiedAt, true)}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td></>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
@@ -9239,12 +9247,12 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMisPeople && <>{workflowHeader("productionPerson", "Production person (created)")}{workflowHeader("maintenanceAcceptedBy", "Maintenance person (accepted)")}{workflowHeader("maintenanceClosedBy", "Maintenance person (closed)")}</>}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "Breakdown type")}
           {workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")}{showUserRole && workflowHeader("requesterRole", "User role")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && <>{workflowHeader("etc", "ETC")}{workflowHeader("etcRemaining", "Time left for ETC")}</>}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")}{showUserRole && workflowHeader("requesterRole", "User role")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && workflowHeader("etcRemaining", "Time left for ETC")}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? visibleWorkflowRows.map((row) => {
             const days = calculateBreakdownDaysUntilClose(row.start, row.closedAt, now);
-            const etcLabel = showEtc && row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
+            const etcLabel = row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
@@ -9267,7 +9275,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showArrivalFlagData && <><td>{formatTwelveHourDateTime(row.arrivalFlaggedAt)}</td><td>{row.arrivalFlaggedBy || "—"}</td><td><b>{elapsedLabel(row.start, row.arrivalFlaggedAt)}</b></td><td>{row.acceptedAt ? formatTwelveHourDateTime(row.acceptedAt) : <span className="arrival-not-reached">Not reached</span>}</td><td><b>{elapsedLabel(row.start, row.acceptedAt || new Date(now))}</b></td><td>{row.acceptedBy || "Pending"}</td></>}
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} label={`${days} ${days === 1 ? "day" : "days"}`} /></td>
-              {showEtc && <><td className="etc-cell">{etcLabel || "Not set"}</td><td className="etc-cell"><EtcCountdown request={row} etcLabel={etcLabel} /></td></>}
+              {showEtc && <td className="etc-cell"><EtcCountdown request={row} etcLabel={etcLabel} /></td>}
               <td><MaintenanceRemarks remarks={row.dailyRemarks} category={row.category} /></td>
               {showWorkCompletion && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
               {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").KMR || "—"}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
@@ -9278,7 +9286,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               </td>}
               {!actionsFirst && workflowActions(row, lockedIdeal)}
             </tr>;
-          }) : <tr><td colSpan={10 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showUserRole ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 2 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={11 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showUserRole ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 1 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </ActionsTable>
     </div>{remainingWorkflowRows > 0 && <div className="workflow-table-load-more" role="status"><span>Showing {visibleWorkflowRows.length} of {sortedRows.length} records</span><button type="button" onClick={() => setVisibleRowLimit((limit) => Math.min(limit + WORKFLOW_RENDER_BATCH, sortedRows.length))}>Show next {Math.min(WORKFLOW_RENDER_BATCH, remainingWorkflowRows)}</button></div>}</>

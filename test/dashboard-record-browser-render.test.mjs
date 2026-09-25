@@ -23,10 +23,12 @@ test("BD Balance places location, reasons and meter readings beside their reques
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
-  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
+  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
   const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true,
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
   assert.match(html, /<th>Days of breakdown<\/th><th>Current location<\/th>/);
+  assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
+  assert.match(html, /10-09-2026 10:00:00 AM<\/td><td[^>]*>10-09-2026 06:00:00 PM<\/td>/);
   assert.match(html, /<th>Equipment category<\/th><th>Type of breakdown<\/th><th>Reason of breakdown<\/th>/);
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
@@ -40,7 +42,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const timingColumns = ["Closed", "MIS verified at", "First trip time"];
   const row = {id: "case-1", requestReference: "JOB-1", requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Closed",
-    requestStart: "2026-09-10 10:00:00", requestClosed: "2026-09-10 11:00:00", requestVerified: "2026-09-10 12:00:00", requestFirstTrip: "2026-09-10 11:30:00"};
+    requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", requestClosed: "2026-09-10 11:00:00", requestVerified: "2026-09-10 12:00:00", requestFirstTrip: "2026-09-10 11:30:00"};
   for (const [title, event, expected] of [
     ["Production Request", "production", ["Closed"]], ["Closed", "closed", ["Closed"]],
     ["Verified", "verified", timingColumns], ["Idle Vehicles", "idle", []],
@@ -54,16 +56,16 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     const html = renderToStaticMarkup(React.createElement(Browser, props));
     const columns = dateColumnsFirst(tableModel(table.children).columns);
     assert.deepEqual(columns.filter(column => timingColumns.includes(column.label)).map(column => column.label), expected, title);
-    assert.deepEqual(columns.slice(0, 2 + expected.length).map(column => column.label), ["Status", "Started", ...expected], title);
+    assert.deepEqual(columns.slice(0, 3 + expected.length).map(column => column.label), ["Status", "Started", "ETC", ...expected], title);
     const dataRows = descendants(descendants(table.children, node => node.type === "tbody"), node => node.type === "tr");
     const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
     assert.equal(exported.rows.length, 1, title);
     assert.equal(table.printTitle, table.exportTitle, title);
     assert.doesNotMatch(html, /1 of 1 records/); // The shared toolbar owns the only count.
     assert.equal(table.toolbarPortal, true);
-    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 13 + expected.length + (event === "idle" ? 3 : 0), title);
+    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 14 + expected.length + (event === "idle" ? 3 : 0), title);
     if (event === "idle") {
-      assert.equal(columns[2].label, "Idle Vehicle Date");
+      assert.equal(columns[3].label, "Idle Vehicle Date");
       assert.equal(columns[columns.findIndex(column => column.label === "Breakdown reason") + 1].label, "Idle reason");
       assert.equal(exported.columns.find(column => column.label === "Idle reason").value(exported.rows[0]), "No driver");
       assert.ok(html.includes("Not recorded"));
@@ -71,7 +73,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
     if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
     const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
-    assert.ok(empty.includes(`colSpan="${13 + expected.length + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
+    assert.ok(empty.includes(`colSpan="${14 + expected.length + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
   }
 });
 
@@ -93,7 +95,7 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
     assert.ok(table.props.exportTitle.endsWith(label));
     assert.equal(table.props.printTitle, table.props.exportTitle);
     const columns = dateColumnsFirst(tableModel(table.props.children).columns);
-    assert.deepEqual(columns.slice(0, 3).map(column => column.label), ["Status", "Started", "BD closing time"]);
+    assert.deepEqual(columns.slice(0, 4).map(column => column.label), ["Status", "Started", "ETC", "BD closing time"]);
     const dataRows = descendants(descendants(table, node => node.type === "tbody"), node => node.type === "tr");
     const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
     assert.equal(exported.rows.length, count);
