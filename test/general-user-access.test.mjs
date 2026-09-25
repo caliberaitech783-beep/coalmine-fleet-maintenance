@@ -28,19 +28,20 @@ async function authorize(session,path,{method="GET",query={}}={}){
   return result;
 }
 
-test("General User is a recognized Team User with Dashboard and Tickets defaults",()=>{
+test("General User is a recognized Team User with every menu available and none selected by default",()=>{
   assert.ok(MOBILE_USER_ROLES.includes(GENERAL_USER_ROLE));
+  assert.deepEqual(GENERAL_USER_MENU_OPTIONS,["Dashboard","Masters","WhatsApp Integration","Requests","Reports","Audit Trail","Tickets"]);
   for(const name of ["General User"," general ","general_user"])assert.equal(normalizeMobileUserRole(name),GENERAL_USER_ROLE);
   const profile=sessionFor();
   assert.equal(profile.role,"normal");
   assert.equal(profile.assignedRole,GENERAL_USER_ROLE);
   for(const view of ["desktop","mobile"]){
-    assert.deepEqual(profile.permissions[`${view}UserMenuAccess`],["Dashboard","Tickets"]);
+    assert.deepEqual(profile.permissions[`${view}UserMenuAccess`],[]);
     assert.deepEqual(profile.permissions[`${view}UserRequestAccess`],[]);
   }
-  assert.equal(profile.permissions.viewDashboardRequests,true);
+  assert.equal(profile.permissions.viewDashboardRequests,false);
   assert.equal(profile.permissions.readRequests,false);
-  assert.equal(profile.permissions.viewEquipment,true);
+  assert.equal(profile.permissions.viewEquipment,false);
 });
 
 test("General User keeps independent saved menus and explicit empty selections",()=>{
@@ -56,12 +57,13 @@ test("General User keeps independent saved menus and explicit empty selections",
 });
 
 test("missing mobile settings inherit desktop; invalid menus never grant access",()=>{
-  const profile=sessionFor({desktopUserMenuAccess:["Requests","Requests","Masters","Reports"]});
-  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Reports"]);
-  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Reports"]);
+  const profile=sessionFor({desktopUserMenuAccess:["Requests","Requests","Masters","Reports","Unknown"]});
+  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Masters","Reports"]);
+  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Masters","Reports"]);
   assert.deepEqual(profile.permissions.desktopUserRequestAccess,["View requests","Closed history"]);
   assert.equal(profile.permissions.readRequests,true);
-  assert.equal(generalUserCanAccessMenu(profile,"Masters"),false);
+  assert.equal(generalUserCanAccessMenu(profile,"Masters"),true);
+  assert.equal(generalUserCanAccessMenu(profile,"Unknown"),false);
 });
 
 test("additional menu grants never add maintenance authority, even with stale privilege flags",()=>{
@@ -83,8 +85,8 @@ test("saving General User defaults and all-unchecked menus matches the form",()=
   });
   vm.runInContext(source,context);
   const defaults=context.applyUserRoleDefaults({...user});
-  assert.equal(defaults.desktopUserMenuAccess,"Dashboard | Tickets");
-  assert.equal(defaults.mobileUserMenuAccess,"Dashboard | Tickets");
+  assert.equal(defaults.desktopUserMenuAccess,"");
+  assert.equal(defaults.mobileUserMenuAccess,"");
   const saved=context.applyUserRoleDefaults({...user,desktopUserMenuAccess:"",mobileUserMenuAccess:"Tickets",desktopUserRequestAccess:"",mobileUserRequestAccess:"",edit:true});
   assert.equal(saved.desktopUserMenuAccess,"");
   assert.equal(saved.mobileUserMenuAccess,"Tickets");
@@ -92,13 +94,18 @@ test("saving General User defaults and all-unchecked menus matches the form",()=
   assert.equal(saved.userType,"Mobile User");
 });
 
-test("API permits General User dashboard and tickets and rejects unchecked tabs",async()=>{
+test("API rejects every unchecked General User menu by default",async()=>{
   const session=sessionFor();
-  assert.equal((await authorize(session,"/api/requests",{query:{scope:"dashboard"}})).passed,true);
-  assert.equal((await authorize(session,"/api/tickets")).passed,true);
-  assert.equal((await authorize(session,"/api/tickets",{method:"POST"})).passed,true);
-  for(const path of ["/api/requests","/api/requests/REQ1/meter-file","/api/report-schedule-settings","/api/oracle/driver"]){
-    assert.equal((await authorize(session,path)).status,403,path);
+  for(const [path,options] of [
+    ["/api/requests",{query:{scope:"dashboard"}}],
+    ["/api/tickets",{}],
+    ["/api/tickets",{method:"POST"}],
+    ["/api/requests",{}],
+    ["/api/requests/REQ1/meter-file",{}],
+    ["/api/report-schedule-settings",{}],
+    ["/api/oracle/driver",{}],
+  ]){
+    assert.equal((await authorize(session,path,options)).status,403,path);
   }
   assert.equal((await authorize(session,"/api/requests",{query:{scope:"reports"}})).status,403);
 });
@@ -132,12 +139,13 @@ test("existing Team User roles retain their existing API access",async()=>{
 });
 
 test("General User dashboard fleet access follows the menu grant and assigned site",()=>{
-  assert.equal(canReadDashboardEquipment(sessionFor()),true);
+  const dashboardSession=sessionFor({desktopUserMenuAccess:"Dashboard"});
+  assert.equal(canReadDashboardEquipment(dashboardSession),true);
   assert.equal(canReadDashboardEquipment(sessionFor({desktopUserMenuAccess:"Tickets",mobileUserMenuAccess:"Tickets"})),false);
-  const scope=dashboardEquipmentScope(sessionFor(),user);
+  const scope=dashboardEquipmentScope(dashboardSession,user);
   assert.equal(scope.restrictToScope,true);
   const rows=[{door:"IN-SCOPE",currentLocation:"Sasti OB"},{door:"OTHER",currentLocation:"Ghugus"}];
-  assert.deepEqual(scopeDashboardEquipmentRecords(rows,sessionFor(),user),[rows[0]]);
+  assert.deepEqual(scopeDashboardEquipmentRecords(rows,dashboardSession,user),[rows[0]]);
 });
 
 test("General User request feeds keep dashboard, optional Requests, and Reports site-scoped",async()=>{

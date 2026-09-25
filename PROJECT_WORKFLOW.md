@@ -21,7 +21,7 @@ Nerve Center is a mining-operations portal for:
 The application has two interfaces:
 
 1. **Super User workspace**: dashboard, masters, WhatsApp Integration, Reports, and Audit Trail.
-2. **Mobile User workspace**: a role-specific request workspace for Production User, Maintenance User, or MIS User.
+2. **Mobile User workspace**: a role-specific request workspace for Production User, Maintenance User, or MIS User, plus the configurable menu workspace for General User.
 
 ## 2. Architecture at a glance
 
@@ -118,7 +118,7 @@ New application users receive their registered phone number as the initial passw
 
 Team User location assignment supports multiple site checkboxes in both Add and Edit. **All sites** selects every listed site; clearing an individual checkbox excludes it. The selection is stored as normalized site names separated by ` | ` in `site` (and mirrored in `location` by the form), preserving existing single-site records. All sites is a selection of the current list, so newly added sites require assignment. At least one site is required in the form. Live server checks use `userSiteScope` for requests, equipment, request creation and updates, MIS evidence and verification, and team tickets; stale manager report settings never widen Team User scope. Multi-site users select one assigned site when creating a ticket. Role and menu permissions still apply within the assigned sites.
 
-**General User** is available under **Team User** when adding or editing Users & employees. Its desktop and mobile menu selections default to **Dashboard** and **Tickets** only. **Requests** and **Reports** are available as unchecked options; selecting them grants read-only access to the assigned location. Saved selections, including an empty selection, are retained. Switching another role to General User starts with the General User defaults. General User never receives request creation, editing, deletion, closure, verification, or master administration permissions. The API checks the union of the configured desktop/mobile menus; dashboard data uses `GET /api/requests?scope=dashboard` and remains site-scoped.
+**General User** is available under **Team User** when adding or editing Users & employees. Its desktop and mobile selectors offer **Dashboard**, **Masters**, **WhatsApp Integration**, **Requests**, **Reports**, **Audit Trail**, and **Tickets**, with every menu unticked by default. Saved selections, including an empty selection, are retained. Switching another role to General User starts with the empty General User defaults. General User never receives request creation, editing, deletion, closure, or verification permissions. The API checks the union of the configured desktop/mobile menus; dashboard data uses `GET /api/requests?scope=dashboard` and remains site-scoped.
 
 
 | Mobile role | Request visibility | Create | Edit | Delete | Close | Verify / first trip | Equipment master |

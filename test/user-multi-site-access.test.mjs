@@ -14,7 +14,11 @@ const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const evaluate=(source,deps)=>new Function(...Object.keys(deps),source)(...Object.values(deps));
 const user={userType:'Mobile User',userGroup:'General User',site:'SASTI II | Jayant OB',managerRegion:'All',managerSites:'Majri OB'};
 const rows=[{ref:'S',site:'Sasti OB'},{ref:'J',site:'Jayant OB'},{ref:'M',site:'Majri OB'},{ref:'X',site:''}];
-const sessionFor=(role='General User')=>{const profile=resolveMobileAccess({user:{...user,userGroup:role}});return {...profile,role:profile.sessionRole,login:'test'};};
+const sessionFor=(role='General User')=>{
+  const menuAccess=role==='General User'?{desktopUserMenuAccess:'Dashboard',mobileUserMenuAccess:'Dashboard'}:{};
+  const profile=resolveMobileAccess({user:{...user,...menuAccess,userGroup:role}});
+  return {...profile,role:profile.sessionRole,login:'test'};
+};
 async function invoke(method,path,{record=user,session=sessionFor(),query={},body={},dependencies={}}={}){
   let handler,result={status:200};
   const start=server.indexOf(`app.${method}('${path}',`);

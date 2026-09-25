@@ -2736,7 +2736,7 @@ const mobileRoleAuthority = {
   "Production User": "Create request only",
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
-  "General User": "Dashboard and tickets by default",
+  "General User": "Choose from all menus",
 };
 const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
@@ -4011,7 +4011,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager />
     </>}
     {accountRole && !isDesktopUser && <>
-      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "Only Dashboard and Tickets are selected by default. Select Requests or Reports to grant additional read-only access." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "All menu choices are available and unticked by default. Select only the menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
     </>}
