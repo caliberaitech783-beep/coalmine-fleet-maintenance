@@ -38,6 +38,11 @@ const click = control => {
 
 test("one bar per OEM drills into its exact rows while OEM dots only filter", () => {
   const chart = makeChart();
+  const categoryPatterns = new Map();
+  chart.sites.flatMap(site => site.bars).flatMap(bar => bar.categorySegments).forEach(segment => {
+    if (categoryPatterns.has(segment.equipmentGroupKey)) assert.equal(segment.groupIndex, categoryPatterns.get(segment.equipmentGroupKey));
+    else categoryPatterns.set(segment.equipmentGroupKey, segment.groupIndex);
+  });
   let selected;
   let filtered;
   const tree = Chart({chart, onSelect: selection => { selected = createOemBreakdownSelection(chart, selection); }, onFilterOem: oem => { filtered = oem; }});

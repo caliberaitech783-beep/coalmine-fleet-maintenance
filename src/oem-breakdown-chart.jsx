@@ -123,8 +123,8 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
                     <button type="button" className="mine-oem-bar-total" {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-total`, bar, bar.rows.length, site.name)}
                       aria-label={`${site.name} · ${bar.label}: ${bar.rows.length} breakdown assets, view details`}
                       onClick={event => inspect(event, { site: site.name, oem: bar.key })}><b>{bar.rows.length.toLocaleString()}</b></button>
-                    {bar.categorySegments.map((segment, segmentIndex) => <button type="button" className="mine-oem-category-segment" data-group-index={segment.groupIndex % 4}
-                      key={segment.equipmentGroupKey} style={{ height: `${segment.rows.length / bar.rows.length * 100}%`, backgroundColor: bar.color }}
+                    {bar.categorySegments.map((segment, segmentIndex) => <button type="button" className="mine-oem-category-segment" data-group-index={segment.groupIndex % 6}
+                      key={segment.equipmentGroupKey} style={{ height: `${segment.rows.length / bar.rows.length * 100}%` }}
                       {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-${segmentIndex}`, bar, segment.rows.length, site.name, segment.equipmentGroup)}
                       aria-label={`${site.name} · ${bar.label} · ${segment.equipmentGroup}: ${segment.rows.length} breakdown assets, view details`}
                       onClick={event => inspect(event, { site: site.name, oem: bar.key, equipmentGroup: segment.equipmentGroupKey, equipmentGroupLabel: segment.equipmentGroup })} />)}

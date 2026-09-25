@@ -96,6 +96,15 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
     count: rows.filter(row => row.oemKey === key).length,
   }));
   const filteredRows = rows.filter((row) => oem === "all" || row.oemKey === oem);
+  const categoryLabels = new Map();
+  filteredRows.forEach((row) => {
+    const equipmentGroup = row.equipmentGroup || oemEquipmentGroupLabel(row.record, row.requests?.[0]);
+    const equipmentGroupKey = row.equipmentGroupKey || normalize(equipmentGroup);
+    if (!categoryLabels.has(equipmentGroupKey)) categoryLabels.set(equipmentGroupKey, equipmentGroup);
+  });
+  const equipmentGroups = [...categoryLabels]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([equipmentGroupKey, equipmentGroup], groupIndex) => ({ equipmentGroupKey, equipmentGroup, groupIndex }));
   const siteGroups = regions.flatMap((region) => region.sites.map((site) => ({ region: region.code, name: typeof site === "string" ? site : site.name, rows: [] })));
   filteredRows.forEach((row) => {
     let site = siteGroups.find((group) => recordBelongsToSite({ site: row.site }, group.name));
@@ -108,16 +117,10 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
   const sites = siteGroups.map((site) => {
     const bars = oems.map((item) => {
       const barRows = site.rows.filter((row) => row.oemKey === item.key);
-      const groups = new Map();
-      barRows.forEach((row) => {
-        const equipmentGroup = row.equipmentGroup || oemEquipmentGroupLabel(row.record, row.requests?.[0]);
-        const equipmentGroupKey = row.equipmentGroupKey || normalize(equipmentGroup);
-        if (!groups.has(equipmentGroupKey)) groups.set(equipmentGroupKey, { equipmentGroup, equipmentGroupKey, rows: [] });
-        groups.get(equipmentGroupKey).rows.push(row);
-      });
-      const categorySegments = [...groups.values()]
-        .sort((a, b) => a.equipmentGroup.localeCompare(b.equipmentGroup))
-        .map((group, groupIndex) => ({ ...group, groupIndex }));
+      const categorySegments = equipmentGroups.map((group) => ({
+        ...group,
+        rows: barRows.filter((row) => row.equipmentGroupKey === group.equipmentGroupKey),
+      })).filter((group) => group.rows.length);
       return { ...item, rows: barRows, categorySegments };
     }).filter((item) => item.rows.length);
     return {
@@ -131,7 +134,7 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
   const maximum = Math.max(1, ...sites.flatMap(site => site.bars.map(bar => bar.rows.length)));
   const step = Math.max(1, Math.ceil(maximum / 5));
   const axisMax = step * 5;
-  return { rows: filteredRows, sourceRows: rows, oems, selectedOem: oem, sites, axisMax, ticks: [5, 4, 3, 2, 1, 0].map((tick) => tick * step) };
+  return { rows: filteredRows, sourceRows: rows, oems, equipmentGroups, selectedOem: oem, sites, axisMax, ticks: [5, 4, 3, 2, 1, 0].map((tick) => tick * step) };
 }
 
 export function selectOemBreakdownRows(rows, selection = {}) {
