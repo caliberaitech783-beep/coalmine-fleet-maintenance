@@ -44,14 +44,16 @@ async function telegramRequest(method,{env,fetchImpl,json,form}){
   return details.result;
 }
 
-function assertReady(config,purpose,settings){
+function assertReady(config,purpose,settings,privateChatId=''){
   if(!config.configured){const error=new Error('Telegram is not configured.');error.code='TELEGRAM_NOT_CONFIGURED';throw error}
-  if(config.paused||!telegramPurposeEnabled(settings,purpose)){const error=new Error('Telegram delivery is paused for this message type.');error.code='TELEGRAM_POLICY_PAUSED';throw error}
+  // Personal messages such as OTPs may only go to one person's own chat, whose id is positive.
+  const allowedPrivate=PRIVATE_PURPOSES.has(purpose)&&/^\d+$/.test(privateChatId);
+  if(config.paused||!(allowedPrivate||telegramPurposeEnabled(settings,purpose))){const error=new Error('Telegram delivery is paused for this message type.');error.code='TELEGRAM_POLICY_PAUSED';throw error}
 }
 
-export async function sendTelegramText({message,purpose='',settings,chatId},{env=process.env,fetchImpl=fetch}={}){
-  const config=telegramConfiguration(env);
-  assertReady(config,purpose,settings);
+export async function sendTelegramText({message,purpose='',settings,chatId,privateChat=false},{env=process.env,fetchImpl=fetch}={}){
+  const config=telegramConfiguration(privateChat||clean(chatId)?{...env,TELEGRAM_DEFAULT_CHAT_ID:clean(chatId)||clean(env.TELEGRAM_DEFAULT_CHAT_ID)}:env);
+  assertReady(config,purpose,settings,privateChat?clean(chatId):'');
   const text=telegramPlainText(message);
   if(!text)throw new Error('A Telegram message is required.');
   const target=clean(chatId)||config.chatId;

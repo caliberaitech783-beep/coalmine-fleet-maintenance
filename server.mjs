@@ -2013,7 +2013,7 @@ app.post('/api/login',async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const passwordResetRequestMessage='If the user name has a registered mobile number, a 6-digit OTP has been sent by WhatsApp.';
+const passwordResetRequestMessage='If the user name has a registered mobile number or connected Telegram, a 6-digit OTP has been sent by WhatsApp or Telegram.';
 const passwordResetPhone=(record={})=>String(record.phone||record.phoneNo||record.phoneNumber||'').trim();
 const passwordResetDeliveryError='The OTP could not be delivered to your registered WhatsApp number. Ask an administrator to check WhatsApp Integration > alert history.';
 const passwordResetPausedError='WhatsApp OTP delivery is switched off in Report settings. Ask an administrator to turn on WhatsApp delivery and the "Password reset OTPs" switch.';
@@ -2036,7 +2036,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
     const loginRows=loginRecordCandidates(userRows,username);
     const exactRows=loginRows.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);
     const candidates=exactRows.length?exactRows:loginRows;
-    if(candidates.length!==1||!passwordResetPhone(candidates[0].record_data)){
+    if(candidates.length!==1||(!passwordResetPhone(candidates[0].record_data)&&!await linkedTelegramChat(candidates[0].record_data.login))){
       await recordPasswordResetDelivery({username,user:candidates[0]?.record_data||{},
         status:candidates.length===0?'Skipped - no user with this user name':candidates.length>1?`Skipped - ${candidates.length} users match this user name`:'Skipped - phone number missing'});
       return res.status(202).json({message:passwordResetRequestMessage,resetToken:fallbackToken});
@@ -2063,23 +2063,32 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
     const phone=passwordResetPhone(user.record_data);
     const whatsappEnv=await metaWhatsAppRuntimeEnv();
     let status='Sent',paused=false;
+    // Users who connected Telegram also get the OTP in their private bot chat
+    // (never a group), so a reset still works when WhatsApp is paused.
+    const telegramChat=await linkedTelegramChat(user.record_data.login);
+    const telegramOtp=telegramChat?await sendTelegramText({chatId:telegramChat,purpose:'passwordResetOtp',privateChat:true,
+      message:`Nerve Center password reset OTP: ${otp}\nIt expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})
+      .then(()=>true,error=>{console.error('Password reset OTP Telegram delivery failed:',error.message);return false}):false;
     try{
+      if(!phone)throw Object.assign(new Error('Phone number missing'),{code:'NO_PHONE'});
       await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]},{env:whatsappEnv});
     }catch(templateError){
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
       try{
-        if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+        if(['WHATSAPP_POLICY_PAUSED','NO_PHONE'].includes(templateError.code))throw templateError;
         await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv});
         // Meta accepts free-form text but only delivers it inside an open 24-hour
         // conversation, so flag it clearly instead of reporting a plain "Sent".
         status=`Sent as plain text (delivered only if the user messaged the business number in the last 24 hours). Template failed: ${templateError.message}`;
       }catch(deliveryError){
-        await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
         console.error('Password reset OTP delivery failed:',deliveryError.message);
         paused=deliveryError.code==='WHATSAPP_POLICY_PAUSED';
         status=paused?'Failed - paused by Report settings':`Failed - ${deliveryError.message} (template: ${templateError.message})`;
+        if(telegramOtp){status=`Sent by Telegram only. WhatsApp: ${status}`;paused=false}
+        else await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
       }
     }
+    if(telegramOtp&&status==='Sent')status='Sent by WhatsApp and Telegram';
     await recordPasswordResetDelivery({username,user:user.record_data,phone,status});
     if(status.startsWith('Failed'))return res.status(paused?409:502).json({error:paused?passwordResetPausedError:passwordResetDeliveryError});
     res.status(202).json({message:passwordResetRequestMessage,resetToken});
@@ -3291,6 +3300,7 @@ app.delete('/api/telegram/link',requireSession,async(req,res,next)=>{
   req.audit={eventType:'Integration',module:'Telegram',action:'Disconnect Telegram',targetType:'User',targetReference:sessionLogin(req),changedFields:[]};
   try{
     await pool.query('DELETE FROM telegram_user_links WHERE login=$1',[sessionLogin(req)]);
+    await saveTelegramOnUserRecord(sessionLogin(req),null);
     res.json({linked:false});
   }catch(error){next(error)}
 });
@@ -3318,17 +3328,21 @@ app.post('/api/telegram/webhook',async(req,res)=>{
   const update=parseTelegramUpdate(req.body);
   const reply=(chatId,text)=>sendTelegramText({message:text,chatId}).catch(error=>console.error('Telegram reply failed.',error.message));
   try{
-    if(update.kind==='blocked')await pool.query('DELETE FROM telegram_user_links WHERE chat_id=$1',[update.chatId]);
+    if(update.kind==='blocked')await disconnectTelegramChat(update.chatId);
     else if(update.kind==='stop'){
-      await pool.query('DELETE FROM telegram_user_links WHERE chat_id=$1',[update.chatId]);
+      await disconnectTelegramChat(update.chatId);
       await reply(update.chatId,'Nerve Center alerts are turned off for this Telegram account. To turn them on again, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
     }else if(update.kind==='start'&&update.token){
       const {rows}=await pool.query(`DELETE FROM telegram_link_tokens WHERE token=$1 AND expires_at>NOW() RETURNING login`,[update.token]);
       if(!rows[0])return await reply(update.chatId,'This connection link has expired. Open bdms.cmll.in, click your profile icon and choose Connect Telegram again.');
       await pool.query(`INSERT INTO telegram_user_links (login,chat_id,telegram_username,linked_at) VALUES ($1,$2,$3,NOW())
         ON CONFLICT (login) DO UPDATE SET chat_id=EXCLUDED.chat_id,telegram_username=EXCLUDED.telegram_username,linked_at=NOW()`,[rows[0].login,update.chatId,update.username]);
+      const user=await saveTelegramOnUserRecord(rows[0].login,{chatId:update.chatId,username:update.username})||{};
       await appendBackendProcessAudit({module:'Telegram',action:'Connect Telegram',targetReference:rows[0].login,reason:'User confirmed the connection in Telegram.'}).catch(()=>{});
-      await reply(update.chatId,`Connected to Nerve Center as ${rows[0].login}.\nYou will now receive your BDMS alerts here.\nSend /stop at any time to turn them off.`);
+      const profile=resolveMobileAccess({user});
+      const role=profile.sessionRole==='super'?user.designation||profile.permissions?.adminLevel||'Administrator':profile.assignedRole||'User';
+      const location=String(user.site||user.location||'').replace(/\s*\|\s*/g,', ')||'All locations';
+      await reply(update.chatId,`Connected to Nerve Center.\nName: ${user.employee||rows[0].login}\nLogin: ${String(user.login||rows[0].login).toUpperCase()}\nRole: ${role}\nLocation: ${location}\n\nYou will now receive your BDMS alerts here, as on WhatsApp.\nSend /stop at any time to turn them off.`);
     }else if(update.kind==='start'||update.kind==='text'){
       await reply(update.chatId,'To receive Nerve Center alerts here, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
     }
@@ -3566,13 +3580,13 @@ async function ticketVisibleToSession(ticket,session){
 // One copy of each alert goes to the Telegram group, separate from the
 // per-recipient WhatsApp fan-out, so it never delays or fails WhatsApp delivery.
 const TELEGRAM_GROUP_LOGIN='telegram:group';
-async function deliverToTelegramGroup({reportType,target,level='',message,purpose,reportSettings,document=null}){
+async function deliverToTelegramGroup({reportType,target,level='',message,purpose,document=null}){
   const config=telegramConfiguration();
   if(!config.configured)return 'Skipped - not configured';
   let status='Sent';
   try{
-    if(document)await sendTelegramDocument({...document,caption:message,purpose,settings:reportSettings});
-    else await sendTelegramText({message,purpose,settings:reportSettings});
+    if(document)await sendTelegramDocument({...document,caption:message,purpose});
+    else await sendTelegramText({message,purpose});
   }catch(error){
     if(error.code==='TELEGRAM_POLICY_PAUSED')return 'Skipped - paused';
     status=`Failed - ${String(error?.message||'Telegram delivery error').slice(0,160)}`;
@@ -3589,21 +3603,46 @@ function mirrorToTelegramGroup(options){
   setImmediate(()=>{deliverToTelegramGroup(options).catch((error)=>console.error('Telegram follow-up failed.',error?.message||error))});
 }
 
+async function linkedTelegramChat(login){
+  const key=String(login||'').trim().toLowerCase();
+  if(!key||!telegramConfiguration().botToken)return '';
+  const {rows}=await pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[key]);
+  return rows[0]?.chat_id||'';
+}
+
+// Mirrors the Telegram connection onto the user's own Users & employees record,
+// so it shows with their profile and survives backups. Delivery reads the
+// telegram_user_links table; these fields are for administrators to see.
+async function saveTelegramOnUserRecord(login,link){
+  const {rows}=await pool.query(`UPDATE master_records SET record_data=
+      CASE WHEN $2::jsonb IS NULL THEN record_data-'telegramChatId'-'telegramUsername'-'telegramLinkedAt' ELSE record_data||$2::jsonb END
+    WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=$1
+    RETURNING record_data`,[login,link?JSON.stringify({telegramChatId:link.chatId,telegramUsername:link.username||'',telegramLinkedAt:new Date().toISOString()}):null]);
+  return rows[0]?.record_data||null;
+}
+
+async function disconnectTelegramChat(chatId){
+  const {rows}=await pool.query('DELETE FROM telegram_user_links WHERE chat_id=$1 RETURNING login',[String(chatId)]);
+  for(const {login} of rows)await saveTelegramOnUserRecord(login,null);
+}
+
 // Personal Telegram copies go to the same logins WhatsApp selected, for users
 // who connected Telegram from their profile. Phone numbers are not needed.
-async function deliverToTelegramUsers({logins,message,purpose,reportSettings,reportType='System notification',target=''}){
+// Telegram is free, so it keeps full messaging: Report-settings pauses and
+// quiet hours that reduce WhatsApp do not apply here.
+async function deliverToTelegramUsers({logins,message,purpose,reportType='System notification',target=''}){
   const config=telegramConfiguration();
   const wanted=[...new Set((logins||[]).map(value=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   if(!config.botToken||!wanted.length)return [];
   const {rows}=await pool.query(`SELECT login,chat_id AS "chatId" FROM telegram_user_links WHERE login=ANY($1::text[])`,[wanted]);
   return Promise.all(rows.map(async({login,chatId})=>{
     let status='Sent';
-    try{await sendTelegramText({message,purpose,settings:reportSettings,chatId},{env:{...process.env,TELEGRAM_DEFAULT_CHAT_ID:chatId}})}
+    try{await sendTelegramText({message,purpose,chatId})}
     catch(error){
       if(error.code==='TELEGRAM_POLICY_PAUSED')return {login,status:'Skipped - paused'};
       status=`Failed - ${String(error?.message||'Telegram delivery error').slice(0,160)}`;
       // The user blocked the bot or deleted the chat: stop trying until they reconnect.
-      if(Number(error.status)===403)await pool.query('DELETE FROM telegram_user_links WHERE login=$1 AND chat_id=$2',[login,chatId]).catch(()=>{});
+      if(Number(error.status)===403)await disconnectTelegramChat(chatId).catch(()=>{});
     }
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -3623,7 +3662,11 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nNerve Center notification\n${message}`;
   if(telegramGroup)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,message:telegramText});
   if(!logins.length)return [];
-  if(!whatsappPurposeEnabled(reportSettings,messagePurpose))return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
+  if(!whatsappPurposeEnabled(reportSettings,messagePurpose)){
+    // A WhatsApp pause or quiet hours only reduce paid WhatsApp; Telegram still gets the alert.
+    mirrorToTelegramUsers({logins,message:telegramText,purpose:messagePurpose,target:reference});
+    return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
+  }
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
@@ -3640,7 +3683,7 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
   const eligibleLogins=[...usersByLogin.keys()];
-  mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText,purpose:messagePurpose,reportSettings,target:reference});
+  mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText,purpose:messagePurpose,target:reference});
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
   const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -4885,7 +4928,8 @@ let workflowReminderRunning=false;
 async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
   if(!databaseReady||workflowReminderRunning)return {skipped:true};
   const reportSettings=await storedWhatsAppReportSettings();
-  if(!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
+  const telegramReminders=telegramConfiguration().configured;
+  if(!telegramReminders&&!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
   workflowReminderRunning=true;
   let sent=0,failed=0,skipped=0;
   try{
@@ -4901,8 +4945,12 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       const eventType=idle?'idle':'opened';
       const eventTime=new Date(idle?request.idleAtRaw:request.startedAtRaw);
       const purpose=idle?'idleReminder':'offRoadEscalation';
-      if(!whatsappPurposeEnabled(reportSettings,purpose,now))continue;
-      const slotKey=workflowReminderSlot(eventType,eventTime,now,reportSettings);
+      const whatsappReminder=whatsappPurposeEnabled(reportSettings,purpose,now);
+      if(!whatsappReminder&&!telegramReminders)continue;
+      // A reminder switched off for WhatsApp still repeats on Telegram at the saved interval.
+      const slotSettings=whatsappReminder?reportSettings:{...reportSettings,reminders:{
+        offRoad:{...reportSettings.reminders.offRoad,enabled:true},idle:{...reportSettings.reminders.idle,enabled:true}}};
+      const slotKey=workflowReminderSlot(eventType,eventTime,now,slotSettings);
       if(!slotKey)continue;
       const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
@@ -4912,11 +4960,15 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         const telegramClaim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
           VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,TELEGRAM_GROUP_LOGIN,slotKey]);
         if(telegramClaim.rows.length){
-          const status=await deliverToTelegramGroup({reportType:'System notification',target:request.ref,purpose,reportSettings,
+          const status=await deliverToTelegramGroup({reportType:'System notification',target:request.ref,purpose,
             message:reminderText});
           await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,telegramClaim.rows[0].id]);
+          // With WhatsApp reminders off, the per-recipient loop below is skipped, so
+          // connected users get their personal copy here, once per slot.
+          if(!whatsappReminder)mirrorToTelegramUsers({logins:recipients,message:reminderText,purpose,target:request.ref});
         }
       }
+      if(!whatsappReminder)continue;
       const workflowTemplate=idle
         ? {templateKey:'requestIdle',parameters:[equipmentDetails,request.site,requestNotificationTime(eventTime),request.idleReason||'Not recorded',request.ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}}
         : {templateKey:'requestOpened',parameters:[request.ref,request.site,request.equipmentGroup||request.equipment||'Not available',request.door||'Not available',request.category||'Breakdown',request.owner||'Production User',requestNotificationTime(eventTime),request.expectedCompletionAtRaw?requestNotificationTime(request.expectedCompletionAtRaw):'Not set',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}};
@@ -6374,6 +6426,10 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
         employee:String(record.employee||'').trim().toUpperCase(),
         passwordHash:previousRecord.passwordHash,
         mustChangePassword:previousRecord.mustChangePassword,
+        // The Telegram connection is owned by the user, not the edit form.
+        telegramChatId:previousRecord.telegramChatId,
+        telegramUsername:previousRecord.telegramUsername,
+        telegramLinkedAt:previousRecord.telegramLinkedAt,
       };
     }
     if(master==='Privilege'){
@@ -6831,6 +6887,13 @@ async function initializeDatabase(){
     await migrate();
     databaseReady=true;
     databaseError='';
+    // Users who connected before the profile fields existed get them filled in.
+    await pool.query(`UPDATE master_records m SET record_data=m.record_data||jsonb_build_object(
+        'telegramChatId',l.chat_id,'telegramUsername',l.telegram_username,'telegramLinkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+      FROM telegram_user_links l
+      WHERE m.master_name='Users & employees' AND lower(trim(m.record_data->>'login'))=l.login
+        AND (m.record_data->>'telegramChatId') IS DISTINCT FROM l.chat_id`)
+      .catch(error=>console.error('Could not copy Telegram connections to user records.',error.message));
     // Only the configured production slot registers, so staging never takes the webhook.
     if(telegramConfiguration().configured)ensureTelegramWebhook(publicBaseUrl())
       .then(result=>result.registered&&console.log(`Telegram webhook ready at ${result.url}.`))

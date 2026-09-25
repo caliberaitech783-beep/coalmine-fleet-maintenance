@@ -83,7 +83,8 @@ test('workbook escalation and repeat intervals use a deduplicated scheduler',()=
   assert.match(server,/async function sendScheduledWorkflowWhatsAppReminders/);
   assert.match(server,/started_at<=\$1::timestamptz-\(\$2::int\*INTERVAL '1 hour'\)/);
   assert.match(server,/ideal_requested_at<=\$1::timestamptz-\(\$3::int\*INTERVAL '1 hour'\)/);
-  assert.match(server,/workflowReminderSlot\(eventType,eventTime,now,reportSettings\)/);
+  assert.match(server,/workflowReminderSlot\(eventType,eventTime,now,slotSettings\)/);
+  assert.match(server,/const slotSettings=whatsappReminder\?reportSettings:/);
   assert.match(server,/ON CONFLICT DO NOTHING RETURNING id/);
   assert.match(server,/const workflowReminderTimer=setStaggeredInterval/);
 });

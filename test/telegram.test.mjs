@@ -142,7 +142,7 @@ test("Server links accounts through one-time tokens and a secret-checked webhook
 test("Personal Telegram copies follow WhatsApp recipients and hierarchy reports", () => {
   assert.ok(server.includes("mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText"));
   assert.ok(server.includes("mirrorToTelegramUsers({logins:[login],message:delivery.message,purpose:'consolidatedRequestReport'"));
-  assert.ok(server.includes("Number(error.status)===403)await pool.query('DELETE FROM telegram_user_links"));
+  assert.ok(server.includes("Number(error.status)===403)await disconnectTelegramChat(chatId)"));
 });
 
 test("Every user can connect Telegram from the profile panel", () => {
@@ -152,4 +152,30 @@ test("Every user can connect Telegram from the profile panel", () => {
   assert.ok(profile.includes("fetch(\"/api/telegram/link\", { method: \"POST\", headers })"));
   assert.match(profile, /Connect Telegram/);
   assert.match(source, /Users connected to Telegram/);
+});
+
+test("Password reset OTPs reach only a person's private chat, never a group", async () => {
+  const { calls, fetchImpl } = recordingFetch();
+  await sendTelegramText({ message: "OTP 123456", purpose: "passwordResetOtp", chatId: "987654321", privateChat: true }, { env, fetchImpl });
+  assert.equal(JSON.parse(calls[0].options.body).chat_id, "987654321");
+  await assert.rejects(sendTelegramText({ message: "OTP", purpose: "passwordResetOtp", chatId: "-5550689740", privateChat: true }, { env, fetchImpl }), { code: "TELEGRAM_POLICY_PAUSED" });
+  await assert.rejects(sendTelegramText({ message: "OTP", purpose: "passwordResetOtp" }, { env, fetchImpl }), { code: "TELEGRAM_POLICY_PAUSED" });
+  assert.equal(calls.length, 1);
+});
+
+test("A personal chat id works without a default group configured", async () => {
+  const { calls, fetchImpl } = recordingFetch();
+  await sendTelegramText({ message: "Alert", chatId: "42" }, { env: { TELEGRAM_BOT_TOKEN: "123:secret-token" }, fetchImpl });
+  assert.equal(JSON.parse(calls[0].options.body).chat_id, "42");
+});
+
+test("Telegram keeps full messaging and is saved on the user's profile record", () => {
+  assert.ok(server.includes("async function deliverToTelegramUsers({logins,message,purpose,reportType='System notification',target=''})"));
+  assert.ok(server.includes("await sendTelegramText({message,purpose,chatId})"));
+  assert.ok(server.includes("if(!whatsappReminder)mirrorToTelegramUsers({logins:recipients,message:reminderText,purpose,target:request.ref});"));
+  assert.ok(server.includes("telegramChatId:previousRecord.telegramChatId,"));
+  assert.ok(server.includes("const user=await saveTelegramOnUserRecord(rows[0].login,{chatId:update.chatId,username:update.username})||{};"));
+  assert.ok(server.includes("await saveTelegramOnUserRecord(sessionLogin(req),null);"));
+  assert.ok(server.includes("const telegramChat=await linkedTelegramChat(user.record_data.login);"));
+  assert.ok(server.includes("if(telegramOtp){status=`Sent by Telegram only. WhatsApp: ${status}`;paused=false}"));
 });

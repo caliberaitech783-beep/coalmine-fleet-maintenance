@@ -225,6 +225,7 @@ for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
       const result=await api.sendWhatsAppNotifications(api.client,['creator','super'],'REF/1','Message',{templateKey:purpose,parameters:[]});
       assert.deepEqual(result,[{login:'creator',status:'Skipped - paused by Report settings'},{login:'super',status:'Skipped - paused by Report settings'}]);
       assert.equal(api.queries.length,0);
+      assert.deepEqual(api.telegramUsers.flatMap(options=>options.logins),['creator','super'],'Telegram keeps full messaging while WhatsApp is paused');
       if(purpose==='dailyUpdate'){
         await api.addTicketNotifications(api.client,['creator','manager'],'REF/1','Message',{templateKey:purpose,parameters:[]},{site:'Sasti OB'});
         assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager']);
