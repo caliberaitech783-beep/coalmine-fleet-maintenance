@@ -60,6 +60,10 @@
 .mine-dashboard :is(.mine-breakdown-site-head, .mine-road-site-head) { min-height: 52px; }
 .mine-dashboard .mine-breakdown-site-head span small { display: block; margin-top: 2px; color: var(--brand-purple); font-size: 11px; font-weight: 750; letter-spacing: 0; text-transform: none; }
 .mine-dashboard :is(.mine-breakdown-site-head, .mine-breakdown-site-row) { grid-template-columns: minmax(150px, 1.1fr) repeat(5, minmax(75px, .55fr)) minmax(280px, 2.1fr) 24px; min-width: 925px; }
+/* All-sites Total row pinned under the site rows. */
+.mine-dashboard .mine-breakdown-site-row.mine-breakdown-site-total { border-top: 2px solid var(--mine-line); border-bottom: 0; background: color-mix(in srgb, #315fd4 8%, var(--mine-panel)); cursor: default; }
+.mine-dashboard .mine-breakdown-site-row.mine-breakdown-site-total:hover { background: color-mix(in srgb, #315fd4 8%, var(--mine-panel)); }
+.mine-dashboard .mine-breakdown-site-total > .site b { color: #c9554d; font: 900 18px/1 Manrope; text-transform: uppercase; }
 .mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) > .site b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) .metric b,
 .mine-dashboard .mine-road-site-row > .availability b,

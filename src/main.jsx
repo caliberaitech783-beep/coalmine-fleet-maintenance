@@ -2283,6 +2283,21 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                   </button>;
                 }) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}
               </div>
+              {breakdownSiteSummary.length > 0 && (() => {
+                // Column sums of the site rows above, so the total always matches what is shown.
+                const total = breakdownSiteSummary.reduce((sum, site) => {
+                  const road = roadAvailabilityBySiteName.get(site.site);
+                  sum.open += site.open; sum.incoming += site.incoming; sum.outgoing += site.outgoing; sum.balance += site.balance;
+                  if (road) { sum.road.total += road.total; sum.road.onRoad += road.onRoad; sum.road.offRoad += road.offRoad; sum.road.idle += road.idle; }
+                  return sum;
+                }, { open: 0, incoming: 0, outgoing: 0, balance: 0, road: { total: 0, onRoad: 0, offRoad: 0, idle: 0 } });
+                const road = total.road;
+                const roadAvailability = availabilityPercentFromCounts(road);
+                return <div role="row" className="mine-breakdown-site-row mine-breakdown-site-total" aria-label={`Total: ${total.open} open, ${total.incoming} in, ${total.outgoing} out, ${total.balance} balance; ${roadAvailability}% availability count with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle.`}>
+                  <span className="site"><b>Total :</b></span><span className="metric open"><b>{total.open.toLocaleString()}</b></span><span className="metric incoming"><b>+{total.incoming.toLocaleString()}</b></span><span className="metric outgoing"><b>-{total.outgoing.toLocaleString()}</b></span><span className="metric balance"><b>{total.balance.toLocaleString()}</b></span><span className="metric idle"><b>{road.idle.toLocaleString()}</b></span>
+                  <span className="mine-breakdown-road-impact"><span><b>{roadAvailability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span></span><span aria-hidden="true" />
+                </div>;
+              })()}
             </div>
           </div> : <div className="mine-site-road-view">
             <div className="mine-site-road-summary">

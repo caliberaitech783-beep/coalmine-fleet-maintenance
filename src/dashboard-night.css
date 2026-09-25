@@ -94,6 +94,7 @@
   .mine-dashboard.mine-dashboard-night .mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(6) { --type-color: #5ec3de; }
   .mine-dashboard.mine-dashboard-night .dashboard-breakdown-road-mix button:nth-child(1) { --type-color: #4cc795; }
   .mine-dashboard.mine-dashboard-night .mine-breakdown-site-head span small { color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-total > .site b { color: #ff8a8e; }
   .mine-dashboard.mine-dashboard-night :is(.mine-breakdown-site-row, .mine-road-site-row) > .site svg,
   .mine-dashboard.mine-dashboard-night .mine-breakdown-road-impact > em,
   .mine-dashboard.mine-dashboard-night .mine-breakdown-site-row > .metric.open b { color: #8eb5ff; }
