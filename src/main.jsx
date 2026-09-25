@@ -30,6 +30,7 @@ import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./duration-sort.mjs";
 import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import UserProfile from "./user-profile.jsx";
+import TelegramGate from "./telegram-gate.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
 import { playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS } from "./notification-chime.mjs";
 import LiveTemperatureChip from "./live-temperature-chip.jsx";
@@ -8178,6 +8179,37 @@ function MetaWhatsAppSetup() {
   const [telegramWorking, setTelegramWorking] = useState(false);
   const [telegramNotice, setTelegramNotice] = useState("");
   const [telegramLinks, setTelegramLinks] = useState([]);
+  const [telegramRule, setTelegramRule] = useState(null);
+  const [telegramExempt, setTelegramExempt] = useState(new Set());
+  const [telegramRuleSaving, setTelegramRuleSaving] = useState(false);
+  const [telegramRuleNotice, setTelegramRuleNotice] = useState(null);
+  const loadTelegramRule = async () => {
+    const response = await fetch("/api/telegram/settings", {headers:{Authorization:`Bearer ${authToken}`}}).catch(() => null);
+    const result = response?.ok ? await response.json().catch(() => null) : null;
+    if (!result) return;
+    setTelegramRule(result);
+    setTelegramExempt(new Set(result.exemptLogins || []));
+  };
+  const saveTelegramRule = async (enabled) => {
+    setTelegramRuleSaving(true);
+    setTelegramRuleNotice(null);
+    try {
+      const response = await fetch("/api/telegram/settings", {method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},body:JSON.stringify({enabled,exemptLogins:[...telegramExempt]})});
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save the Telegram requirement.");
+      setTelegramRuleNotice({ok:true,text:enabled ? `Saved. Telegram is now required at login for everyone except ${telegramExempt.size} exempt ${telegramExempt.size === 1 ? "user" : "users"}.` : "Saved. Telegram is optional."});
+      await loadTelegramRule();
+    } catch (saveError) {
+      setTelegramRuleNotice({ok:false,text:saveError.message});
+    } finally {
+      setTelegramRuleSaving(false);
+    }
+  };
+  const toggleTelegramExempt = (login) => setTelegramExempt((current) => {
+    const next = new Set(current);
+    if (next.has(login)) next.delete(login); else next.add(login);
+    return next;
+  });
   const loadMetaSettings = async () => {
     const settingsResponse = await fetch("/api/whatsapp/settings", {headers:{Authorization:`Bearer ${authToken}`}});
     const saved = await settingsResponse.json().catch(() => ({}));
@@ -8213,6 +8245,7 @@ function MetaWhatsAppSetup() {
     let active = true;
     loadMetaSettings().catch((loadError) => active && setError(loadError.message));
     loadTelegramStatus();
+    loadTelegramRule();
     return () => { active = false; };
   }, []);
   const phoneDigits = (employee) => String(employee.phone || employee.phoneNo || employee.phoneNumber || "").replace(/\D/g, "");
@@ -8293,6 +8326,27 @@ function MetaWhatsAppSetup() {
           <tbody>{telegramLinks.map((link) => <tr key={link.login}><td>{link.name}</td><td>{link.login}</td><td>{link.site || "--"}</td><td>{link.username ? `@${link.username}` : "--"}</td><td data-sort-value={link.linkedAt}>{formatDisplayDateTime(link.linkedAt)}</td></tr>)}</tbody></ActionsTable>
           : <p className="telegram-links-empty">No users have connected yet.</p>}
       </div>
+      {telegramRule && <div className="telegram-links telegram-requirement">
+        <h3>Require Telegram at login <span className={telegramRule.enabled ? "on" : ""}>{telegramRule.enabled ? "On" : "Off"}</span></h3>
+        <p>When on, every user who has not connected Telegram sees a "Connect Telegram to continue" screen after signing in and cannot use the app until they connect. Users who block the bot are disconnected and asked again at their next sign-in. Tick users below to exempt them.</p>
+        <p className="telegram-requirement-summary">
+          {telegramRule.users.filter((user) => user.linked).length} connected · {telegramRule.users.filter((user) => !user.linked && !telegramExempt.has(user.login)).length} not connected · {telegramExempt.size} exempt · {telegramRule.users.length} users
+        </p>
+        <ActionsTable printTitle="Telegram status of all users" exportTitle="Telegram status of all users"><thead><tr><th>Exempt</th><th>Employee</th><th>Login</th><th>Role</th><th>Location</th><th>Telegram</th></tr></thead>
+          <tbody>{telegramRule.users.map((user) => <tr key={user.login}>
+            <td><input type="checkbox" aria-label={`Exempt ${user.name} from Telegram`} checked={telegramExempt.has(user.login)} onChange={() => toggleTelegramExempt(user.login)} /></td>
+            <td>{user.name}</td><td>{user.login.toUpperCase()}</td><td>{user.role || "--"}</td><td>{user.site || "--"}</td>
+            <td>{user.linked ? `Connected${user.username ? ` (@${user.username})` : ""}` : telegramExempt.has(user.login) ? "Exempt" : "Not connected"}</td>
+          </tr>)}</tbody></ActionsTable>
+        {telegramRuleNotice && <div className={`meta-whatsapp-feedback ${telegramRuleNotice.ok ? "success" : "error"}`} role={telegramRuleNotice.ok ? "status" : "alert"}>{telegramRuleNotice.text}</div>}
+        <footer>
+          <button type="button" onClick={() => saveTelegramRule(telegramRule.enabled)} disabled={telegramRuleSaving}><Save />Save exemptions</button>
+          <button type="button" className="primary" onClick={() => {
+            if (!telegramRule.enabled && !window.confirm(`Require Telegram at login? ${telegramRule.users.filter((user) => !user.linked && !telegramExempt.has(user.login)).length} users who have not connected yet will be asked to connect before they can continue.`)) return;
+            saveTelegramRule(!telegramRule.enabled);
+          }} disabled={telegramRuleSaving}>{telegramRuleSaving ? <RefreshCw className="spin" /> : <ShieldCheck />}{telegramRule.enabled ? "Turn off requirement" : "Require Telegram at login"}</button>
+        </footer>
+      </div>}
     </div>
   </section>;
 }
@@ -11241,6 +11295,7 @@ function App() {
           toggleTheme={toggleTheme}
         />
         <SessionMessageInbox session={session} />
+        <TelegramGate token={authToken} logout={logout} />
         <RemoteAssistanceAgent session={session} />
         {globalVehicleHistoryDialog}
       </>
@@ -11373,6 +11428,7 @@ function App() {
         </div>
       )}
       <SessionMessageInbox session={session} />
+      <TelegramGate token={authToken} logout={logout} />
       <RemoteAssistanceAgent session={session} />
       {globalVehicleHistoryDialog}
     </div>

@@ -78,6 +78,20 @@ export async function sendTelegramDocument({buffer,filename='nerve-center-report
   return {sent:true,chatId:target,messageId:result?.message_id};
 }
 
+// "Require Telegram at login": off until an administrator turns it on, with a
+// list of logins (for example directors or OEM staff) who are never asked.
+export function normalizeTelegramRequirement(value={}){
+  const logins=Array.isArray(value?.exemptLogins)?value.exemptLogins:[];
+  return {enabled:value?.enabled===true,
+    exemptLogins:[...new Set(logins.map(login=>clean(login).toLowerCase()).filter(Boolean))].sort()};
+}
+
+export function telegramRequiredFor(requirement,login,{botConfigured=true}={}){
+  const settings=normalizeTelegramRequirement(requirement);
+  const key=clean(login).toLowerCase();
+  return Boolean(botConfigured&&settings.enabled&&key&&!settings.exemptLogins.includes(key));
+}
+
 // Telegram echoes this secret in every webhook call. It is derived from the bot
 // token, so no extra setting is needed and a new token rotates it.
 export function telegramWebhookSecret(env=process.env){

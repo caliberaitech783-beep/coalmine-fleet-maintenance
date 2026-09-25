@@ -49,7 +49,7 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook} from './telegram.mjs';
+import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor} from './telegram.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3293,11 +3293,62 @@ app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator,async(re
 
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
 
+const TELEGRAM_REQUIREMENT_SETTING_KEY='telegram_required';
+async function storedTelegramRequirement(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_REQUIREMENT_SETTING_KEY]);
+  return normalizeTelegramRequirement(rows[0]?.setting_value);
+}
+
 app.get('/api/telegram/me',requireSession,async(req,res,next)=>{
   try{
-    const {rows}=await pool.query(`SELECT telegram_username AS "username",linked_at AS "linkedAt" FROM telegram_user_links WHERE login=$1`,[sessionLogin(req)]);
+    req.audit=false;
+    const [{rows},requirement]=await Promise.all([
+      pool.query(`SELECT telegram_username AS "username",linked_at AS "linkedAt" FROM telegram_user_links WHERE login=$1`,[sessionLogin(req)]),
+      storedTelegramRequirement(),
+    ]);
+    const available=Boolean(telegramConfiguration().botToken);
     res.set('Cache-Control','no-store');
-    res.json({available:Boolean(telegramConfiguration().botToken),linked:Boolean(rows[0]),...(rows[0]||{})});
+    res.json({available,linked:Boolean(rows[0]),required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available}),...(rows[0]||{})});
+  }catch(error){next(error)}
+});
+
+// Every user with their Telegram status, for the requirement and exemption list.
+app.get('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
+  try{
+    const [requirement,{rows:users},{rows:links}]=await Promise.all([
+      storedTelegramRequirement(),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
+      pool.query(`SELECT login,telegram_username AS "username",linked_at AS "linkedAt" FROM telegram_user_links`),
+    ]);
+    const linked=new Map(links.map(link=>[link.login,link]));
+    const seen=new Set();
+    const list=users.map(({record_data})=>record_data||{}).map(user=>{
+      const login=String(user.login||'').trim().toLowerCase();
+      if(!login||seen.has(login))return null;
+      seen.add(login);
+      const profile=resolveMobileAccess({user});
+      return {login,name:String(user.employee||user.login||''),site:String(user.site||user.location||''),
+        role:profile.sessionRole==='super'?String(user.designation||profile.permissions?.adminLevel||'Administrator'):String(profile.assignedRole||user.userType||''),
+        linked:linked.has(login),username:linked.get(login)?.username||'',linkedAt:linked.get(login)?.linkedAt||null,
+        exempt:requirement.exemptLogins.includes(login)};
+    }).filter(Boolean);
+    res.set('Cache-Control','no-store');
+    res.json({...requirement,users:list});
+  }catch(error){next(error)}
+});
+
+app.put('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
+  try{
+    const before=await storedTelegramRequirement();
+    const updated={...before,...normalizeTelegramRequirement({enabled:req.body?.enabled??before.enabled,exemptLogins:req.body?.exemptLogins??before.exemptLogins})};
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[TELEGRAM_REQUIREMENT_SETTING_KEY,JSON.stringify(updated)]);
+    req.audit={eventType:'Integration',module:'Telegram',action:'Save Telegram login requirement',targetType:'Telegram requirement',targetReference:updated.enabled?'Required at login':'Optional',
+      changedFields:[
+        ...(before.enabled!==updated.enabled?[{field:'Require Telegram at login',before:before.enabled?'On':'Off',after:updated.enabled?'On':'Off'}]:[]),
+        ...(before.exemptLogins.join(', ')!==updated.exemptLogins.join(', ')?[{field:'Exempt users',before:before.exemptLogins.join(', ')||'None',after:updated.exemptLogins.join(', ')||'None'}]:[]),
+      ]};
+    res.json(updated);
   }catch(error){next(error)}
 });
 

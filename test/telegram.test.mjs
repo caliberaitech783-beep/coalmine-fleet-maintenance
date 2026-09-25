@@ -179,3 +179,30 @@ test("Telegram keeps full messaging and is saved on the user's profile record", 
   assert.ok(server.includes("const telegramChat=await linkedTelegramChat(user.record_data.login);"));
   assert.ok(server.includes("if(telegramOtp){status=`Sent by Telegram only. WhatsApp: ${status}`;paused=false}"));
 });
+
+test("Telegram can be required at login, with exempt users", async () => {
+  const { normalizeTelegramRequirement, telegramRequiredFor } = await import("../telegram.mjs");
+  assert.deepEqual(normalizeTelegramRequirement(), { enabled: false, exemptLogins: [] });
+  assert.deepEqual(normalizeTelegramRequirement({ enabled: true, exemptLogins: [" Director ", "director", "", "oem1"] }), { enabled: true, exemptLogins: ["director", "oem1"] });
+  const rule = { enabled: true, exemptLogins: ["director"] };
+  assert.equal(telegramRequiredFor(rule, "ANOOP"), true);
+  assert.equal(telegramRequiredFor(rule, " DIRECTOR "), false);
+  assert.equal(telegramRequiredFor({ ...rule, enabled: false }, "anoop"), false);
+  assert.equal(telegramRequiredFor(rule, "anoop", { botConfigured: false }), false);
+  assert.equal(telegramRequiredFor(rule, ""), false);
+});
+
+test("The login gate blocks unconnected users and admins manage exemptions", () => {
+  const gate = readFileSync(new URL("../src/telegram-gate.jsx", import.meta.url), "utf8");
+  assert.match(gate, /const blocking = Boolean\(state\?\.required && !state\?\.linked\);/);
+  assert.match(gate, /Connect Telegram to continue/);
+  assert.match(gate, /play\.google\.com\/store\/apps\/details\?id=org\.telegram\.messenger/);
+  assert.match(gate, /web\.telegram\.org/);
+  assert.match(gate, /onClick=\{logout\}/);
+  assert.equal((source.match(/<TelegramGate token=\{authToken\} logout=\{logout\} \/>/g) || []).length, 2);
+  assert.ok(server.includes("required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available})"));
+  assert.ok(server.includes("app.put('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator"));
+  assert.ok(server.includes("action:'Save Telegram login requirement'"));
+  assert.match(source, /Require Telegram at login/);
+  assert.match(source, /toggleTelegramExempt\(user\.login\)/);
+});

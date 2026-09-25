@@ -286,3 +286,31 @@
     width: 100%;
   }
 }
+
+.telegram-requirement h3 span.on {
+  background: #e3f6ea;
+  color: #1f7a45;
+}
+
+.telegram-requirement-summary {
+  font-weight: 800;
+}
+
+.telegram-requirement > footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.telegram-requirement > footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.telegram-requirement > footer svg {
+  width: 15px;
+  height: 15px;
+}
