@@ -297,13 +297,13 @@ test("OEM view retains today's shared filters and separate label and count actio
   }
 });
 
-test("OEM equipment-group bars and site totals open the matching breakdown records", () => {
+test("OEM bars and site totals open the matching breakdown records", () => {
   const cases = [
-    ["Sasti OB · Tata · TIPPER: 1 breakdown assets, view details", "WCL", "Sasti OB", "tata", ["BD-1"]],
-    ["Sasti OB · Volvo · TIPPER: 1 breakdown assets, view details", "WCL", "Sasti OB", "volvo", ["BD-2"]],
-    ["Majri OB · Volvo · TIPPER: 1 breakdown assets, view details", "WCL", "Majri OB", "volvo", ["BD-3"]],
-    ["Jayant OB · Tata · TIPPER: 1 breakdown assets, view details", "NCL", "Jayant OB", "tata", ["BD-4"]],
-    ["Jayant OB · Volvo · TIPPER: 1 breakdown assets, view details", "NCL", "Jayant OB", "volvo", ["BD-5"]],
+    ["Sasti OB · Tata: 1 breakdown assets, view details", "WCL", "Sasti OB", "tata", ["BD-1"]],
+    ["Sasti OB · Volvo: 1 breakdown assets, view details", "WCL", "Sasti OB", "volvo", ["BD-2"]],
+    ["Majri OB · Volvo: 1 breakdown assets, view details", "WCL", "Majri OB", "volvo", ["BD-3"]],
+    ["Jayant OB · Tata: 1 breakdown assets, view details", "NCL", "Jayant OB", "tata", ["BD-4"]],
+    ["Jayant OB · Volvo: 1 breakdown assets, view details", "NCL", "Jayant OB", "volvo", ["BD-5"]],
     ["Sasti OB: 2 breakdown assets, view all OEMs", "WCL", "Sasti OB", "all", ["BD-1", "BD-2"]],
   ];
   for (const [label, region, site, oem, references] of cases) {
@@ -340,7 +340,7 @@ test("OEM dots filter the chart without opening the detail list", () => {
 test("an open OEM list follows refreshed requests and shared OEM, site, region and date changes", () => {
   const view = harness(oemHarnessOptions);
   let tree = view.render(oemRequests);
-  clickOem(byLabel(renderOemChart(tree), "Sasti OB · Tata · TIPPER: 1 breakdown assets, view details"));
+  clickOem(byLabel(renderOemChart(tree), "Sasti OB · Tata: 1 breakdown assets, view details"));
   tree = view.render(oemRequests);
   const assertReferences = expected => assert.deepEqual(oemDetails(tree).selection.records.map(row => row.requestReference), expected);
   assertReferences(["BD-1"]);
@@ -434,7 +434,7 @@ test("OEM panel, plain heading and chart backgrounds have no list action; its co
   assert.equal(byClass(tree, "mine-fleet-chart-title"), undefined);
   const chart = renderOemChart(tree);
   const backgrounds = [panel, heading, ...findAll(panel, node => node.type === "header" || node.props.className === "mine-fleet-chart-heading"), chart,
-    ...findAll(chart, node => ["mine-oem-chart-layout", "mine-oem-sites", "mine-oem-grid", "mine-oem-bar-track", "mine-oem-bar-column", "mine-oem-group-labels"].includes(node.props.className))];
+    ...findAll(chart, node => ["mine-oem-chart-layout", "mine-oem-sites", "mine-oem-grid", "mine-oem-bar-track", "mine-oem-bar-column"].includes(node.props.className))];
   assert.ok(backgrounds.length > 8);
   for (const background of backgrounds) {
     assert.equal(background.props.onClick, undefined);

@@ -35,19 +35,18 @@ const click = control => {
   assert.ok(stopped, "nested click must not open the whole chart");
 };
 
-test("equipment-group bars drill into their exact rows while OEM dots only filter", () => {
+test("one bar per OEM drills into its exact rows while OEM dots only filter", () => {
   const chart = makeChart();
   let selected;
   let filtered;
   const tree = Chart({chart, onSelect: selection => { selected = createOemBreakdownSelection(chart, selection); }, onFilterOem: oem => { filtered = oem; }});
   const controls = descendants(tree, node => node.type === "button");
   for (const site of chart.sites) for (const bar of site.bars) {
-    const control = controls.find(button => button.props["aria-label"] === `${site.name} · ${bar.oemLabel} · ${bar.equipmentGroup}: ${bar.rows.length} breakdown assets, view details`);
+    const control = controls.find(button => button.props["aria-label"] === `${site.name} · ${bar.label}: ${bar.rows.length} breakdown assets, view details`);
     assertTooltip(control, bar, bar.rows.length, site.name);
     click(control);
     assert.equal(selected.rows.length, bar.rows.length);
-    assert.equal(selected.equipmentGroupLabel, bar.equipmentGroup);
-    assert.ok(selected.rows.every(row => row.oemKey === bar.oemKey && row.equipmentGroupKey === bar.equipmentGroupKey && row.site === site.name));
+    assert.ok(selected.rows.every(row => row.oemKey === bar.key && row.site === site.name));
   }
   for (const oem of chart.oems.filter(item => item.count)) {
     selected = undefined;
@@ -102,7 +101,7 @@ test("site totals retain the selected OEM and every tooltip target stays unique"
   }
 });
 
-test("every OEM and equipment group has a separate proportional bar with its exact count", () => {
+test("every OEM has one separate proportional bar with its exact count", () => {
   const equipment = [
     {id: 1, make: "Tata", group: "Excavator", door: "A", currentLocation: "Sasti OB", status: "Breakdown"},
     {id: 2, make: "Tata", group: "Tipper", door: "B", currentLocation: "Sasti OB", status: "Breakdown"},
@@ -110,9 +109,9 @@ test("every OEM and equipment group has a separate proportional bar with its exa
     {id: 4, make: "Komatsu", group: "Dozer", door: "D", currentLocation: "Sasti OB", status: "Breakdown"},
   ];
   const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment}), equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}]});
-  assert.deepEqual(chart.sites[0].bars.map(bar => [bar.oemLabel, bar.equipmentGroup, bar.rows.length]), [["Komatsu", "Dozer", 1], ["Tata", "Excavator", 1], ["Tata", "Tipper", 2]]);
+  assert.deepEqual(chart.sites[0].bars.map(bar => [bar.label, bar.rows.length]), [["Komatsu", 1], ["Tata", 3]]);
   const tree = Chart({chart, onSelect() {}});
-  for (const bar of descendants(tree, node => node.props.className === "mine-oem-group-bar")) {
+  for (const bar of descendants(tree, node => node.props.className === "mine-oem-oem-bar")) {
     assert.equal(bar.props.style.height, `${bar.props["data-oem-count"] / chart.axisMax * 100}%`);
     assert.equal(textOf(bar), String(bar.props["data-oem-count"]));
   }
@@ -121,7 +120,7 @@ test("every OEM and equipment group has a separate proportional bar with its exa
   assert.doesNotMatch(markup, /role="button"/);
 });
 
-test("the plot uses the room the screen has left and retains grouped bars", () => {
+test("the plot uses the room the screen has left and retains OEM bars", () => {
   const chart = makeChart();
   const unmeasured = Chart({chart}).props.plotHeight;
   assert.ok(unmeasured >= 260);
@@ -131,6 +130,6 @@ test("the plot uses the room the screen has left and retains grouped bars", () =
   assert.equal(Chart({chart, availableHeight: 5000}).props.plotHeight, unmeasured);
   assert.equal(Chart({chart, availableHeight: 40}).props.plotHeight, 200);
   const fitted = Chart({chart, availableHeight: short});
-  assert.ok(descendants(fitted, node => node.props?.className === "mine-oem-group-bar").length);
-  assert.ok(descendants(fitted, node => node.props?.className === "mine-oem-group-label").length);
+  assert.ok(descendants(fitted, node => node.props?.className === "mine-oem-oem-bar").length);
+  assert.equal(descendants(fitted, node => node.props?.className === "mine-oem-bar-label").length, 0, "the shared legend avoids repeated labels below every site");
 });

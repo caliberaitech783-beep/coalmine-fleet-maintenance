@@ -1527,7 +1527,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
-  const [oemDrilldownSelection, setOemDrilldownSelection] = useState({});
   const [oemToolbarTarget, setOemToolbarTarget] = useState(null);
   const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
   const openBreakdownList = () => setAssetDrilldown("fleet-breakdown:account");
@@ -1813,13 +1812,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setDashboardRegion(filters.region);
     setDashboardSite(filters.site);
     setDashboardOem(filters.oem);
-    setOemDrilldownSelection(selection);
     setOemDrilldownKind("breakdown");
   };
-  const filterOemChart = oem => { setDashboardOem(oem); setOemDrilldownSelection({}); };
-  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownSelection({}); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
+  const filterOemChart = oem => setDashboardOem(oem);
+  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
   // Derive the open list from the current filters and data on every render.
-  const oemSelection = createOemBreakdownSelection(oemChart, oemDrilldownSelection);
+  const oemSelection = createOemBreakdownSelection(oemChart);
   const oemDrilldown = oemDrilldownKind ? {
     ...oemSelection,
     site: dashboardSite !== "all" ? dashboardSite : "",
@@ -1827,7 +1825,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     records: oemDrilldownKind === "fleet" ? fleetAssetRequestDetails(oemFleetEquipment, locationBreakdowns) : oemSelection.records,
     fleetOnly: oemDrilldownKind === "fleet",
     periodLabel: oemDrilldownKind === "fleet" ? "Current fleet" : oemLive ? "Current breakdowns" : filteredDateLabel,
-    title: (oemDrilldownKind === "fleet" ? "Total fleet" : "OEM BD") + " · " + oemSelection.label + (oemDrilldownKind === "fleet" ? "" : " · " + oemSelection.equipmentGroupLabel) + " · " + (dashboardSite !== "all" ? dashboardSite : dashboardRegion === "all" ? "All selected sites" : dashboardRegion) + " · " + (oemDrilldownKind === "fleet" ? oemFleetEquipment.length : oemSelection.rows.length) + " assets",
+    title: (oemDrilldownKind === "fleet" ? "Total fleet" : "OEM BD") + " · " + oemSelection.label + " · " + (dashboardSite !== "all" ? dashboardSite : dashboardRegion === "all" ? "All selected sites" : dashboardRegion) + " · " + (oemDrilldownKind === "fleet" ? oemFleetEquipment.length : oemSelection.rows.length) + " assets",
   } : null;
   const fleetChartAllKey = showFleetBreakdowns ? "fleet-breakdown:all" : "all";
   // The fleet chart uses fixed 25-unit grid steps on one linear scale, so every bar is proportional to its count.

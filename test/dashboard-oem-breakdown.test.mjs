@@ -65,7 +65,7 @@ test("all sites appear, OEM spelling is normalized and every site/OEM count reco
   assert.equal(tata.sites[2].total, 0);
 });
 
-test("each OEM and equipment group is plotted separately and group drilldown reconciles", () => {
+test("each OEM has one bar even when it contains several equipment groups", () => {
   const groupedEquipment = [
     { id: 10, door: "A", make: "Tata", group: "Excavator", currentLocation: "Sasti OB" },
     { id: 11, door: "B", make: "Tata", group: "Tipper", currentLocation: "Sasti OB" },
@@ -75,15 +75,14 @@ test("each OEM and equipment group is plotted separately and group drilldown rec
   const groupedRows = build({ equipment: groupedEquipment, requests: groupedEquipment.map(record => ({ ref: record.door, door: record.door, site: record.currentLocation, status: "Open" })) });
   const chart = buildOemBreakdownChart({ rows: groupedRows, equipment: groupedEquipment, regions });
   const site = chart.sites[0];
-  assert.deepEqual(site.bars.map(bar => [bar.oemLabel, bar.equipmentGroup, bar.rows.length]), [
-    ["Komatsu", "Dozer", 1],
-    ["Tata", "Excavator", 1],
-    ["Tata", "Tipper", 2],
+  assert.deepEqual(site.bars.map(bar => [bar.label, bar.rows.length]), [
+    ["Komatsu", 1],
+    ["Tata", 3],
   ]);
   for (const bar of site.bars) {
-    const selected = createOemBreakdownSelection(chart, { site: site.name, oem: bar.oemKey, equipmentGroup: bar.equipmentGroupKey, equipmentGroupLabel: bar.equipmentGroup });
+    const selected = createOemBreakdownSelection(chart, { site: site.name, oem: bar.key });
     assert.equal(selected.rows.length, bar.rows.length);
-    assert.equal(selected.equipmentGroupLabel, bar.equipmentGroup);
+    assert.ok(selected.rows.every(row => row.oemKey === bar.key));
   }
 });
 
