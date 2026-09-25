@@ -24,6 +24,16 @@ test("login password opens the full keyboard instead of the iOS telephone keypad
   assert.match(passwordInput, /autoCorrect="off"/);
 });
 
+test("Enter moves from the login user name to the password and the form submits the login", () => {
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const login = source.slice(source.indexOf("function Login"), source.indexOf("function Side"));
+
+  assert.match(login, /const passwordInputRef = useRef\(null\)/);
+  assert.match(login, /if \(event\.key !== "Enter"\) return;\s*event\.preventDefault\(\);\s*passwordInputRef\.current\?\.focus\(\);/);
+  assert.match(login, /<input id="login-password"\s*ref=\{passwordInputRef\}/);
+  assert.match(login, /onSubmit=\{\(event\) => \{\s*event\.preventDefault\(\);\s*signIn\(\);\s*\}\}/);
+});
+
 test("login and reset usernames do not autocapitalize on mobile", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   for (const id of ["login-username", "reset-username"]) {

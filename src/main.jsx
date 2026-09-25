@@ -511,6 +511,7 @@ const coarsePointerDevice = () => typeof window !== "undefined" && typeof window
 function Login({ onLogin, theme, toggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const passwordInputRef = useRef(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [preferredLanguage, setPreferredLanguage] = useState(() => preferredLanguageCodes()[0] || "en");
   const [secondaryLanguage, setSecondaryLanguage] = useState(() => {
@@ -740,6 +741,11 @@ function Login({ onLogin, theme, toggleTheme }) {
             <input id="login-username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                passwordInputRef.current?.focus();
+              }}
               placeholder="Enter your user name"
               autoComplete="username"
               autoCapitalize="none"
@@ -754,6 +760,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <div className="login-input">
             <LockKeyhole aria-hidden="true" />
             <input id="login-password"
+              ref={passwordInputRef}
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
