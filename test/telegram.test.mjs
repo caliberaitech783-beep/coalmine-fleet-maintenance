@@ -113,12 +113,12 @@ test("Webhook updates are parsed for private start, stop and block events only",
 
 test("The webhook is registered once with its secret and only over https", async () => {
   const calls = [];
-  let current = "";
+  let current = "", updates = [];
   const fetchImpl = async (url, options) => {
     const method = url.split("/").pop(), body = JSON.parse(options.body);
     calls.push({ method, body });
-    if (method === "setWebhook") current = body.url;
-    return { ok: true, status: 200, json: async () => ({ ok: true, result: method === "getWebhookInfo" ? { url: current } : true }) };
+    if (method === "setWebhook") { current = body.url; updates = body.allowed_updates; }
+    return { ok: true, status: 200, json: async () => ({ ok: true, result: method === "getWebhookInfo" ? { url: current, allowed_updates: updates } : true }) };
   };
   assert.deepEqual(await ensureTelegramWebhook("http://localhost:3000", { env, fetchImpl }), { registered: false });
   await ensureTelegramWebhook("https://bdms.cmll.in/", { env, fetchImpl });
@@ -205,4 +205,32 @@ test("The login gate blocks unconnected users and admins manage exemptions", () 
   assert.ok(server.includes("action:'Save Telegram login requirement'"));
   assert.match(source, /Require Telegram at login/);
   assert.match(source, /toggleTelegramExempt\(user\.login\)/);
+});
+
+test("Join requests and group upgrades are parsed from webhook updates", () => {
+  assert.deepEqual(parseTelegramUpdate({ chat_join_request: { chat: { id: -5550689740 }, from: { id: 42 }, user_chat_id: 42 } }), { kind: "joinRequest", groupChatId: "-5550689740", userId: "42", userChatId: "42" });
+  assert.deepEqual(parseTelegramUpdate({ message: { chat: { id: -5550689740, type: "group" }, migrate_to_chat_id: -1009876543210 } }), { kind: "migrated", groupChatId: "-5550689740", newChatId: "-1009876543210" });
+});
+
+test("The webhook subscribes to join requests and re-registers when the list changes", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    const method = url.split("/").pop();
+    calls.push({ method, body: JSON.parse(options.body) });
+    return { ok: true, status: 200, json: async () => ({ ok: true, result: method === "getWebhookInfo" ? { url: "https://bdms.cmll.in/api/telegram/webhook", allowed_updates: ["message", "my_chat_member"] } : true }) };
+  };
+  await ensureTelegramWebhook("https://bdms.cmll.in", { env, fetchImpl });
+  const set = calls.find((call) => call.method === "setWebhook");
+  assert.deepEqual(set.body.allowed_updates, ["message", "my_chat_member", "chat_join_request"]);
+});
+
+test("Only BDMS administrators are invited to and admitted into the admin group", () => {
+  assert.ok(server.includes("return profile.sessionRole==='super'&&['admin','super admin'].includes("));
+  assert.ok(server.includes("if(isBdmsAdministrator(user))await inviteAdministratorToTelegramGroup(rows[0].login,update.chatId)"));
+  assert.ok(server.includes("const approved=users.some(user=>user&&isBdmsAdministrator(user));"));
+  assert.ok(server.includes("await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);"));
+  assert.ok(server.includes("if(update.groupChatId!==group.chatId)return;"));
+  assert.ok(server.includes("app.post('/api/telegram/admin-group/invite',requireSuper,requireWhatsAppAdministrator"));
+  assert.ok(server.includes("await followTelegramGroupMigration(chatId,error.migrateToChatId);"));
+  assert.match(source, /Invite all admins to the group/);
 });

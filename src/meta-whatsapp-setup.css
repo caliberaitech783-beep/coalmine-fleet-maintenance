@@ -314,3 +314,8 @@
   width: 15px;
   height: 15px;
 }
+
+.meta-whatsapp-form > footer.telegram-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}

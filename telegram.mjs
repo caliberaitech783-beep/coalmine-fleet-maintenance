@@ -117,6 +117,12 @@ export function parseTelegramUpdate(update){
   const member=update?.my_chat_member;
   if(member?.chat?.type==='private'&&['kicked','left'].includes(member.new_chat_member?.status))
     return {kind:'blocked',chatId:String(member.chat.id)};
+  const request=update?.chat_join_request;
+  if(request?.chat?.id&&request?.from?.id)
+    return {kind:'joinRequest',groupChatId:String(request.chat.id),userId:String(request.from.id),userChatId:String(request.user_chat_id||request.from.id)};
+  // A basic group upgraded to a supergroup gets a new id; alerts must follow it.
+  if(update?.message?.migrate_to_chat_id)
+    return {kind:'migrated',groupChatId:String(update.message.chat.id),newChatId:String(update.message.migrate_to_chat_id)};
   return {kind:'ignored'};
 }
 
@@ -126,12 +132,17 @@ export async function telegramBotUsername({env=process.env,fetchImpl=fetch}={}){
   return cachedBotUsername;
 }
 
+// Join requests let the bot admit only BDMS administrators to the admin group.
+export const TELEGRAM_WEBHOOK_UPDATES=['message','my_chat_member','chat_join_request'];
+
 export async function ensureTelegramWebhook(baseUrl,{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(env);
   const url=`${clean(baseUrl).replace(/\/+$/,'')}/api/telegram/webhook`;
   if(!config.botToken||!url.startsWith('https://'))return {registered:false};
   const info=await telegramRequest('getWebhookInfo',{env,fetchImpl,json:{}});
-  if(info?.url!==url)await telegramRequest('setWebhook',{env,fetchImpl,json:{url,secret_token:telegramWebhookSecret(env),allowed_updates:['message','my_chat_member']}});
+  const wanted=[...TELEGRAM_WEBHOOK_UPDATES].sort().join(',');
+  if(info?.url!==url||[...(info?.allowed_updates||[])].sort().join(',')!==wanted)
+    await telegramRequest('setWebhook',{env,fetchImpl,json:{url,secret_token:telegramWebhookSecret(env),allowed_updates:TELEGRAM_WEBHOOK_UPDATES}});
   return {registered:true,url,pendingUpdates:info?.pending_update_count||0,lastError:clean(info?.last_error_message)};
 }
 
@@ -143,4 +154,19 @@ export async function telegramStatus({env=process.env,fetchImpl=fetch}={}){
     telegramRequest('getChat',{env,fetchImpl,json:{chat_id:config.chatId}}),
   ]);
   return {configured:true,connected:true,paused:config.paused,botUsername:clean(bot?.username),chatTitle:clean(chat?.title||chat?.username),chatId:config.chatId};
+}
+
+// The admin group invite asks to join; the bot then approves administrators only.
+export async function createTelegramJoinRequestLink(chatId,{env=process.env,fetchImpl=fetch}={}){
+  const result=await telegramRequest('createChatInviteLink',{env,fetchImpl,json:{chat_id:chatId,name:'BDMS administrators',creates_join_request:true}});
+  return clean(result?.invite_link);
+}
+
+export async function answerTelegramJoinRequest(chatId,userId,approve,{env=process.env,fetchImpl=fetch}={}){
+  return telegramRequest(approve?'approveChatJoinRequest':'declineChatJoinRequest',{env,fetchImpl,json:{chat_id:chatId,user_id:Number(userId)}});
+}
+
+export async function telegramChatMemberStatus(chatId,userId,{env=process.env,fetchImpl=fetch}={}){
+  const member=await telegramRequest('getChatMember',{env,fetchImpl,json:{chat_id:chatId,user_id:Number(userId)}});
+  return clean(member?.status);
 }

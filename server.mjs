@@ -49,7 +49,7 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor} from './telegram.mjs';
+import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus} from './telegram.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3272,7 +3272,8 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
 
 app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator,async(_req,res)=>{
   try{
-    const status=await telegramStatus();
+    const group=await telegramGroupSettings();
+    const status=await telegramStatus({env:{...process.env,TELEGRAM_DEFAULT_CHAT_ID:group.chatId}});
     const [webhook,{rows}]=await Promise.all([
       ensureTelegramWebhook(publicBaseUrl()).catch(error=>({registered:false,lastError:error.message})),
       pool.query('SELECT COUNT(*)::int AS count FROM telegram_user_links'),
@@ -3282,11 +3283,32 @@ app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator,async(_
   catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Telegram connection failed.'})}
 });
 
+// Invites every connected Admin and Super Admin who is not yet in the admin group.
+app.post('/api/telegram/admin-group/invite',requireSuper,requireWhatsAppAdministrator,async(req,res)=>{
+  req.audit={eventType:'Integration',module:'Telegram',action:'Invite administrators to admin group',targetType:'Telegram group',changedFields:[]};
+  if(!telegramConfiguration().configured)return res.status(400).json({error:'Telegram is not configured.'});
+  try{
+    await telegramAdminGroupInviteLink();
+  }catch(error){
+    return res.status(409).json({error:`The bot could not create the group invite. In Telegram, make CALIBER BDMS an admin of the group with "Invite users via link" allowed. (${error.message})`});
+  }
+  const {rows}=await pool.query('SELECT login,chat_id AS "chatId" FROM telegram_user_links');
+  const results={invited:0,alreadyMember:0,notAdmin:0,failed:0};
+  for(const {login,chatId} of rows){
+    const user=await bdmsUserRecord(login);
+    if(!user||!isBdmsAdministrator(user)){results.notAdmin++;continue}
+    try{(await inviteAdministratorToTelegramGroup(login,chatId))==='Invited'?results.invited++:results.alreadyMember++}
+    catch(error){results.failed++;console.error(`Telegram admin group invite failed for ${login}:`,error.message)}
+  }
+  req.audit.reason=`Invited ${results.invited}, already in group ${results.alreadyMember}, failed ${results.failed}`;
+  res.json(results);
+});
+
 app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator,async(req,res)=>{
   req.audit={eventType:'Integration',module:'WhatsApp Integration',action:'Send Telegram test message',targetType:'Telegram group',changedFields:[]};
   if(!telegramConfiguration().configured)return res.status(400).json({error:'Telegram is not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_DEFAULT_CHAT_ID in Azure.'});
   try{
-    const result=await sendTelegramText({message:`Nerve Center test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
+    const result=await sendTelegramText({chatId:(await telegramGroupSettings()).chatId,message:`Nerve Center test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
     res.status(201).json(result);
   }catch(error){res.status(502).json({error:error instanceof Error?error.message:'Telegram delivery failed.'})}
 });
@@ -3412,6 +3434,21 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       const role=profile.sessionRole==='super'?user.designation||profile.permissions?.adminLevel||'Administrator':profile.assignedRole||'User';
       const location=String(user.site||user.location||'').replace(/\s*\|\s*/g,', ')||'All locations';
       await reply(update.chatId,`Connected to Nerve Center.\nName: ${user.employee||rows[0].login}\nLogin: ${String(user.login||rows[0].login).toUpperCase()}\nRole: ${role}\nLocation: ${location}\n\nYou will now receive your BDMS alerts here, as on WhatsApp.\nSend /stop at any time to turn them off.`);
+      if(isBdmsAdministrator(user))await inviteAdministratorToTelegramGroup(rows[0].login,update.chatId)
+        .catch(error=>console.error('Telegram admin group invite failed.',error.message));
+    }else if(update.kind==='joinRequest'){
+      // Only BDMS administrators who connected their Telegram may join the admin group.
+      const group=await telegramGroupSettings();
+      if(update.groupChatId!==group.chatId)return;
+      const {rows}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.userId]);
+      const users=await Promise.all(rows.map(({login})=>bdmsUserRecord(login)));
+      const approved=users.some(user=>user&&isBdmsAdministrator(user));
+      await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);
+      await appendBackendProcessAudit({module:'Telegram',action:approved?'Approve admin group join request':'Decline admin group join request',
+        targetReference:rows.map(({login})=>login).join(', ')||`Telegram user ${update.userId}`,reason:approved?'BDMS administrator':'Not a connected BDMS administrator'}).catch(()=>{});
+      if(!approved)await reply(update.userChatId,'The BDMS ADMIN ALERT group is only for BDMS administrators. Your request was declined.');
+    }else if(update.kind==='migrated'){
+      await followTelegramGroupMigration(update.groupChatId,update.newChatId);
     }else if(update.kind==='start'||update.kind==='text'){
       await reply(update.chatId,'To receive Nerve Center alerts here, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
     }
@@ -3649,13 +3686,41 @@ async function ticketVisibleToSession(ticket,session){
 // One copy of each alert goes to the Telegram group, separate from the
 // per-recipient WhatsApp fan-out, so it never delays or fails WhatsApp delivery.
 const TELEGRAM_GROUP_LOGIN='telegram:group';
+// The admin group's id starts as TELEGRAM_DEFAULT_CHAT_ID. If Telegram upgrades
+// the group to a supergroup its id changes, and the new id is stored here.
+const TELEGRAM_GROUP_SETTING_KEY='telegram_admin_group';
+async function telegramGroupSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_GROUP_SETTING_KEY]).catch(()=>({rows:[]}));
+  const stored=rows[0]?.setting_value||{};
+  const fallback=telegramConfiguration().chatId;
+  const chatId=String(stored.chatId||fallback||'');
+  return {chatId,inviteLink:stored.chatId===chatId&&stored.inviteLink?String(stored.inviteLink):''};
+}
+async function saveTelegramGroupSettings(value){
+  await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+    ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[TELEGRAM_GROUP_SETTING_KEY,JSON.stringify(value)]);
+}
+async function followTelegramGroupMigration(oldChatId,newChatId){
+  const current=await telegramGroupSettings();
+  if(!newChatId||current.chatId!==String(oldChatId))return;
+  await saveTelegramGroupSettings({chatId:String(newChatId),inviteLink:''});
+  console.log(`Telegram admin group moved from ${oldChatId} to ${newChatId}.`);
+}
+
 async function deliverToTelegramGroup({reportType,target,level='',message,purpose,document=null}){
   const config=telegramConfiguration();
   if(!config.configured)return 'Skipped - not configured';
+  let {chatId}=await telegramGroupSettings();
   let status='Sent';
+  const send=()=>document?sendTelegramDocument({...document,caption:message,purpose,chatId}):sendTelegramText({message,purpose,chatId});
   try{
-    if(document)await sendTelegramDocument({...document,caption:message,purpose});
-    else await sendTelegramText({message,purpose});
+    try{await send()}
+    catch(error){
+      if(!error.migrateToChatId)throw error;
+      await followTelegramGroupMigration(chatId,error.migrateToChatId);
+      chatId=String(error.migrateToChatId);
+      await send();
+    }
   }catch(error){
     if(error.code==='TELEGRAM_POLICY_PAUSED')return 'Skipped - paused';
     status=`Failed - ${String(error?.message||'Telegram delivery error').slice(0,160)}`;
@@ -3663,9 +3728,39 @@ async function deliverToTelegramGroup({reportType,target,level='',message,purpos
   }
   try{await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-    [reportType,String(target||''),level,'Telegram group',config.chatId,status])}
+    [reportType,String(target||''),level,'Telegram group',chatId,status])}
   catch(historyError){console.error('Could not record Telegram delivery.',historyError.message)}
   return status;
+}
+
+// Admin and Super Admin users belong in the admin group; Managers do not.
+function isBdmsAdministrator(user={}){
+  const profile=resolveMobileAccess({user});
+  return profile.sessionRole==='super'&&['admin','super admin'].includes(String(profile.permissions?.adminLevel||'').trim().toLowerCase());
+}
+
+async function bdmsUserRecord(login){
+  const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'
+    AND lower(trim(record_data->>'login'))=$1 LIMIT 1`,[String(login||'').trim().toLowerCase()]);
+  return rows[0]?.record_data||null;
+}
+
+async function telegramAdminGroupInviteLink(){
+  const group=await telegramGroupSettings();
+  if(group.inviteLink)return group.inviteLink;
+  const inviteLink=await createTelegramJoinRequestLink(group.chatId);
+  await saveTelegramGroupSettings({chatId:group.chatId,inviteLink});
+  return inviteLink;
+}
+
+// Sends one administrator a private invite to the admin group, unless they are already in it.
+async function inviteAdministratorToTelegramGroup(login,chatId){
+  const group=await telegramGroupSettings();
+  const status=await telegramChatMemberStatus(group.chatId,chatId).catch(()=>'');
+  if(['creator','administrator','member','restricted'].includes(status))return 'Already in the group';
+  const inviteLink=await telegramAdminGroupInviteLink();
+  await sendTelegramText({chatId,message:`You are a BDMS administrator, so you are invited to the BDMS ADMIN ALERT group, which receives every alert from all sites.\nTap to join: ${inviteLink}\nThe bot approves your request automatically.`});
+  return 'Invited';
 }
 
 function mirrorToTelegramGroup(options){
