@@ -7962,22 +7962,36 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
     const batches = batchMasterRecords(incoming);
     const saved = [];
     for (let index = 0; index < batches.length; index += 1) {
-      const response = await fetch("/api/masters/" + encodeURIComponent(name), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(batches[index]),
-      });
+      let response;
+      try {
+        response = await fetch("/api/masters/" + encodeURIComponent(name), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(batches[index]),
+        });
+      } catch {
+        throw new Error("Could not reach the server. Check your connection and try again.");
+      }
+      const responseText = await response.text();
+      let details = {};
+      try { details = responseText ? JSON.parse(responseText) : {}; } catch {}
       if (!response.ok) {
-        const details = await response.json().catch(() => ({}));
+        const oneManualRecord = batches.length === 1 && batches[0].length === 1;
+        const unavailable = [502, 503, 504].includes(response.status);
         throw new Error(
           details.error ||
-            `Could not save import batch ${index + 1} of ${batches.length}. Please retry.`,
+            (unavailable
+              ? "The server is temporarily unavailable. Nothing was saved; please try again."
+              : oneManualRecord
+                ? `Could not save this ${name === "Users & employees" ? "user" : "record"}. Please try again.`
+                : `Could not save import batch ${index + 1} of ${batches.length}. Please retry.`),
         );
       }
-      saved.push(...(await response.json()));
+      if (!Array.isArray(details)) throw new Error("The server returned an invalid save response. Please retry.");
+      saved.push(...details);
     }
     setRecords((current) => {
       const next = [...current];

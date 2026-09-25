@@ -69,7 +69,7 @@ import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrue
 import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request-conflict.mjs';
 import {auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {requestDeletionBlocker,requestDeletionSnapshot,normalizeDeletionReferences,REQUEST_BULK_DELETE_LIMIT} from './request-deletion.mjs';
-import {duplicateUsername} from './user-username.mjs';
+import {duplicateUsername,lockUsernamesForWrite} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
@@ -6032,7 +6032,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
-        await client.query('LOCK TABLE master_records IN SHARE ROW EXCLUSIVE MODE');
+        await lockUsernamesForWrite(client);
         const existing=await client.query(
           `SELECT record_data FROM master_records WHERE master_name='Users & employees'`
         );
