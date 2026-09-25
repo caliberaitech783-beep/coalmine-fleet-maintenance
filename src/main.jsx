@@ -332,8 +332,9 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
       headers.set("X-BDMS-Device-ID", clientDeviceId);
       requestInit = {...init, headers};
     }
-    // The edge firewall rejects JSON bodies above 128 KB with an HTML 403, so
-    // oversized payloads (meter evidence, trip cards, audio) go as text/plain.
+    // The edge firewall rejects some valid JSON bodies (large media and known
+    // false-positive permission text), so the transport helper uses the
+    // server's JSON-compatible text/plain path for those requests.
     if (url.startsWith("/api/")) requestInit = edgeSafeJsonInit(requestInit);
     // While a deployment restarts the app the gateway answers 502/503/504 for
     // a few seconds. Read-only API calls wait and retry instead of showing an

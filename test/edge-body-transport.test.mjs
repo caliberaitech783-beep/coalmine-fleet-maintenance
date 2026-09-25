@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {EDGE_INSPECTED_BODY_LIMIT_BYTES,JSON_BODY_CONTENT_TYPES,LARGE_JSON_BODY_THRESHOLD_BYTES,LARGE_JSON_CONTENT_TYPE,edgeSafeJsonInit,embeddedMediaJsonBody,largeJsonBody} from '../request-body-transport.mjs';
+import {EDGE_INSPECTED_BODY_LIMIT_BYTES,JSON_BODY_CONTENT_TYPES,LARGE_JSON_BODY_THRESHOLD_BYTES,LARGE_JSON_CONTENT_TYPE,edgeSafeJsonInit,edgeSignatureJsonBody,embeddedMediaJsonBody,largeJsonBody} from '../request-body-transport.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -42,6 +42,23 @@ test('small embedded media JSON uses the edge-safe content type',()=>{
   assert.equal(rewritten.headers['Content-Type'],LARGE_JSON_CONTENT_TYPE);
   assert.equal(rewritten.body,body);
   assert.equal(embeddedMediaJsonBody(JSON.stringify({note:'data:image/png is ordinary text'})),false);
+});
+
+test('user master permissions containing Shift Master bypass the edge false positive',()=>{
+  const body=JSON.stringify([{
+    login:'NEW-ADMIN',
+    adminLevel:'Admin',
+    masterAccess:'Users & employees | Equipment master | Region master | Shift Master | OEM master',
+  }]);
+  assert.equal(largeJsonBody(body),false);
+  assert.equal(embeddedMediaJsonBody(body),false);
+  assert.equal(edgeSignatureJsonBody(body),true);
+  const init={method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer t'},body};
+  const rewritten=edgeSafeJsonInit(init);
+  assert.equal(rewritten.headers['Content-Type'],LARGE_JSON_CONTENT_TYPE);
+  assert.equal(rewritten.headers.Authorization,'Bearer t');
+  assert.equal(rewritten.body,body);
+  assert.equal(edgeSignatureJsonBody(JSON.stringify({masterAccess:'Shift Master | OEM master'})),false,'Shift Master is safe when it does not follow a pipe');
 });
 
 test('the server parses text/plain bodies as JSON and the UI routes API calls through the transport helper',()=>{
