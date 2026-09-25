@@ -8,6 +8,7 @@ export const MOBILE_USER_ROLES = [
 export const GENERAL_USER_ROLE = "General User";
 export const GENERAL_USER_MENU_OPTIONS = [
   "Dashboard",
+  "CD",
   "Masters",
   "WhatsApp Integration",
   "Requests",

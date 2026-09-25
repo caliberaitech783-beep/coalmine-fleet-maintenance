@@ -27,7 +27,7 @@ import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,va
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
-import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
+import {accessAllows,managerRoleSelection,masterAccessAllows,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
@@ -1138,6 +1138,21 @@ async function migrate(){
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('user_access_labels_normalized','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // CD was previously forced for desktop accounts. Clear that inherited
+    // value once so Directory is unticked for every role until an
+    // administrator explicitly selects it for desktop and/or mobile.
+    const {rows:directoryOptInApplied}=await client.query("SELECT value FROM app_metadata WHERE key='directory_cd_opt_in_v1' FOR UPDATE");
+    if(!directoryOptInApplied.length){
+      const {rows:userRows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' FOR UPDATE");
+      for(const row of userRows){
+        const normalized=removeLegacyDirectoryMenuAccess(row.record_data);
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('directory_cd_opt_in_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     // Canonicalize stored operational locations without deleting or re-syncing

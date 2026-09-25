@@ -88,8 +88,8 @@ test('the top-level header buttons get glass badges in the header gradient tones
   assert.match(styles,/\.header-nav-icon \{[\s\S]*background: linear-gradient\(135deg, var\(--hn-a, #8b5cf6\), var\(--hn-b, #522e90\)\)/);
   assert.match(styles,/\.header-nav-item\[data-nav="dashboard"\] \{ --hn-a: #8b5cf6; --hn-b: #522e90;/,'leftmost button uses the header purple');
   assert.match(styles,/\.header-nav-item\[data-nav="cd"\] \{ --hn-a: #7c3aed; --hn-b: #2563eb;/,'CD gets its own main menu badge');
-  assert.match(source,/visibleNav = nav\.filter\(\(\[name\]\) => name==="CD" \|\|/,'CD remains visible for existing logged-in sessions');
-  assert.match(source,/if\(name==="CD"\)return true;/,'CD page guard allows existing logged-in sessions');
+  assert.doesNotMatch(source,/visibleNav = nav\.filter\(\(\[name\]\) => name==="CD" \|\|/,'CD is no longer forced into navigation');
+  assert.doesNotMatch(source,/if\(name==="CD"\)return true;/,'CD uses the same saved-menu guard as other optional pages');
   assert.match(styles,/\.header-nav-item\[data-nav="admin"\] \{ --hn-a: #f97373; --hn-b: #f04e53;/,'rightmost button uses the header coral');
   for(const key of ['cd','masters','whatsapp','workspaces','reports','tickets','manager','correction','approvals'])assert.match(styles,new RegExp(`\\.header-nav-item\\[data-nav="${key}"\\][^{]*\\{ --hn-a: #[0-9a-f]{6}; --hn-b: #[0-9a-f]{6};`),key);
   assert.match(styles,/\[data-nav="tickets"\]:hover \.header-nav-icon svg[^{]*\{ animation: ws-tick/);
@@ -101,7 +101,7 @@ test('the top-level header buttons get glass badges in the header gradient tones
 test('operational, manager and workspace navigation get the graphical treatment through data-nav attributes only',()=>{
   const motion=readFileSync(new URL('../src/nav-motion.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   const header=source.slice(source.indexOf('<nav className="normal-header-nav">'),source.indexOf('</nav>',source.indexOf('<nav className="normal-header-nav">')));
-  for(const [key,icon,label] of [['dashboard','LayoutDashboard',' Dashboard'],['reports','FileBarChart',' Reports'],['tickets','Ticket',' Tickets'],['transfers','ArrowRightLeft',' Vehicle Transfer']]){
+  for(const [key,icon,label] of [['dashboard','LayoutDashboard',' Dashboard'],['directory','BookOpen',' Directory \\(CD\\)'],['reports','FileBarChart',' Reports'],['tickets','Ticket',' Tickets'],['transfers','ArrowRightLeft',' Vehicle Transfer']]){
     assert.match(header,new RegExp(`<button data-nav="${key}" className=\\{section === "[a-z]+" \\? "active" : ""\\}[\\s\\S]*?><${icon} \\/>${label}<\\/button>`),`${key} keeps the plain icon + label shape`);
   }
   assert.match(header,/<button data-nav="requests" className=\{section === "profile" \? "active" : ""\}[\s\S]*?><Wrench \/> \{isGeneral \? "Requests" : mobileRole\}<\/button>/);

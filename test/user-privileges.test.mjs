@@ -33,6 +33,8 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /isDesktopUser && <>[\s\S]*Selected menus for each view/);
   assert.match(source, /accountRole && !isDesktopUser && <>[\s\S]*OperationalViewMenuFields/);
   assert.match(source, /desktopUserMenuAccess[\s\S]*mobileUserMenuAccess/);
+  assert.match(source, /option==="CD"\?"Directory \(CD\)":option/);
+  assert.match(source, /operationalMenuOptions=\[\.\.\.operationalDefaultMenuOptions,"CD"\]/);
   assert.match(source, /showRequestsMenu&&canCreate&&canSeeRequestMenu\("Create request"\)/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
@@ -69,13 +71,13 @@ test("each Manager receives a role-specific dashboard", () => {
   assert.match(source, /adminPermissions\.adminLevel === "Manager"[\s\S]*<ManagerDashboard/);
 });
 
-test("Admin is automatically assigned every menu and submenu", () => {
+test("Admin receives every default menu except the optional Directory", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const defaults = source.match(/function applyUserRoleDefaults[\s\S]*?\n}/)?.[0] || "";
   assert.match(defaults, /role === "User"/);
   assert.match(defaults, /record\.adminLevel === "Admin"/);
   assert.match(defaults, /record\.masterAccess = ADMIN_MASTER_OPTIONS\.join/);
-  assert.match(defaults, /record\.tabAccess = ADMIN_TAB_OPTIONS\.join/);
+  assert.match(defaults, /record\.tabAccess = ADMIN_DEFAULT_TAB_OPTIONS\.join/);
   assert.match(defaults, /Object\.values\(ADMIN_SUBMENU_OPTIONS\)/);
 });
 

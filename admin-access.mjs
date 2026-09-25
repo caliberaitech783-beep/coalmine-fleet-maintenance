@@ -21,6 +21,7 @@ export const ADMIN_TAB_OPTIONS = [
   "Audit Trail",
   "Tickets",
 ];
+export const ADMIN_DEFAULT_TAB_OPTIONS = ADMIN_TAB_OPTIONS.filter((option) => option !== "CD");
 export const ADMIN_REPORT_OPTIONS = [
   "Reports",
   "General Report",
@@ -44,6 +45,25 @@ export function accessSelection(record = {}, key, options = []) {
   const raw = Array.isArray(record[key]) ? record[key] : String(record[key] || "").split(/\s*[|,]\s*/);
   const allowed = new Set(options);
   return [...new Set(raw.map((value) => String(value).trim()).filter((value) => allowed.has(value)))];
+}
+
+// CD used to be forced on for desktop users. Remove that legacy value once
+// during deployment so Directory becomes a genuine per-view opt-in. The
+// migration is intentionally limited to menu fields and preserves every
+// other role and permission setting.
+export function removeLegacyDirectoryMenuAccess(record = {}) {
+  const next = {...record};
+  for (const key of ["tabAccess", "mobileTabAccess", "desktopUserMenuAccess", "mobileUserMenuAccess"]) {
+    if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+    const original = next[key];
+    const values = (Array.isArray(original) ? original : String(original || "").split(/\s*[|,]\s*/))
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+    if (!values.includes("CD")) continue;
+    const filtered = [...new Set(values.filter((value) => value !== "CD"))];
+    next[key] = Array.isArray(original) ? filtered : filtered.join(" | ");
+  }
+  return next;
 }
 
 export function accessAllows(selection, name) {
@@ -78,8 +98,8 @@ export function adminAccessPermissions(user = {}) {
   const adminLevel = normalizeAdminLevel(user.adminLevel);
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
-  const requiredTabs = ["CD", ...(ticketAccount ? ["Tickets"] : [])];
-  const tabAccess = selectedTabs != null ? [...new Set([...selectedTabs, ...requiredTabs])] : selectedTabs;
+  const requiredTabs = ticketAccount ? ["Tickets"] : [];
+  const tabAccess = [...new Set([...(selectedTabs ?? ADMIN_DEFAULT_TAB_OPTIONS), ...requiredTabs])];
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
   return {

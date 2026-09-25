@@ -30,7 +30,7 @@ async function authorize(session,path,{method="GET",query={}}={}){
 
 test("General User is a recognized Team User with every menu available and none selected by default",()=>{
   assert.ok(MOBILE_USER_ROLES.includes(GENERAL_USER_ROLE));
-  assert.deepEqual(GENERAL_USER_MENU_OPTIONS,["Dashboard","Masters","WhatsApp Integration","Requests","Reports","Audit Trail","Tickets"]);
+  assert.deepEqual(GENERAL_USER_MENU_OPTIONS,["Dashboard","CD","Masters","WhatsApp Integration","Requests","Reports","Audit Trail","Tickets"]);
   for(const name of ["General User"," general ","general_user"])assert.equal(normalizeMobileUserRole(name),GENERAL_USER_ROLE);
   const profile=sessionFor();
   assert.equal(profile.role,"normal");
@@ -45,8 +45,8 @@ test("General User is a recognized Team User with every menu available and none 
 });
 
 test("General User keeps independent saved menus and explicit empty selections",()=>{
-  const profile=sessionFor({desktopUserMenuAccess:"Dashboard | Reports",mobileUserMenuAccess:"Tickets"});
-  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Dashboard","Reports"]);
+  const profile=sessionFor({desktopUserMenuAccess:"Dashboard | CD | Reports",mobileUserMenuAccess:"Tickets"});
+  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Dashboard","CD","Reports"]);
   assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets"]);
   const empty=sessionFor({desktopUserMenuAccess:"",mobileUserMenuAccess:""});
   assert.deepEqual(empty.permissions.desktopUserMenuAccess,[]);
