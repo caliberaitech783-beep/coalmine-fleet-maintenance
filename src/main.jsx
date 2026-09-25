@@ -1071,7 +1071,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           <b className="header-user-name">{profileHeaderName(session?.name, permissions.adminLevel === "Manager" ? "Manager" : "Administrator")}</b>
           <small>{[profileHeaderDesignation({name:session?.name,permissions}), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
-        <UserProfile session={session} role={profileHeaderDesignation({name:session?.name,permissions})} location={profileLocation} />
+        <UserProfile session={session} role={profileHeaderDesignation({name:session?.name,permissions})} location={profileLocation} apiToken={authToken} />
         <button onClick={logout} aria-label="Sign out" className="sign-out-button">
           <DoorExitIcon /><span className="sign-out-label">Sign out</span>
         </button>
@@ -8120,6 +8120,7 @@ function MetaWhatsAppSetup() {
   const [telegram, setTelegram] = useState(null);
   const [telegramWorking, setTelegramWorking] = useState(false);
   const [telegramNotice, setTelegramNotice] = useState("");
+  const [telegramLinks, setTelegramLinks] = useState([]);
   const loadMetaSettings = async () => {
     const settingsResponse = await fetch("/api/whatsapp/settings", {headers:{Authorization:`Bearer ${authToken}`}});
     const saved = await settingsResponse.json().catch(() => ({}));
@@ -8134,6 +8135,8 @@ function MetaWhatsAppSetup() {
     const telegramResponse = await fetch("/api/telegram/status", {headers:{Authorization:`Bearer ${authToken}`}}).catch(() => null);
     const telegramState = await telegramResponse?.json().catch(() => ({}));
     setTelegram(telegramResponse?.ok ? telegramState : {connected:false,error:telegramState?.error || "Telegram connection is not ready."});
+    const linksResponse = await fetch("/api/telegram/links", {headers:{Authorization:`Bearer ${authToken}`}}).catch(() => null);
+    setTelegramLinks(linksResponse?.ok ? await linksResponse.json().catch(() => []) : []);
   };
   const sendTelegramTest = async () => {
     setTelegramWorking(true);
@@ -8225,6 +8228,14 @@ function MetaWhatsAppSetup() {
       </span>
       {(telegramNotice || telegram?.error) && <div className={`meta-whatsapp-feedback ${telegramNotice?.ok ? "success" : "error"}`} role={telegramNotice?.ok ? "status" : "alert"}>{telegramNotice?.text || telegram.error}</div>}
       <footer><button type="button" className="primary" onClick={sendTelegramTest} disabled={telegramWorking || !telegram?.connected}>{telegramWorking ? <RefreshCw className="spin" /> : <Send />}{telegramWorking ? "Sending..." : "Send Telegram test"}</button></footer>
+      {telegram?.webhook?.lastError && <div className="meta-whatsapp-feedback error" role="alert">Telegram cannot reach the app: {telegram.webhook.lastError}</div>}
+      <div className="telegram-links">
+        <h3>Users connected to Telegram <span>{telegramLinks.length}</span></h3>
+        <p>Each user connects once from their profile icon → Connect Telegram. They then get the same alerts as on WhatsApp.</p>
+        {telegramLinks.length ? <ActionsTable printTitle="Users connected to Telegram" exportTitle="Users connected to Telegram"><thead><tr><th>Employee</th><th>Login</th><th>Location</th><th>Telegram</th><th>Connected on</th></tr></thead>
+          <tbody>{telegramLinks.map((link) => <tr key={link.login}><td>{link.name}</td><td>{link.login}</td><td>{link.site || "--"}</td><td>{link.username ? `@${link.username}` : "--"}</td><td data-sort-value={link.linkedAt}>{formatDisplayDateTime(link.linkedAt)}</td></tr>)}</tbody></ActionsTable>
+          : <p className="telegram-links-empty">No users have connected yet.</p>}
+      </div>
     </div>
   </section>;
 }
@@ -10675,7 +10686,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
       {!embedded&&section==="directory"&&showDirectoryMenu&&<CaliberDirectoryPage />}

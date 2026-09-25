@@ -211,7 +211,7 @@ function deliveryHarness({
       return {message,reportContext};
     },
     publicBaseUrl:()=>'https://example.invalid',metaWhatsAppRuntimeEnv:async()=>({}),
-    sendMetaWhatsAppTemplate:async(args)=>{if(fail)throw new Error('Template unavailable');sent.push(args);},
+    sendMetaWhatsAppTemplate:async(args)=>{if(fail)throw new Error('Template unavailable');sent.push(args);},mirrorToTelegramUsers:()=>{},
     console:{error:(...args)=>errors.push(args)},
   };
   const api=new Function(...Object.keys(dependencies),`${schedulerSource};return {sendScheduledHierarchyReportBundles,sendRequestEventReports};`)(...Object.values(dependencies));

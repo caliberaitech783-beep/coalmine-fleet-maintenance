@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { telegramConfiguration, telegramPurposeEnabled, telegramPlainText, sendTelegramText, sendTelegramDocument, telegramStatus } from "../telegram.mjs";
+import { telegramConfiguration, telegramPurposeEnabled, telegramPlainText, sendTelegramText, sendTelegramDocument, telegramStatus, telegramWebhookSecret, newTelegramLinkToken, parseTelegramUpdate, ensureTelegramWebhook } from "../telegram.mjs";
 import { normalizeWhatsAppReportSettings } from "../whatsapp-report-settings.mjs";
 
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -77,15 +77,79 @@ test("Telegram status reports the bot and group names", async () => {
 });
 
 test("Server mirrors each alert once to the Telegram group", () => {
-  assert.match(server, /if\(telegram\)mirrorToTelegramGroup\(/);
-  assert.match(server, /purpose,telegram:false\}\);/);
-  assert.match(server, /\[idle\?'idle_repeat':'offroad_escalation',request\.ref,TELEGRAM_GROUP_LOGIN,slotKey\]/);
-  assert.match(server, /app\.post\('\/api\/telegram\/test',requireSuper,requireWhatsAppAdministrator/);
-  assert.match(server, /app\.get\('\/api\/telegram\/status',requireSuper,requireWhatsAppAdministrator/);
+  assert.ok(server.includes("if(telegramGroup)mirrorToTelegramGroup("));
+  assert.ok(server.includes("purpose,telegramGroup:false,telegramMessage:reminderText});"));
+  assert.ok(server.includes("[idle?'idle_repeat':'offroad_escalation',request.ref,TELEGRAM_GROUP_LOGIN,slotKey]"));
+  assert.ok(server.includes("app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator"));
+  assert.ok(server.includes("app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator"));
 });
 
 test("WhatsApp setup page offers a Telegram test button", () => {
-  assert.match(source, /Telegram group alerts/);
-  assert.match(source, /fetch\("\/api\/telegram\/test", \{method:"POST"/);
-  assert.match(source, /Send Telegram test/);
+  assert.ok(source.includes("Telegram group alerts"));
+  assert.ok(source.includes('fetch("/api/telegram/test", {method:"POST"'));
+  assert.ok(source.includes("Send Telegram test"));
+});
+
+test("Link tokens fit Telegram's start parameter and the webhook secret is stable", () => {
+  const token = newTelegramLinkToken();
+  assert.match(token, /^[A-Za-z0-9_-]{24}$/);
+  assert.notEqual(token, newTelegramLinkToken());
+  assert.equal(telegramWebhookSecret(env), telegramWebhookSecret(env));
+  assert.match(telegramWebhookSecret(env), /^[a-f0-9]{48}$/);
+  assert.equal(telegramWebhookSecret({}), "");
+  assert.doesNotMatch(telegramWebhookSecret(env), /secret-token/);
+});
+
+test("Webhook updates are parsed for private start, stop and block events only", () => {
+  const privateMessage = (text) => ({ message: { chat: { id: 42, type: "private" }, from: { username: "anoop" }, text } });
+  assert.deepEqual(parseTelegramUpdate(privateMessage("/start abcdefghijklmnopqrstuvwx")), { kind: "start", chatId: "42", token: "abcdefghijklmnopqrstuvwx", username: "anoop" });
+  assert.equal(parseTelegramUpdate(privateMessage("/start")).token, "");
+  assert.equal(parseTelegramUpdate(privateMessage("/start bad token!")).token, "");
+  assert.equal(parseTelegramUpdate(privateMessage("/stop")).kind, "stop");
+  assert.equal(parseTelegramUpdate(privateMessage("hello")).kind, "text");
+  assert.equal(parseTelegramUpdate({ message: { chat: { id: -5, type: "group" }, text: "/start abcdefghijklmnopqrstuvwx" } }).kind, "ignored");
+  assert.deepEqual(parseTelegramUpdate({ my_chat_member: { chat: { id: 42, type: "private" }, new_chat_member: { status: "kicked" } } }), { kind: "blocked", chatId: "42" });
+});
+
+test("The webhook is registered once with its secret and only over https", async () => {
+  const calls = [];
+  let current = "";
+  const fetchImpl = async (url, options) => {
+    const method = url.split("/").pop(), body = JSON.parse(options.body);
+    calls.push({ method, body });
+    if (method === "setWebhook") current = body.url;
+    return { ok: true, status: 200, json: async () => ({ ok: true, result: method === "getWebhookInfo" ? { url: current } : true }) };
+  };
+  assert.deepEqual(await ensureTelegramWebhook("http://localhost:3000", { env, fetchImpl }), { registered: false });
+  await ensureTelegramWebhook("https://bdms.cmll.in/", { env, fetchImpl });
+  await ensureTelegramWebhook("https://bdms.cmll.in", { env, fetchImpl });
+  const sets = calls.filter((call) => call.method === "setWebhook");
+  assert.equal(sets.length, 1);
+  assert.equal(sets[0].body.url, "https://bdms.cmll.in/api/telegram/webhook");
+  assert.equal(sets[0].body.secret_token, telegramWebhookSecret(env));
+});
+
+test("Server links accounts through one-time tokens and a secret-checked webhook", () => {
+  assert.match(server, /app\.post\('\/api\/telegram\/webhook',async\(req,res\)=>\{\s*req\.audit=false;/);
+  assert.ok(server.includes("req.get('x-telegram-bot-api-secret-token')!==secret)return res.sendStatus(401)"));
+  assert.ok(server.includes("DELETE FROM telegram_link_tokens WHERE token=$1 AND expires_at>NOW() RETURNING login"));
+  assert.ok(server.includes("INTERVAL '15 minutes'"));
+  assert.ok(server.includes("app.post('/api/telegram/link',requireSession"));
+  assert.ok(server.includes("app.get('/api/telegram/links',requireSuper,requireWhatsAppAdministrator"));
+  assert.ok(server.includes("CREATE TABLE IF NOT EXISTS telegram_user_links"));
+});
+
+test("Personal Telegram copies follow WhatsApp recipients and hierarchy reports", () => {
+  assert.ok(server.includes("mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText"));
+  assert.ok(server.includes("mirrorToTelegramUsers({logins:[login],message:delivery.message,purpose:'consolidatedRequestReport'"));
+  assert.ok(server.includes("Number(error.status)===403)await pool.query('DELETE FROM telegram_user_links"));
+});
+
+test("Every user can connect Telegram from the profile panel", () => {
+  const profile = readFileSync(new URL("../src/user-profile.jsx", import.meta.url), "utf8");
+  assert.ok(profile.includes("<TelegramConnect token={apiToken} />"));
+  assert.equal((source.match(/apiToken={authToken}/g) || []).length, 2);
+  assert.ok(profile.includes("fetch(\"/api/telegram/link\", { method: \"POST\", headers })"));
+  assert.match(profile, /Connect Telegram/);
+  assert.match(source, /Users connected to Telegram/);
 });

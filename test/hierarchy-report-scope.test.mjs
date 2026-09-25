@@ -145,7 +145,7 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
       published.push({args,data:filtered,message,reportContext});return {message,reportContext};
     },
     publicBaseUrl:()=> 'https://example.invalid',metaWhatsAppRuntimeEnv:async()=>({}),
-    sendMetaWhatsAppTemplate:async args=>sent.push(args),
+    sendMetaWhatsAppTemplate:async args=>sent.push(args),mirrorToTelegramUsers:()=>{},
     console:{error:(...args)=>errors.push(args)},
   };
   const run=new Function(...Object.keys(dependencies),`${schedulerSnippet};return sendScheduledHierarchyReportBundles;`)(...Object.values(dependencies));

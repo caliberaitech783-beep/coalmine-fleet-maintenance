@@ -1,3 +1,4 @@
+import {createHash,randomBytes} from 'node:crypto';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled} from './whatsapp-report-settings.mjs';
 
 const clean=(value)=>String(value??'').trim();
@@ -73,6 +74,49 @@ export async function sendTelegramDocument({buffer,filename='nerve-center-report
   form.append('document',new Blob([documentBuffer],{type:'application/pdf'}),safeFilename);
   const result=await telegramRequest('sendDocument',{env,fetchImpl,form});
   return {sent:true,chatId:target,messageId:result?.message_id};
+}
+
+// Telegram echoes this secret in every webhook call. It is derived from the bot
+// token, so no extra setting is needed and a new token rotates it.
+export function telegramWebhookSecret(env=process.env){
+  const token=clean(env.TELEGRAM_BOT_TOKEN);
+  return token?createHash('sha256').update(`nerve-center-webhook:${token}`).digest('hex').slice(0,48):'';
+}
+
+export function newTelegramLinkToken(){
+  return randomBytes(18).toString('base64url');
+}
+
+// Reads the parts of a webhook update the account-link flow needs: a private
+// "/start <token>" or "/stop", or the user blocking the bot.
+export function parseTelegramUpdate(update){
+  const message=update?.message;
+  if(message?.chat?.type==='private'&&typeof message.text==='string'){
+    const [command,argument='']=message.text.trim().split(/\s+/,2);
+    const name=clean(command).toLowerCase().replace(/@.*$/,'');
+    return {kind:name==='/start'?'start':name==='/stop'?'stop':'text',chatId:String(message.chat.id),
+      token:name==='/start'&&/^[A-Za-z0-9_-]{16,64}$/.test(argument)?argument:'',
+      username:clean(message.from?.username)};
+  }
+  const member=update?.my_chat_member;
+  if(member?.chat?.type==='private'&&['kicked','left'].includes(member.new_chat_member?.status))
+    return {kind:'blocked',chatId:String(member.chat.id)};
+  return {kind:'ignored'};
+}
+
+let cachedBotUsername='';
+export async function telegramBotUsername({env=process.env,fetchImpl=fetch}={}){
+  if(!cachedBotUsername)cachedBotUsername=clean((await telegramRequest('getMe',{env,fetchImpl,json:{}}))?.username);
+  return cachedBotUsername;
+}
+
+export async function ensureTelegramWebhook(baseUrl,{env=process.env,fetchImpl=fetch}={}){
+  const config=telegramConfiguration(env);
+  const url=`${clean(baseUrl).replace(/\/+$/,'')}/api/telegram/webhook`;
+  if(!config.botToken||!url.startsWith('https://'))return {registered:false};
+  const info=await telegramRequest('getWebhookInfo',{env,fetchImpl,json:{}});
+  if(info?.url!==url)await telegramRequest('setWebhook',{env,fetchImpl,json:{url,secret_token:telegramWebhookSecret(env),allowed_updates:['message','my_chat_member']}});
+  return {registered:true,url,pendingUpdates:info?.pending_update_count||0,lastError:clean(info?.last_error_message)};
 }
 
 export async function telegramStatus({env=process.env,fetchImpl=fetch}={}){

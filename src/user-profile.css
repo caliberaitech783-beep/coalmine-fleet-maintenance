@@ -20,3 +20,13 @@
 @media (prefers-reduced-motion: reduce) {
   .header-login-icon, .header-login-icon::before, .header-login-icon::after { animation: none !important; transition: none !important; }
 }
+
+/* Telegram connection inside the profile panel. */
+.user-profile-telegram { margin: 0 0 14px; padding-top: 12px; border-top: 1px solid #e3e9f2; }
+.user-profile-telegram .telegram-label { display: block; font-size: 12px; color: #52647b; }
+.user-profile-telegram .telegram-state { display: block; margin: 3px 0 8px; font-size: 14px; font-weight: 400; }
+.user-profile-telegram button { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 700; }
+.user-profile-telegram button svg { width: 14px; height: 14px; }
+.user-profile-telegram .telegram-connect { color: #fff; background: #229ed9; border: 1px solid #1b8cc2; }
+.user-profile-telegram .telegram-disconnect { color: #9d3932; background: #fff4f3; border: 1px solid #f0c9c5; }
+.user-profile-telegram small { display: block; margin-top: 8px; color: #52647b; font-size: 12px; }

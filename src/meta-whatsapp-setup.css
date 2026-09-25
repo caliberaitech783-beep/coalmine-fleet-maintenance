@@ -214,6 +214,35 @@
   margin-top: 14px;
 }
 
+.telegram-links {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.telegram-links h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--navy);
+  font: 850 13px Manrope;
+}
+
+.telegram-links h3 span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e6f4fb;
+  color: #1b7fb0;
+  font-size: 11px;
+}
+
+.telegram-links p {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 :root[data-theme="dark"] .meta-whatsapp-overview,
 :root[data-theme="dark"] .meta-whatsapp-fields input,
 :root[data-theme="dark"] .meta-whatsapp-fields select {
