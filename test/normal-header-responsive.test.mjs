@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+test("operational header popovers stay above the dashboard toolbar and below modals at desktop widths", () => {
+  const styles = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../src/dashboard-filter-bar.css", import.meta.url), "utf8");
+  const base = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+  const header = styles.match(/\.normal > header \{([^}]+)\}/)[1];
+  const toolbar = dashboard.match(/\.mine-dashboard > \.dashboard-filter-bar \{([^}]+)\}/)[1];
+  const overlay = base.match(/\.overlay\{([^}]+)\}/)[1];
+  const layer = rule => Number(rule.match(/z-index:\s*(\d+)/)[1]);
+
+  assert.match(header, /position: sticky/);
+  assert.ok(layer(header) > layer(toolbar), "The header stacking context must clear the dashboard toolbar");
+  assert.ok(layer(header) < layer(overlay), "Modal overlays must remain above the header");
+});
+
 test("operational profile headers use left-led responsive navigation", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");

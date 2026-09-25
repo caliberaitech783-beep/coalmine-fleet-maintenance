@@ -292,7 +292,8 @@
 .normal > header {
   position: sticky;
   top: 0;
-  z-index: 12;
+  /* Keep profile and notification popovers above the sticky dashboard toolbar (30). */
+  z-index: 40;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr) clamp(205px, 16vw, 250px) max-content;
   justify-content: start;
