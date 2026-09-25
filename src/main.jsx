@@ -8117,6 +8117,9 @@ function MetaWhatsAppSetup() {
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [telegram, setTelegram] = useState(null);
+  const [telegramWorking, setTelegramWorking] = useState(false);
+  const [telegramNotice, setTelegramNotice] = useState("");
   const loadMetaSettings = async () => {
     const settingsResponse = await fetch("/api/whatsapp/settings", {headers:{Authorization:`Bearer ${authToken}`}});
     const saved = await settingsResponse.json().catch(() => ({}));
@@ -8127,9 +8130,29 @@ function MetaWhatsAppSetup() {
     const status = await statusResponse.json().catch(() => ({}));
     setConnection(statusResponse.ok ? status : {connected:false,error:status.error || "Meta connection is not ready."});
   };
+  const loadTelegramStatus = async () => {
+    const telegramResponse = await fetch("/api/telegram/status", {headers:{Authorization:`Bearer ${authToken}`}}).catch(() => null);
+    const telegramState = await telegramResponse?.json().catch(() => ({}));
+    setTelegram(telegramResponse?.ok ? telegramState : {connected:false,error:telegramState?.error || "Telegram connection is not ready."});
+  };
+  const sendTelegramTest = async () => {
+    setTelegramWorking(true);
+    setTelegramNotice("");
+    try {
+      const response = await fetch("/api/telegram/test", {method:"POST",headers:{Authorization:`Bearer ${authToken}`}});
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Telegram test message failed.");
+      setTelegramNotice({ok:true,text:"Test message sent. Check the Telegram group."});
+    } catch (testError) {
+      setTelegramNotice({ok:false,text:testError.message || "Telegram test message failed."});
+    } finally {
+      setTelegramWorking(false);
+    }
+  };
   useEffect(() => {
     let active = true;
     loadMetaSettings().catch((loadError) => active && setError(loadError.message));
+    loadTelegramStatus();
     return () => { active = false; };
   }, []);
   const phoneDigits = (employee) => String(employee.phone || employee.phoneNo || employee.phoneNumber || "").replace(/\D/g, "");
@@ -8194,6 +8217,15 @@ function MetaWhatsAppSetup() {
       {(notice || error || connection?.error) && <div className={`meta-whatsapp-feedback ${error || connection?.error ? "error" : "success"}`} role={error || connection?.error ? "alert" : "status"}>{error || notice || connection.error}</div>}
       <footer><button type="submit" className="primary" disabled={working || !form.phoneNumberId.trim() || (form.provider === "fast2sms" ? (!settings?.providerApiKeyConfigured && !form.providerApiKey.trim()) : (!settings?.accessTokenConfigured && !form.accessToken.trim()))}>{working ? <RefreshCw className="spin" /> : <Save />}{working ? "Connecting..." : "Save, verify and sync templates"}</button></footer>
     </form>
+    <div className="meta-whatsapp-form telegram-setup">
+      <div className="meta-whatsapp-form-heading"><div><h2>Telegram group alerts</h2><p>{telegram?.connected ? `@${telegram.botUsername} posts to ${telegram.chatTitle || "the group"}${telegram.paused ? " (paused)" : ""}` : "Set TELEGRAM_BOT_TOKEN and TELEGRAM_DEFAULT_CHAT_ID in Azure app settings."}</p></div><MessageCircle /></div>
+      <span className={`meta-connection-state ${telegram?.connected ? "connected" : "disconnected"}`}>
+        {telegram?.connected ? <CheckCircle2 /> : <AlertTriangle />}
+        {telegram?.connected ? "Connected" : telegram?.configured === false ? "Not configured" : "Not connected"}
+      </span>
+      {(telegramNotice || telegram?.error) && <div className={`meta-whatsapp-feedback ${telegramNotice?.ok ? "success" : "error"}`} role={telegramNotice?.ok ? "status" : "alert"}>{telegramNotice?.text || telegram.error}</div>}
+      <footer><button type="button" className="primary" onClick={sendTelegramTest} disabled={telegramWorking || !telegram?.connected}>{telegramWorking ? <RefreshCw className="spin" /> : <Send />}{telegramWorking ? "Sending..." : "Send Telegram test"}</button></footer>
+    </div>
   </section>;
 }
 

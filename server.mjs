@@ -49,6 +49,7 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
+import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument} from './telegram.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3231,6 +3232,20 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   }
 });
 
+app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator,async(_req,res)=>{
+  try{res.json(await telegramStatus())}
+  catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Telegram connection failed.'})}
+});
+
+app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator,async(req,res)=>{
+  req.audit={eventType:'Integration',module:'WhatsApp Integration',action:'Send Telegram test message',targetType:'Telegram group',changedFields:[]};
+  if(!telegramConfiguration().configured)return res.status(400).json({error:'Telegram is not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_DEFAULT_CHAT_ID in Azure.'});
+  try{
+    const result=await sendTelegramText({message:`Nerve Center test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
+    res.status(201).json(result);
+  }catch(error){res.status(502).json({error:error instanceof Error?error.message:'Telegram delivery failed.'})}
+});
+
 app.get('/api/oracle/health',requireSuper,async(_req,res)=>{
   if(!oracleConfigured)return res.status(503).json({configured:false,connected:false,error:'Oracle database settings are not configured.'});
   try{
@@ -3459,11 +3474,39 @@ async function ticketVisibleToSession(ticket,session){
   return creatorRoles.includes(ticket?.creatorRole)&&userManagesSite(manager,ticket?.site);
 }
 
-async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose=''}={}){
+// One copy of each alert goes to the Telegram group, separate from the
+// per-recipient WhatsApp fan-out, so it never delays or fails WhatsApp delivery.
+const TELEGRAM_GROUP_LOGIN='telegram:group';
+async function deliverToTelegramGroup({reportType,target,level='',message,purpose,reportSettings,document=null}){
+  const config=telegramConfiguration();
+  if(!config.configured)return 'Skipped - not configured';
+  let status='Sent';
+  try{
+    if(document)await sendTelegramDocument({...document,caption:message,purpose,settings:reportSettings});
+    else await sendTelegramText({message,purpose,settings:reportSettings});
+  }catch(error){
+    if(error.code==='TELEGRAM_POLICY_PAUSED')return 'Skipped - paused';
+    status=`Failed - ${String(error?.message||'Telegram delivery error').slice(0,160)}`;
+    console.error(`Telegram delivery failed for ${target}:`,error.message);
+  }
+  try{await pool.query(`INSERT INTO whatsapp_alert_history
+    (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [reportType,String(target||''),level,'Telegram group',config.chatId,status])}
+  catch(historyError){console.error('Could not record Telegram delivery.',historyError.message)}
+  return status;
+}
+
+function mirrorToTelegramGroup(options){
+  setImmediate(()=>{deliverToTelegramGroup(options).catch((error)=>console.error('Telegram follow-up failed.',error?.message||error))});
+}
+
+async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose='',telegram=true}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
-  if(!logins.length)return [];
   const reportSettings=await storedWhatsAppReportSettings();
   const messagePurpose=purpose||workflowTemplate?.templateKey||'';
+  if(telegram)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,
+    message:`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nNerve Center notification\n${message}`});
+  if(!logins.length)return [];
   if(!whatsappPurposeEnabled(reportSettings,messagePurpose))return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
@@ -4745,6 +4788,16 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       if(!slotKey)continue;
       const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
+      if(telegramConfiguration().configured){
+        // The group gets one reminder per request and slot, not one per recipient.
+        const telegramClaim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
+          VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,TELEGRAM_GROUP_LOGIN,slotKey]);
+        if(telegramClaim.rows.length){
+          const status=await deliverToTelegramGroup({reportType:'System notification',target:request.ref,purpose,reportSettings,
+            message:`SITE: ${request.site||'Not recorded'}\n${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}\n${equipmentDetails}\n${idle?`Idle since ${requestNotificationTime(eventTime)}. Reason: ${request.idleReason||'Not recorded'}`:`Off Road since ${requestNotificationTime(eventTime)}`}\n${workflowRequestLink(request.ref,publicBaseUrl())}`});
+          await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,telegramClaim.rows[0].id]);
+        }
+      }
       const workflowTemplate=idle
         ? {templateKey:'requestIdle',parameters:[equipmentDetails,request.site,requestNotificationTime(eventTime),request.idleReason||'Not recorded',request.ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}}
         : {templateKey:'requestOpened',parameters:[request.ref,request.site,request.equipmentGroup||request.equipment||'Not available',request.door||'Not available',request.category||'Breakdown',request.owner||'Production User',requestNotificationTime(eventTime),request.expectedCompletionAtRaw?requestNotificationTime(request.expectedCompletionAtRaw):'Not set',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}};
@@ -4752,7 +4805,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         const claim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
           VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,login,slotKey]);
         if(!claim.rows.length){skipped+=1;continue}
-        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site,purpose});
+        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site,purpose,telegram:false});
         const status=results[0]?.status||'Skipped';
         if(status==='Sent')sent+=1;else failed+=1;
         await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]);

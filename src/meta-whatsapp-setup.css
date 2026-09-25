@@ -206,6 +206,14 @@
   height: 15px;
 }
 
+.telegram-setup {
+  border-top: 1px solid var(--line);
+}
+
+.telegram-setup > .meta-connection-state {
+  margin-top: 14px;
+}
+
 :root[data-theme="dark"] .meta-whatsapp-overview,
 :root[data-theme="dark"] .meta-whatsapp-fields input,
 :root[data-theme="dark"] .meta-whatsapp-fields select {

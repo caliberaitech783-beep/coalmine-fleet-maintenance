@@ -46,7 +46,7 @@ function sourceBetween(startMarker,endMarker,from=0){
 }
 
 function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),now=new Date('2026-09-15T09:15:00+05:30'),templateError=null,templateGate=null,beforeRecipientLookup}={}){
-  const templates=[],texts=[],templateAttempts=[],history=[],inApp=[],queries=[],errors=[];
+  const templates=[],texts=[],templateAttempts=[],history=[],inApp=[],queries=[],errors=[],telegram=[];
   const client={query:async(sql,args=[])=>{
     queries.push({sql,args:structuredClone(args)});
     if(sql.includes("master_name='Users & employees'")){
@@ -66,6 +66,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
     metaWhatsAppRuntimeEnv:async()=>({WHATSAPP_REPORT_SETTINGS:settings}),
     sendMetaWhatsAppTemplate:async(args)=>{templateAttempts.push(args);if(templateGate)await templateGate;if(templateError)throw templateError;templates.push(args);},
     sendMetaWhatsAppText:async(args)=>{texts.push(args);},console:{error:(...args)=>errors.push(args)},
+    mirrorToTelegramGroup:(options)=>telegram.push(options),
   };
   // Execute the real server selection, delivery and best-effort functions
   // together; only I/O and the clock are replaced.
@@ -75,7 +76,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
   // Meta; tests that assert on delivery settle it first.
   api.settleWhatsApp=async()=>{while(api.whatsappDeliveries.size)await Promise.all([...api.whatsappDeliveries]);};
   const sentLogins=()=>templates.concat(texts).map(({to})=>normalizeLogin(users.find(user=>String(user.phone||user.phoneNo||user.phoneNumber)===to)?.login));
-  return {...api,client,users,settings,templates,texts,templateAttempts,history,inApp,queries,errors,sentLogins};
+  return {...api,client,users,settings,templates,texts,templateAttempts,history,inApp,queries,errors,telegram,sentLogins};
 }
 
 // Run the actual call in each ticket route, including its independently chosen
@@ -123,6 +124,8 @@ for(const purpose of ['ticketCreated','ticketResolved']){
     assert.ok(api.inApp.every(args=>args[1]==='TIC/1'));
     assert.ok(api.templates.every(message=>message.templateKey===purpose&&message.purpose===purpose&&message.parameters[0]==='TIC/1'));
     assert.equal(api.history.length,1);
+    assert.equal(api.telegram.length,1,"the Telegram group gets one copy per event");
+    assert.equal(api.telegram[0].purpose,purpose);
     assert.ok(api.history.every(args=>args[1]==='TIC/1'&&args[5]==='Sent'));
     assert.deepEqual(route.timeline,[...api.inApp.map(()=> 'in-app'),'commit','response','whatsapp']);
     assert.equal(route.responses.length,1);
