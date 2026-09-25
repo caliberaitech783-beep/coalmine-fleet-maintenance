@@ -3914,22 +3914,36 @@ function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   </>;
 }
 
+function AccessSelectAll({label,options=[],selected=[],onChange}){
+  const control=useRef(null);
+  const selectedCount=options.filter((option)=>selected.includes(option)).length;
+  const allSelected=options.length>0&&selectedCount===options.length;
+  useEffect(()=>{if(control.current)control.current.indeterminate=selectedCount>0&&!allSelected},[selectedCount,allSelected]);
+  return <label className="access-select-all"><input ref={control} type="checkbox" checked={allSelected} onChange={(event)=>onChange(event.target.checked?[...options]:[])} /><span>{label}</span></label>;
+}
+
 function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false}){
   const prefix=view==="mobile"?"mobile":"";
   const keyFor=(field)=>prefix?mobileAccessKey(field):field;
   const requiredTabs=isManager?["Dashboard","Tickets"]:[];
   const shownTabs=[...new Set([...visibleTabs,...requiredTabs])];
+  const [submenuSelections,setSubmenuSelections]=useState(()=>Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field,options})=>{
+    const saved=selectedAccessValues(record,keyFor(field),prefix?field:"").filter((option)=>options.includes(option));
+    return [field,saved];
+  })));
   const toggleTab=(tab,checked)=>setVisibleTabs((current)=>checked?[...new Set([...current,tab])]:current.filter((item)=>item!==tab));
+  const setSubmenu=(field,selection)=>setSubmenuSelections((current)=>({...current,[field]:selection}));
+  const toggleSubmenu=(field,option,checked)=>setSubmenuSelections((current)=>({...current,[field]:checked?[...new Set([...(current[field]||[]),option])]:(current[field]||[]).filter((item)=>item!==option)}));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{shownTabs.length} selected</span></header>
     <fieldset className="user-access-field access-section-card">
       <legend>Selected menus</legend>
       {requiredTabs.map((tab)=><input key={tab} type="hidden" name={keyFor("tabAccess")} value={tab} />)}
-      <div>{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div>
+      <div><AccessSelectAll label="Select all menus" options={ADMIN_TAB_OPTIONS} selected={shownTabs} onChange={setVisibleTabs} />{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div>
     </fieldset>
-    {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field);return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
+    {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field),selected=submenuSelections[submenu.field]||[];return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
       <legend>{tab} · Submenus</legend>
-      <div>{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} defaultChecked={selectedAccessValues(record,field,prefix?submenu.field:"").includes(option)} /><span>{navigationLabel(option)}</span></label>)}</div>
+      <div><AccessSelectAll label="Select all submenus" options={submenu.options} selected={selected} onChange={(selection)=>setSubmenu(submenu.field,selection)} />{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} checked={selected.includes(option)} onChange={(event)=>toggleSubmenu(submenu.field,option,event.target.checked)} /><span>{navigationLabel(option)}</span></label>)}</div>
     </fieldset>})}
   </section>;
 }
@@ -3942,11 +3956,12 @@ function OperationalViewMenuFields({record={},view="desktop",role=""}){
   const menuOptions = isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
   const [menus,setMenus]=useState(() => isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions);
   const requestOptions=operationalRequestOptions[role]||[];
-  const selectedRequests=selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option));
+  const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
+  const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
-    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div>{menuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}</span></label>)}</div></fieldset>
-    {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div>{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} defaultChecked={selectedRequests.includes(option)}/><span>{option}</span></label>)}</div></fieldset>}
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={setMenus} />{menuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}</span></label>)}</div></fieldset>
+    {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div><AccessSelectAll label="Select all submenus" options={requestOptions} selected={selectedRequests} onChange={setSelectedRequests} />{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} checked={selectedRequests.includes(option)} onChange={(event)=>toggleRequest(option,event.target.checked)}/><span>{option}</span></label>)}</div></fieldset>}
   </section>;
 }
 
