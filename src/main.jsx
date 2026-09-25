@@ -218,6 +218,7 @@ import {
   HardDrive,
   Volume2,
   LifeBuoy,
+  ImagePlus,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -6397,10 +6398,60 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
   </Modal>;
 }
 
+// Pasted screenshots and photos are scaled to at most 1600 px and re-encoded as
+// JPEG on a white background, so an announcement image stays a few hundred KB.
+const ANNOUNCEMENT_IMAGE_MAX_SIDE=1600;
+function shrinkAnnouncementImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file||!/^image\/(png|jpeg|webp|gif)$/.test(file.type))return reject(new Error('Paste or choose a PNG, JPEG, WebP or GIF image.'));
+    const url=URL.createObjectURL(file),image=new Image();
+    image.onload=()=>{
+      const scale=Math.min(1,ANNOUNCEMENT_IMAGE_MAX_SIDE/Math.max(image.naturalWidth,image.naturalHeight));
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+      const context=canvas.getContext('2d');
+      context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+      context.drawImage(image,0,0,canvas.width,canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg',0.85));
+    };
+    image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('This image could not be read.'));};
+    image.src=url;
+  });
+}
+
+// Loads an announcement image with the signed-in token (an <img src> cannot send it).
+function AnnouncementImage({id,token,className="announcement-image"}) {
+  const [src,setSrc]=useState("");
+  useEffect(()=>{
+    let objectUrl="",active=true;
+    fetch(`/api/announcements/${encodeURIComponent(id)}/image`,{headers:{Authorization:`Bearer ${token}`}})
+      .then((response)=>response.ok?response.blob():null)
+      .then((blob)=>{if(blob&&active){objectUrl=URL.createObjectURL(blob);setSrc(objectUrl);}})
+      .catch(()=>{});
+    return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+  },[id,token]);
+  if(!src)return <span className={`${className} loading`}>Loading image...</span>;
+  return <a className={className} href={src} target="_blank" rel="noreferrer" title="Open the full image"><img src={src} alt="Announcement attachment" /></a>;
+}
+
 function AnnouncementComposer({session,onClose,onSent}) {
   const [message,setMessage]=useState("");
+  const [image,setImage]=useState("");
   const [sending,setSending]=useState(false);
   const [error,setError]=useState("");
+  const imageInput=useRef(null);
+  const attachImage=async(file)=>{
+    setError("");
+    try{setImage(await shrinkAnnouncementImage(file));}
+    catch(imageError){setError(imageError.message);}
+  };
+  const pasteImage=(event)=>{
+    const item=[...(event.clipboardData?.items||[])].find((entry)=>entry.kind==='file'&&entry.type.startsWith('image/'));
+    if(!item)return;
+    event.preventDefault();
+    void attachImage(item.getAsFile());
+  };
   const [history,setHistory]=useState([]);
   const [withdrawingId,setWithdrawingId]=useState("");
   const token=session?.token||authToken;
@@ -6415,10 +6466,10 @@ function AnnouncementComposer({session,onClose,onSent}) {
   const send=async(event)=>{
     event.preventDefault();
     const text=message.trim();
-    if(!text){setError('Write the announcement before sending.');return;}
+    if(!text&&!image){setError('Write the announcement or add an image before sending.');return;}
     setSending(true);setError("");
     try{
-      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text})});
+      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text,image})});
       const responseText=await response.text();
       let result={};
       try{result=responseText?JSON.parse(responseText):{};}catch{}
@@ -6440,11 +6491,17 @@ function AnnouncementComposer({session,onClose,onSent}) {
   return <Modal title="Announce to all users" close={onClose}>
     <form className="form announcement-compose" onSubmit={send}>
       <div className="session-message-recipient"><span><Users /></span><div><small>Send to</small><b>All users</b><p>Every signed-in user sees this as a popup until they close it. Users who sign in later also see it, for 30 days.</p></div></div>
-      <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="2000" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone..." /></label>
-      <div className="session-message-compose-meta"><span>{message.length} / 2,000 characters</span>{error&&<b role="alert">{error}</b>}</div>
-      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||!message.trim()}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
+      <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="2000" value={message} onPaste={pasteImage} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone... You can also paste an image here (Ctrl + V)." /></label>
+      <div className="announcement-image-picker">
+        <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(event)=>{void attachImage(event.target.files?.[0]);event.target.value="";}} />
+        {image
+          ?<figure><img src={image} alt="Image to send with the announcement" /><button type="button" onClick={()=>setImage("")} disabled={sending}><X />Remove image</button></figure>
+          :<button type="button" onClick={()=>imageInput.current?.click()} disabled={sending}><ImagePlus />Add image</button>}
+      </div>
+      <div className="session-message-compose-meta"><span>{message.length} / 2,000 characters{image?' · 1 image':''}</span>{error&&<b role="alert">{error}</b>}</div>
+      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||(!message.trim()&&!image)}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
     </form>
-    {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}><p>{row.message}</p><small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
+    {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}>{row.message&&<p>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} className="announcement-image thumbnail" />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
   </Modal>;
 }
 
@@ -6494,7 +6551,7 @@ function SessionMessageInbox({session}) {
   return createPortal(<div className="session-message-inbox-overlay">
     <section className={`session-message-inbox${isAnnouncement?' announcement':''}`} role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
       <header><span><MessageCircle /></span><div><small>{isAnnouncement?'Announcement to all users':'Direct message'}</small><h2 id="session-message-title">{isAnnouncement?'Announcement':'Message'} from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
-      <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
+      <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{isAnnouncement&&current.hasImage&&<AnnouncementImage id={current.id} token={session.token} />}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
       {error&&<div className="session-message-inbox-error" role="alert"><AlertTriangle />{error}</div>}
       <footer><span>This message will remain open until you close it.</span><button type="button" onClick={dismiss} disabled={closingId===String(current.id)}><X />{closingId===String(current.id)?'Closing...':'Close message'}</button></footer>
     </section>

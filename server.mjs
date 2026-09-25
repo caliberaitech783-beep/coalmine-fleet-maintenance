@@ -36,7 +36,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
-import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
+import {ANNOUNCEMENT_ACTIVE_DAYS,announcementImageBinary,announcementImageError,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
@@ -743,6 +743,7 @@ async function migrate(){
       withdrawn_by TEXT NOT NULL DEFAULT ''
     );
     ALTER TABLE announcements ALTER COLUMN message TYPE TEXT;
+    ALTER TABLE announcements ADD COLUMN IF NOT EXISTS image_data TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS announcement_acknowledgements (
       announcement_id BIGINT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
       reader_key TEXT NOT NULL,
@@ -2295,7 +2296,9 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
 // per user (login), so it does not come back on another device.
 app.get('/api/announcements/pending',requireSession,async(req,res,next)=>{
   try{
-    const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt"
+    // The image itself is fetched once from /image; this list is polled every few seconds.
+    const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt",
+      (a.image_data<>'') AS "hasImage"
       FROM announcements a
       WHERE a.withdrawn_at IS NULL AND a.created_at>NOW()-make_interval(days => $2::int)
         AND NOT EXISTS (SELECT 1 FROM announcement_acknowledgements k WHERE k.announcement_id=a.id AND k.reader_key=ANY($1::text[]))
@@ -2303,6 +2306,20 @@ app.get('/api/announcements/pending',requireSession,async(req,res,next)=>{
     req.audit=false;
     res.set('Cache-Control','no-store');
     res.json({announcements:rows});
+  }catch(error){next(error)}
+});
+
+app.get('/api/announcements/:announcementId/image',requireSession,async(req,res,next)=>{
+  try{
+    req.audit=false;
+    const announcementId=Number(req.params.announcementId);
+    if(!Number.isSafeInteger(announcementId)||announcementId<1)return res.status(400).json({error:'Invalid announcement.'});
+    const {rows}=await pool.query('SELECT image_data FROM announcements WHERE id=$1',[announcementId]);
+    const image=announcementImageBinary(rows[0]?.image_data);
+    if(!image)return res.status(404).json({error:'This announcement has no image.'});
+    // An announcement's image never changes, so each browser downloads it once.
+    res.set('Cache-Control','private, max-age=2592000, immutable');
+    res.type(image.contentType).send(image.bytes);
   }catch(error){next(error)}
 });
 
@@ -2322,7 +2339,7 @@ app.patch('/api/announcements/:announcementId/acknowledge',requireSession,async(
 app.get('/api/announcements',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt",
-      a.withdrawn_at AS "withdrawnAt",a.withdrawn_by AS "withdrawnBy",
+      a.withdrawn_at AS "withdrawnAt",a.withdrawn_by AS "withdrawnBy",(a.image_data<>'') AS "hasImage",
       (SELECT COUNT(*)::int FROM announcement_acknowledgements k WHERE k.announcement_id=a.id) AS "acknowledgedCount"
       FROM announcements a ORDER BY a.created_at DESC,a.id DESC LIMIT 20`);
     req.audit=false;
@@ -2334,10 +2351,11 @@ app.get('/api/announcements',requireSuper,requireAdministrator,async(req,res,nex
 app.post('/api/announcements',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const message=normalizeAnnouncement(req.body?.message);
-    const validationError=announcementValidationError(message);
+    const image=typeof req.body?.image==='string'?req.body.image.trim():'';
+    const validationError=announcementImageError(image)||announcementValidationError(message,{hasImage:Boolean(image)});
     if(validationError)return res.status(400).json({error:validationError});
-    const {rows}=await pool.query(`INSERT INTO announcements (message,sender_login,sender_name) VALUES ($1,$2,$3)
-      RETURNING id,created_at AS "createdAt"`,[message,String(req.session.login||''),String(req.session.name||'')]);
+    const {rows}=await pool.query(`INSERT INTO announcements (message,sender_login,sender_name,image_data) VALUES ($1,$2,$3,$4)
+      RETURNING id,created_at AS "createdAt"`,[message,String(req.session.login||''),String(req.session.name||''),image]);
     req.audit={eventType:'Security',module:'Announcements',action:'Send announcement',targetType:'Announcement',targetReference:String(rows[0].id),reason:`Announcement to all users (${message.length} characters)`,changedFields:[]};
     res.status(201).json({id:rows[0].id,createdAt:rows[0].createdAt});
   }catch(error){next(error)}

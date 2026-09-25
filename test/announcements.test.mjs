@@ -19,7 +19,7 @@ const routeOf = (start) => server.slice(server.indexOf(start), server.indexOf('\
 
 test('announcement text is trimmed, required and capped at 2,000 characters', () => {
   assert.equal(normalizeAnnouncement('  Site closed tomorrow.\r\nReport at 8 AM.  '), 'Site closed tomorrow.\nReport at 8 AM.');
-  assert.equal(announcementValidationError('   '), 'Write the announcement before sending.');
+  assert.equal(announcementValidationError('   '), 'Write the announcement or add an image before sending.');
   assert.equal(announcementValidationError('x'.repeat(ANNOUNCEMENT_MAX_LENGTH + 1)), 'Keep the announcement within 2000 characters.');
   assert.equal(announcementValidationError('Safety briefing at 9 AM in the workshop.'), '');
   assert.equal(announcementValidationError('प्रोडक्शन यूज़र के लिए पहली ट्रिप का वेरिफिकेशन जरूरी है।'.repeat(20)), '');
@@ -48,7 +48,8 @@ test('only Admin and Super Admin can send, list or withdraw announcements; every
   assert.match(server, /app\.get\('\/api\/announcements\/pending',requireSession,/);
   assert.match(server, /app\.patch\('\/api\/announcements\/:announcementId\/acknowledge',requireSession,/);
   const send = routeOf("app.post('/api/announcements',");
-  assert.match(send, /announcementValidationError\(message\)/);
+  assert.ok(send.includes('announcementValidationError(message,{hasImage:Boolean(image)})'));
+  assert.ok(send.includes('announcementImageError(image)'));
   assert.match(send, /action:'Send announcement'/, 'publishing is audited');
   const withdraw = routeOf("app.patch('/api/announcements/:announcementId/withdraw',");
   assert.match(withdraw, /WHERE id=\$1 AND withdrawn_at IS NULL RETURNING id/);
@@ -97,4 +98,27 @@ test('administrators compose announcements from the User Sessions page and can r
   assert.match(page, /Announcement sent to all users\. Each user will see it until they close it\./);
   assert.match(styles, /\.session-message-inbox\.announcement header\{/);
   assert.match(styles, /\.announcement-history li button\{/);
+});
+
+test('announcements may carry one validated image served separately from the poll', async () => {
+  const { announcementImageError, announcementImageBinary, announcementValidationError: validate } = await import('../announcement.mjs');
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  assert.equal(announcementImageError(''), '');
+  assert.equal(announcementImageError(png), '');
+  assert.match(announcementImageError('data:text/html;base64,PGI+'), /PNG, JPEG, WebP or GIF/);
+  assert.match(announcementImageError('javascript:alert(1)'), /PNG, JPEG, WebP or GIF/);
+  assert.match(announcementImageError(`data:image/jpeg;base64,${'A'.repeat(3 * 1024 * 1024)}`), /too large/);
+  assert.equal(validate('', { hasImage: true }), '');
+  const binary = announcementImageBinary(png);
+  assert.equal(binary.contentType, 'image/png');
+  assert.deepEqual([...binary.bytes.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+  const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
+  assert.match(server, /ADD COLUMN IF NOT EXISTS image_data TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /app\.get\('\/api\/announcements\/:announcementId\/image',requireSession/);
+  assert.match(server, /\(a\.image_data<>''\) AS "hasImage"/);
+  assert.doesNotMatch(server.slice(server.indexOf("app.get('/api/announcements/pending'"), server.indexOf("app.get('/api/announcements/:announcementId/image'")), /a\.image_data AS/);
+  const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  assert.match(source, /onPaste=\{pasteImage\}/);
+  assert.match(source, /JSON\.stringify\(\{message:text,image\}\)/);
+  assert.match(source, /current\.hasImage&&<AnnouncementImage/);
 });

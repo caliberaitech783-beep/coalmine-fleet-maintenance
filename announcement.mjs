@@ -5,14 +5,31 @@
  */
 export const ANNOUNCEMENT_MAX_LENGTH = 2000;
 export const ANNOUNCEMENT_ACTIVE_DAYS = 30;
+// The browser shrinks pasted images first; this is the server-side ceiling.
+export const ANNOUNCEMENT_IMAGE_MAX_CHARS = 3 * 1024 * 1024;
+const ANNOUNCEMENT_IMAGE_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export function normalizeAnnouncement(value = "") {
   return String(value ?? "").replace(/\r\n?/g, "\n").trim();
 }
 
-export function announcementValidationError(value = "") {
+export function announcementImageError(image = "") {
+  if (!image) return "";
+  if (typeof image !== "string" || !ANNOUNCEMENT_IMAGE_PATTERN.test(image)) return "Attach a PNG, JPEG, WebP or GIF image.";
+  if (image.length > ANNOUNCEMENT_IMAGE_MAX_CHARS) return "The image is too large. Use a smaller image.";
+  return "";
+}
+
+/** Splits a validated data URL into its content type and bytes for serving. */
+export function announcementImageBinary(image = "") {
+  const match = String(image).match(ANNOUNCEMENT_IMAGE_PATTERN);
+  if (!match) return null;
+  return { contentType: `image/${match[1]}`, bytes: Buffer.from(image.slice(image.indexOf(",") + 1), "base64") };
+}
+
+export function announcementValidationError(value = "", { hasImage = false } = {}) {
   const message = normalizeAnnouncement(value);
-  if (!message) return "Write the announcement before sending.";
+  if (!message && !hasImage) return "Write the announcement or add an image before sending.";
   if (message.length > ANNOUNCEMENT_MAX_LENGTH) return `Keep the announcement within ${ANNOUNCEMENT_MAX_LENGTH} characters.`;
   return "";
 }
