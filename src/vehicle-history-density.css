@@ -5,14 +5,18 @@
 }
 
 .vehicle-history-header {
+  align-items: stretch;
   gap: 16px;
-  padding: 14px 18px;
+  padding: 10px 16px;
 }
 
 .vehicle-history-heading {
+  align-content: center;
+  flex: 1 1 40%;
   grid-template-columns: 48px minmax(0, 1fr);
   column-gap: 12px;
   row-gap: 6px;
+  min-width: 0;
 }
 
 .vehicle-history-heading > .vehicle-history-back {
@@ -51,6 +55,14 @@
   margin-top: 3px;
   font-size: 14px;
   line-height: 1.35;
+}
+
+.vehicle-history-header-side {
+  display: grid;
+  flex: 1 1 60%;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .vehicle-history-header-actions {
@@ -116,17 +128,17 @@
 
 .vehicle-history-summary {
   gap: 8px;
-  padding: 10px 12px 0;
+  padding: 0;
 }
 
 .vehicle-history-summary article {
-  gap: 14px;
-  padding: 11px 16px;
+  gap: 10px;
+  padding: 8px 11px;
 }
 
 .vehicle-history-summary article > svg {
-  width: 30px;
-  height: 30px;
+  width: 27px;
+  height: 27px;
 }
 
 .vehicle-history-summary article > span {
@@ -134,7 +146,7 @@
   flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -268,8 +280,16 @@
 
 @media (max-width: 1050px) {
   .vehicle-history-header {
+    align-items: stretch;
+    flex-direction: column;
     gap: 10px;
     padding: 12px 14px;
+  }
+
+  .vehicle-history-heading,
+  .vehicle-history-header-side {
+    flex: none;
+    width: 100%;
   }
 
   .vehicle-history-identity {
@@ -323,8 +343,9 @@
   }
 
   .vehicle-history-summary {
+    grid-template-columns: 1fr;
     gap: 7px;
-    padding: 8px 8px 0;
+    padding: 0;
   }
 
   .vehicle-history-summary article {

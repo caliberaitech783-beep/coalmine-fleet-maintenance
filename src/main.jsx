@@ -6702,14 +6702,16 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
         <span><History /></span>
         <div><small>Complete vehicle history</small><h1 id="vehicle-history-title">Door no. {door}</h1><p>{[equipment, vehicleDetails.reportMake || vehicleDetails.make, model].filter(Boolean).join(" · ")}</p></div>
       </div>
-      <div className="vehicle-history-header-actions"><div ref={setTableToolbarTarget} /><ExportMenu title={`${VEHICLE_HISTORY_REPORT} - ${door}`} columns={columns} rows={historyRows} label="Download history" disabled={!historyRows.length} /></div>
+      <div className="vehicle-history-header-side">
+        <div className="vehicle-history-header-actions"><div ref={setTableToolbarTarget} /><ExportMenu title={`${VEHICLE_HISTORY_REPORT} - ${door}`} columns={columns} rows={historyRows} label="Download history" disabled={!historyRows.length} /></div>
+        <div className="vehicle-history-summary">
+          <article><History /><span><small>Total breakdowns</small><b>{historyRows.length}</b></span></article>
+          <article><CheckCircle2 /><span><small>Completed repairs</small><b>{completedRepairs.length}</b></span></article>
+          <article><Clock /><span><small>Average time between breakdowns</small><b>{averageRepeatLabel}</b></span></article>
+        </div>
+      </div>
     </header>
     <dl className="vehicle-history-identity">{identity.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl>
-    <div className="vehicle-history-summary">
-      <article><History /><span><small>Total breakdowns</small><b>{historyRows.length}</b></span></article>
-      <article><CheckCircle2 /><span><small>Completed repairs</small><b>{completedRepairs.length}</b></span></article>
-      <article><Clock /><span><small>Average time between breakdowns</small><b>{averageRepeatLabel}</b></span></article>
-    </div>
     <article className={`vehicle-last-repair${latestRepair ? "" : " empty"}`}>
       <div className="vehicle-last-repair-title"><Wrench /><span><small>What was done last time</small><h2>{latestRepair ? latestRepair.maintenanceWork || "Work details were not recorded" : "No completed repair has been recorded"}</h2></span></div>
       {latestRepair && <dl>
