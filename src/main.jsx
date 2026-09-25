@@ -252,6 +252,7 @@ import "./dashboard-bar-motion.css";
 import "./back-button-motion.css";
 import "./dashboard-section-export.css";
 import "./workspace-night.css";
+import "./vehicle-history-density.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import { breakdownTrendExport, fleetSectionExport, requestLifecycleExport, throughputSectionExport } from "./dashboard-section-export.mjs";
