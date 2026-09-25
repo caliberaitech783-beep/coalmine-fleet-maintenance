@@ -1,4 +1,4 @@
-.mine-oem-dashboard { --mine-oem-chart-headroom: 36px; --mine-oem-chart-caption: 68px; cursor: default; }
+.mine-oem-dashboard { --mine-oem-chart-headroom: 36px; --mine-oem-chart-caption: 116px; cursor: default; }
 .mine-oem-dashboard b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .mine-oem-summary { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 10px; padding: 12px 20px; }
 .mine-oem-summary h3 { margin: 0; color: var(--mine-text); font-size: 18px; flex-shrink: 0; }
@@ -14,7 +14,8 @@
 .mine-oem-view .mine-head-actions > label > span { color: #fff; }
 .mine-oem-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 20px 18px; }
 .mine-oem-legend button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 13px; cursor: pointer; }
-.mine-oem-legend i { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.mine-oem-legend button[aria-pressed="true"] { border-color: var(--brand-purple); box-shadow: inset 0 0 0 1px var(--brand-purple), 0 0 0 2px color-mix(in srgb, var(--brand-purple) 14%, transparent); background: color-mix(in srgb, var(--brand-purple) 8%, var(--mine-panel)); }
+.mine-oem-legend i { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .mine-oem-legend b { padding-left: 4px; font-size: 15px; }
 .mine-oem-legend .mine-oem-all { border-color: var(--brand-purple); color: var(--brand-purple); font-weight: 700; }
 .mine-oem-all b, .mine-oem-actions b { font-size: 16px; }
@@ -27,26 +28,26 @@
 .mine-oem-sites { position: relative; display: flex; height: calc(var(--mine-oem-chart-headroom) + var(--mine-oem-plot-height) + var(--mine-oem-chart-caption)); }
 .mine-oem-grid { position: absolute; inset: var(--mine-oem-chart-headroom) 0 var(--mine-oem-chart-caption); display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
 .mine-oem-grid i { border-top: 1px dashed var(--mine-line); }
-.mine-oem-site { box-sizing: border-box; position: relative; display: grid; grid-template-rows: minmax(0, 1fr) var(--mine-oem-chart-caption); flex: 1 0 168px; min-width: 0; padding-top: var(--mine-oem-chart-headroom); border-left: 1px solid var(--mine-line); }
-.mine-oem-bar-track { display: flex; justify-content: center; align-items: end; min-height: 0; }
-.mine-oem-stack { position: relative; display: flex; flex-direction: column-reverse; width: 92px; }
-.mine-oem-segment { box-sizing: border-box; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; box-shadow: inset 0 1px #ffffff55; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
-.mine-oem-segment-label { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; min-width: 0; max-height: 100%; padding: 0 4px; overflow: hidden; pointer-events: none; }
-.mine-oem-segment-label > span { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px !important; font-weight: 700; line-height: 14px; }
-.mine-oem-segment .mine-oem-segment-label > b { font-size: 12px !important; line-height: 14px; }
-.mine-oem-segment[data-count-callout] { position: relative; overflow: visible; }
-.mine-oem-segment[data-count-callout] .mine-oem-segment-label { position: absolute; left: calc(100% + 10px); width: max-content; min-width: 24px; height: 14px; max-height: none; border-radius: 3px; pointer-events: auto; }
-.mine-oem-count-connector { position: absolute; left: 100%; width: 10px; overflow: visible; pointer-events: none; }
-.mine-oem-count-connector line { stroke-width: 1.5; }
-.mine-oem-segment:last-child { border-radius: 5px 5px 0 0; }
-.mine-oem-total { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); min-width: 0; min-height: 0; padding: 1px 4px; border: 0; border-radius: 3px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 21px; font-weight: 800; line-height: 26px; white-space: nowrap; cursor: pointer; }
-.mine-oem-site-caption { display: flex; align-items: flex-start; justify-content: center; min-width: 0; padding: 8px 6px; border-top: 2px solid var(--brand-purple); }
+.mine-oem-site { box-sizing: border-box; position: relative; display: grid; grid-template-rows: minmax(0, 1fr) var(--mine-oem-chart-caption); flex: 0 0 168px; min-width: 168px; padding-top: var(--mine-oem-chart-headroom); border-left: 1px solid var(--mine-line); }
+.mine-oem-bar-track { position: relative; display: flex; justify-content: center; align-items: stretch; gap: 8px; min-height: 0; padding: 0 10px; }
+.mine-oem-bar-column { display: flex; flex: 0 0 68px; align-items: flex-end; justify-content: center; min-width: 0; min-height: 0; }
+.mine-oem-group-bar { box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 50px; min-width: 0; min-height: 8px; padding: 0; border: 0; border-radius: 5px 5px 0 0; overflow: visible; box-shadow: inset 0 1px #ffffff66; color: #fff; font: inherit; cursor: pointer; }
+.mine-oem-group-bar::after { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(135deg, transparent 0 52%, #ffffff17 52% 66%, transparent 66%); content: ""; pointer-events: none; }
+.mine-oem-group-bar[data-group-index="1"]::after { background: linear-gradient(135deg, #ffffff22 0 24%, transparent 24% 70%, #00000012 70%); }
+.mine-oem-group-bar[data-group-index="2"]::after { background: repeating-linear-gradient(135deg, transparent 0 6px, #ffffff1f 6px 9px); }
+.mine-oem-group-bar > b { position: absolute; bottom: calc(100% + 4px); left: 50%; z-index: 1; transform: translateX(-50%); padding: 0 2px; color: var(--mine-text); font-size: 14px !important; line-height: 16px; text-shadow: 0 1px var(--mine-panel); }
+.mine-oem-total { position: absolute; top: calc(-1 * var(--mine-oem-chart-headroom) + 4px); left: 50%; z-index: 2; transform: translateX(-50%); min-width: 0; min-height: 0; padding: 1px 4px; border: 0; border-radius: 3px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 16px; font-weight: 800; line-height: 22px; white-space: nowrap; cursor: pointer; }
+.mine-oem-site-caption { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; min-width: 0; padding: 0; border-top: 2px solid var(--brand-purple); }
+.mine-oem-group-labels { display: flex; justify-content: center; gap: 8px; min-height: 58px; padding: 7px 10px 3px; }
+.mine-oem-group-label { display: flex; flex: 0 0 68px; flex-direction: column; align-items: center; gap: 2px; min-width: 0; color: var(--mine-text); text-align: center; }
+.mine-oem-group-label b { display: -webkit-box; max-width: 100%; overflow: hidden; font-size: 11px !important; line-height: 13px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mine-oem-group-label small { max-width: 100%; overflow: hidden; color: var(--mine-muted); font-size: 10px; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mine-oem-site-label { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 0; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--mine-text); font: inherit; font-size: 13px; line-height: 16px; cursor: pointer; }
 .mine-oem-site-label b { max-width: 100%; overflow-wrap: anywhere; }
 .mine-oem-site-label small { color: var(--mine-muted); font-size: 12px; }
 .mine-oem-dashboard button:focus-visible, .mine-oem-scroll:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 3px; }
-.mine-oem-segment:focus-visible { position: relative; z-index: 1; }
-.mine-oem-segment:hover { box-shadow: inset 0 0 0 1px #fff; }
+.mine-oem-group-bar:focus-visible { position: relative; z-index: 1; }
+.mine-oem-group-bar:hover { box-shadow: inset 0 0 0 1px #fff; filter: brightness(1.12); transform: translateY(-1px); }
 .mine-oem-total:hover, .mine-oem-site-label:hover { text-decoration: underline; text-underline-offset: 3px; }
 .mine-oem-tooltip { box-sizing: border-box; position: fixed; z-index: 10000; width: min(240px, calc(100vw - 16px)); max-height: calc(100vh - 16px); padding: 12px 14px; border: 1px solid #d8d1e5; border-radius: 8px; overflow: hidden; background: #fff; color: #142943; box-shadow: 0 6px 24px #14294330; font-family: inherit; font-size: 13px; line-height: 1.5; pointer-events: none; }
 .mine-oem-tooltip-heading { display: flex; align-items: center; gap: 8px; }

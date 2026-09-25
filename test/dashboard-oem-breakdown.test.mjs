@@ -5,11 +5,11 @@ import { buildOemBreakdownRows, buildOemBreakdownChart, selectOemBreakdownRows, 
 
 const now = Date.parse("2026-09-14T12:00:00+05:30");
 const equipment = [
-  { id: 1, equipmentName: "E1", door: "E1", make: "Tata", currentLocation: "Sasti OB", category: "Equipment", status: "Operational" },
-  { id: 2, equipmentName: "V1", door: "V1", make: " tata ", currentLocation: "Sasti II", category: "Vehicle", status: "Operational" },
-  { id: 3, equipmentName: "V2", door: "V2", make: "Komatsu", currentLocation: "Jayant OB", category: "Vehicle", status: "Operational" },
-  { id: 4, equipmentName: "E2", door: "E2", make: "Komatsu", currentLocation: "Sasti OB", category: "Equipment", status: "Operational" },
-  { id: 5, equipmentName: "E3", door: "E3", currentLocation: "Jayant OB", status: "Breakdown" },
+  { id: 1, equipmentName: "E1", door: "E1", make: "Tata", group: "Excavator", currentLocation: "Sasti OB", category: "Equipment", status: "Operational" },
+  { id: 2, equipmentName: "V1", door: "V1", make: " tata ", group: "Tipper", currentLocation: "Sasti II", category: "Vehicle", status: "Operational" },
+  { id: 3, equipmentName: "V2", door: "V2", make: "Komatsu", group: "Tipper", currentLocation: "Jayant OB", category: "Vehicle", status: "Operational" },
+  { id: 4, equipmentName: "E2", door: "E2", make: "Komatsu", group: "Dozer", currentLocation: "Sasti OB", category: "Equipment", status: "Operational" },
+  { id: 5, equipmentName: "E3", door: "E3", group: "Grader", currentLocation: "Jayant OB", status: "Breakdown" },
 ];
 const requests = [
   { ref: "BD1", door: "E1", site: "Sasti OB", start: "2026-09-10 · 10:00:00", status: "Open", complaint: "Hydraulics" },
@@ -63,6 +63,28 @@ test("all sites appear, OEM spelling is normalized and every site/OEM count reco
   assert.equal(tata.rows.length, 1);
   assert.equal(tata.sites[0].total, 1);
   assert.equal(tata.sites[2].total, 0);
+});
+
+test("each OEM and equipment group is plotted separately and group drilldown reconciles", () => {
+  const groupedEquipment = [
+    { id: 10, door: "A", make: "Tata", group: "Excavator", currentLocation: "Sasti OB" },
+    { id: 11, door: "B", make: "Tata", group: "Tipper", currentLocation: "Sasti OB" },
+    { id: 12, door: "C", make: "Tata", group: "  tipper  ", currentLocation: "Sasti OB" },
+    { id: 13, door: "D", make: "Komatsu", group: "Dozer", currentLocation: "Sasti OB" },
+  ];
+  const groupedRows = build({ equipment: groupedEquipment, requests: groupedEquipment.map(record => ({ ref: record.door, door: record.door, site: record.currentLocation, status: "Open" })) });
+  const chart = buildOemBreakdownChart({ rows: groupedRows, equipment: groupedEquipment, regions });
+  const site = chart.sites[0];
+  assert.deepEqual(site.bars.map(bar => [bar.oemLabel, bar.equipmentGroup, bar.rows.length]), [
+    ["Komatsu", "Dozer", 1],
+    ["Tata", "Excavator", 1],
+    ["Tata", "Tipper", 2],
+  ]);
+  for (const bar of site.bars) {
+    const selected = createOemBreakdownSelection(chart, { site: site.name, oem: bar.oemKey, equipmentGroup: bar.equipmentGroupKey, equipmentGroupLabel: bar.equipmentGroup });
+    assert.equal(selected.rows.length, bar.rows.length);
+    assert.equal(selected.equipmentGroupLabel, bar.equipmentGroup);
+  }
 });
 
 test("unknown OEMs and sites keep unmatched requests visible and repeated requests share one asset", () => {
