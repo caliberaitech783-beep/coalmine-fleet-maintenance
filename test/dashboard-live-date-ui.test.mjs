@@ -297,13 +297,13 @@ test("OEM view retains today's shared filters and separate label and count actio
   }
 });
 
-test("OEM bars and site totals open the matching breakdown records", () => {
+test("OEM equipment-category sections and site totals open the matching breakdown records", () => {
   const cases = [
-    ["Sasti OB · Tata: 1 breakdown assets, view details", "WCL", "Sasti OB", "tata", ["BD-1"]],
-    ["Sasti OB · Volvo: 1 breakdown assets, view details", "WCL", "Sasti OB", "volvo", ["BD-2"]],
-    ["Majri OB · Volvo: 1 breakdown assets, view details", "WCL", "Majri OB", "volvo", ["BD-3"]],
-    ["Jayant OB · Tata: 1 breakdown assets, view details", "NCL", "Jayant OB", "tata", ["BD-4"]],
-    ["Jayant OB · Volvo: 1 breakdown assets, view details", "NCL", "Jayant OB", "volvo", ["BD-5"]],
+    ["Sasti OB · Tata · TIPPER: 1 breakdown assets, view details", "WCL", "Sasti OB", "tata", ["BD-1"]],
+    ["Sasti OB · Volvo · TIPPER: 1 breakdown assets, view details", "WCL", "Sasti OB", "volvo", ["BD-2"]],
+    ["Majri OB · Volvo · TIPPER: 1 breakdown assets, view details", "WCL", "Majri OB", "volvo", ["BD-3"]],
+    ["Jayant OB · Tata · TIPPER: 1 breakdown assets, view details", "NCL", "Jayant OB", "tata", ["BD-4"]],
+    ["Jayant OB · Volvo · TIPPER: 1 breakdown assets, view details", "NCL", "Jayant OB", "volvo", ["BD-5"]],
     ["Sasti OB: 2 breakdown assets, view all OEMs", "WCL", "Sasti OB", "all", ["BD-1", "BD-2"]],
   ];
   for (const [label, region, site, oem, references] of cases) {

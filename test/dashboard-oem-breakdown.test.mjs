@@ -79,10 +79,20 @@ test("each OEM has one bar even when it contains several equipment groups", () =
     ["Komatsu", 1],
     ["Tata", 3],
   ]);
+  assert.deepEqual(site.bars.map(bar => [bar.label, bar.categorySegments.map(segment => [segment.equipmentGroup, segment.rows.length])]), [
+    ["Komatsu", [["DOZER", 1]]],
+    ["Tata", [["EXCAVATOR", 1], ["TIPPER", 2]]],
+  ]);
   for (const bar of site.bars) {
     const selected = createOemBreakdownSelection(chart, { site: site.name, oem: bar.key });
     assert.equal(selected.rows.length, bar.rows.length);
     assert.ok(selected.rows.every(row => row.oemKey === bar.key));
+    for (const segment of bar.categorySegments) {
+      const category = createOemBreakdownSelection(chart, { site: site.name, oem: bar.key, equipmentGroup: segment.equipmentGroupKey, equipmentGroupLabel: segment.equipmentGroup });
+      assert.equal(category.rows.length, segment.rows.length);
+      assert.equal(category.equipmentGroupLabel, segment.equipmentGroup);
+      assert.ok(category.rows.every(row => row.equipmentGroupKey === segment.equipmentGroupKey));
+    }
   }
 });
 

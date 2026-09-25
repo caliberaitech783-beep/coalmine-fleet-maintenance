@@ -20,13 +20,14 @@ function makeChart({oem = "all", sites = ["Sasti OB", "Majri OB", "Empty site"]}
   return buildOemBreakdownChart({rows, equipment, regions: [{code: "WCL", sites}], oem});
 }
 
-function assertTooltip(control, {label, color}, count, site) {
+function assertTooltip(control, {label, color}, count, site, category = "") {
   assert.ok(control.props["data-oem-tooltip"]);
   assert.equal(control.props["aria-describedby"], control.props["data-oem-tooltip"]);
   assert.equal(control.props["data-oem-name"], label);
   assert.equal(control.props["data-oem-color"], color);
   assert.equal(control.props["data-oem-count"], count);
   assert.equal(control.props["data-oem-site"], site);
+  assert.equal(control.props["data-oem-category"] || "", category);
 }
 
 const click = control => {
@@ -47,6 +48,14 @@ test("one bar per OEM drills into its exact rows while OEM dots only filter", ()
     click(control);
     assert.equal(selected.rows.length, bar.rows.length);
     assert.ok(selected.rows.every(row => row.oemKey === bar.key && row.site === site.name));
+    for (const segment of bar.categorySegments) {
+      const categoryControl = controls.find(button => button.props["aria-label"] === `${site.name} · ${bar.label} · ${segment.equipmentGroup}: ${segment.rows.length} breakdown assets, view details`);
+      assertTooltip(categoryControl, bar, segment.rows.length, site.name, segment.equipmentGroup);
+      click(categoryControl);
+      assert.equal(selected.rows.length, segment.rows.length);
+      assert.equal(selected.equipmentGroupLabel, segment.equipmentGroup);
+      assert.ok(selected.rows.every(row => row.oemKey === bar.key && row.equipmentGroupKey === segment.equipmentGroupKey && row.site === site.name));
+    }
   }
   for (const oem of chart.oems.filter(item => item.count)) {
     selected = undefined;
@@ -101,7 +110,7 @@ test("site totals retain the selected OEM and every tooltip target stays unique"
   }
 });
 
-test("every OEM has one separate proportional bar with its exact count", () => {
+test("every OEM has one proportional bar containing all equipment categories", () => {
   const equipment = [
     {id: 1, make: "Tata", group: "Excavator", door: "A", currentLocation: "Sasti OB", status: "Breakdown"},
     {id: 2, make: "Tata", group: "Tipper", door: "B", currentLocation: "Sasti OB", status: "Breakdown"},
@@ -110,11 +119,16 @@ test("every OEM has one separate proportional bar with its exact count", () => {
   ];
   const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment}), equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}]});
   assert.deepEqual(chart.sites[0].bars.map(bar => [bar.label, bar.rows.length]), [["Komatsu", 1], ["Tata", 3]]);
+  assert.deepEqual(chart.sites[0].bars.map(bar => bar.categorySegments.map(segment => [segment.equipmentGroup, segment.rows.length])), [[['DOZER', 1]], [['EXCAVATOR', 1], ['TIPPER', 2]]]);
   const tree = Chart({chart, onSelect() {}});
-  for (const bar of descendants(tree, node => node.props.className === "mine-oem-oem-bar")) {
-    assert.equal(bar.props.style.height, `${bar.props["data-oem-count"] / chart.axisMax * 100}%`);
-    assert.equal(textOf(bar), String(bar.props["data-oem-count"]));
-  }
+  const bars = descendants(tree, node => node.props.className === "mine-oem-oem-bar");
+  chart.sites[0].bars.forEach((bar, index) => {
+    assert.equal(bars[index].props.style.height, `${bar.rows.length / chart.axisMax * 100}%`);
+    assert.equal(textOf(bars[index]), String(bar.rows.length));
+  });
+  const segments = descendants(tree, node => node.props.className === "mine-oem-category-segment");
+  assert.equal(segments.length, 3);
+  assert.ok(segments.every(segment => segment.props["data-oem-category"]));
   const markup = renderToStaticMarkup(tree);
   assert.match(markup, /^<div class="mine-oem-dashboard" id="oem-breakdown-plot"/);
   assert.doesNotMatch(markup, /role="button"/);

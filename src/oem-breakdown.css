@@ -31,21 +31,28 @@
 .mine-oem-site { box-sizing: border-box; position: relative; display: grid; grid-template-rows: minmax(0, 1fr) var(--mine-oem-chart-caption); flex: 0 0 132px; min-width: 132px; padding-top: var(--mine-oem-chart-headroom); border-left: 1px solid var(--mine-line); }
 .mine-oem-bar-track { position: relative; display: flex; justify-content: center; align-items: stretch; gap: 6px; min-height: 0; padding: 0 10px; }
 .mine-oem-bar-column { display: flex; flex: 0 0 38px; align-items: flex-end; justify-content: center; min-width: 0; min-height: 0; }
-.mine-oem-oem-bar { box-sizing: border-box; position: relative; display: flex; align-items: center; justify-content: center; width: 32px; min-width: 0; min-height: 8px; padding: 0; border: 0; border-radius: 5px 5px 0 0; overflow: visible; box-shadow: inset 0 1px #ffffff66; color: #fff; font: inherit; cursor: pointer; }
-.mine-oem-oem-bar > b { position: absolute; bottom: calc(100% + 4px); left: 50%; z-index: 1; transform: translateX(-50%); padding: 0 2px; color: var(--mine-text); font-size: 14px !important; line-height: 16px; text-shadow: 0 1px var(--mine-panel); }
+.mine-oem-oem-bar { box-sizing: border-box; position: relative; display: flex; flex-direction: column-reverse; width: 32px; min-width: 0; min-height: 8px; border-radius: 5px 5px 0 0; overflow: visible; outline: 1px solid color-mix(in srgb, var(--mine-oem-color) 70%, transparent); outline-offset: -1px; }
+.mine-oem-bar-total { position: absolute; bottom: calc(100% + 4px); left: 50%; z-index: 2; transform: translateX(-50%); min-width: 24px; padding: 0 2px; border: 0; background: transparent; color: var(--mine-text); font: inherit; font-size: 14px; line-height: 16px; text-shadow: 0 1px var(--mine-panel); cursor: pointer; }
+.mine-oem-category-segment { box-sizing: border-box; flex: 0 0 auto; width: 100%; min-height: 0; padding: 0; border: 0; border-top: 1px solid #ffffffaa; opacity: .98; cursor: pointer; }
+.mine-oem-category-segment:first-of-type { border-top: 0; }
+.mine-oem-category-segment:last-child { border-radius: 5px 5px 0 0; }
+.mine-oem-category-segment[data-group-index="1"] { filter: brightness(1.16) saturate(.82); }
+.mine-oem-category-segment[data-group-index="2"] { background-image: repeating-linear-gradient(135deg, transparent 0 5px, #ffffff38 5px 7px); }
+.mine-oem-category-segment[data-group-index="3"] { filter: brightness(.82) saturate(1.12); }
 .mine-oem-total { position: absolute; top: calc(-1 * var(--mine-oem-chart-headroom) + 4px); left: 50%; z-index: 2; transform: translateX(-50%); min-width: 0; min-height: 0; padding: 1px 4px; border: 0; border-radius: 3px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 16px; font-weight: 800; line-height: 22px; white-space: nowrap; cursor: pointer; }
 .mine-oem-site-caption { display: flex; align-items: stretch; justify-content: center; min-width: 0; padding: 6px 4px 2px; border-top: 2px solid var(--brand-purple); }
 .mine-oem-site-label { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 0; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--mine-text); font: inherit; font-size: 13px; line-height: 16px; cursor: pointer; }
 .mine-oem-site-label b { max-width: 100%; overflow-wrap: anywhere; }
 .mine-oem-site-label small { color: var(--mine-muted); font-size: 12px; }
 .mine-oem-dashboard button:focus-visible, .mine-oem-scroll:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 3px; }
-.mine-oem-oem-bar:focus-visible { position: relative; z-index: 1; }
-.mine-oem-oem-bar:hover { box-shadow: inset 0 0 0 1px #fff; filter: brightness(1.12); transform: translateY(-1px); }
+.mine-oem-bar-total:focus-visible, .mine-oem-category-segment:focus-visible { position: relative; z-index: 3; }
+.mine-oem-category-segment:hover { box-shadow: inset 0 0 0 1px #fff; filter: brightness(1.25); }
 .mine-oem-total:hover, .mine-oem-site-label:hover { text-decoration: underline; text-underline-offset: 3px; }
 .mine-oem-tooltip { box-sizing: border-box; position: fixed; z-index: 10000; width: min(240px, calc(100vw - 16px)); max-height: calc(100vh - 16px); padding: 12px 14px; border: 1px solid #d8d1e5; border-radius: 8px; overflow: hidden; background: #fff; color: #142943; box-shadow: 0 6px 24px #14294330; font-family: inherit; font-size: 13px; line-height: 1.5; pointer-events: none; }
 .mine-oem-tooltip-heading { display: flex; align-items: center; gap: 8px; }
 .mine-oem-tooltip-heading i { flex: 0 0 12px; height: 12px; border-radius: 3px; }
 .mine-oem-tooltip-heading strong { min-width: 0; overflow-wrap: anywhere; font-weight: 800; }
+.mine-oem-tooltip-category { margin-top: 5px; color: #52647a; font-weight: 700; overflow-wrap: anywhere; }
 .mine-oem-tooltip-count { margin-top: 6px; }
 .mine-oem-tooltip-count b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .mine-oem-tooltip-site { margin-top: 4px; color: #52647a; overflow-wrap: anywhere; }

@@ -1,4 +1,5 @@
 import { createFleetAssetResolver, equipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 import { indiaDateTimeEpoch } from "../report-date-range.mjs";
 import { parseReportTimestamp } from "../report-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
@@ -9,6 +10,9 @@ const normalize = (value) => text(value).toLowerCase();
 const idle = (request) => ["idle", "ideal"].includes(normalize(request.status));
 export const OEM_COLORS = ["#522e90", "#c93e47", "#237d96", "#b55d13", "#39734c", "#a23578", "#5268bd", "#746042", "#146c68", "#9c3c25", "#7553a6", "#536d24", "#235ea8", "#b04065", "#62636a", "#866213", "#337345", "#9b427f", "#436273", "#7e4435", "#654fa0", "#256b80", "#886432", "#845069"];
 export const oemLabel = (record = {}) => text(record.make) || text(record.oem) || "OEM not specified";
+export const oemEquipmentGroupLabel = (record = {}, request = {}) => equipmentGroupValue(record)
+  || normalizeEquipmentGroup(record.itemName || request.equipmentGroup || request.equipment || record.category)
+  || "UNCLASSIFIED";
 
 export function oemDateRangeError(from, to) {
   if ((from && !Number.isFinite(indiaDateTimeEpoch(from))) || (to && !Number.isFinite(indiaDateTimeEpoch(to)))) return "Choose valid dates.";
@@ -47,6 +51,7 @@ export function buildOemBreakdownRows({ equipment = [], requests = [], from = ""
   const rows = [];
   const addRow = (record, matching, id) => {
     const oem = oemLabel(record);
+    const equipmentGroup = oemEquipmentGroupLabel(record, matching[0]);
     const site = text(record.currentLocation || record.location || record.site) || "Site not specified";
     const details = matching.length ? matching.map((request, index) => ({
       ...request,
@@ -67,7 +72,7 @@ export function buildOemBreakdownRows({ equipment = [], requests = [], from = ""
       status: "Off road", category: "—",
       complaint: "Off road in Equipment master; no linked active request.",
     }];
-    rows.push({ id, oem, oemKey: normalize(oem), site, record, requests: details });
+    rows.push({ id, oem, oemKey: normalize(oem), equipmentGroup, equipmentGroupKey: normalize(equipmentGroup), site, record, requests: details });
   };
   equipment.forEach((record, index) => {
     const history = matches.get(record);
@@ -101,7 +106,20 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
     site.rows.push(row);
   });
   const sites = siteGroups.map((site) => {
-    const bars = oems.map((item) => ({ ...item, rows: site.rows.filter((row) => row.oemKey === item.key) })).filter((item) => item.rows.length);
+    const bars = oems.map((item) => {
+      const barRows = site.rows.filter((row) => row.oemKey === item.key);
+      const groups = new Map();
+      barRows.forEach((row) => {
+        const equipmentGroup = row.equipmentGroup || oemEquipmentGroupLabel(row.record, row.requests?.[0]);
+        const equipmentGroupKey = row.equipmentGroupKey || normalize(equipmentGroup);
+        if (!groups.has(equipmentGroupKey)) groups.set(equipmentGroupKey, { equipmentGroup, equipmentGroupKey, rows: [] });
+        groups.get(equipmentGroupKey).rows.push(row);
+      });
+      const categorySegments = [...groups.values()]
+        .sort((a, b) => a.equipmentGroup.localeCompare(b.equipmentGroup))
+        .map((group, groupIndex) => ({ ...group, groupIndex }));
+      return { ...item, rows: barRows, categorySegments };
+    }).filter((item) => item.rows.length);
     return {
       ...site,
       total: site.rows.length,
@@ -117,7 +135,9 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
 }
 
 export function selectOemBreakdownRows(rows, selection = {}) {
+  const equipmentGroup = normalize(selection.equipmentGroup || selection.group);
   return rows.filter((row) => (!selection.oem || row.oemKey === selection.oem)
+    && (!equipmentGroup || (row.equipmentGroupKey || normalize(row.equipmentGroup || oemEquipmentGroupLabel(row.record, row.requests?.[0]))) === equipmentGroup)
     && (!selection.site || recordBelongsToSite({ site: row.site }, selection.site)));
 }
 
@@ -127,6 +147,9 @@ export function createOemBreakdownSelection(chart, selection = {}) {
   const oem = selection.oem || (chart.selectedOem !== "all" ? chart.selectedOem : "");
   const rows = selectOemBreakdownRows(chart.rows, { ...selection, oem });
   const selected = chart.oems.find(item => item.key === oem);
+  const equipmentGroupLabel = selection.equipmentGroup
+    ? selection.equipmentGroupLabel || rows[0]?.equipmentGroup || "UNCLASSIFIED"
+    : "";
   const records = rows.flatMap(row => row.requests.map((request, index) => ({
     ...row.record,
     id: `${row.id}:${index}`,
@@ -148,7 +171,7 @@ export function createOemBreakdownSelection(chart, selection = {}) {
     breakdownReason: request.complaint || "—",
     requestDetails: request,
   })));
-  return { ...selection, oem, rows, records, label: selected?.label || "All OEMs", color: selected?.color || "", regions: chart.sites.reduce((regions, site) => {
+  return { ...selection, oem, rows, records, label: selected?.label || "All OEMs", equipmentGroupLabel, color: selected?.color || "", regions: chart.sites.reduce((regions, site) => {
     let region = regions.find(item => item.code === site.region);
     if (!region) { region = { code: site.region, sites: [] }; regions.push(region); }
     region.sites.push(site.name);

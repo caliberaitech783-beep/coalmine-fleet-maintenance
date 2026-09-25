@@ -12,12 +12,13 @@ function fitPlotHeight(chart, available) {
   return available > 0 ? Math.max(MIN_PLOT_HEIGHT, Math.min(preferred, available)) : preferred;
 }
 
-const tooltipAttributes = (id, oem, count, site) => ({
+const tooltipAttributes = (id, oem, count, site, equipmentCategory = "") => ({
   "data-oem-tooltip": id,
   "data-oem-name": oem.label,
   "data-oem-color": oem.color,
   "data-oem-count": count,
   "data-oem-site": site,
+  ...(equipmentCategory ? { "data-oem-category": equipmentCategory } : {}),
   "aria-describedby": id,
 });
 
@@ -75,6 +76,7 @@ function OemChartSurface({ chart, plotHeight, children }) {
     {children}
     {tooltip && createPortal(<div ref={tooltipRef} className="mine-oem-tooltip" id={tooltip.oemTooltip} role="tooltip">
       <div className="mine-oem-tooltip-heading"><i aria-hidden="true" style={{ background: tooltip.oemColor }} /><strong>{tooltip.oemName}</strong></div>
+      {tooltip.oemCategory && <div className="mine-oem-tooltip-category">{tooltip.oemCategory}</div>}
       <div className="mine-oem-tooltip-count"><b>{Number(tooltip.oemCount).toLocaleString()}</b> breakdown {Number(tooltip.oemCount) === 1 ? "asset" : "assets"}</div>
       <div className="mine-oem-tooltip-site">{tooltip.oemSite}</div>
     </div>, document.body)}
@@ -99,7 +101,7 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
   };
   return <OemChartSurface chart={chart} plotHeight={plotHeight}>
     <div className="mine-oem-summary">
-      <h3>Site-wise OEM breakdown</h3>
+      <h3>Site-wise OEM and equipment-category breakdown</h3>
       <div className="mine-oem-actions"><button type="button" className="secondary" onClick={event => { event.stopPropagation(); onReset?.(); }}>Reset filters</button><button type="button" className="secondary" title="View all breakdown assets matching the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-full-list", totalOem, chart.rows.length, siteScope)} onClick={event => inspect(event, {})}>View full list <b>{chart.rows.length.toLocaleString()}</b></button></div>
       {!error && <div className="mine-oem-legend" aria-label="Filter chart by OEM">
         {visibleOems.map((oem, index) => <button type="button" key={oem.key} aria-pressed={chart.selectedOem === oem.key} {...tooltipAttributes(`oem-breakdown-tooltip-legend-${index}`, oem, oemTotals.get(oem.key), siteScope)} onClick={event => filterOem(event, oem.key)} aria-label={`Filter chart by ${oem.label}: ${oemTotals.get(oem.key)} breakdown assets`}><i aria-hidden="true" style={{ background: oem.color }} /><span>{oem.label}</span><b>{oemTotals.get(oem.key).toLocaleString()}</b></button>)}
@@ -110,19 +112,23 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
       {!chart.rows.length && <p className="mine-empty" role="status">No OEM breakdowns match the selected filters.</p>}
       <div className="mine-oem-chart-layout">
         <div className="mine-oem-axis" aria-hidden="true"><b>BD count</b>{chart.ticks.map((tick) => <span key={tick}>{tick}</span>)}</div>
-        <div className="mine-oem-scroll" tabIndex="0" role="region" aria-label="Site-wise OEM breakdown chart, scroll horizontally for more sites">
+        <div className="mine-oem-scroll" tabIndex="0" role="region" aria-label="Site-wise OEM and equipment-category breakdown chart, scroll horizontally for more sites">
           <div className="mine-oem-sites" style={{ minWidth: `${Math.max(132, chartWidth)}px` }}>
             <div className="mine-oem-grid" aria-hidden="true">{chart.ticks.map((tick) => <i key={tick} />)}</div>
-            {chart.sites.map((site, siteIndex) => <section className="mine-oem-site" style={{ flexBasis: `${siteWidth(site)}px` }} key={`${site.region}:${site.name}`} aria-label={`${site.name} OEM breakdowns`}>
+            {chart.sites.map((site, siteIndex) => <section className="mine-oem-site" style={{ flexBasis: `${siteWidth(site)}px` }} key={`${site.region}:${site.name}`} aria-label={`${site.name} OEM breakdowns by equipment category`}>
               <div className="mine-oem-bar-track">
                 <button type="button" className="mine-oem-total" title={`${site.name}: view ${site.total.toLocaleString()} ${selectedOem ? `${selectedOem.label} ` : ""}breakdown assets`} {...tooltipAttributes(`oem-breakdown-tooltip-total-${siteIndex}`, selectedOem || allOemsSummary(site.segments), site.total, site.name)} onClick={event => inspect(event, { site: site.name })} aria-label={`${site.name}: ${site.total} breakdown assets, ${hasOemFilter ? "view details" : "view all OEMs"}`}><b>{site.total.toLocaleString()}</b></button>
                 {site.bars.map((bar, barIndex) => <div className="mine-oem-bar-column" key={bar.key}>
-                  <button type="button" className="mine-oem-oem-bar" style={{ height: `${bar.rows.length / chart.axisMax * 100}%`, backgroundColor: bar.color }}
-                    {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}`, bar, bar.rows.length, site.name)}
-                    aria-label={`${site.name} · ${bar.label}: ${bar.rows.length} breakdown assets, view details`}
-                    onClick={event => inspect(event, { site: site.name, oem: bar.key })}>
-                    <b>{bar.rows.length.toLocaleString()}</b>
-                  </button>
+                  <div className="mine-oem-oem-bar" style={{ height: `${bar.rows.length / chart.axisMax * 100}%`, "--mine-oem-color": bar.color }}>
+                    <button type="button" className="mine-oem-bar-total" {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-total`, bar, bar.rows.length, site.name)}
+                      aria-label={`${site.name} · ${bar.label}: ${bar.rows.length} breakdown assets, view details`}
+                      onClick={event => inspect(event, { site: site.name, oem: bar.key })}><b>{bar.rows.length.toLocaleString()}</b></button>
+                    {bar.categorySegments.map((segment, segmentIndex) => <button type="button" className="mine-oem-category-segment" data-group-index={segment.groupIndex % 4}
+                      key={segment.equipmentGroupKey} style={{ height: `${segment.rows.length / bar.rows.length * 100}%`, backgroundColor: bar.color }}
+                      {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-${segmentIndex}`, bar, segment.rows.length, site.name, segment.equipmentGroup)}
+                      aria-label={`${site.name} · ${bar.label} · ${segment.equipmentGroup}: ${segment.rows.length} breakdown assets, view details`}
+                      onClick={event => inspect(event, { site: site.name, oem: bar.key, equipmentGroup: segment.equipmentGroupKey, equipmentGroupLabel: segment.equipmentGroup })} />)}
+                  </div>
                 </div>)}
               </div>
               <div className="mine-oem-site-caption"><button type="button" className="mine-oem-site-label" title={`${site.name}: ${selectedOem ? `view ${selectedOem.label} breakdown details` : "view all OEM breakdowns"}`} {...tooltipAttributes(`oem-breakdown-tooltip-site-${siteIndex}`, selectedOem || allOemsSummary(site.segments), site.total, site.name)} onClick={event => inspect(event, { site: site.name })}><b>{site.name}</b><small>{site.region}</small></button></div>
@@ -130,7 +136,7 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
           </div>
         </div>
       </div>
-      <div className="mine-fleet-chart-x">Region and site · Breakdown fleet by OEM</div>
+      <div className="mine-fleet-chart-x">Region and site · Breakdown fleet by OEM and equipment category</div>
     </>}
   </OemChartSurface>;
 }
