@@ -125,7 +125,7 @@ test('saved schedules migrate legacy report names to the renamed catalogue',()=>
 test('hierarchy weekday and time selections drive scheduled report delivery',()=>{
   const settings=applyHierarchyDeliveryRule(defaultHierarchyReportScheduleSettings(),'director',{
     scheduleDays:'Monday | Wednesday',
-    scheduleTimes:'10:00 | 19:00',
+    scheduleTimes:'10:00 AM | 7:00 PM',
     reportAccess:`${DIRECTOR_REPORT_TITLES[0]} | ${DIRECTOR_REPORT_TITLES[13]}`,
   });
   const monday=reportsDueForDesignation('director',new Date('2026-09-07T04:35:00Z'),20,settings);

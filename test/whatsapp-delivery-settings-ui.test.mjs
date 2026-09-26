@@ -17,7 +17,8 @@ function harness({settings=policy.defaultWhatsAppReportSettings(),section='deliv
   const slots=[details,structuredClone(settings),section,'requestOpened',''];
   let cursor=0;
   const requests=[],closed=[];
-  const bindings={React,...policy,...templates,document:{body:{}},createPortal:child=>child,useEffect(){},
+  const TwelveHourTimeInput=({value,onChange,...props})=>React.createElement('input',{...props,type:'text',value,onChange:event=>onChange?.(event.target.value)});
+  const bindings={React,...policy,...templates,TwelveHourTimeInput,document:{body:{}},createPortal:child=>child,useEffect(){},
     useState(initial){const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];},
     useRef(initial){const index=cursor++;if(!(index in slots))slots[index]={current:initial};return slots[index];},
     readApiJson:async response=>response,
@@ -83,8 +84,8 @@ test('reset delivery rules preserves draft CRM days and times and custom templat
   assert.deepEqual(reset.templates,original.templates);
   assert.deepEqual(reset.events,policy.defaultWhatsAppReportSettings().events);
   assert.deepEqual(reset.channels,policy.defaultWhatsAppReportSettings().channels);
-  const time=descendants(app.render(),node=>node.type==='input'&&node.props['aria-label']==='CRM fallback delivery time 1')[0];
-  time.props.onChange({target:{value:'06:30'}});
+  const time=descendants(app.render(),node=>node.props['aria-label']==='CRM fallback delivery time 1')[0];
+  time.props.onChange('06:30');
   app.button('Reset delivery rules').props.onClick();
   assert.match(renderToStaticMarkup(app.render()),/Keep saved timetables/);
   await app.button('Save settings').props.onClick();
@@ -104,7 +105,7 @@ test('CRM timetable is clearly an organisation fallback and retains day and time
   assert.match(html,/Fallback delivery days/);
   assert.match(html,/CRM fallback delivery time 1/);
   assert.doesNotMatch(html,/Your CRM delivery timetable/);
-  assert.equal(descendants(tree,node=>node.type==='input'&&node.props.type==='time').length,policy.defaultWhatsAppReportSettings().crm.times.length);
+  assert.equal(descendants(tree,node=>node.props['aria-label']?.startsWith('CRM fallback delivery time')).length,policy.defaultWhatsAppReportSettings().crm.times.length);
 });
 
 test('request alert role choices use the policy options and do not imply managers receive CRM alerts',()=>{

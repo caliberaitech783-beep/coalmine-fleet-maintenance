@@ -1,4 +1,5 @@
 const TIME_PATTERN=/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+const TWELVE_HOUR_TIME_PATTERN=/^(0?[1-9]|1[0-2]):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i;
 const ISO_DATE_PATTERN=/^(\d{4})-(\d{2})-(\d{2})$/;
 const DISPLAY_DATE_PATTERN=/^(\d{2})-(\d{2})-(\d{4})$/;
 
@@ -25,9 +26,12 @@ export const SHIFT_MASTER_DEFAULTS=[
 
 function normalizeTime(value,label){
   const text=String(value||'').trim();
-  const match=text.match(TIME_PATTERN);
-  if(!match)throw new Error(`${label} must use HH:MM or HH:MM:SS.`);
-  const hour=Number(match[1]),minute=Number(match[2]),second=Number(match[3]||0);
+  const twelveHour=text.match(TWELVE_HOUR_TIME_PATTERN);
+  const match=twelveHour||text.match(TIME_PATTERN);
+  if(!match)throw new Error(`${label} must be a valid time such as 07:00 PM.`);
+  let hour=Number(match[1]);
+  if(twelveHour){hour%=12;if(match[4].toUpperCase()==='PM')hour+=12;}
+  const minute=Number(match[2]),second=Number(match[3]||0);
   if(hour>23||minute>59||second>59)throw new Error(`${label} is not a valid time.`);
   return [hour,minute,second].map((part)=>String(part).padStart(2,'0')).join(':');
 }

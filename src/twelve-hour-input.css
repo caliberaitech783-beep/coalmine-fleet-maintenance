@@ -1,0 +1,27 @@
+.twelve-hour-time-input {
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+.twelve-hour-datetime-input {
+  display: grid;
+  grid-template-columns: minmax(132px, 1fr) minmax(132px, 0.85fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.twelve-hour-datetime-input > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.report-time-field .twelve-hour-time-input,
+.wrs-time-slots .twelve-hour-time-input {
+  width: 132px;
+}
+
+@media (max-width: 560px) {
+  .twelve-hour-datetime-input {
+    grid-template-columns: 1fr;
+  }
+}

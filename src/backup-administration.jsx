@@ -123,7 +123,7 @@ function PcBackupCopy({session}){
     }catch(scriptError){setProblem(scriptError.message||'Could not load the PC setup script.');}
     finally{setWorking('');}
   };
-  const when=(value)=>value?new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Never';
+  const when=(value)=>value?new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',hour12:true}).replace(/\b(am|pm)\b/gi,period=>period.toUpperCase()):'Never';
   return <section className="pc-backup-copy" aria-labelledby="pc-backup-copy-title">
     <header><span className="pc-backup-icon"><Laptop /></span><div><h3 id="pc-backup-copy-title">Copy backups to a PC</h3><p>Every day the PC downloads the latest completed backup, checks its SHA-256 checksum and keeps the number of copies you choose. Create a key, download the setup script, and run it once on that PC.</p></div></header>
     {problem&&<div className="backup-alert error" role="alert"><AlertTriangle /><span>{problem}</span></div>}
@@ -131,7 +131,7 @@ function PcBackupCopy({session}){
       <li><b>Create a key for the PC</b><div className="pc-backup-create"><input value={label} maxLength={60} placeholder="PC name, e.g. Head office desktop" aria-label="PC name" onChange={(event)=>setLabel(event.target.value)} /><button type="button" className="primary" disabled={Boolean(working)} onClick={createKey}><KeyRound />{working==='create'?'Creating...':'Create PC key'}</button></div>
         {created&&<div className="pc-backup-key" role="status"><small>Copy this key now. It is shown only once and will be asked for by the setup script.</small><code>{created.key}</code><button type="button" className="secondary" onClick={copyKey}><Copy />{copied?'Copied':'Copy key'}</button></div>}</li>
       <li><b>Download the setup script</b><button type="button" className="secondary" disabled={Boolean(working)} onClick={downloadSetup}><Download />{working==='script'?'Preparing...':'Download PC setup script'}</button></li>
-      <li><b>On that PC, right-click the script and choose "Run with PowerShell"</b><small>Choose the folder, the daily time (03:00 suits the 02:00 server backup), how many copies to keep, and paste the key. The first copy runs immediately.</small></li>
+      <li><b>On that PC, right-click the script and choose "Run with PowerShell"</b><small>Choose the folder, the daily time (3:00 AM suits the 2:00 AM server backup), how many copies to keep, and paste the key. The first copy runs immediately.</small></li>
     </ol>
     <div className="pc-backup-keys"><h4>PCs receiving copies</h4>{keys===null?<p>Loading...</p>:keys.length?<table><thead><tr><th>PC</th><th>Key ends</th><th>Created</th><th>Last copy</th><th /></tr></thead><tbody>{keys.map((key)=><tr key={key.id}><td><b>{key.label}</b><small>{key.createdBy}</small></td><td><code>...{key.hint}</code></td><td>{when(key.createdAt)}</td><td>{when(key.lastUsedAt)}{key.lastUsedIp&&<small>{key.lastUsedIp}</small>}</td><td><button type="button" className="danger" disabled={Boolean(working)} onClick={()=>revokeKey(key)}><Trash2 />{working===`revoke-${key.id}`?'Revoking...':'Revoke'}</button></td></tr>)}</tbody></table>:<p>No PC is set up yet.</p>}</div>
   </section>;

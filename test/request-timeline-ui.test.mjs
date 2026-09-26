@@ -3,7 +3,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React from "react";
-import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { transformWithOxc } from "vite";
 import {formatTimelineDuration, parseRequestTimelineTimestamp, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
 import * as equipment from "../request-equipment.mjs";
@@ -79,13 +78,13 @@ function harness(name, extra = {}) {
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
     })),
     DailyUpdatesPanel,
-    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null, MaintenanceEtcInput: "maintenance-etc",
+    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null, MaintenanceEtcInput: "maintenance-etc", TwelveHourTimeInput: "twelve-hour-time",
     TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
     useMasterRecords: () => [[]], normalizeEquipmentGroup: value => value,
     formatTwelveHourDateTime: value => value || "Not recorded", effectiveInfoPulseEtcTimestamp: () => Number.NaN,
     indiaDateTimeInputValue: () => "", delayedReasonRequired: () => false, delayedReasonsForRepairType: () => ["Parts - OEM"],
-    arrivalRedFlagRequired: () => false, TIME_24H_PATTERN, readMeterEvidence: async () => "fixture",
+    arrivalRedFlagRequired: () => false, readMeterEvidence: async () => "fixture",
     FormData: class {constructor(values) {this.values = values;} get(key) {return this.values[key] ?? "";}},
     URL: {createObjectURL: () => "fixture:preview", revokeObjectURL() {}},
     FileReader: class {readAsDataURL() {this.result = "data:image/png;base64,dGVzdA=="; this.onload();}},
@@ -194,7 +193,7 @@ test("timeline view distinguishes recorded sources and never invents legacy acto
   assert.match(text(stage("acceptedAt")), /System recorded.*QA Recorded Actor/);
   assert.match(text(stage("firstTripAt")), /Form supplied.*QA Recorded Actor/);
   assert.match(text(stage("start")), /Source not recorded \(legacy\).*Timestamp audit authorNot recorded.*Timestamp audit saved atNot recorded/);
-  assert.match(text(stage("acceptedAt")), /10:10:00 IST/);
+  assert.match(text(stage("acceptedAt")), /10:10:00 AM IST/);
   assert.match(text(tree), /does not independently prove/);
   assert.match(text(tree), /Older changes cannot be reconstructed/);
 });
@@ -206,9 +205,9 @@ test("timeline shows planned ETC and corrected original/new values, reason, acto
   assert.match(text(tree), /Expected completion \(planned\)/);
   const historyText = text(all(tree, node => node.props.className === "request-timeline-history")[0]);
   assert.match(historyText, /Corrected/);
-  assert.match(historyText, /Original: .*11:30:00 IST/);
-  assert.match(historyText, /Saved value: .*12:30:00 IST/);
-  assert.match(historyText, /QA Correction Author.*11:45:00 IST.*Form supplied/);
+  assert.match(historyText, /Original: .*11:30:00 AM IST/);
+  assert.match(historyText, /Saved value: .*12:30:00 PM IST/);
+  assert.match(historyText, /QA Correction Author.*11:45:00 AM IST.*Form supplied/);
   assert.match(historyText, /Reason: Replacement part ETA revised/);
 });
 
@@ -260,7 +259,7 @@ test("legacy creator and daily updates are visible without inventing acceptance 
   assert.match(text(articles[1]),/does not mean the vehicle never reached maintenance/);
   assert.doesNotMatch(text(articles[1]),/AVADH|ASHISH|System recorded/);
   const updates = panelText(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
-  assert.match(updates,/#1 06 Sept 2026, 01:34:00 IST AVADH KISHORE TIWARI \(maintenance-fixture\) Air Compressor Removed (?:Breakdown · )?Delayed reason: Air Compressor Clutch Kit Not Available/);
+  assert.match(updates,/#1 06 Sept 2026, 01:34:00 AM IST AVADH KISHORE TIWARI \(maintenance-fixture\) Air Compressor Removed (?:Breakdown · )?Delayed reason: Air Compressor Clutch Kit Not Available/);
   assert.match(text(tree),/not arrival waiting time or confirmed hands-on repair time/);
   assert.equal(events.find(event=>event.event === "acceptedAt").eventAt,null);
   assert.deepEqual(legacy,original);
@@ -280,7 +279,7 @@ test("updates show saved remarks newest first by default, numbered from the firs
   const tree = harness("RequestTimelineView").render({data:body(request.ref,{request:changed})});
   const html = renderToStaticMarkup(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
   const updates = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1].replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim());
-  assert.deepEqual(updates,["#2 06 Sept 2026, 01:34:00 IST Not recorded Newer update Delayed reason: Not recorded","#1 05 Sept 2026, 01:34:00 IST Not recorded Older update Delayed reason: Not recorded"]);
+  assert.deepEqual(updates,["#2 06 Sept 2026, 01:34:00 AM IST Not recorded Newer update Delayed reason: Not recorded","#1 05 Sept 2026, 01:34:00 AM IST Not recorded Older update Delayed reason: Not recorded"]);
   assert.match(html,/<button type="button" aria-pressed="true" title="[^"]+">Newest first<\/button><button type="button" aria-pressed="false" title="[^"]+">Oldest first<\/button>/);
 });
 
@@ -327,11 +326,12 @@ for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name} retain
   assert.equal(button(app.render(), "Cancel").props.disabled, false);
 });
 
-test("MIS first-trip time field imports its real validator and is mandatory", () => {
-  assert.match(main, /import\s*\{\s*TIME_24H_PATTERN\s*\}\s*from\s*["']\.\.\/request-time\.mjs["']/);
+test("MIS first-trip time field uses the shared 12-hour control and is mandatory", () => {
+  assert.match(main, /TwelveHourTimeInput name="firstTripTime" includeSeconds required/);
   const app = harness("VerifyRequestForm");
   let tree = app.render({request: {...request, meterType: "HMR"}, close() {}, onSave: async () => {}});
-  assert.equal(field(tree, "firstTripTime").props.pattern, TIME_24H_PATTERN);
+  assert.equal(field(tree, "firstTripTime").props.includeSeconds, true);
+  assert.equal(field(tree, "firstTripTime").props.required, true);
   assert.equal(field(tree, "firstTripDate").props.required, true);
   assert.equal(all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.checked, true);
 });

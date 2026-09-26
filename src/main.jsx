@@ -11,7 +11,6 @@ import "./smart-print.css";
 import "./date-input.css";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, parseFilterValues, toggleFilterValue } from "./multi-value-filter.mjs";
-import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
@@ -19,6 +18,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
+import { TwelveHourDateTimeInput, TwelveHourTimeInput } from "./twelve-hour-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import { useTableLayouts, TableLayoutControls, TableLayoutSelect } from "./table-layouts.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
@@ -1388,7 +1388,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
     {managerReconnecting && <ConnectionRecoveryNotice updatedAt={managerUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
-    {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {new Date(managerUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes automatically and when you return to this tab.</p>}
+    {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {formatDisplayTime(new Date(managerUpdatedAt))} · Refreshes automatically and when you return to this tab.</p>}
     {productionManagerView&&productionFirstTripRows.length>0&&<div className="manager-first-trip-alert first-trip-pending-alert" role="alert"><CheckCircle2 /><span>{productionFirstTripRows.length} vehicle/equipment first-trip entry pending after Maintenance made on road.</span><button type="button" className="primary" onClick={()=>setQueueTab("firstTrip")}>Open</button></div>}
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, action, types]) => <button type="button" key={label} onClick={() => managerDataReady&&action&&setManagerDrilldown(action.key)} disabled={!action||!managerDataReady} aria-busy={!managerDataReady} aria-haspopup="dialog" aria-label={`${label}: ${managerDataReady?Number(value||0).toLocaleString():"loading"}. View details`}>
       <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small><ChevronRight className="manager-kpi-drilldown-icon" aria-hidden="true" />{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
@@ -2737,7 +2737,7 @@ const masterFields = {
     ["level", "User level (L1 / L2 / L3 / L4)"],
     ["schedule", "Schedule"],
     ["scheduleDays", "Scheduled days (separate with |)"],
-    ["scheduleTimes", "IST times (HH:MM, separate with |)"],
+    ["scheduleTimes", "IST times (h:mm AM/PM, separate with |)"],
     ["reportAccess", "Report ticks (separate with |)"],
     ["siteAccess", "Site ticks (separate with |)"],
   ],
@@ -4483,7 +4483,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
                       {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
                     </select></>
                   ) : type === "time" ? (
-                    <>{label} *<input type="time" step="1" name={key} required /></>
+                    <>{label} (12-hour) *<TwelveHourTimeInput includeSeconds name={key} required /></>
                   ) : type === "date" ? (
                     <>{label}<DateInput name={key} /></>
                   ) : type === "shift-status" ? (
@@ -7405,7 +7405,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     <label><span>Frequency</span><select value={schedule.cadence} onChange={(event) => updateReportSchedule(schedule.key, { cadence: event.target.value, weekday: event.target.value === "weekly" ? (schedule.weekday ?? 1) : null, intervalDays: event.target.value === "interval" ? (schedule.intervalDays || 7) : null })}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N days</option></select></label>
                     {schedule.cadence === "weekly" && <label><span>Day</span><select value={schedule.weekday} onChange={(event) => updateReportSchedule(schedule.key, { weekday: Number(event.target.value) })}>{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
-                    <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" aria-label={`Report delivery time ${index+1}`} value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>
+                    <label className="report-time-field"><span>IST time slots (12-hour)</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><TwelveHourTimeInput aria-label={`Report delivery time ${index+1}`} value={time} required onChange={(nextTime) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? nextTime : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>
                   </div>
                   {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker" open><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportAccess.allowedReports.length ? reportAccess.allowedReports.map((title) => <label key={title}><input type="checkbox" checked={schedule.reports.includes(title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(title) ? schedule.reports.filter((item) => item !== title) : [...schedule.reports, title] })} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to your role yet. Ask an administrator to add them to the role default.</p>}</div></details>}
                   {schedule.reports.includes(TICKET_ACCEPTANCE_REPORT_TITLE) && <p className="report-acceptance-schedule-note">Ticket Acceptance includes delays over 30 minutes in scheduled WhatsApp reports.</p>}
@@ -7430,8 +7430,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             </header>
             <div className="report-zip-range">
               <div><CalendarDays /><span><b>Report period</b><small>Only records within this IST date and time range are included.</small></span></div>
-              <label><span>From</span><DateInput type="datetime-local" value={reportZipFrom} max={reportZipTo} onChange={(event) => setReportZipFrom(event.target.value)} /></label>
-              <label><span>To</span><DateInput type="datetime-local" value={reportZipTo} min={reportZipFrom} onChange={(event) => setReportZipTo(event.target.value)} /></label>
+              <label><span>From (IST, 12-hour)</span><TwelveHourDateTimeInput value={reportZipFrom} max={reportZipTo} onChange={setReportZipFrom} /></label>
+              <label><span>To (IST, 12-hour)</span><TwelveHourDateTimeInput value={reportZipTo} min={reportZipFrom} onChange={setReportZipTo} /></label>
             </div>
             <div className="report-zip-toolbar">
               <div className="report-zip-selection"><span><b>{selectedZipReports.length}</b> of {accessibleReportGroups.length} selected</span><small>PDF + Excel included</small><i aria-hidden="true"><span style={{ width: `${accessibleReportGroups.length ? (selectedZipReports.length / accessibleReportGroups.length) * 100 : 0}%` }} /></i></div>
@@ -7876,7 +7876,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
               ) : type === "site-select" ? (
                 <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Select site</option>{privilegeSelectionValue(editing[key]) && !siteOptions.includes(privilegeSelectionValue(editing[key])) && <option value={privilegeSelectionValue(editing[key])}>{privilegeSelectionValue(editing[key])}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
               ) : type === "time" ? (
-                <label key={key}>{label} *<input type="time" step="1" name={key} required defaultValue={editing[key] || ""} /></label>
+                <label key={key}>{label} (12-hour) *<TwelveHourTimeInput includeSeconds name={key} required defaultValue={editing[key] || ""} /></label>
               ) : type === "date" ? (
                 <label key={key}>{label}<DateInput name={key} defaultValue={editing[key] || ""} /></label>
               ) : type === "shift-status" ? (
@@ -9794,7 +9794,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
       <div className="formgrid">
         {firstTripDone && <>
           <label>First trip date *<DateInput name="firstTripDate" required defaultValue={today.date} /><small>Enter the actual trip date. It must not be earlier than closure or in the future.</small></label>
-          <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
+          <label>First trip time (12-hour with seconds) *<TwelveHourTimeInput name="firstTripTime" includeSeconds required defaultValue={today.time} /></label>
         </>}
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required />
         {request.firstTripAt && <label className="full">Reason for correcting the recorded first-trip time *<textarea name="correctionReason" required maxLength={500} /><small>This unverified entry already has a first-trip time: {request.firstTripAt}. Any replacement or removal will retain the original value.</small></label>}
@@ -9855,7 +9855,7 @@ function ProductionFirstTripForm({ request, close, onSave }) {
       </div>
       <div className="formgrid">
         <label>Production first-trip date *<DateInput name="firstTripDate" required defaultValue={today.date} /><small>Enter when the vehicle/equipment actually started work after Maintenance made it on road.</small></label>
-        <label>Production first-trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
+        <label>Production first-trip time (12-hour with seconds) *<TwelveHourTimeInput name="firstTripTime" includeSeconds required defaultValue={today.time} /></label>
         <label className="full">Production first-trip note *<textarea name="productionFirstTripRemark" required maxLength={1000} placeholder="Example: Vehicle started loading work / first dispatch started / no driver assigned but unit received." /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}

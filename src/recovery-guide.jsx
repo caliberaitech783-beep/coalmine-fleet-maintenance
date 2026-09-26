@@ -12,7 +12,7 @@ const PARTS = [
 ];
 
 const LAYERS = [
-  {Icon: Server, title: "Server backup every night", text: "At 02:00 IST (days and time can be changed) the app writes a compressed, checksum-verified file of the whole database and keeps 30. It survives restarts and redeployments, but it lives on the same App Service, so losing the App Service loses these too."},
+  {Icon: Server, title: "Server backup every night", text: "At 2:00 AM IST (days and time can be changed) the app writes a compressed, checksum-verified file of the whole database and keeps 30. It survives restarts and redeployments, but it lives on the same App Service, so losing the App Service loses these too."},
   {Icon: Laptop, title: "Copy to your PC every day", text: "Your PC downloads the newest backup, checks its SHA-256 checksum and keeps the number you choose. If the PC was off, it copies as soon as it is back on. A folder inside the company OneDrive gives an off-site copy as well."},
   {Icon: Cloud, title: "Azure PostgreSQL automatic backups", text: "Azure also keeps point-in-time backups of the database server. Check the retention period in the Azure portal on the PostgreSQL server's Backup and restore page."},
 ];
@@ -36,10 +36,10 @@ export default function RecoveryGuide({onNavigate}) {
 
     <h2>Trial: set it up and prove it works</h2>
     <ol className="recovery-trail">
-      <li><h3>Check the nightly server backup</h3><p>Open {open("Backup Schedule", "Backup Schedule")}. The switch should show <b>Active</b>, every weekday ticked, 02:00 and retention 30. Click <b>Save schedule</b> if you changed anything.</p></li>
+      <li><h3>Check the nightly server backup</h3><p>Open {open("Backup Schedule", "Backup Schedule")}. The switch should show <b>Active</b>, every weekday ticked, 2:00 AM and retention 30. Click <b>Save schedule</b> if you changed anything.</p></li>
       <li><h3>Make a backup now</h3><p>On the same page click <b>Run backup now</b>. Then open {open("Backup", "Backup")}: the newest row should say <b>Completed</b> with a size and a checksum.</p></li>
       <li><h3>Create a key for your PC</h3><p>On {open("Backup Schedule", "Backup Schedule")}, scroll to <b>Copy backups to a PC</b>. Type a name such as "Head office desktop", click <b>Create PC key</b>, then <b>Copy key</b>. The key is shown only once.</p></li>
-      <li><h3>Download and run the setup script on that PC</h3><p>Click <b>Download PC setup script</b>. In Downloads, right-click <code>Nerve-Center-Backup-Setup.ps1</code> and choose <b>Run with PowerShell</b>. Answer four questions: the folder, the time (03:00), how many copies to keep (30), and paste the key.</p></li>
+      <li><h3>Download and run the setup script on that PC</h3><p>Click <b>Download PC setup script</b>. In Downloads, right-click <code>Nerve-Center-Backup-Setup.ps1</code> and choose <b>Run with PowerShell</b>. Answer four questions: the folder, the time (3:00 AM), how many copies to keep (30), and paste the key.</p></li>
       <li><h3>Watch the first copy</h3><p>The script runs the first copy straight away and prints a line such as <code>Copied BDMS-Backup-….ndjson.gz (12.4 MB, SHA-256 verified)</code>. The key's <b>Last copy</b> time updates and the {open("Audit Trail", "Audit Trail")} shows <b>Copy backup to PC</b>.</p></li>
       <li><h3>Confirm the daily schedule</h3><p>In Windows <b>Task Scheduler</b> find <b>Nerve Center backup copy</b>. A log of every copy is kept in <code>%LOCALAPPDATA%\NerveCenterBackup\backup-copy.log</code>.</p></li>
       <li><h3>Practise a restore without changing anything</h3><p>Open {open("Import Backup", "Import Backup")} as a Super Admin and choose a file from your PC folder. The app reads the whole file, checks it is complete and shows the rows per table. <b>Stop there</b>: nothing has changed. Repeat this drill once a month.</p></li>

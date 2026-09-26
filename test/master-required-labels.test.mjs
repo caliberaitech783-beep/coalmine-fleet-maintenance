@@ -16,6 +16,9 @@ for (const [name, next] of [["MasterActions", "Equipment"], ["MasterPage", "Mast
 const Null = () => null;
 const SearchableSelectFixture = ({label, name, required, defaultValue}) => React.createElement("label", null,
   label, required ? " *" : "", React.createElement("input", {name, required, defaultValue}));
+const TwelveHourTimeInputFixture = ({name, required, defaultValue}) => React.createElement("input", {
+  type: "text", name, required, defaultValue,
+});
 function nodes(tree, predicate) {
   const found = [];
   const visit = node => {
@@ -49,7 +52,7 @@ function render(name, componentName) {
     mobileRoleAuthority: {"Maintenance User": "Edit requests"}, persistedUserTypeOptions: ["Mobile User", "Super Admin"],
     isCheckedValue: value => value === true, privilegeAccessValue: value => value || "", privilegeSelectionValue: value => value || "",
     useSortableRows: rows => [rows, {}, () => {}], sortCollator: new Intl.Collator(),
-    SearchableSelect: SearchableSelectFixture,
+    SearchableSelect: SearchableSelectFixture, TwelveHourTimeInput: TwelveHourTimeInputFixture,
     ...Object.fromEntries(["RefreshCw", "Trash2", "Save", "Upload", "Plus", "X", "Search", "Pencil", "CheckCircle2", "LockKeyhole", "Modal", "ExportMenu", "MultiTextField", "UserTypeAccessFields", "TableParameterFilter", "ActionsTable", "FilterableHeader", "MasterActions"].map(key => [key, Null])),
   };
   const Component = new Function("DateInput", ...Object.keys(scope), `${codes[componentName]}; return ${componentName};`)(DateInput, ...Object.values(scope));

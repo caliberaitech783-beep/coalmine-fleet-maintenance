@@ -20,7 +20,8 @@ test('reports UI supports selectable PDF and Excel downloads in one ZIP archive'
   assert.match(source,/className=\{selectedZipReports\.includes\(report\.title\) \? "selected" : ""\}/);
   assert.match(polish,/\.report-zip-modal > header/);
   assert.match(polish,/\.report-zip-groups label\.selected/);
-  assert.match(source,/type="datetime-local"/);
+  assert.match(source,/<TwelveHourDateTimeInput value=\{reportZipFrom\}/);
+  assert.match(source,/<TwelveHourDateTimeInput value=\{reportZipTo\}/);
   assert.match(source,/reportRowsWithinRange\(report\.rows, report\.dateValue, reportZipFrom, reportZipTo\)/);
   assert.match(polish,/\.report-zip-range/);
 });

@@ -109,7 +109,7 @@ export default function OrganisationChartView({ view = "reporting", chart, loadi
   const { reporting, summary } = chart;
   const text = PAGE_TEXT[view] || PAGE_TEXT.reporting;
   const visible = activeSite === "all" ? sites : sites.filter((entry) => entry.site === activeSite);
-  const updated = updatedAt ? new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  const updated = updatedAt ? new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }).replace(/\b(am|pm)\b/gi, period => period.toUpperCase()) : "";
   const SiteBlock = view === "access" ? AccessSite : view === "levels" ? LevelsSite : view === "people" ? PeopleSite : ReportingSite;
   return <section className={`panel pagepanel organisation-chart org-view-${view}`} aria-busy={loading}>
     <header><div><span className="page-eyebrow">Administration · read only · site-wise</span><h1>{text.title}</h1><p>{text.intro} Updates by itself whenever Users &amp; employees, Privilege or Hierarchy master change.</p></div>

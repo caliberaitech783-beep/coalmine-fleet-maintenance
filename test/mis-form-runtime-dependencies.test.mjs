@@ -7,11 +7,11 @@ import {build} from "vite";
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("workflow time fields import the shared browser validation pattern", () => {
+test("workflow time fields import the shared 12-hour controls", () => {
   assert.equal(
-    /import\s*\{\s*TIME_24H_PATTERN\s*\}\s*from\s*["']\.\.\/request-time\.mjs["'];/.test(source),
+    /import\s*\{\s*TwelveHourDateTimeInput\s*,\s*TwelveHourTimeInput\s*\}\s*from\s*["']\.\/twelve-hour-input\.jsx["'];/.test(source),
     true,
-    "first-trip, maintenance, and scheduling forms must not depend on an undefined browser global",
+    "first-trip and scheduling forms must use the shared AM/PM controls",
   );
 });
 

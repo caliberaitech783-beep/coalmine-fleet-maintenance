@@ -20,6 +20,7 @@ test('Shift Master accepts workbook headers, normalizes time, and validates effe
     site:'Majri OB',shiftName:'Shift A',shiftCode:'A',startTime:'05:00:00',endTime:'13:00:00',
     effectiveFrom:'2026-09-15',effectiveTo:'2026-09-30',status:'Active',remarks:'Day shift',
   });
+  assert.equal(normalizeShiftRecord({...normalized,startTime:'7:05 PM'}).startTime,'19:05:00');
   assert.throws(()=>normalizeShiftRecord({...normalized,effectiveTo:'14-09-2026'}),/cannot be before/);
   assert.throws(()=>normalizeShiftRecord({...normalized,startTime:'25:00'}),/valid time/);
   assert.equal(displaySiteName(normalizeOperationalSiteFields({site:'Gouri OB'}).site),'Gauri Pauni OB (2nd)');

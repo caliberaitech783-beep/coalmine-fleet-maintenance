@@ -126,7 +126,7 @@ export function SavedReportsDialog({ title = "", reports = [], loading = false, 
 function formatSavedAt(value) {
   const date = new Date(value || "");
   if (Number.isNaN(date.getTime())) return "recently";
-  return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()} ${date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()} ${date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).replace(/\b(am|pm)\b/gi, period => period.toUpperCase())}`;
 }
 
 /**

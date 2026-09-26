@@ -1,5 +1,5 @@
 import {canonicalReportTitle,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
-import {formatDisplayTime} from './date-time-format.mjs';
+import {formatDisplayTime,parseTwelveHourTime} from './date-time-format.mjs';
 import {whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
 import {scheduledReportTimes as scheduleTimes,scheduledReportWindow,scheduledReportWindowsDue} from './report-delivery-window.mjs';
 export {scheduledReportWindow} from './report-delivery-window.mjs';
@@ -203,7 +203,7 @@ export function applyHierarchyDeliveryRule(settings,designationKey,rule={}){
   if(designation.managedByReportSettings===true)return normalized;
   if(!designation.schedules.some((schedule)=>schedule.enabled&&schedule.reports.length))return normalized;
   const weekdays=[...new Set(hierarchyList(rule.scheduleDays).map((day)=>WEEKDAY_NUMBER.get(day.toLowerCase())).filter((day)=>day!=null))];
-  const times=hierarchyList(rule.scheduleTimes).filter((time)=>TIME_PATTERN.test(time)).slice(0,6);
+  const times=hierarchyList(rule.scheduleTimes).map((time)=>parseTwelveHourTime(time)||time).filter((time)=>TIME_PATTERN.test(time)).slice(0,6);
   const activeReports=new Set(designation.schedules.filter((schedule)=>schedule.enabled).flatMap((schedule)=>schedule.reports));
   const pausedReports=new Set(designation.schedules.filter((schedule)=>!schedule.enabled).flatMap((schedule)=>schedule.reports).filter((title)=>!activeReports.has(title)));
   const reports=hierarchyList(rule.reportAccess).map(canonicalReportTitle).filter((title)=>ALLOWED_REPORTS.has(title)&&!pausedReports.has(title));

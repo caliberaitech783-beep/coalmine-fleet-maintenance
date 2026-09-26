@@ -5978,7 +5978,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const closingMeterFile=String(req.body?.closingMeterFile||'');
     const closingMeterFileName=String(req.body?.closingMeterFileName||'').trim().slice(0,255);
     const closedAt=parseRequestTimelineTimestamp(`${closingDate}T${closingTime}`);
-    if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
+    if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and 12-hour time with AM/PM.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
@@ -6233,7 +6233,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const reference=String(req.params.reference||'').trim();
     const firstTripAt=parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`);
     const remark=String(req.body?.productionFirstTripRemark||req.body?.remark||'').trim();
-    if(!firstTripAt)return res.status(400).json({error:'Enter a valid production first-trip date and time in HH:MM:SS format.'});
+    if(!firstTripAt)return res.status(400).json({error:'Enter a valid production first-trip date and 12-hour time with AM/PM.'});
     if(!remark)return res.status(400).json({error:'Enter the production first-trip remark or work-start note.'});
     if(remark.length>1000)return res.status(400).json({error:'Keep the production first-trip remark within 1,000 characters.'});
     const user=await currentUserRecord(req.session,client);
@@ -6289,7 +6289,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
-    if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
+    if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and 12-hour time with AM/PM.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
     const misUser=await currentUserRecord(req.session);

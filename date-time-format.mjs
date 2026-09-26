@@ -80,6 +80,28 @@ export function formatDisplayTime(value, emptyValue = '—') {
   return `${pad(hour12)}:${parts.minute}:${parts.second} ${hour24 >= 12 ? 'PM' : 'AM'}`;
 }
 
+export function formatTimeInputValue(value, {includeSeconds = false, emptyValue = ''} = {}) {
+  const formatted = formatDisplayTime(value, emptyValue);
+  if (!formatted || formatted === emptyValue) return formatted;
+  return includeSeconds ? formatted : formatted.replace(/^(\d{2}:\d{2}):\d{2}\s+/, '$1 ');
+}
+
+export function parseTwelveHourTime(value, {includeSeconds = false} = {}) {
+  const text = String(value ?? '').trim();
+  const pattern = includeSeconds
+    ? /^(0?[1-9]|1[0-2]):([0-5]\d):([0-5]\d)\s*([AP]M)$/i
+    : /^(0?[1-9]|1[0-2]):([0-5]\d)\s*([AP]M)$/i;
+  const match = text.match(pattern);
+  if (!match) return '';
+  const period = match[includeSeconds ? 4 : 3].toUpperCase();
+  let hour = Number(match[1]) % 12;
+  if (period === 'PM') hour += 12;
+  return `${pad(hour)}:${match[2]}${includeSeconds ? `:${match[3]}` : ''}`;
+}
+
+export const TWELVE_HOUR_TIME_PATTERN = '(?:0?[1-9]|1[0-2]):[0-5][0-9]\\s*(?:AM|PM)';
+export const TWELVE_HOUR_TIME_SECONDS_PATTERN = '(?:0?[1-9]|1[0-2]):[0-5][0-9]:[0-5][0-9]\\s*(?:AM|PM)';
+
 export function formatDisplayDateTime(value, emptyValue = '—') {
   const parts = indiaParts(value);
   if (!parts) return fallback(value, emptyValue);

@@ -7,7 +7,7 @@ test("workflow date and time fields are read only except MIS and Production firs
   const fieldNames = ["date", "time", "closingDate", "closingTime"];
 
   for (const name of fieldNames) {
-    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput)[^>]*name="${name}"[^>]*>`, "g"))];
+    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput|TwelveHourTimeInput)[^>]*name="${name}"[^>]*>`, "g"))];
     assert.ok(inputs.length, `${name} should be present`);
     for (const [input] of inputs) {
       if (!/\btype="hidden"/.test(input)) {
@@ -18,7 +18,7 @@ test("workflow date and time fields are read only except MIS and Production firs
   }
 
   for (const name of ["firstTripDate", "firstTripTime"]) {
-    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput)[^>]*name="${name}"[^>]*>`, "g"))];
+    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput|TwelveHourTimeInput)[^>]*name="${name}"[^>]*>`, "g"))];
     assert.equal(inputs.length, 2, `${name} should exist in the MIS and Production first-trip forms`);
     for (const [input] of inputs) {
       assert.doesNotMatch(input, /\breadOnly\b/, `${name} must be editable in both first-trip forms`);
