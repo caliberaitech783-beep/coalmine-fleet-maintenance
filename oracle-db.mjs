@@ -118,6 +118,60 @@ export async function oracleDriverLookup({ date, time, location, equipmentNo }) 
   }
 }
 
+let fleetDriversCache;
+let fleetDriversPromise;
+export async function oracleLatestFleetDrivers() {
+  if (fleetDriversCache && Date.now() < fleetDriversCache.expiresAt) return fleetDriversCache.rows;
+  if (fleetDriversPromise) return fleetDriversPromise;
+  fleetDriversPromise = (async () => {
+    const pool = await oraclePool();
+    const connection = await pool.getConnection();
+    try {
+      connection.callTimeout = 15000;
+      const result = await connection.execute(
+        `SELECT ranked.equipment_tno, equipment.equipmentid, equipment.equipmentname,
+                equipment.equipmentno, ranked.vehicle_no, ranked.driver_name,
+                TO_CHAR(ranked.log_date, 'YYYY-MM-DD HH24:MI:SS') AS driver_at
+         FROM (
+           SELECT candidates.*, ROW_NUMBER() OVER (
+             PARTITION BY equipment_tno, CASE WHEN equipment_tno IS NULL THEN vehicle_no END
+             ORDER BY log_date DESC, log_tno DESC, source_type
+           ) AS result_rank
+           FROM (
+             SELECT log.equipmenttno AS equipment_tno, CAST(NULL AS VARCHAR2(200)) AS vehicle_no,
+                    emp.employeename AS driver_name, log.equipmentlogbookdate AS log_date,
+                    log.tno AS log_tno, 'Equipment' AS source_type
+             FROM cmpl.equipmentlogbook log
+             JOIN cmpl.employee emp ON emp.employeecode = log.operatorcode
+             WHERE TRIM(emp.employeename) IS NOT NULL AND log.equipmentlogbookdate <= SYSDATE
+             UNION ALL
+             SELECT log.equipmenttno, log.vehicleno, emp.employeename, log.vehiclelogbookdate,
+                    log.tno, 'Vehicle'
+             FROM cmpl.vehiclelogbook log
+             JOIN cmpl.employee emp ON emp.employeecode = log.operatorcode
+             WHERE TRIM(emp.employeename) IS NOT NULL AND log.vehiclelogbookdate <= SYSDATE
+           ) candidates
+         ) ranked
+         LEFT JOIN cmpl.equipment equipment ON equipment.tno = ranked.equipment_tno
+         WHERE ranked.result_rank = 1`, [],
+        {outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000},
+      );
+      const rows = (result.rows || []).map(row => ({
+        oracleEquipmentTno: String(row.EQUIPMENT_TNO ?? ''),
+        equipmentId: String(row.EQUIPMENTID ?? ''), equipmentName: String(row.EQUIPMENTNAME ?? ''),
+        oracleEquipmentNo: String(row.EQUIPMENTNO ?? ''), vehicleNo: String(row.VEHICLE_NO ?? ''),
+        driverName: String(row.DRIVER_NAME ?? ''), driverAt: String(row.DRIVER_AT ?? ''),
+      }));
+      fleetDriversCache = {rows, expiresAt: Date.now() + 5 * 60 * 1000};
+      return rows;
+    } finally {
+      await connection.close();
+    }
+  })();
+  try { return await fleetDriversPromise; }
+  finally { fleetDriversPromise = null; }
+}
+
 export async function oracleEquipmentTransfers(fromDate = null) {
   fromDate = transferSyncDate(fromDate);
   const pool = await oraclePool();

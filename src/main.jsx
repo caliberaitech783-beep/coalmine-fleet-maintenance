@@ -6880,7 +6880,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/reports/master-data",{signal:controller.signal,cache:"no-store",headers:{Authorization:`Bearer ${session?.token || authToken}`}})
+    setReportMasterData(previous => ({...previous,loading:true}));
+    fetch(`/api/reports/master-data${activeReportCategory === "vehicle-history" ? "?includeDrivers=1" : ""}`,{signal:controller.signal,cache:"no-store",headers:{Authorization:`Bearer ${session?.token || authToken}`}})
       .then(async response => {
         const data = await response.json();
         if(!response.ok) throw new Error(data.error || "Could not load report master data.");
@@ -6888,7 +6889,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         if(!controller.signal.aborted) setReportMasterData({...data,loading:false,error:""});
       }).catch(error => {if(!controller.signal.aborted) setReportMasterData({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:false,error:error.message});});
     return () => controller.abort();
-  },[session?.token]);
+  },[session?.token,activeReportCategory]);
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
   const [reportScheduleScope, setReportScheduleScope] = useState("personal");
@@ -7490,6 +7491,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       </div>}
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
+      {reportMasterData.driverLookupWarning && <p role="status">{reportMasterData.driverLookupWarning}</p>}
       {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
       {selectedReport && reportShiftOptions.length > 0 && <div className="mobile-tabs report-shift-tabs" aria-label="Shift Master filter">
         <button type="button" className={selectedReportShift === ALL_SHIFTS_KEY ? "active" : ""} onClick={() => setSelectedReportShift(ALL_SHIFTS_KEY)}>All shifts</button>

@@ -31,7 +31,8 @@ import {accessAllows,managerRoleSelection,masterAccessAllows,removeLegacyDirecto
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
-import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
+import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth,oracleLatestFleetDrivers} from './oracle-db.mjs';
+import {withFleetDriverNames} from './fleet-driver-names.mjs';
 import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
@@ -6480,7 +6481,18 @@ app.get('/api/reports/master-data',requireSession,async(req,res,next)=>{
     const shifts=rows.filter(row=>row.master_name==='Shift Master').map(row=>({id:row.id,...row.record_data}));
     const transferRecords=transfers.filter(row=>!scope.restrictToScope||[row.source,row.destination].some(site=>reportScopeIncludesSite({sites:scope.allowedSites},site)));
     const shiftRecords=shifts.filter(row=>!scope.restrictToScope||reportScopeIncludesSite({sites:scope.allowedSites},row.site));
-    res.json({equipmentRecords:scopeDashboardEquipmentRecords(equipment,session,user,scope),transferRecords,shiftRecords});
+    let equipmentRecords=scopeDashboardEquipmentRecords(equipment,session,user,scope);
+    let driverLookupWarning='';
+    if(req.query.includeDrivers==='1'){
+      if(oracleConfigured){
+        try{equipmentRecords=withFleetDriverNames(equipmentRecords,await oracleLatestFleetDrivers());}
+        catch(error){
+          console.error('Fleet driver lookup failed.',error.message);
+          driverLookupWarning='Latest Oracle drivers are temporarily unavailable. Showing saved driver names where available.';
+        }
+      }else driverLookupWarning='Oracle driver lookup is not configured. Showing saved driver names where available.';
+    }
+    res.json({equipmentRecords,transferRecords,shiftRecords,driverLookupWarning});
   }catch(error){next(error)}
 });
 

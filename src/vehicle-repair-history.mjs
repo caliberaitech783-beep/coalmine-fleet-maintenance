@@ -183,6 +183,8 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
     const latest = history.at(-1) || {};
     const latestTransfer = latestTransferForVehicle(transfers, { ...vehicle, ...latest }) || {};
     const latestDriver = history.findLast((request) => clean(request.driverName || request.driver)) || {};
+    const logbookDriver = clean(vehicle.logbookDriverName) && breakdownTime({start: vehicle.logbookDriverAt}) >= breakdownTime(latestDriver)
+      ? clean(vehicle.logbookDriverName) : "";
     const door = vehicleDoor(vehicle) || vehicleDoor(latest);
     return {
       ...vehicle,
@@ -193,7 +195,7 @@ export function vehicleFleetRows(equipmentRecords = [], requests = [], transfers
       reportMake: clean(vehicle.make || vehicle.reportMake || latest.reportMake || latest.make),
       reportModel: clean(vehicle.model || vehicle.modelNo || vehicle.reportModel || latest.reportModel || latest.model),
       reportSite: clean(vehicle.currentLocation || vehicle.location || vehicle.reportSite || latest.reportSite || latest.site || latestTransfer.destination),
-      driverName: clean(latest.driverName || latest.driver || latestDriver.driverName || latestDriver.driver
+      driverName: clean(logbookDriver || latest.driverName || latest.driver || latestDriver.driverName || latestDriver.driver
         || vehicle.driverName || vehicle.driver || vehicle.operatorName || vehicle.operator
         || latestTransfer.driverName || latestTransfer.driver || latestTransfer.operatorName || latestTransfer.operator),
       registrationNumber: clean(vehicle.reg || vehicle.registrationNumber || latest.reg),
@@ -262,7 +264,7 @@ export function vehicleCommonRemarkRows(equipmentRecords = [], requests = [], tr
       : `${history.length} breakdown${history.length === 1 ? "" : "s"}${open ? ` · ${open} open` : " · all closed"}`;
     return {
       ...vehicle,
-      driverName: clean(latest.driverName || latest.driver || vehicle.driverName),
+      driverName: clean(vehicle.driverName || latest.driverName || latest.driver),
       notice,
       remark: clean(latestRemark?.remark || latest.maintenanceWork || latest.idleReason || latest.status),
       breakdownReason: common.label,
