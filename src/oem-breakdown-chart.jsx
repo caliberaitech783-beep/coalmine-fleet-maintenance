@@ -89,6 +89,7 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
   const sourceRows = chart.sourceRows || chart.rows;
   const oemTotals = new Map(chart.oems.map(oem => [oem.key, oem.count ?? sourceRows.filter(row => row.oemKey === oem.key).length]));
   const visibleOems = chart.oems.filter(oem => oemTotals.get(oem.key));
+  const visibleCategories = (chart.categories || []).filter(category => category.count);
   const hasOemFilter = Boolean(chart.selectedOem && chart.selectedOem !== "all");
   const selectedOem = hasOemFilter ? chart.oems.find(oem => oem.key === chart.selectedOem) || { label: chart.selectedOem, color: "#64748b" } : null;
   const totalOem = selectedOem || allOemsSummary(visibleOems);
@@ -109,6 +110,15 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
       </div>}
     </div>
     {error ? <p className="mine-oem-error" role="alert">{error}</p> : <>
+      {!!visibleCategories.length && <div className="mine-oem-category-legend" aria-label="OEM equipment-category breakdown totals">
+        <strong>Equipment categories</strong>
+        <div>{visibleCategories.map((category, index) => <button type="button" key={category.key}
+          {...tooltipAttributes(`oem-breakdown-tooltip-category-${index}`, category, category.count, siteScope)}
+          aria-label={`${category.label}: ${category.count} breakdown assets, view details`}
+          onClick={event => inspect(event, { oem: category.oemKey, equipmentGroup: category.equipmentGroupKey, equipmentGroupLabel: category.equipmentGroup })}>
+          <i aria-hidden="true" style={{ background: category.color }} /><span>{category.label}</span><b>{category.count.toLocaleString()}</b>
+        </button>)}</div>
+      </div>}
       {!chart.rows.length && <p className="mine-empty" role="status">No OEM breakdowns match the selected filters.</p>}
       <div className="mine-oem-chart-layout">
         <div className="mine-oem-axis" aria-hidden="true"><b>BD count</b>{chart.ticks.map((tick) => <span key={tick}>{tick}</span>)}</div>
@@ -123,10 +133,10 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
                     <button type="button" className="mine-oem-bar-total" {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-total`, bar, bar.rows.length, site.name)}
                       aria-label={`${site.name} · ${bar.label}: ${bar.rows.length} breakdown assets, view details`}
                       onClick={event => inspect(event, { site: site.name, oem: bar.key })}><b>{bar.rows.length.toLocaleString()}</b></button>
-                    {bar.categorySegments.map((segment, segmentIndex) => <button type="button" className="mine-oem-category-segment" data-group-index={segment.groupIndex % 6}
-                      key={segment.equipmentGroupKey} style={{ height: `${segment.rows.length / bar.rows.length * 100}%` }}
-                      {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-${segmentIndex}`, bar, segment.rows.length, site.name, segment.equipmentGroup)}
-                      aria-label={`${site.name} · ${bar.label} · ${segment.equipmentGroup}: ${segment.rows.length} breakdown assets, view details`}
+                    {bar.categorySegments.map((segment, segmentIndex) => <button type="button" className="mine-oem-category-segment"
+                      key={segment.key} style={{ height: `${segment.rows.length / bar.rows.length * 100}%`, "--mine-oem-category-color": segment.color }}
+                      {...tooltipAttributes(`oem-breakdown-tooltip-${siteIndex}-${barIndex}-${segmentIndex}`, segment, segment.rows.length, site.name)}
+                      aria-label={`${site.name} · ${segment.label}: ${segment.rows.length} breakdown assets, view details`}
                       onClick={event => inspect(event, { site: site.name, oem: bar.key, equipmentGroup: segment.equipmentGroupKey, equipmentGroupLabel: segment.equipmentGroup })} />)}
                   </div>
                 </div>)}

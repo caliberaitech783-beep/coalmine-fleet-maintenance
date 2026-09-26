@@ -96,6 +96,21 @@ test("each OEM has one bar even when it contains several equipment groups", () =
   }
 });
 
+test("every OEM equipment category has a separate label and colour", () => {
+  const groupedEquipment = [
+    { id: 20, door: "A", make: "Volvo", group: "Volvo Equipment", currentLocation: "Sasti OB", status: "Breakdown" },
+    { id: 21, door: "B", make: "Volvo", group: "Volvo Tipper", currentLocation: "Sasti OB", status: "Breakdown" },
+    { id: 22, door: "C", make: "Tata", group: "Tipper", currentLocation: "Sasti OB", status: "Breakdown" },
+  ];
+  const rows = build({ equipment: groupedEquipment, requests: [] });
+  const chart = buildOemBreakdownChart({ rows, equipment: groupedEquipment, regions });
+  assert.deepEqual(chart.categories.map((category) => category.label), ["Tata TIPPER", "VOLVO EQUIPMENT", "VOLVO TIPPER"]);
+  assert.equal(new Set(chart.categories.map((category) => category.color)).size, chart.categories.length);
+  for (const bar of chart.sites[0].bars) for (const segment of bar.categorySegments) {
+    assert.equal(segment.color, chart.categories.find((category) => category.key === segment.key).color);
+  }
+});
+
 test("unknown OEMs and sites keep unmatched requests visible and repeated requests share one asset", () => {
   const rows = build({ equipment: [], requests: [
     { ref: "A", door: "unknown-1", site: "New site", status: "Open" },
@@ -175,6 +190,7 @@ test("OEM colours never cycle and stay consistent between the legend, site segme
   const rows = build({equipment: catalogue, requests: []});
   const all = buildOemBreakdownChart({rows, equipment: catalogue, regions});
   assert.equal(new Set(all.oems.map(oem => oem.color)).size, 40);
+  assert.equal(new Set(all.categories.map(category => category.color)).size, 40);
   for (const oem of all.oems) {
     const filtered = buildOemBreakdownChart({rows, equipment: catalogue, regions, oem: oem.key});
     assert.equal(filtered.sites[0].segments[0].color, oem.color);

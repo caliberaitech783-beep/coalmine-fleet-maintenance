@@ -13,13 +13,18 @@
 .mine-oem-actions button { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--brand-purple); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .mine-oem-view .mine-head-actions > label > span { color: #fff; }
 .mine-oem-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 20px 18px; }
-.mine-oem-legend button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 13px; cursor: pointer; }
+.mine-oem-legend button, .mine-oem-category-legend button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 13px; cursor: pointer; }
 .mine-oem-legend button[aria-pressed="true"] { border-color: var(--brand-purple); box-shadow: inset 0 0 0 1px var(--brand-purple), 0 0 0 2px color-mix(in srgb, var(--brand-purple) 14%, transparent); background: color-mix(in srgb, var(--brand-purple) 8%, var(--mine-panel)); }
-.mine-oem-legend i { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-.mine-oem-legend b { padding-left: 4px; font-size: 15px; }
+.mine-oem-legend i, .mine-oem-category-legend i { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.mine-oem-legend b, .mine-oem-category-legend b { padding-left: 4px; font-size: 15px; }
 .mine-oem-legend .mine-oem-all { border-color: var(--brand-purple); color: var(--brand-purple); font-weight: 700; }
 .mine-oem-all b, .mine-oem-actions b { font-size: 16px; }
-.mine-oem-legend button:hover, .mine-oem-actions button:hover { border-color: var(--brand-purple); box-shadow: inset 0 0 0 1px var(--brand-purple); }
+.mine-oem-legend button:hover, .mine-oem-category-legend button:hover, .mine-oem-actions button:hover { border-color: var(--brand-purple); box-shadow: inset 0 0 0 1px var(--brand-purple); }
+.mine-oem-category-legend { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px 12px; padding: 0 20px 10px; }
+.mine-oem-category-legend > strong { color: var(--mine-text); font-size: 12px; white-space: nowrap; }
+.mine-oem-category-legend > div { display: flex; gap: 6px; min-width: 0; padding: 2px 3px 5px; overflow-x: auto; scrollbar-width: thin; }
+.mine-oem-category-legend button { flex: 0 0 auto; gap: 5px; padding: 6px 8px; white-space: nowrap; }
+.mine-oem-category-legend button :is(span, b) { font-size: 12px; }
 .mine-oem-chart-layout { display: grid; grid-template-columns: 55px minmax(0, 1fr); padding: 0 16px; }
 .mine-oem-axis { box-sizing: border-box; position: relative; display: flex; flex-direction: column; justify-content: space-between; height: calc(var(--mine-oem-chart-headroom) + var(--mine-oem-plot-height) + var(--mine-oem-chart-caption)); padding: var(--mine-oem-chart-headroom) 10px var(--mine-oem-chart-caption) 0; color: var(--mine-muted); font-size: 12px; text-align: right; }
 .mine-oem-axis > b { position: absolute; top: 140px; left: -16px; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; }
@@ -33,13 +38,8 @@
 .mine-oem-bar-column { display: flex; flex: 0 0 38px; align-items: flex-end; justify-content: center; min-width: 0; min-height: 0; }
 .mine-oem-oem-bar { box-sizing: border-box; position: relative; display: flex; flex-direction: column-reverse; width: 32px; min-width: 0; min-height: 8px; border-radius: 5px 5px 0 0; overflow: visible; outline: 1px solid color-mix(in srgb, var(--mine-oem-color) 70%, transparent); outline-offset: -1px; }
 .mine-oem-bar-total { position: absolute; bottom: calc(100% + 4px); left: 50%; z-index: 2; transform: translateX(-50%); min-width: 24px; padding: 0 2px; border: 0; background: transparent; color: var(--mine-text); font: inherit; font-size: 14px; line-height: 16px; text-shadow: 0 1px var(--mine-panel); cursor: pointer; }
-.mine-oem-category-segment { box-sizing: border-box; flex: 0 0 auto; width: 100%; min-height: 0; padding: 0; border: 0; border-top: 2px solid #fff; background-color: var(--mine-oem-color); box-shadow: inset 0 0 0 1px #ffffff42; cursor: pointer; }
+.mine-oem-category-segment { box-sizing: border-box; flex: 0 0 auto; width: 100%; min-height: 0; padding: 0; border: 0; border-top: 2px solid #fff; background-color: var(--mine-oem-category-color, var(--mine-oem-color)); box-shadow: inset 0 0 0 1px #ffffff42; cursor: pointer; }
 .mine-oem-category-segment:last-child { border-radius: 5px 5px 0 0; }
-.mine-oem-category-segment[data-group-index="1"] { background-color: color-mix(in srgb, var(--mine-oem-color) 58%, #fff); }
-.mine-oem-category-segment[data-group-index="2"] { background-color: color-mix(in srgb, var(--mine-oem-color) 72%, #182033); }
-.mine-oem-category-segment[data-group-index="3"] { background-image: repeating-linear-gradient(135deg, transparent 0 4px, #ffffffa8 4px 7px); }
-.mine-oem-category-segment[data-group-index="4"] { background-image: radial-gradient(circle at 2px 2px, #ffffffb5 1.2px, transparent 1.4px); background-size: 6px 6px; }
-.mine-oem-category-segment[data-group-index="5"] { background-color: color-mix(in srgb, var(--mine-oem-color) 72%, #fff); background-image: repeating-linear-gradient(0deg, transparent 0 4px, #ffffffa0 4px 6px); }
 .mine-oem-total { position: absolute; top: calc(-1 * var(--mine-oem-chart-headroom) + 4px); left: 50%; z-index: 2; transform: translateX(-50%); min-width: 0; min-height: 0; padding: 1px 4px; border: 0; border-radius: 3px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 16px; font-weight: 800; line-height: 22px; white-space: nowrap; cursor: pointer; }
 .mine-oem-site-caption { display: flex; align-items: stretch; justify-content: center; min-width: 0; padding: 6px 4px 2px; border-top: 2px solid var(--brand-purple); }
 .mine-oem-site-label { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 0; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--mine-text); font: inherit; font-size: 13px; line-height: 16px; cursor: pointer; }
@@ -76,6 +76,7 @@
   .mine-fleet-chart-toggle:has(.mine-oem-tab) button b { min-width: 0; }
   .mine-oem-summary { align-items: flex-start; flex-direction: column; padding-inline: 12px; }
   .mine-oem-legend { padding-inline: 12px; }
+  .mine-oem-category-legend { grid-template-columns: 1fr; padding-inline: 12px; }
   .mine-oem-chart-layout { padding-inline: 8px; grid-template-columns: 42px minmax(0, 1fr); }
   .mine-oem-filter select { max-width: none; }
 }

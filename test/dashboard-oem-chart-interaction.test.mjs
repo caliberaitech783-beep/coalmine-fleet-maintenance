@@ -54,8 +54,8 @@ test("one bar per OEM drills into its exact rows while OEM dots only filter", ()
     assert.equal(selected.rows.length, bar.rows.length);
     assert.ok(selected.rows.every(row => row.oemKey === bar.key && row.site === site.name));
     for (const segment of bar.categorySegments) {
-      const categoryControl = controls.find(button => button.props["aria-label"] === `${site.name} · ${bar.label} · ${segment.equipmentGroup}: ${segment.rows.length} breakdown assets, view details`);
-      assertTooltip(categoryControl, bar, segment.rows.length, site.name, segment.equipmentGroup);
+      const categoryControl = controls.find(button => button.props["aria-label"] === `${site.name} · ${segment.label}: ${segment.rows.length} breakdown assets, view details`);
+      assertTooltip(categoryControl, segment, segment.rows.length, site.name);
       click(categoryControl);
       assert.equal(selected.rows.length, segment.rows.length);
       assert.equal(selected.equipmentGroupLabel, segment.equipmentGroup);
@@ -69,6 +69,13 @@ test("one bar per OEM drills into its exact rows while OEM dots only filter", ()
     click(control);
     assert.equal(filtered, oem.key);
     assert.equal(selected, undefined, "an OEM dot filters without opening the list");
+  }
+  for (const category of chart.categories.filter(item => item.count)) {
+    const control = controls.find(button => button.props["aria-label"] === `${category.label}: ${category.count} breakdown assets, view details`);
+    assertTooltip(control, category, category.count, "Sites matching current filters");
+    click(control);
+    assert.equal(selected.rows.length, category.count);
+    assert.ok(selected.rows.every(row => row.oemKey === category.oemKey && row.equipmentGroupKey === category.equipmentGroupKey));
   }
   const filteredChart = makeChart({oem: chart.oems[0].key});
   const filteredTree = Chart({chart: filteredChart, onSelect() {}, onFilterOem: value => { filtered = value; }});
@@ -133,7 +140,7 @@ test("every OEM has one proportional bar containing all equipment categories", (
   });
   const segments = descendants(tree, node => node.props.className === "mine-oem-category-segment");
   assert.equal(segments.length, 3);
-  assert.ok(segments.every(segment => segment.props["data-oem-category"]));
+  assert.ok(segments.every(segment => segment.props["data-oem-color"] && segment.props.style["--mine-oem-category-color"]));
   const markup = renderToStaticMarkup(tree);
   assert.match(markup, /^<div class="mine-oem-dashboard" id="oem-breakdown-plot"/);
   assert.doesNotMatch(markup, /role="button"/);
