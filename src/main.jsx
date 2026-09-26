@@ -151,6 +151,7 @@ const RecoveryGuide=createLazyFeature(()=>import("./recovery-guide.jsx"),undefin
 const HelpTraining=createLazyFeature(()=>import("./help-training.jsx"),undefined,{compact:true,silent:true});
 const DashboardRecordBrowser=createLazyFeature(()=>import("./dashboard-record-browser.jsx"),undefined,{loadingLabel:"Loading records…"});
 const InfoPulseContent=createLazyFeature(()=>import("./info-pulse-content.jsx"),undefined,{loadingLabel:"Loading Info Pulse…"});
+import InfoPulseBirthday from './info-pulse-birthday.jsx';
 import {
   LayoutDashboard,
   Truck,
@@ -10127,7 +10128,7 @@ function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null,
   return createPortal(<div className="ai-feeder-overlay pulse-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><PulseIcon /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
+        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><PulseIcon /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><div className="pulse-birthday-heading"><h2 id="ai-feeder-title">Open breakdowns</h2><InfoPulseBirthday token={session?.token} now={now} /></div></div>
         <div className="ai-feeder-actions">
           {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}

@@ -1,0 +1,26 @@
+.pulse-panel .pulse-title { flex: 1; }
+.pulse-birthday-heading { display:flex; align-items:center; gap:28px; margin-top:9px; min-width:0; }
+.pulse-panel .pulse-birthday-heading h2 { margin:0; flex:none; }
+.pulse-birthday { position:relative; isolation:isolate; display:flex; align-items:center; gap:10px; flex:1; min-width:0; overflow:hidden; padding:9px 10px; min-height:57px; border:1px solid #ffffff3d; border-radius:12px; background:#ffffff16; color:#fff; }
+.pulse-birthday-cake { font-size:27px; flex:none; animation:pulse-birthday-cake 2.6s ease-in-out infinite; transform-origin:center bottom; }
+.pulse-birthday-viewport { flex:1; min-width:0; overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent); }
+.pulse-birthday-track { display:flex; width:max-content; animation:pulse-birthday-scroll var(--birthday-duration,22s) linear infinite; }
+.pulse-birthday-message { display:flex; flex:none; align-items:center; gap:16px; padding-right:44px; white-space:nowrap; font-size:14px; }
+.pulse-birthday-message strong { color:#fff; font-size:16px; }
+.pulse-birthday-greeting,.pulse-birthday-star { color:#ffe696; font-weight:700; }
+.pulse-birthday-pause { position:relative; z-index:1; flex:none; display:grid; place-items:center; width:36px; min-height:36px; border:1px solid #ffffff3d; border-radius:8px; background:#ffffff12; color:#fff; cursor:pointer; }
+.pulse-birthday-confetti { position:absolute; inset:0; z-index:-1; pointer-events:none; }
+.pulse-birthday-confetti i { position:absolute; top:-10px; left:16%; width:4px; height:7px; background:#ffe696; opacity:0; animation:pulse-birthday-confetti 4s linear infinite; }
+.pulse-birthday-confetti i:nth-child(2) { left:32%; animation-delay:-1.3s; background:#ffb7d6; }
+.pulse-birthday-confetti i:nth-child(3) { left:48%; animation-delay:-2.7s; background:#fff; }
+.pulse-birthday-confetti i:nth-child(4) { left:63%; animation-delay:-.8s; background:#c5b8ff; }
+.pulse-birthday-confetti i:nth-child(5) { left:78%; animation-delay:-3.2s; }
+.pulse-birthday-confetti i:nth-child(6) { left:90%; animation-delay:-1.9s; background:#fff; }
+.pulse-birthday:hover .pulse-birthday-track { animation-play-state:paused; }
+.pulse-birthday[data-paused="true"] .pulse-birthday-track,.pulse-birthday[data-paused="true"] .pulse-birthday-cake,.pulse-birthday[data-paused="true"] .pulse-birthday-confetti i { animation-play-state:paused; }
+@keyframes pulse-birthday-scroll { to { transform:translateX(-50%); } }
+@keyframes pulse-birthday-cake { 0%,100% { transform:rotate(-5deg); } 50% { transform:translateY(-3px) rotate(5deg); } }
+@keyframes pulse-birthday-confetti { 0% { opacity:0; transform:translateY(0) rotate(0); } 15% { opacity:.8; } 85% { opacity:.5; } 100% { opacity:0; transform:translateY(80px) rotate(210deg); } }
+@media(max-width:800px) { .pulse-birthday-heading { flex-wrap:wrap; gap:12px; } .pulse-birthday { flex-basis:100%; } }
+@media(pointer:coarse) { .pulse-birthday-pause { min-width:44px; min-height:44px; } }
+@media(prefers-reduced-motion:reduce) { .pulse-birthday-track,.pulse-birthday-cake,.pulse-birthday-confetti i { animation:none; } .pulse-birthday-message:nth-child(2),.pulse-birthday-confetti,.pulse-birthday-pause { display:none; } .pulse-birthday-track { width:auto; } .pulse-birthday-message { white-space:normal; flex-wrap:wrap; padding:0; gap:8px; } .pulse-birthday-viewport { mask-image:none; } }

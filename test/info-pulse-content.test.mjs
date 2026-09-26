@@ -384,7 +384,7 @@ test('loading, failures and an empty balance never render a misleading count and
 
 test('the panel header drops the total pill and the trigger badge carries the BD balance', () => {
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-  assert.match(main, /<h2 id="ai-feeder-title">Open breakdowns<\/h2><\/div>/);
+  assert.match(main, /<h2 id="ai-feeder-title">Open breakdowns<\/h2><InfoPulseBirthday token=\{session\?\.token\} now=\{now\} \/><\/div>/);
   assert.ok(!main.includes('pulse-heading-total') && !main.includes('headerTarget'));
   assert.match(main, /const breakdowns = useMemo\(\(\) => ready \? buildInfoPulseBreakdowns\(requests\) : \[\], \[requests, ready\]\);/);
   assert.match(main, /const firstTripPending = useMemo\(\(\) => ready \? buildInfoPulseFirstTripPending\(requests, \{now\}\) : \[\], \[requests, ready, now\]\);/);

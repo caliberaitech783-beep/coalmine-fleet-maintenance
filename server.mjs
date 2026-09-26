@@ -1,4 +1,5 @@
 import express from 'express';
+import {currentBirthdayNames} from './info-pulse-birthdays.mjs';
 import compression from 'compression';
 import {createNotificationFeed} from './notification-feed.mjs';
 import {formatDisplayDate,formatDisplayDateTime} from './date-time-format.mjs';
@@ -5257,6 +5258,13 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
     return {sent,failed,skipped};
   }finally{workflowReminderRunning=false}
 }
+
+app.get('/api/info-pulse/birthdays',requireSession,async(req,res,next)=>{
+  try{
+    res.set('Cache-Control','private, no-store');
+    res.json({names:await currentBirthdayNames()});
+  }catch(error){next(error)}
+});
 
 app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
   try{
