@@ -31,8 +31,8 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{reso
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const response=(body={reference:'TKT-FIXTURE'},ok=true)=>({ok,json:async()=>body});
 const configurations=[
-  {name:'TicketCreateForm',path:'/api/tickets',method:'POST',message:'message',audio:'messageAudio',data:'attachmentData',fileName:'attachmentName',fileType:'attachmentType',callback:'onCreated',pending:'Creating…',submit:'Create ticket',defaultError:'Could not create the ticket.'},
-  {name:'TicketResolutionForm',path:'/api/tickets/resolve',method:'PATCH',message:'resolutionMessage',audio:'resolutionAudio',data:'resolutionAttachmentData',fileName:'resolutionAttachmentName',fileType:'resolutionAttachmentType',callback:'onResolved',pending:'Resolving…',submit:'Resolve ticket',defaultError:'Could not resolve the ticket.'},
+  {name:'TicketCreateForm',path:'/api/tickets',method:'POST',message:'message',audio:'messageAudio',mediaId:'attachmentMediaId',data:'attachmentData',fileName:'attachmentName',fileType:'attachmentType',callback:'onCreated',pending:'Creating…',submit:'Create ticket',defaultError:'Could not create the ticket.'},
+  {name:'TicketResolutionForm',path:'/api/tickets/resolve',method:'PATCH',message:'resolutionMessage',audio:'resolutionAudio',mediaId:'resolutionAttachmentMediaId',data:'resolutionAttachmentData',fileName:'resolutionAttachmentName',fileType:'resolutionAttachmentType',callback:'onResolved',pending:'Resolving…',submit:'Resolve ticket',defaultError:'Could not resolve the ticket.'},
 ];
 
 // Exercise the actual compiled components with deterministic React hook slots,
@@ -66,7 +66,7 @@ function harness(config,{fetch:fetchImpl=async()=>response(),readAttachment}={})
   class FileReader{
     readAsDataURL(file){if(file.failRead)this.onerror();else{this.result=file.data||'data:image/png;base64,dGVzdA==';this.onload();}}
   }
-  const readTicketAttachment=readAttachment||new Function('FileReader',`${attachmentSource};return readTicketAttachment;`)(FileReader);
+  const readTicketAttachment=readAttachment||new Function('uploadMediaFile',`${attachmentSource};return readTicketAttachment;`)(async file=>file?{id:'media-fixture',name:file.name,type:file.type,size:file.size}:null);
   const scope={userSiteSelection,React,useState,useRef,useEffect,Modal:Null,EnhancedSpeechComplaint:Null,Send:Null,CheckCircle2:Null,readTicketAttachment,
     alert:()=>assert.fail('Ticket forms must use inline feedback, not native alert'),
     FormData:class {constructor(values){this.values=values;}get(key){return this.values[key]??'';}},
@@ -101,7 +101,8 @@ for(const config of configurations){
     assert.equal(request.headers.Authorization,'Bearer local-test-token');
     assert.equal(payload[config.message],'Labelled fixture issue');
     assert.equal(payload[config.audio],'data:audio/webm;base64,dGVzdA==');
-    assert.equal(payload[config.data],file.data);assert.equal(payload[config.fileName],file.name);assert.equal(payload[config.fileType],file.type);
+    assert.equal(payload[config.mediaId],'media-fixture');
+    assert.equal(payload[config.data],'');assert.equal(payload[config.fileName],'');assert.equal(payload[config.fileType],'');
     if(config.method==='POST')assert.equal(payload.priority,'High');else assert.equal(payload.reference,'TKT-FIXTURE');
     assert.deepEqual(app.completed,[saved]);assert.deepEqual(app.order,['saved','close']);
   });
@@ -137,14 +138,17 @@ for(const config of configurations){
     }
   });
 
-  test(`${config.name}: invalid, oversized and unreadable media never submit and remain retryable`,async()=>{
-    for(const file of [{name:'bad.txt',type:'text/plain',size:12},{name:'large.png',type:'image/png',size:10*1024*1024+1},{name:'bad.png',type:'image/png',size:12,failRead:true}]){
-      const app=harness(config);
-      let tree=app.attach(app.render(),file);await app.submit(tree);tree=app.render();
-      assert.match(inlineError(tree),file.failRead?/Could not read/:/up to 10 MB/);
-      assert.equal(app.calls.length,0);assert.equal(app.closed,0);assert.equal(button(tree,'Cancel').props.disabled,false);
-      tree=app.attach(tree,null);await app.submit(tree);assert.equal(app.calls.length,1);assert.equal(app.closed,1);
-    }
+  test(`${config.name}: unsupported media stays inline, while large supported media has no browser size ceiling`,async()=>{
+    const invalid=harness(config);
+    let tree=invalid.attach(invalid.render(),{name:'bad.txt',type:'text/plain',size:12});await invalid.submit(tree);tree=invalid.render();
+    assert.match(inlineError(tree),/JPEG, PNG, WebP, MP4, WebM, or MOV/);
+    assert.equal(invalid.calls.length,0);assert.equal(invalid.closed,0);assert.equal(button(tree,'Cancel').props.disabled,false);
+    tree=invalid.attach(tree,null);await invalid.submit(tree);assert.equal(invalid.calls.length,1);assert.equal(invalid.closed,1);
+
+    const large=harness(config);
+    tree=large.attach(large.render(),{name:'large.mov',type:'video/quicktime',size:8*1024*1024*1024});
+    await large.submit(tree);
+    assert.equal(large.calls.length,1);assert.equal(large.closed,1);
   });
 
   test(`${config.name}: synchronous duplicate submission and pending Cancel/modal X are guarded`,async()=>{

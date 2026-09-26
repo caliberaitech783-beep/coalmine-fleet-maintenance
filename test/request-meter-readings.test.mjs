@@ -72,7 +72,8 @@ test("request edit validates opening evidence and does not modify closing eviden
   assert.match(editRoute, /if\(normalizedOpeningMeterReading&&!validMeterReading/);
   assert.doesNotMatch(editRoute, /normalizedClosingMeterReading|closing_meter_reading=|closing_meter_file=/);
   assert.doesNotMatch(editRoute, /if\(normalizedMeterType!=='KMR'&&!openingMeterFile/);
-  assert.match(editRoute, /opening_meter_file=CASE WHEN \$6<>'' THEN \$6 ELSE opening_meter_file END/);
+  assert.match(editRoute, /opening_meter_media_id=COALESCE\(\$14::uuid,opening_meter_media_id\)/);
+  assert.match(editRoute, /opening_meter_file=CASE WHEN \$14::uuid IS NOT NULL THEN '' WHEN \$6<>'' THEN \$6 ELSE opening_meter_file END/);
 });
 
 test("tippers expose both meters using the group, legacy name, matching master or saved readings", () => {

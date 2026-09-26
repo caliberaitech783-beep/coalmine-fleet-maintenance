@@ -19,12 +19,14 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(server,/!reportScopeIncludesSite\(misScope,existing\.site\)/);
   assert.match(server,/This request belongs to a different location/);
   assert.match(server,/const firstTripCardImage=String\(req\.body\?\.firstTripCardImage\|\|''\)/);
-  assert.match(server,/if\(!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
+  assert.match(server,/const firstTripCardMediaId=String\(req\.body\?\.firstTripCardMediaId\|\|''\)/);
+  assert.match(server,/if\(!firstTripCardMedia&&!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
   assert.match(source,/if \(!tripCardFile\) return setFormError\("Upload the first-trip card image\."\)/);
   assert.match(source,/First trip card image \*[\s\S]*name="firstTripCardImage"[\s\S]*required/);
   assert.match(source,/const submitLock = useRef\(false\)/);
   assert.match(source,/if \(submitLock\.current\) return/);
   assert.match(source,/await onSave\(\{firstTripDone/);
+  assert.match(source,/firstTripCardMediaId: firstTripCardMedia\?\.id \|\| ""/);
   assert.match(source,/submitting \? "Verifying…" : "Verify request"/);
   assert.match(source,/showClosedBy && workflowHeader\("closedBy", "Closed by"\)/);
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);

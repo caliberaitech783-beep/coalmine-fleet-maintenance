@@ -5316,17 +5316,35 @@ function EnhancedSpeechComplaint({
   );
 }
 const SpeechComplaint = EnhancedSpeechComplaint;
-function readMeterEvidence(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) return reject(new Error("Select a KMR/HMR evidence file."));
-    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      return reject(new Error("Upload a JPEG, PNG, WebP, or PDF KMR/HMR file up to 5 MB."));
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read the selected KMR/HMR file."));
-    reader.readAsDataURL(file);
+async function uploadMediaFile(file, purpose, token = authToken) {
+  if (!file) return null;
+  const startResponse = await fetch("/api/media/uploads", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`},
+    body: JSON.stringify({purpose, fileName: file.name, contentType: file.type, size: file.size}),
   });
+  const start = await startResponse.json().catch(() => ({}));
+  if (!startResponse.ok) throw new Error(start.error || "Could not prepare the media upload.");
+  const uploadResponse = await fetch(start.uploadUrl, {
+    method: start.method || "PUT",
+    headers: start.headers || {"Content-Type": file.type},
+    body: file,
+  });
+  if (!uploadResponse.ok) throw new Error("The media file could not be uploaded to object storage.");
+  const completeResponse = await fetch(`/api/media/uploads/${encodeURIComponent(start.id)}/complete`, {
+    method: "POST",
+    headers: {Authorization: `Bearer ${token}`},
+  });
+  const completed = await completeResponse.json().catch(() => ({}));
+  if (!completeResponse.ok) throw new Error(completed.error || "The uploaded media could not be verified.");
+  return {id: completed.id || start.id, name: file.name, type: file.type, size: file.size};
+}
+function readMeterEvidence(file, purpose = "request-opening-meter", token = authToken) {
+  if (!file) return null;
+  if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+    throw new Error("Upload a JPEG, PNG, WebP, or PDF KMR/HMR file.");
+  }
+  return uploadMediaFile(file, purpose, token);
 }
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
@@ -9574,9 +9592,9 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       submitLock.current = true;
       setSubmitting(true);
       try {
-        const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
+        const openingMeterMedia = openingMeterFile ? await readMeterEvidence(openingMeterFile, "request-opening-meter") : null;
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterMediaId: openingMeterMedia?.id || "", openingMeterFile: typeof openingMeterMedia === "string" ? openingMeterMedia : "", openingMeterFileName: typeof openingMeterMedia === "string" ? openingMeterFile?.name || "" : "", acceptRequest: acceptingRequest});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -9610,7 +9628,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         {etcDelayed && <label className="full">Delayed reason *<select name="delayedReason" required defaultValue={etcDelayedReasonOptions.includes(request.delayedReason) ? request.delayedReason : ""} key={editCategory}><option value="">Select delayed reason</option>{etcDelayedReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><small>The ETC is being pushed later. Reasons shown are for breakdown type {editCategory || "Breakdown"}.</small></label>}
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(displayedInitialEtcLabel)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
-        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
+        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · uploaded securely to object storage"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
@@ -9657,10 +9675,10 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       submitLock.current = true;
       setSubmitting(true);
       try {
-        const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
+        const closingMeterMedia = tripCardFile ? await readMeterEvidence(tripCardFile, "request-closing-meter") : null;
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterMediaId: closingMeterMedia?.id || "", closingMeterFile: typeof closingMeterMedia === "string" ? closingMeterMedia : "", closingMeterFileName: typeof closingMeterMedia === "string" ? tripCardFile?.name || "" : ""});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -9680,7 +9698,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       <div className="formgrid">
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} />
-        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>
+        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · uploaded securely to object storage"}</small></label>
         <label>Closing date *<DateInput name="closingDate" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (12-hour with seconds) *<input name="closingTime" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {displayDateTime(request.closedAt)}. The original and replacement will be retained.</small></label>}
@@ -9741,29 +9759,23 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const submitLock = useRef(false);
   const closeDialog = () => { if (!submitLock.current) close(); };
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
-  const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read the trip-card image."));
-    reader.readAsDataURL(file);
-  });
   return <Modal title={`Verify closed request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
       const form = new FormData(event.currentTarget);
       if (!tripCardFile) return setFormError("Upload the first-trip card image.");
-      if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
-        return setFormError("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
+      if (tripCardFile && !['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type)) {
+        return setFormError("Upload a JPEG, PNG, or WebP trip-card image.");
       }
       setFormError("");
       submitLock.current = true;
       setSubmitting(true);
       try {
-        const firstTripCardImage = await fileAsDataUrl(tripCardFile);
+        const firstTripCardMedia = await readMeterEvidence(tripCardFile, "request-first-trip-card");
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
         const meterType = requestMeterTypeForRequest(request, equipmentRecords);
-        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
+        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripCardMediaId: firstTripCardMedia?.id || "", firstTripCardImage: typeof firstTripCardMedia === "string" ? firstTripCardMedia : "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
       } catch (error) {
         setFormError(error?.message || "Could not verify this request. Please try again.");
       } finally {
@@ -9796,7 +9808,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
             setTripCardFile(file);
             setTripCardPreview(file ? URL.createObjectURL(file) : "");
           }} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button>
-          <small>JPEG, PNG or WebP · maximum 5 MB</small>
+          <small>JPEG, PNG or WebP · uploaded securely to object storage</small>
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
       </div>
@@ -9856,18 +9868,13 @@ function ProductionFirstTripForm({ request, close, onSave }) {
 }
 
 const ticketCategories = ["General", "Production", "Maintenance", "MIS", "Equipment", "System access"];
-function readTicketAttachment(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) return resolve("");
-    const supported = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
-    if (!supported.includes(file.type) || file.size > 10 * 1024 * 1024) return reject(new Error("Upload a JPEG, PNG, WebP, MP4, WebM, or MOV file up to 10 MB."));
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read the selected attachment."));
-    reader.readAsDataURL(file);
-  });
+function readTicketAttachment(file, purpose = "ticket-attachment", token = authToken) {
+  if (!file) return null;
+  if (!["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"].includes(file.type)) {
+    throw new Error("Upload a JPEG, PNG, WebP, MP4, WebM, or MOV file.");
+  }
+  return uploadMediaFile(file, purpose, token);
 }
-
 function TicketCreateForm({ session, close, onCreated }) {
   const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
   const [ticketSites, setTicketSites] = useState([]), [sitesLoaded, setSitesLoaded] = useState(session?.role === "super");
@@ -9901,12 +9908,12 @@ function TicketCreateForm({ session, close, onCreated }) {
     setSaving(true);
     setError("");
     try {
-      const attachmentData = await readTicketAttachment(attachment);
+      const attachmentMedia = await readTicketAttachment(attachment, "ticket-attachment", session.token);
       if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets", {
         method: "POST",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify({site: form.get("site"), priority: form.get("priority"), message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
+        body: JSON.stringify({site: form.get("site"), priority: form.get("priority"), message, messageAudio, attachmentMediaId: attachmentMedia?.id || "", attachmentData: typeof attachmentMedia === "string" ? attachmentMedia : "", attachmentName: typeof attachmentMedia === "string" ? attachment?.name || "" : "", attachmentType: typeof attachmentMedia === "string" ? attachment?.type || "" : ""}),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
@@ -9926,7 +9933,7 @@ function TicketCreateForm({ session, close, onCreated }) {
 
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
-        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · uploaded securely to object storage"}</small></label>
       </div>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving || !sitesLoaded || (session?.role !== "super" && !ticketSites.length)}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
@@ -9966,12 +9973,12 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
     setSaving(true);
     setError("");
     try {
-      const resolutionAttachmentData = await readTicketAttachment(attachment);
+      const resolutionAttachmentMedia = await readTicketAttachment(attachment, "ticket-resolution", session.token);
       if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets/resolve", {
         method: "PATCH",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify({reference: ticket.reference, resolutionMessage, resolutionAudio, resolutionAttachmentData, resolutionAttachmentName: attachment?.name || "", resolutionAttachmentType: attachment?.type || ""}),
+        body: JSON.stringify({reference: ticket.reference, resolutionMessage, resolutionAudio, resolutionAttachmentMediaId: resolutionAttachmentMedia?.id || "", resolutionAttachmentData: typeof resolutionAttachmentMedia === "string" ? resolutionAttachmentMedia : "", resolutionAttachmentName: typeof resolutionAttachmentMedia === "string" ? attachment?.name || "" : "", resolutionAttachmentType: typeof resolutionAttachmentMedia === "string" ? attachment?.type || "" : ""}),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not resolve the ticket.");
@@ -9984,7 +9991,7 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   return <Modal title={`Resolve ${ticket.reference}`} close={dismiss}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
       <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
-      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · uploaded securely to object storage"}</small></label>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>

@@ -36,7 +36,8 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(source, /EnhancedSpeechComplaint[\s\S]*messageAudio/);
   assert.match(source, /function TicketResolutionForm/);
   assert.match(source, /audioName="resolutionAudio"[\s\S]*Record resolution audio/);
-  assert.match(source, /resolutionAttachmentData/);
+  assert.match(source, /attachmentMediaId/);
+  assert.match(source, /resolutionAttachmentMediaId/);
   assert.match(source, /function TicketMedia/);
   const protectedMedia = fs.readFileSync(new URL("../src/protected-media.jsx", import.meta.url), "utf8");
   assert.match(protectedMedia, /response\.blob\(\)/);
