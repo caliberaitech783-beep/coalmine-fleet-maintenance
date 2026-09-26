@@ -20,7 +20,7 @@ const routes={
   verify:slice("app.patch('/api/requests/:reference/verify',","app.get('/api/requests/:reference/trip-card',"),
 };
 const now=new Date('2026-09-08T12:00:00Z');
-const active={ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),closedAt:null,firstTripAt:null,verifiedAt:null,productionFirstTripAt:'2026-09-08 16:45:00',meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
+const active={ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),expectedCompletionChangedAt:null,closedAt:null,firstTripAt:null,verifiedAt:null,productionFirstTripAt:'2026-09-08 16:45:00',meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
 const maintenance={role:'normal',assignedRole:'Maintenance User',name:'Fixture maintenance',login:'maintenance',permissions:{editRequests:true,closeRequests:true}};
 const mis={role:'normal',assignedRole:'MIS User',name:'Fixture MIS',login:'mis',permissions:{verifyRequests:true}};
 const current=row=>({...structuredClone(row),timelineRecordedAt:now});
@@ -62,6 +62,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     assert.equal(tx,true,'all timestamp writes are transactional');
     if(sql.includes('SET category=')){
       saved.complaint=args[1];saved.expectedCompletionAt=args[2];
+      if(args[12]===true)saved.expectedCompletionChangedAt=now;
       if((saved.acceptanceRequired||args[10]===true)&&!saved.acceptedAt){saved.acceptedAt=now;saved.acceptedBy=args[7];}
     }else if(sql.includes("SET verification_status='Verified'")){
       saved.verifiedAt=now;saved.verifiedBy=args[0];saved.firstTripAt=args[2];saved.firstTripDone=args[1];
@@ -108,6 +109,22 @@ test('ETC correction appends exact original/new values and server actor/reason w
   assert.equal(saved.oldValue,'2026-09-08T13:00:21.321Z');assert.equal(saved.newValue,'2026-09-08T14:00:00.000Z');
   assert.equal(saved.actorLogin,'maintenance');assert.equal(saved.actorName,'Fixture maintenance');assert.equal(saved.source,'user');
   assert.equal(saved.reason,'Parts delivery revised');assert.equal(saved.recordedAt,now.toISOString());assert.equal(saved.correction,true);assert.equal(saved.requestId,'41');
+  assert.equal(app.saved.expectedCompletionChangedAt.getTime(),now.getTime());
+});
+
+test('ETC permits one revision only while unchanged saves remain available',async()=>{
+  const once=harness('edit');
+  const first=await once.call({expectedCompletionAt:'2026-09-08T19:30',correctionReason:'Parts arrival moved'});
+  assert.equal(first.status,200);assert.ok(once.saved.expectedCompletionChangedAt);
+  const lockedRow=structuredClone(once.saved);
+  const unchanged=harness('edit',{row:lockedRow});
+  assert.equal((await unchanged.call({complaint:'Clarified complaint only',expectedCompletionAt:'2026-09-08T19:30'})).status,200);
+  const denied=harness('edit',{row:lockedRow});
+  const result=await denied.call({expectedCompletionAt:'2026-09-08T20:30',correctionReason:'Trying another future ETC'});
+  assert.equal(result.status,409);assert.equal(result.body.code,'ETC_CHANGE_LIMIT_REACHED');
+  assert.match(result.body.error,/already been changed once/i);
+  assert.equal(denied.queries.some(row=>row.sql.startsWith('UPDATE')),false);
+  assert.deepEqual(denied.saved,lockedRow);
 });
 
 test('initial acceptance records independent system capture and user-entered ETC provenance atomically',async()=>{

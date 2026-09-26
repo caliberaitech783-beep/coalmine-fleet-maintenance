@@ -26,7 +26,7 @@ test('ETC remains required and submits the existing field name without incomplet
   assert.match(source, /type="hidden" name="expectedCompletionAt"/);
   assert.equal((source.match(/<DateInput required|<select required/g)||[]).length, 4);
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.match(main, /<MaintenanceEtcInput value=\{expectedCompletionAt\} displayValue=\{displayedInitialEtc\} onChange=\{setExpectedCompletionAt\}/);
+  assert.match(main, /<MaintenanceEtcInput value=\{expectedCompletionAt\} displayValue=\{displayedInitialEtc\} onChange=\{setExpectedCompletionAt\} changeUsed=\{request\.expectedCompletionChangeUsed === true\}/);
   assert.match(main, /expectedCompletionAt: form.get\("expectedCompletionAt"\)/);
 });
 
@@ -63,4 +63,13 @@ test('elapsed existing ETC stays auditable and locked until replacement is chose
   assert.match(fresh, /Earliest allowed: 15-09-2026 04:23 PM IST/);
   assert.doesNotMatch(fresh, /Change to a future ETC/);
   assert.match(source, /disabled=\{etcPeriodDisabled\(parts\.date, period, minimum\)\}/);
+});
+
+test('an ETC is fully locked after its one allowed change has been used', () => {
+  const now = new Date('2026-09-15T10:52:31Z');
+  const used = renderToStaticMarkup(React.createElement(MaintenanceEtcInput, {value: '2026-09-16T18:00', onChange() {}, changeUsed: true, now}));
+  assert.match(used, /name="expectedCompletionAt" value="2026-09-16T18:00"/);
+  assert.match(used, /<input type="date"[^>]*disabled=""/);
+  assert.doesNotMatch(used, /Change to a future ETC/);
+  assert.match(used, /The one allowed ETC change has already been used\. This ETC is now locked\./);
 });

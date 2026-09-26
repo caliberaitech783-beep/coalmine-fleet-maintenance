@@ -48,12 +48,13 @@ export function etcMinuteDisabled(parts, minute, minimum) {
   return isEtcBackdated(etcValue({...parts, minute}), minimum);
 }
 
-export default function MaintenanceEtcInput({value, displayValue = value, onChange, now = Date.now()}) {
+export default function MaintenanceEtcInput({value, displayValue = value, onChange, changeUsed = false, now = Date.now()}) {
   const initialValue = String(value || '').slice(0, 16);
   const initialDisplayValue = String(displayValue || value || '').replace(' ', 'T').slice(0, 16);
   const initialMinimum = etcMinimum(now);
+  const hasExistingEtc = Boolean(initialValue);
   const [parts, setParts] = useState(() => etcParts(initialDisplayValue));
-  const [editing, setEditing] = useState(() => !isEtcBackdated(initialValue, initialMinimum));
+  const [editing, setEditing] = useState(() => !hasExistingEtc || (!changeUsed && !isEtcBackdated(initialValue, initialMinimum)));
   const minimum = etcMinimum(now);
   const currentValue = editing ? etcValue(parts) : initialValue;
   function change(key, next) {
@@ -76,6 +77,11 @@ export default function MaintenanceEtcInput({value, displayValue = value, onChan
   }
   const hours = Array.from({length:12}, (_, i) => String(i + 1).padStart(2, '0'));
   const minutes = Array.from({length:60}, (_, i) => String(i).padStart(2, '0'));
+  const guidance = changeUsed
+    ? 'The one allowed ETC change has already been used. This ETC is now locked.'
+    : editing
+      ? `${hasExistingEtc ? 'This is the only allowed ETC change. ' : 'Set the initial ETC. It can be changed only once later. '}Past dates and times are disabled. Earliest allowed: ${etcMinimumLabel(minimum)}.`
+      : 'This existing ETC is retained for history. This request has one ETC change available; choose Change to a future ETC to use it.';
   return <fieldset className="full etc-field maintenance-etc-input">
     <legend>ETC (Expected Time For Completion) *</legend>
     <div className="maintenance-etc-controls">
@@ -85,7 +91,7 @@ export default function MaintenanceEtcInput({value, displayValue = value, onChan
       <label>Minute<select required value={parts.minute} disabled={!editing || !parts.period || !parts.hour} onChange={e => change('minute', e.target.value)}><option value="">Minute</option>{minutes.map(minute => <option key={minute} disabled={etcMinuteDisabled(parts, minute, minimum)}>{minute}</option>)}</select></label>
     </div>
     <input type="hidden" name="expectedCompletionAt" value={currentValue} />
-    {!editing && <button type="button" className="etc-replace-button" onClick={replacePastEtc}>Change to a future ETC</button>}
-    <small>{editing ? `Past dates and times are disabled. Earliest allowed: ${etcMinimumLabel(minimum)}.` : 'This existing ETC is retained for history. Choose Change to a future ETC to replace it.'}</small>
+    {!editing && hasExistingEtc && !changeUsed && <button type="button" className="etc-replace-button" onClick={replacePastEtc}>Change to a future ETC</button>}
+    <small>{guidance}</small>
   </fieldset>;
 }

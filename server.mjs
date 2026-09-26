@@ -435,6 +435,7 @@ async function migrate(){
       maintenance_audio TEXT NOT NULL DEFAULT '',
       delayed_reason TEXT NOT NULL DEFAULT '',
       expected_completion_at TIMESTAMPTZ,
+      expected_completion_changed_at TIMESTAMPTZ,
       verification_status TEXT NOT NULL DEFAULT 'Pending',
       verified_at TIMESTAMPTZ,
       verified_by TEXT NOT NULL DEFAULT '',
@@ -514,6 +515,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS expected_completion_changed_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE;
@@ -1264,6 +1267,34 @@ async function migrate(){
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('legacy_etc_backdates_repaired_v1',$1,NOW())
         ON CONFLICT (key) DO NOTHING`,[JSON.stringify(repairCounts)]);
+    }
+    // Preserve the one-change rule for requests whose ETC was already revised
+    // before the dedicated marker existed. System repairs do not consume the
+    // user's single operational ETC change.
+    const {rows:etcChangeLimitMarker}=await client.query("SELECT value FROM app_metadata WHERE key='expected_completion_single_change_backfilled_v1' FOR UPDATE");
+    if(!etcChangeLimitMarker.length){
+      const backfill=await client.query(`UPDATE maintenance_requests AS request
+        SET expected_completion_changed_at=history.changed_at
+        FROM (
+          SELECT current_request.id,MIN(audit.occurred_at) AS changed_at
+          FROM maintenance_requests AS current_request
+          JOIN audit_events AS audit
+            ON audit.event_type='Workflow timeline'
+            AND audit.action='Record workflow timestamps'
+            AND audit.outcome='Success'
+            AND audit.target_type='Maintenance request'
+            AND audit.target_reference=current_request.reference
+          CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(audit.changed_fields)='array' THEN audit.changed_fields ELSE '[]'::jsonb END) AS timeline_change
+          WHERE timeline_change->>'requestId'=current_request.id::text
+            AND timeline_change->>'event'='expectedCompletionAt'
+            AND timeline_change->>'source'='user'
+            AND timeline_change->>'correction'='true'
+          GROUP BY current_request.id
+        ) AS history
+        WHERE request.id=history.id AND request.expected_completion_changed_at IS NULL`);
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('expected_completion_single_change_backfilled_v1',$1,NOW())
+        ON CONFLICT (key) DO NOTHING`,[String(backfill.rowCount||0)]);
     }
     await client.query('COMMIT');
   }catch(error){
@@ -5082,7 +5113,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
+  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", (expected_completion_changed_at IS NOT NULL) AS "expectedCompletionChangeUsed", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
@@ -5300,7 +5331,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
 
 const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
   original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
@@ -5667,6 +5698,7 @@ const arrivalDelaySql=`((acceptance_required=TRUE AND accepted_at IS NULL AND st
   OR (accepted_at IS NOT NULL AND accepted_at>started_at+INTERVAL '1 hour'))`;
 const arrivalFlagReadySql=`(NOT ${arrivalDelaySql} OR (arrival_flagged_at IS NOT NULL AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))>0))`;
 const arrivalRedFlagError=()=>Object.assign(new Error('Raise a red flag and save the arrival delay reason before continuing with this request.'),{status:409,code:'ARRIVAL_RED_FLAG_REQUIRED'});
+const etcChangeLimitError=()=>Object.assign(new Error('The ETC has already been changed once and is now locked.'),{status:409,code:'ETC_CHANGE_LIMIT_REACHED'});
 function requireArrivalFlagPermission(req,res,next){
   if(maintenanceManagerSession(req.session))return next();
   return requirePermission(req.session?.permissions?.editRequests===true?'editRequests':'closeRequests',{role:'Maintenance User'})(req,res,next);
@@ -5899,17 +5931,23 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
+    const previousExpectedAt=parseRequestTimelineTimestamp(before.expectedCompletionAt);
+    const nextExpectedAt=parseRequestTimelineTimestamp(expectedAt);
+    const revisingEtc=Boolean(previousExpectedAt&&nextExpectedAt&&previousExpectedAt.getTime()!==nextExpectedAt.getTime());
+    if(revisingEtc&&before.expectedCompletionChangedAt)throw etcChangeLimitError();
     const accepting=!before.acceptedAt&&(before.acceptanceRequired||explicitAcceptance);
     validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
       complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE '' END,
-      accepted_at=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN NOW() ELSE accepted_at END,accepted_by=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
+      accepted_at=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN NOW() ELSE accepted_at END,accepted_by=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,expected_completion_changed_at=CASE WHEN $13::boolean THEN NOW() ELSE expected_completion_changed_at END,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb,
       delayed_reason=CASE WHEN $12<>'' THEN $12 ELSE delayed_reason END
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason]);
+        AND (NOT $13::boolean OR expected_completion_changed_at IS NULL)
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc]);
+    if(!result.rows.length&&revisingEtc)throw etcChangeLimitError();
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });

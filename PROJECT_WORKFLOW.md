@@ -217,6 +217,7 @@ flowchart TD
 
 - Requests tab lists requests with edit and delete actions according to the assigned Privilege flags.
 - After maintenance accepts a request, every dashboard, request table, filter, export and report derives the visible lifecycle from the recorded timestamps: `Accepted` after acceptance and `In progress` after work starts. A stale stored `Open` value must not be displayed once either event has been recorded.
+- Maintenance can set the initial ETC and revise that ETC only once. The edit form locks the ETC controls after the revision, and the API enforces the same rule atomically so concurrent or older clients cannot make a second change. Saving an unchanged ETC does not consume the allowance. Existing user ETC-correction audit history is backfilled into the lock marker at startup.
 - Close request form links back to the original request and captures closing date, closing time, maintenance work, and status.
 - Tippers capture separate HMR and KMR readings at opening and closing. Edit request has one shared **Trip card upload** for the opening readings; Close request has one shared **Trip card upload** for the closing readings. Existing single-meter readings remain associated with their original meter, and missing opening readings can still be filled at closure. Closing readings and uploads remain optional for maintenance updates.
 - Request projections include `openingMeterReadings` and `closingMeterReadings` maps keyed by `HMR`/`KMR`, stored in additive JSONB columns. The single `openingMeterReading`/`closingMeterReading` and `meterType` fields remain compatible with older requests and clients. MIS verification pre-fills saved closing readings and preserves the closing trip card.
@@ -323,7 +324,7 @@ Request projections expose the compatibility keys `ref`, `equipment`, `door`, `r
 `server.mjs` runs idempotent migrations at startup. The main tables are:
 
 - `master_records`: one JSONB row per master record, keyed by `master_name`.
-- `maintenance_requests`: request identity, equipment, location, complaint, start/status, closure, verification, and first-trip fields.
+- `maintenance_requests`: request identity, equipment, location, complaint, start/status, closure, verification, first-trip fields, and the `expected_completion_changed_at` marker that enforces one ETC revision per request.
 - `auth_sessions`: active bearer sessions and resolved permissions.
 - `password_change_sessions`: short-lived mandatory initial-password sessions.
 - `app_metadata`: UI-version session invalidation and repair-type seed markers.

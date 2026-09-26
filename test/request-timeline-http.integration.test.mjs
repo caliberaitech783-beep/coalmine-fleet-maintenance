@@ -29,7 +29,7 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
   const start=india(Date.now()-300000).replace('T',' · ');
   const create=extra=>call('production','POST','/api/requests',{ref,door,chassis,site,complaint:'Isolated timeline test',start,meterType:'HMR',...extra},201);
   const read=()=>call('production','GET',`/api/requests/${ref}/timeline`);
-  const raw=async()=> (await pool.query('SELECT id,started_at,accepted_at,expected_completion_at,closed_at,verified_at FROM maintenance_requests WHERE reference=$1',[ref])).rows[0];
+  const raw=async()=> (await pool.query('SELECT id,started_at,accepted_at,expected_completion_at,expected_completion_changed_at,closed_at,verified_at FROM maintenance_requests WHERE reference=$1',[ref])).rows[0];
   const etc=india(Date.now()+3600000).slice(0,16);
   const edit=extra=>call('maintenance','PATCH',`/api/requests/${ref}`,{complaint:'Isolated timeline test',expectedCompletionAt:etc,meterType:'HMR',...extra});
   let originalId;
@@ -65,6 +65,10 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
     assert.equal(denied.code,'TIMELINE_CORRECTION_REASON_REQUIRED');assert.equal((await raw()).expected_completion_at.getTime(),old.getTime());
     assert.deepEqual((await read()).history,initialHistory);
     await edit({expectedCompletionAt:next,correctionReason:'  Supplier confirmed a later completion  '});
+    const revised=await raw();assert.ok(revised.expected_completion_changed_at);
+    const second=india(Date.now()+10800000).slice(0,16);
+    const locked=await call('maintenance','PATCH',`/api/requests/${ref}`,{complaint:'Must remain unchanged',expectedCompletionAt:second,meterType:'HMR',correctionReason:'Second revision must be rejected'},409);
+    assert.equal(locked.code,'ETC_CHANGE_LIMIT_REACHED');assert.equal((await raw()).expected_completion_at.getTime(),revised.expected_completion_at.getTime());
     const history=(await read()).history,last=history.at(-1);
     assert.equal(history.length,initialHistory.length+1);assert.deepEqual(history.slice(0,-1),initialHistory);
     assert.equal(last.oldValue,old.toISOString());assert.equal(last.actorLogin,logins.maintenance);assert.equal(last.reason,'Supplier confirmed a later completion');assert.equal(last.correction,true);
