@@ -15,7 +15,7 @@ import {
 const tinyPng='data:image/png;base64,iVBORw0KGgo=';
 
 test('correction workflow has explicit approval states',()=>{
-  assert.deepEqual(Object.values(REQUEST_CORRECTION_STATUS),['Pending PM approval','Approved','Rejected','Applied']);
+  assert.deepEqual(Object.values(REQUEST_CORRECTION_STATUS),['Pending PM approval','Approved','Rejected','Applied','Deleted']);
 });
 
 test('each department manager requests corrections only for their own department stage; operational users cannot',()=>{

@@ -5,7 +5,15 @@ export const REQUEST_CORRECTION_STATUS=Object.freeze({
   APPROVED:'Approved',
   REJECTED:'Rejected',
   APPLIED:'Applied',
+  DELETED:'Deleted',
 });
+
+export function canManagePendingCorrection(record,context){
+  return record?.status===REQUEST_CORRECTION_STATUS.PENDING&&(context.administrator===true||(
+    context.requester===true&&context.inScope===true&&context.allowedTypes?.includes(record.correctionType)
+    &&String(record.requestedByLogin||'').trim().toLowerCase()===context.login
+  ));
+}
 
 export const REQUEST_CORRECTION_TYPES=Object.freeze({
   offRoad:{

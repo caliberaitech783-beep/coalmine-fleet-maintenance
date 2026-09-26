@@ -83,7 +83,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
-import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 
 const {Pool}=pg;
@@ -5316,8 +5316,8 @@ function registerRequestCorrectionRoutes(){
     if(!context.administrator&&!context.pm&&!context.requester)return res.status(403).json({error:'This account cannot access request corrections.'});
     const {rows}=await pool.query(`SELECT ${requestCorrectionProjection} FROM request_corrections ORDER BY requested_at DESC,id DESC`);
     res.set('Cache-Control','private, no-store');
-    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes},
-      fieldOptions:context.requester?{breakdownTypes:await correctionBreakdownTypes()}:{}});
+    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)).map((row)=>({...row,canManage:canManagePendingCorrection(row,{...context,inScope:reportScopeIncludesSite(context.scope,row.site)})})),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes},
+      fieldOptions:context.requester||context.administrator?{breakdownTypes:await correctionBreakdownTypes()}:{}});
   }catch(error){next(error)}
 });
 
@@ -5326,7 +5326,7 @@ function registerRequestCorrectionRoutes(){
     const id=Number(req.params.id);
     if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
     const context=await requestCorrectionAccessContext(req.session);
-    const {rows}=await pool.query(`SELECT site,evidence_data AS "evidenceData",evidence_name AS "evidenceName",evidence_type AS "evidenceType" FROM request_corrections WHERE id=$1`,[id]);
+    const {rows}=await pool.query(`SELECT site,requested_by_login AS "requestedByLogin",evidence_data AS "evidenceData",evidence_name AS "evidenceName",evidence_type AS "evidenceType" FROM request_corrections WHERE id=$1`,[id]);
     const row=rows[0];
     if(!row)return res.status(404).json({error:'Correction request not found.'});
     if(!correctionVisibleToContext(row,context))return res.status(403).json({error:'This correction belongs to a different location.'});
@@ -5378,6 +5378,44 @@ function registerRequestCorrectionRoutes(){
     res.status(201).json(saved);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});if(error.code==='23505')return res.status(409).json({error:'This request already has an open correction of the selected type.'});next(error)}finally{client.release()}
 });
+
+  // Lock the same row used by review/apply so a concurrent decision cannot be overwritten.
+  async function managePendingCorrection(req,res,next){
+    const client=await pool.connect();
+    try{
+      const id=Number(req.params.id);
+      if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
+      await client.query('BEGIN');
+      const context=await requestCorrectionAccessContext(req.session,client);
+      const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
+      const before=rows[0];
+      if(!before)throw Object.assign(new Error('Correction request not found.'),{status:404});
+      if(!canManagePendingCorrection(before,{...context,inScope:reportScopeIncludesSite(context.scope,before.site)}))
+        throw Object.assign(new Error('Only an Admin or the requesting department manager can edit or delete a pending correction.'),{status:403});
+      const deleting=req.method==='DELETE';
+      let saved;
+      if(deleting){
+        saved=(await client.query(`UPDATE request_corrections SET status=$1 WHERE id=$2 RETURNING ${requestCorrectionProjection}`,[REQUEST_CORRECTION_STATUS.DELETED,id])).rows[0];
+      }else{
+        const reason=String(req.body?.reason||'').trim();
+        if(reason.length<10||reason.length>1000)throw Object.assign(new Error('Enter a correction reason between 10 and 1,000 characters.'),{status:400});
+        const proposedChanges=normalizeRequestCorrectionChanges(before.correctionType,req.body?.proposedChanges||{},before.originalValues);
+        if(Object.prototype.hasOwnProperty.call(proposedChanges,'category')){
+          const options=await correctionBreakdownTypes(client);
+          if(options.length&&!options.some((name)=>name.toLowerCase()===String(proposedChanges.category).trim().toLowerCase()))throw Object.assign(new Error('Select a Breakdown type from the list.'),{status:400});
+        }
+        saved=(await client.query(`UPDATE request_corrections SET proposed_changes=$1::jsonb,reason=$2 WHERE id=$3 RETURNING ${requestCorrectionProjection}`,[JSON.stringify(proposedChanges),reason,id])).rows[0];
+      }
+      await client.query('COMMIT');
+      req.audit={eventType:'Correction',module:'Maintenance Requests',action:deleting?'Delete pending correction':'Edit pending correction',targetType:'Maintenance request',targetReference:before.requestReference,reason:saved.reason,
+        changedFields:[{field:'Correction ID',before:String(id),after:String(id)},...(deleting?[{field:'Correction status',before:before.status,after:saved.status}]:[
+          ...requestCorrectionChangedFields(before.correctionType,{...before.originalValues,...before.proposedChanges},Object.fromEntries([...new Set([...Object.keys(before.proposedChanges),...Object.keys(saved.proposedChanges)])].map((key)=>[key,saved.proposedChanges[key]??before.originalValues[key]]))),
+          {field:'Reason',before:before.reason,after:saved.reason}])]};
+      res.json(saved);
+    }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+  }
+  app.patch('/api/request-corrections/:id',requireSession,managePendingCorrection);
+  app.delete('/api/request-corrections/:id',requireSession,managePendingCorrection);
 
   app.patch('/api/request-corrections/:id/review',requireSession,async(req,res,next)=>{
   const client=await pool.connect();

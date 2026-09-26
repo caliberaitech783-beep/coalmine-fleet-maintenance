@@ -60,7 +60,7 @@ test('Breakdown type in the correction form is a dropdown from the Repair type m
   assert.equal(category.kind,'text','server normalisation of the value is unchanged');
   assert.match(server,/async function correctionBreakdownTypes\(client=pool\)/);
   assert.match(server,/WHERE master_name='Repair type master'/);
-  assert.match(server,/fieldOptions:context\.requester\?\{breakdownTypes:await correctionBreakdownTypes\(\)\}:\{\}/,'sent with the page so managers without the Repair type master still get the list');
+  assert.match(server,/fieldOptions:context\.requester\|\|context\.administrator\?\{breakdownTypes:await correctionBreakdownTypes\(\)\}:\{\}/,'sent with the page for managers and administrators');
   assert.match(server,/Select a Breakdown type from the list\./,'a typed value outside the master is refused');
   assert.match(view,/if\(field\.optionsSource&&options\.length\)\{/);
   assert.match(view,/\[current,\.\.\.options\]:options/,'the recorded value stays selectable');

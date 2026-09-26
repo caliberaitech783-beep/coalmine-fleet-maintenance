@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,X} from 'lucide-react';
+import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,Trash2,X} from 'lucide-react';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields} from '../request-correction-policy.mjs';
 import SearchableSelect from './searchable-select.jsx';
 import './request-corrections.css';
@@ -49,30 +49,37 @@ function EvidenceViewer({record,token,Modal,onClose}){
   return <Modal title={`Correction evidence · ${record.requestReference}`} close={onClose}><div className="correction-evidence-view">{state.loading?<p>Loading image…</p>:state.error?<div className="correction-notice error">{state.error}</div>:<><img src={state.data.evidenceData} alt={`Correction evidence ${state.data.evidenceName}`} /><p>{state.data.evidenceName}</p></>}</div></Modal>;
 }
 
-function CorrectionCard({record,capabilities,token,Modal,onChanged}){
+function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions={}}){
   const [remark,setRemark]=useState('');
   const [working,setWorking]=useState('');
   const [error,setError]=useState('');
   const [showEvidence,setShowEvidence]=useState(false);
+  const [editing,setEditing]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(false);
+  const [values,setValues]=useState({});
+  const [reason,setReason]=useState('');
   const type=REQUEST_CORRECTION_TYPES[record.correctionType];
   const fields=requestCorrectionFields(record.correctionType).filter((field)=>Object.prototype.hasOwnProperty.call(record.proposedChanges||{},field.key));
   const requestAction=async(action,payload={})=>{
     setWorking(action);setError('');
     try{
-      const response=await fetch(`/api/request-corrections/${record.id}/${action}`,{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const response=await fetch(`/api/request-corrections/${record.id}${['edit','delete'].includes(action)?'':`/${action}`}`,{method:action==='delete'?'DELETE':'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const body=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(body.error||'The correction could not be updated.');
-      setRemark('');await onChanged();
+      setRemark('');setEditing(false);setConfirmDelete(false);await onChanged();
     }catch(problem){setError(problem.message)}finally{setWorking('')}
   };
   return <article className="correction-card">
     <header><div><span>#{record.id} · {record.site}</span><h3>{record.requestReference}</h3><p>{type?.label||record.correctionType}</p></div><b className={`correction-status ${statusClass(record.status)}`}>{record.status}</b></header>
+    {record.canManage&&!editing&&!confirmDelete&&<div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setValues({...record.originalValues,...record.proposedChanges});setReason(record.reason);setError('');setEditing(true)}}><Pencil /> Edit</button><button type="button" className="secondary danger" disabled={!!working} onClick={()=>{setError('');setConfirmDelete(true)}}><Trash2 /> Delete</button></div>}
+    {editing&&<form className="correction-create" onSubmit={(event)=>{event.preventDefault();void requestAction('edit',{proposedChanges:values,reason})}}><b>Edit pending correction</b><p>Changes still require PM approval. The existing evidence image is retained.</p><fieldset disabled={!!working}><div className="correction-form-grid">{requestCorrectionFields(record.correctionType).map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div><label><span>Reason for correction *</span><textarea required minLength={10} maxLength={1000} rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} /></label></fieldset><div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setEditing(false);setError('')}}>Cancel</button><button type="submit" className="primary" disabled={!!working||reason.trim().length<10}>{working==='edit'?'Saving…':'Save changes'}</button></div></form>}
+    {confirmDelete&&<div className="correction-delete-confirm" role="alert"><b>Delete correction #{record.id} for {record.requestReference}?</b><p>This removes the pending correction from the approval queue. The maintenance request stays unchanged and the correction remains in history.</p><div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setConfirmDelete(false);setError('')}}>Cancel</button><button type="button" className="secondary danger" disabled={!!working} onClick={()=>requestAction('delete')}><Trash2 /> {working==='delete'?'Deleting…':'Confirm delete'}</button></div></div>}
     <div className="correction-meta"><span>Requested by <b>{record.requestedByName}</b></span><span>Reason <b>{record.reason}</b></span></div>
     <div className="correction-comparison">{fields.map((field)=><div key={field.key}><span>{field.label}</span><del>{displayValue(record.originalValues?.[field.key],field.kind)}</del><strong>{displayValue(record.proposedChanges?.[field.key],field.kind)}</strong></div>)}</div>
     <button type="button" className="correction-evidence-button" onClick={()=>setShowEvidence(true)}><Eye /> View evidence image · {record.evidenceName}</button>
     {record.reviewedAt&&<div className="correction-review"><ShieldCheck /><div><b>{record.reviewedByName}</b><p>{record.reviewRemark}</p></div></div>}
     {record.appliedAt&&<div className="correction-review applied"><CheckCircle2 /><div><b>Applied by {record.appliedByName}</b><p>The approved values are now in the maintenance request.</p></div></div>}
-    {capabilities.canReview&&record.status===REQUEST_CORRECTION_STATUS.PENDING&&<div className="correction-decision"><label><span>PM verification remark *</span><textarea value={remark} onChange={(event)=>setRemark(event.target.value)} placeholder="Confirm what you checked before approving or rejecting." rows="2" /></label><div><button type="button" className="secondary danger" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'reject',remark})}><X /> Reject</button><button type="button" className="primary" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'approve',remark})}><ShieldCheck /> {working==='review'?'Saving…':'Approve correction'}</button></div></div>}
+    {!editing&&!confirmDelete&&capabilities.canReview&&record.status===REQUEST_CORRECTION_STATUS.PENDING&&<div className="correction-decision"><label><span>PM verification remark *</span><textarea value={remark} onChange={(event)=>setRemark(event.target.value)} placeholder="Confirm what you checked before approving or rejecting." rows="2" /></label><div><button type="button" className="secondary danger" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'reject',remark})}><X /> Reject</button><button type="button" className="primary" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'approve',remark})}><ShieldCheck /> {working==='review'?'Saving…':'Approve correction'}</button></div></div>}
     {capabilities.canApply&&<div className="correction-apply">{record.status===REQUEST_CORRECTION_STATUS.APPROVED?<button type="button" className="primary" disabled={working} onClick={()=>requestAction('apply')}><CheckCircle2 /> {working==='apply'?'Applying…':'Apply approved correction'}</button>:record.status===REQUEST_CORRECTION_STATUS.PENDING?<span><LockKeyhole /> Locked until PM approval</span>:null}</div>}
     {error&&<div className="correction-notice error">{error}</div>}
     {showEvidence&&<EvidenceViewer record={record} token={token} Modal={Modal} onClose={()=>setShowEvidence(false)} />}
@@ -142,8 +149,8 @@ export default function RequestCorrections({session,requests=[],Dialog}){
     <div className="correction-kpis"><div><span>Awaiting PM</span><b>{pending}</b></div><div><span>Ready for Admin</span><b>{approved}</b></div><div><span>Total corrections</span><b>{state.records.length}</b></div></div>
     {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} fieldOptions={state.fieldOptions||{}} />}
     <div className="correction-list-tools"><label><Search /><input type="search" data-smart-search value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search request, user, site, reason, or status" /></label></div>
-    <div className="correction-list-head"><div className="mobile-tabs" role="tablist">{['Open',REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.REJECTED,REQUEST_CORRECTION_STATUS.APPLIED,'All'].map((value)=><button type="button" key={value} className={status===value?'active':''} onClick={()=>setStatus(value)}>{value}</button>)}</div><span>{visible.length} shown</span></div>
+    <div className="correction-list-head"><div className="mobile-tabs" role="tablist">{['Open',REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.REJECTED,REQUEST_CORRECTION_STATUS.APPLIED,REQUEST_CORRECTION_STATUS.DELETED,'All'].map((value)=><button type="button" key={value} className={status===value?'active':''} onClick={()=>setStatus(value)}>{value}</button>)}</div><span>{visible.length} shown</span></div>
     {state.error&&<div className="correction-notice error">{state.error}</div>}
-    <div className="correction-list">{state.loading&&!state.records.length?<div className="correction-empty">Loading corrections…</div>:visible.length?visible.map((record)=><CorrectionCard key={record.id} record={record} capabilities={state.capabilities} token={token} Modal={Dialog} onChanged={load} />):<div className="correction-empty"><ShieldCheck /><b>No corrections in this view</b><span>Approved and rejected decisions remain available in history.</span></div>}</div>
+    <div className="correction-list">{state.loading&&!state.records.length?<div className="correction-empty">Loading corrections…</div>:visible.length?visible.map((record)=><CorrectionCard key={record.id} record={record} capabilities={state.capabilities} fieldOptions={state.fieldOptions||{}} token={token} Modal={Dialog} onChanged={load} />):<div className="correction-empty"><ShieldCheck /><b>No corrections in this view</b><span>Approved and rejected decisions remain available in history.</span></div>}</div>
   </section>;
 }

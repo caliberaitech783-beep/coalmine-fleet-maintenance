@@ -1,4 +1,5 @@
 .request-corrections-page{display:grid;gap:18px;color:var(--ink,#17233d)}
+.correction-manage{display:flex;flex-wrap:wrap;gap:10px}.correction-manage button{padding:10px 16px}.correction-manage .danger{color:#b52d38}.correction-delete-confirm{padding:16px;background:#fff0f0;border:1px solid #edb5bb}.correction-status.deleted{background:#eee;color:#666}.correction-create fieldset{border:0;padding:0;margin:0;min-width:0;display:grid;gap:14px}
 .correction-page-head,.correction-form-heading,.correction-card>header,.correction-list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
 .correction-page-head{padding:24px;border:1px solid var(--line,#dce3ef);background:var(--panel,#fff)}
 .correction-page-head span{font-size:12px;font-weight:800;color:#167795;letter-spacing:0}
