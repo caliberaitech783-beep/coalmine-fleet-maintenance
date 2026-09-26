@@ -76,10 +76,11 @@ test("Telegram status reports the bot and group names", async () => {
   assert.deepEqual(await telegramStatus({ env: {}, fetchImpl }), { configured: false, connected: false, paused: false });
 });
 
-test("Server mirrors each alert once to the Telegram group", () => {
+test("Server blocks request alerts in the admin group and deduplicates personal reminders", () => {
   assert.ok(server.includes("if(telegramGroup)mirrorToTelegramGroup("));
   assert.ok(server.includes("purpose,telegramGroup:false,telegramMessage:reminderText});"));
-  assert.ok(server.includes("[idle?'idle_repeat':'offroad_escalation',request.ref,TELEGRAM_GROUP_LOGIN,slotKey]"));
+  assert.ok(server.includes("if(isRequestLifecycleAlert({reportType,target,purpose}))return 'Skipped - admin request alerts disabled';"));
+  assert.ok(!server.includes("request.ref,TELEGRAM_GROUP_LOGIN,slotKey"));
   assert.ok(server.includes("app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator"));
   assert.ok(server.includes("app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator"));
 });
@@ -175,7 +176,7 @@ test("A personal chat id works without a default group configured", async () => 
 test("Telegram keeps full messaging and is saved on the user's profile record", () => {
   assert.ok(server.includes("async function deliverToTelegramUsers({logins,message,purpose,reportType='System notification',target=''})"));
   assert.ok(server.includes("await sendTelegramText({message,purpose,chatId})"));
-  assert.ok(server.includes("if(!whatsappReminder)mirrorToTelegramUsers({logins:recipients,message:reminderText,purpose,target:request.ref});"));
+  assert.ok(server.includes("const telegramReminders=Boolean(telegramConfiguration().botToken);"));
   assert.ok(server.includes("telegramChatId:previousRecord.telegramChatId,"));
   assert.ok(server.includes("const user=await saveTelegramOnUserRecord(rows[0].login,{chatId:update.chatId,username:update.username})||{};"));
   assert.ok(server.includes("await saveTelegramOnUserRecord(sessionLogin(req),null);"));

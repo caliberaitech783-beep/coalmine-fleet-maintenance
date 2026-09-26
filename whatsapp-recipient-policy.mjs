@@ -36,3 +36,13 @@ export function isWhatsAppAllAlertRecipient(){
 export function isWhatsAppReportsOnlyRecipient(user={},profile=resolveMobileAccess({user})){
   return ['manager','director','admin','superAdmin'].includes(whatsAppRecipientRole(user,profile));
 }
+
+export function isRequestAlertSuppressedUser(user={},profile=resolveMobileAccess({user})){
+  return whatsAppRecipientRole(user,profile)==='director'
+    ||(profile.sessionRole==='super'&&['admin','super admin'].includes(words(profile.permissions?.adminLevel)));
+}
+
+export function isRequestLifecycleAlert({purpose='',target='',reportType='System notification'}={}){
+  return ['requestOpened','requestAccepted','requestClosed','requestVerified','requestIdle','offRoadEscalation','idleReminder','dailyUpdate'].includes(purpose)
+    ||(reportType==='System notification'&&/^REQ-/i.test(String(target)));
+}

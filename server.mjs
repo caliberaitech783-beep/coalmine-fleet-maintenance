@@ -85,6 +85,7 @@ import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
+import {isRequestAlertSuppressedUser,isRequestLifecycleAlert} from './whatsapp-recipient-policy.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -3694,9 +3695,8 @@ async function ticketVisibleToSession(ticket,session){
   return creatorRoles.includes(ticket?.creatorRole)&&userManagesSite(manager,ticket?.site);
 }
 
-// One copy of each alert goes to the Telegram group, separate from the
+// One copy of eligible non-request alerts goes to the Telegram group, separate from the
 // per-recipient WhatsApp fan-out, so it never delays or fails WhatsApp delivery.
-const TELEGRAM_GROUP_LOGIN='telegram:group';
 // The admin group's id starts as TELEGRAM_DEFAULT_CHAT_ID. If Telegram upgrades
 // the group to a supergroup its id changes, and the new id is stored here.
 const TELEGRAM_GROUP_SETTING_KEY='telegram_admin_group';
@@ -3719,6 +3719,8 @@ async function followTelegramGroupMigration(oldChatId,newChatId){
 }
 
 async function deliverToTelegramGroup({reportType,target,level='',message,purpose,document=null}){
+  // This is the administrators' shared group, so request traffic must never bypass role exclusions here.
+  if(isRequestLifecycleAlert({reportType,target,purpose}))return 'Skipped - admin request alerts disabled';
   const config=telegramConfiguration();
   if(!config.configured)return 'Skipped - not configured';
   let {chatId}=await telegramGroupSettings();
@@ -3770,7 +3772,7 @@ async function inviteAdministratorToTelegramGroup(login,chatId){
   const status=await telegramChatMemberStatus(group.chatId,chatId).catch(()=>'');
   if(['creator','administrator','member','restricted'].includes(status))return 'Already in the group';
   const inviteLink=await telegramAdminGroupInviteLink();
-  await sendTelegramText({chatId,message:`You are a BDMS administrator, so you are invited to the BDMS ADMIN ALERT group, which receives every alert from all sites.\nTap to join: ${inviteLink}\nThe bot approves your request automatically.`});
+  await sendTelegramText({chatId,message:`You are a BDMS administrator, so you are invited to the BDMS ADMIN ALERT group. Request lifecycle alerts and reminders are disabled for administrators.\nTap to join: ${inviteLink}\nThe bot approves your request automatically.`});
   return 'Invited';
 }
 
@@ -4736,6 +4738,7 @@ function requestNotificationTime(value){
 
 async function requestStakeholderLogins(client,{site,requesterLogin}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const excluded=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isRequestAlertSuppressedUser(user)).map(user=>String(user.login||'').trim().toLowerCase()));
   const recipients=[String(requesterLogin||'').trim().toLowerCase()];
   const requestSite=canonicalSiteName(site);
   for(const row of rows){
@@ -4744,15 +4747,15 @@ async function requestStakeholderLogins(client,{site,requesterLogin}){
     if(!login)continue;
     const profile=resolveMobileAccess({user});
     const siteMatches=reportScopeIncludesSite(userSiteScope(user),requestSite);
-    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&userManagesSite(user,site))recipients.push(login);
     if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
   }
-  return [...new Set(recipients.filter(Boolean))];
+  return [...new Set(recipients.filter(login=>login&&!excluded.has(login)))];
 }
 
 async function productionFirstTripNotificationLogins(client,{site}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const excluded=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isRequestAlertSuppressedUser(user)).map(user=>String(user.login||'').trim().toLowerCase()));
   const requestSite=canonicalSiteName(site);
   const recipients=[];
   for(const row of rows){
@@ -4765,7 +4768,7 @@ async function productionFirstTripNotificationLogins(client,{site}){
     if(profile.sessionRole==='normal'&&profile.assignedRole==='Production User'&&siteMatches)recipients.push(login);
     if(profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Manager'&&managerRoles.includes('Production Manager')&&userManagesSite(user,site))recipients.push(login);
   }
-  return [...new Set(recipients)];
+  return [...new Set(recipients.filter(login=>!excluded.has(login)))];
 }
 
 async function notifyProductionFirstTripPending(request,closedAt,closedBy){
@@ -4932,8 +4935,8 @@ async function createMaintenanceReminderNotifications(){
   for(const request of requests){
     const recipients=new Set();
     for(const {user,login,profile,scope} of people){
+      if(isRequestAlertSuppressedUser(user,profile))continue;
       if(profile.assignedRole==='Maintenance User'&&reportScopeIncludesSite(scope,request.site))recipients.add(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.add(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,request.site))recipients.add(login);
     }
     const message=`${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`;
@@ -5172,7 +5175,7 @@ let workflowReminderRunning=false;
 async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
   if(!databaseReady||workflowReminderRunning)return {skipped:true};
   const reportSettings=await storedWhatsAppReportSettings();
-  const telegramReminders=telegramConfiguration().configured;
+  const telegramReminders=Boolean(telegramConfiguration().botToken);
   if(!telegramReminders&&!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
   workflowReminderRunning=true;
   let sent=0,failed=0,skipped=0;
@@ -5199,20 +5202,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site,ignoreSwitches:!whatsappReminder});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
       const reminderText=`SITE: ${request.site||'Not recorded'}\n${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}\n${equipmentDetails}\n${idle?`Idle since ${requestNotificationTime(eventTime)}. Reason: ${request.idleReason||'Not recorded'}`:`Off Road since ${requestNotificationTime(eventTime)}`}\n${workflowRequestLink(request.ref,publicBaseUrl())}`;
-      if(telegramConfiguration().configured){
-        // The group gets one reminder per request and slot, not one per recipient.
-        const telegramClaim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
-          VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,TELEGRAM_GROUP_LOGIN,slotKey]);
-        if(telegramClaim.rows.length){
-          const status=await deliverToTelegramGroup({reportType:'System notification',target:request.ref,purpose,
-            message:reminderText});
-          await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,telegramClaim.rows[0].id]);
-          // With WhatsApp reminders off, the per-recipient loop below is skipped, so
-          // connected users get their personal copy here, once per slot.
-          if(!whatsappReminder)mirrorToTelegramUsers({logins:recipients,message:reminderText,purpose,target:request.ref});
-        }
-      }
-      if(!whatsappReminder)continue;
+      // Personal reminders are deduplicated per eligible operational user, even when WhatsApp is paused.
       const workflowTemplate=idle
         ? {templateKey:'requestIdle',parameters:[equipmentDetails,request.site,requestNotificationTime(eventTime),request.idleReason||'Not recorded',request.ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}}
         : {templateKey:'requestOpened',parameters:[request.ref,request.site,request.equipmentGroup||request.equipment||'Not available',request.door||'Not available',request.category||'Breakdown',request.owner||'Production User',requestNotificationTime(eventTime),request.expectedCompletionAtRaw?requestNotificationTime(request.expectedCompletionAtRaw):'Not set',workflowRequestLink(request.ref,publicBaseUrl())],context:{request}};
