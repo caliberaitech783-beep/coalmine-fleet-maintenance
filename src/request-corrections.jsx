@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,Trash2,X} from 'lucide-react';
-import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields} from '../request-correction-policy.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields,requestCorrectionReviewRemarkError} from '../request-correction-policy.mjs';
 import SearchableSelect from './searchable-select.jsx';
 import './request-corrections.css';
 import DateInput from "./date-input.mjs";
@@ -51,6 +51,7 @@ function EvidenceViewer({record,token,Modal,onClose}){
 
 function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions={}}){
   const [remark,setRemark]=useState('');
+  const [reviewError,setReviewError]=useState('');
   const [working,setWorking]=useState('');
   const [error,setError]=useState('');
   const [showEvidence,setShowEvidence]=useState(false);
@@ -60,14 +61,20 @@ function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions=
   const [reason,setReason]=useState('');
   const type=REQUEST_CORRECTION_TYPES[record.correctionType];
   const fields=requestCorrectionFields(record.correctionType).filter((field)=>Object.prototype.hasOwnProperty.call(record.proposedChanges||{},field.key));
-  const requestAction=async(action,payload={})=>{
-    setWorking(action);setError('');
+  const requestAction=async(action,payload={},operation=action)=>{
+    setWorking(operation);setError('');
     try{
       const response=await fetch(`/api/request-corrections/${record.id}${['edit','delete'].includes(action)?'':`/${action}`}`,{method:action==='delete'?'DELETE':'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const body=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(body.error||'The correction could not be updated.');
-      setRemark('');setEditing(false);setConfirmDelete(false);await onChanged();
+      setRemark('');setReviewError('');setEditing(false);setConfirmDelete(false);await onChanged();
     }catch(problem){setError(problem.message)}finally{setWorking('')}
+  };
+  const submitReview=(decision)=>{
+    const validationError=requestCorrectionReviewRemarkError(remark);
+    if(validationError){setReviewError(validationError);return}
+    setReviewError('');
+    void requestAction('review',{decision,remark},decision);
   };
   return <article className="correction-card">
     <header><div><span>#{record.id} · {record.site}</span><h3>{record.requestReference}</h3><p>{type?.label||record.correctionType}</p></div><b className={`correction-status ${statusClass(record.status)}`}>{record.status}</b></header>
@@ -79,7 +86,7 @@ function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions=
     <button type="button" className="correction-evidence-button" onClick={()=>setShowEvidence(true)}><Eye /> View evidence image · {record.evidenceName}</button>
     {record.reviewedAt&&<div className="correction-review"><ShieldCheck /><div><b>{record.reviewedByName}</b><p>{record.reviewRemark}</p></div></div>}
     {record.appliedAt&&<div className="correction-review applied"><CheckCircle2 /><div><b>Applied by {record.appliedByName}</b><p>The approved values are now in the maintenance request.</p></div></div>}
-    {!editing&&!confirmDelete&&capabilities.canReview&&record.status===REQUEST_CORRECTION_STATUS.PENDING&&<div className="correction-decision"><label><span>PM verification remark *</span><textarea value={remark} onChange={(event)=>setRemark(event.target.value)} placeholder="Confirm what you checked before approving or rejecting." rows="2" /></label><div><button type="button" className="secondary danger" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'reject',remark})}><X /> Reject</button><button type="button" className="primary" disabled={working||remark.trim().length<5} onClick={()=>requestAction('review',{decision:'approve',remark})}><ShieldCheck /> {working==='review'?'Saving…':'Approve correction'}</button></div></div>}
+    {!editing&&!confirmDelete&&capabilities.canReview&&record.status===REQUEST_CORRECTION_STATUS.PENDING&&<div className="correction-decision"><label><span>PM verification remark *</span><textarea value={remark} onChange={(event)=>{const value=event.target.value;setRemark(value);if(reviewError&&!requestCorrectionReviewRemarkError(value))setReviewError('')}} placeholder="Confirm what you checked before approving or rejecting." rows="2" aria-invalid={Boolean(reviewError)} aria-describedby={reviewError?`correction-review-error-${record.id}`:undefined} />{reviewError&&<small id={`correction-review-error-${record.id}`} className="correction-field-error" role="alert">{reviewError}</small>}</label><div><button type="button" className="secondary danger" disabled={Boolean(working)} onClick={()=>submitReview('reject')}><X /> {working==='reject'?'Rejecting…':'Reject'}</button><button type="button" className="primary" disabled={Boolean(working)} onClick={()=>submitReview('approve')}><ShieldCheck /> {working==='approve'?'Approving…':'Approve correction'}</button></div></div>}
     {capabilities.canApply&&<div className="correction-apply">{record.status===REQUEST_CORRECTION_STATUS.APPROVED?<button type="button" className="primary" disabled={working} onClick={()=>requestAction('apply')}><CheckCircle2 /> {working==='apply'?'Applying…':'Apply approved correction'}</button>:record.status===REQUEST_CORRECTION_STATUS.PENDING?<span><LockKeyhole /> Locked until PM approval</span>:null}</div>}
     {error&&<div className="correction-notice error">{error}</div>}
     {showEvidence&&<EvidenceViewer record={record} token={token} Modal={Modal} onClose={()=>setShowEvidence(false)} />}

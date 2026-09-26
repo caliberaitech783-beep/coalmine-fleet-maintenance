@@ -139,6 +139,11 @@ export function requestCorrectionValidationError({type,reason,evidenceData,evide
   return '';
 }
 
+export function requestCorrectionReviewRemarkError(value=''){
+  const length=String(value??'').trim().length;
+  return length<5||length>1000?'Enter a PM review remark between 5 and 1,000 characters.':'';
+}
+
 export function validCorrectionEvidence(value=''){
   const match=String(value).match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
   if(!match)return false;

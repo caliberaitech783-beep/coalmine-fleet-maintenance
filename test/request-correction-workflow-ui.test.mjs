@@ -49,6 +49,10 @@ test('correction screen explains and enforces the approval sequence',()=>{
   assert.match(view,/Apply approved correction/);
   assert.match(view,/Upload correction evidence/);
   assert.match(view,/PM verification remark/);
+  assert.match(view,/submitReview\('reject'\)/,'Reject remains clickable so an invalid remark gets visible feedback');
+  assert.match(view,/correction-field-error/,'the remark validation is shown next to the field');
+  assert.doesNotMatch(view,/disabled=\{working\|\|remark\.trim\(\)\.length<5\}/,'the review buttons must not fail silently');
+  assert.match(server,/requestCorrectionReviewRemarkError\(remark\)/,'the API shares the same validation rule');
   assert.match(view,/Search request, door, equipment, chassis, or site/);
   assert.match(view,/Search request, user, site, reason, or status/);
 });

@@ -83,7 +83,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
-import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 
 const {Pool}=pg;
@@ -5501,7 +5501,8 @@ function registerRequestCorrectionRoutes(){
     const id=Number(req.params.id),decision=String(req.body?.decision||'').trim().toLowerCase(),remark=String(req.body?.remark||'').trim();
     if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
     if(!['approve','reject'].includes(decision))return res.status(400).json({error:'Select Approve or Reject.'});
-    if(remark.length<5||remark.length>1000)return res.status(400).json({error:'Enter a PM review remark between 5 and 1,000 characters.'});
+    const remarkError=requestCorrectionReviewRemarkError(remark);
+    if(remarkError)return res.status(400).json({error:remarkError});
     await client.query('BEGIN');
     const context=await requestCorrectionAccessContext(req.session,client);
     const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);

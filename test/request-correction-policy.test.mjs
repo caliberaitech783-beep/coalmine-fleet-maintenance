@@ -4,6 +4,7 @@ import {
   REQUEST_CORRECTION_STATUS,
   normalizeRequestCorrectionChanges,
   requestCorrectionSnapshot,
+  requestCorrectionReviewRemarkError,
   requestCorrectionTimelineFields,
   requestCorrectionTypesForManagerRoles,
   requestCorrectionTypesForRole,
@@ -60,6 +61,13 @@ test('reason and image evidence are mandatory',()=>{
   assert.match(requestCorrectionValidationError({type:'offRoad',reason:'short',evidenceData:tinyPng,evidenceName:'proof.png',proposedChanges:{complaint:'Correct'},originalValues:{complaint:'Wrong'}}),/between 10 and 1,000/);
   assert.match(requestCorrectionValidationError({type:'offRoad',reason:'Correcting the recorded complaint',evidenceData:'',evidenceName:'proof.png',proposedChanges:{complaint:'Correct'},originalValues:{complaint:'Wrong'}}),/Upload a JPG/);
   assert.equal(requestCorrectionValidationError({type:'offRoad',reason:'Correcting the recorded complaint',evidenceData:tinyPng,evidenceName:'proof.png',proposedChanges:{complaint:'Correct'},originalValues:{complaint:'Wrong'}}),'');
+});
+
+test('PM review remarks give the same validation result in the screen and API',()=>{
+  assert.match(requestCorrectionReviewRemarkError(''),/between 5 and 1,000/);
+  assert.match(requestCorrectionReviewRemarkError(' no '),/between 5 and 1,000/);
+  assert.equal(requestCorrectionReviewRemarkError('valid'),'');
+  assert.match(requestCorrectionReviewRemarkError('x'.repeat(1001)),/between 5 and 1,000/);
 });
 
 test('timeline events are derived from approved changed fields',()=>{
