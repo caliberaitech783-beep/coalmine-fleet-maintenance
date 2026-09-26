@@ -110,11 +110,11 @@ test("timeline button does not fetch or mount content until opened and preserves
   let tree = app.render(props); app.effects();
   assert.equal(app.requests.length, 0);
   assert.equal(all(tree, node => node.type === Dialog).length, 0);
-  assert.equal(button(tree, "View time breakdown").props["aria-label"], `View time breakdown for ${request.ref}`);
+  assert.equal(button(tree, "View time breakdown").props["aria-label"], `View complete lifecycle for job reference ${request.ref}`);
   button(tree, "View time breakdown").props.onClick();
   tree = app.render();
   const dialog = all(tree, node => node.type === Dialog)[0];
-  assert.equal(dialog.props.title, `Time breakdown · ${request.ref}`);
+  assert.equal(dialog.props.title, `Complete lifecycle · ${request.ref}`);
   assert.equal(dialog.props.children.props.reference, request.ref);
   assert.equal(dialog.props.children.props.token, "qa-token");
   dialog.props.close();
@@ -128,7 +128,7 @@ test("timeline button does not fetch or mount content until opened and preserves
 test("opening timeline fetches the encoded request-scoped endpoint with current authorization and no cache", async () => {
   const app = harness("RequestTimelineContent");
   const reference = "QA/request #01";
-  assert.match(text(app.render({reference, token: "qa-token"})), /Loading recorded times/); app.effects();
+  assert.match(text(app.render({reference, token: "qa-token"})), /Loading complete lifecycle/); app.effects();
   assert.equal(app.requests[0].url, "/api/requests/QA%2Frequest%20%2301/timeline");
   assert.equal(app.requests[0].options.headers.Authorization, "Bearer qa-token");
   assert.equal(app.requests[0].options.cache, "no-store");
@@ -151,14 +151,14 @@ test("account changes hide prior timeline immediately and unmount aborts pending
   app.render({reference: request.ref, token: "qa-admin"}); app.effects();
   app.requests[0].respond(body()); await settle();
   assert.equal(app.render().props.data.reference, request.ref);
-  assert.match(text(app.render({reference: request.ref, token: "qa-production"})), /Loading recorded times/);
+  assert.match(text(app.render({reference: request.ref, token: "qa-production"})), /Loading complete lifecycle/);
   app.effects();
   assert.equal(app.requests[0].options.signal.aborted, true);
   assert.equal(app.requests[1].options.headers.Authorization, "Bearer qa-production");
   app.unmount();
   assert.equal(app.requests[1].options.signal.aborted, true);
   app.requests[1].respond(body()); await settle();
-  assert.match(text(app.render()), /Loading recorded times/);
+  assert.match(text(app.render()), /Loading complete lifecycle/);
 });
 
 test("timeline load errors are inline; retry remains scoped and rejects malformed or mismatched responses", async () => {
@@ -167,17 +167,17 @@ test("timeline load errors are inline; retry remains scoped and rejects malforme
   app.requests[0].respond({error: "This request belongs to a different location."}, false); await settle();
   assert.match(alerts(app.render()), /different location/);
   for (const invalid of [body("WRONG-REFERENCE"), body(request.ref, {events: null}), body(request.ref, {history: null}), body(request.ref, {durations: null})]) {
-    button(app.render(), "Retry time breakdown").props.onClick(); app.render(); app.effects();
+    button(app.render(), "Retry lifecycle").props.onClick(); app.render(); app.effects();
     app.requests.at(-1).respond(invalid); await settle();
     assert.match(alerts(app.render()), /response is incomplete/);
   }
-  button(app.render(), "Retry time breakdown").props.onClick(); app.render(); app.effects();
+  button(app.render(), "Retry lifecycle").props.onClick(); app.render(); app.effects();
   app.requests.at(-1).malformed(); await settle();
   assert.match(alerts(app.render()), /response is incomplete/);
-  button(app.render(), "Retry time breakdown").props.onClick(); app.render(); app.effects();
+  button(app.render(), "Retry lifecycle").props.onClick(); app.render(); app.effects();
   app.requests.at(-1).reject(new Error("Network interrupted")); await settle();
   assert.match(alerts(app.render()), /Network interrupted/);
-  button(app.render(), "Retry time breakdown").props.onClick(); app.render(); app.effects();
+  button(app.render(), "Retry lifecycle").props.onClick(); app.render(); app.effects();
   app.requests.at(-1).respond(body()); await settle();
   assert.equal(app.render().props.data.reference, request.ref);
   assert.equal(alerts(app.render()), "");
@@ -360,7 +360,8 @@ test("the time breakdown shows the equipment group and door number with the requ
   const view = text(harness("RequestTimelineView").render({data: body(request.ref, {request: identified})}));
   assert.ok(view.includes("SCANIA TIPPERS · S56-MH34BZ0561 · Dhoptala OB (2nd) · QA-TIMELINE-01"));
   const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8");
-  assert.ok(source.includes("const title = identity ? `Time breakdown · ${reference} · ${identity}` : `Time breakdown · ${reference}`;"));
+  assert.ok(source.includes("const title = identity ? `Complete lifecycle · ${reference} · ${identity}` : `Complete lifecycle · ${reference}`;"));
+  assert.ok(source.includes('className="request-lifecycle-overview"'));
   assert.ok(source.includes("onLoaded={request => setIdentity(requestTimelineIdentity(request))}"));
   assert.ok(source.includes("onLoaded?.(body.request || {})"));
   void requestTimelineIdentity;

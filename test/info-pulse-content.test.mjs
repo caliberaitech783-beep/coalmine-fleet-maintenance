@@ -489,7 +489,7 @@ test('Export beside Refresh offers PDF, Excel and Smart Print for every breakdow
   assert.equal(exportOf(wide).props.title, 'Info Pulse BD balance breakdowns · All regions · Until 16-09-2026');
   // The panel hands over the shared menu, whose popover and "preparing file" overlay are raised above the full-screen panel.
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-  assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\}[^\r\n]* ExportMenu=\{ExportMenu\} \/>/);
+  assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\}[^\r\n]* ExportMenu=\{ExportMenu\}[^\r\n]* \/>/);
   assert.match(main, /function ExportMenu\(\{[^\r\n]*, portalClassName = "", printSection = false, excelSheets = null \}\) \{/);
   assert.match(main, /className=\{`export-menu-popover\$\{portalClassName \? ` \$\{portalClassName\}` : ""\}`\}/);
   assert.match(main, /<CaliberActivityOverlay message=\{downloadActivity\} className=\{portalClassName\} \/>/);

@@ -37,6 +37,17 @@ export function RequestTimelineView({data}) {
   const byEvent = new Map(events.map(event => [event.event,event]));
   const request = data.request || {};
   const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean);
+  const overview = [
+    ["Current status", request.status],
+    ["Site / work location", request.site || request.location],
+    ["Equipment group", request.equipmentGroup || request.equipment],
+    ["Door / registration", request.door || request.reg],
+    ["Chassis / serial number", request.chassis || request.chassisNo || request.manufacturerSerialNo],
+    ["Breakdown type", request.category || request.type],
+    ["Reported problem", request.complaint],
+    ["Delayed reason", request.delayedReason || request.delayReason],
+    ["Work completed", request.maintenanceWork],
+  ];
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
   const identity = requestTimelineIdentity(request);
   const endpointState = (key) => {
@@ -71,6 +82,8 @@ export function RequestTimelineView({data}) {
   const steps = stageTimingSteps(request);
   return <div className="request-timeline-content">
     {identity && <p className="request-timeline-identity"><b>{identity}</b><span> · {data.reference}</span></p>}
+    <h3>Request overview</h3>
+    <dl className="request-lifecycle-overview">{overview.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "").trim() || "Not recorded"}</dd></div>)}</dl>
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
     {idleApproval && <p className="request-timeline-note">This request closed through a manager’s on-road approval. Its closure is not a separately recorded repair-completion time. The maintenance interval can include idle waiting.</p>}
     <h3>Step by step</h3>
@@ -133,14 +146,14 @@ export function RequestTimelineContent({reference,token,onLoaded}) {
     fetch(`/api/requests/${encodeURIComponent(reference)}/timeline`, {cache:"no-store",signal:controller.signal,headers:{Authorization:`Bearer ${token}`}})
       .then(async response => {
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.error || "Could not load this request’s time breakdown.");
-        if (body.reference !== reference || !Array.isArray(body.events) || !Array.isArray(body.history) || !body.durations) throw new Error("The time breakdown response is incomplete. Please retry.");
+        if (!response.ok) throw new Error(body.error || "Could not load this request’s complete lifecycle.");
+        if (body.reference !== reference || !Array.isArray(body.events) || !Array.isArray(body.history) || !body.durations) throw new Error("The lifecycle response is incomplete. Please retry.");
         if (!controller.signal.aborted) { setState({reference,token,data:body}); onLoaded?.(body.request || {}); }
       }).catch(error => {if (!controller.signal.aborted) setState({reference,token,error:error.message});});
     return () => controller.abort();
   },[reference,token,retry]);
-  if (state?.reference !== reference || state?.token !== token) return <p role="status">Loading recorded times…</p>;
-  if (state.error) return <div><p role="alert">{state.error}</p><button type="button" onClick={() => setRetry(value => value + 1)}>Retry time breakdown</button></div>;
+  if (state?.reference !== reference || state?.token !== token) return <p role="status">Loading complete lifecycle…</p>;
+  if (state.error) return <div><p role="alert">{state.error}</p><button type="button" onClick={() => setRetry(value => value + 1)}>Retry lifecycle</button></div>;
   return <RequestTimelineView data={state.data} />;
 }
 
@@ -149,7 +162,7 @@ export default function RequestTimelineButton({reference,token,Dialog,label}) {
   const [identity,setIdentity] = useState("");
   useEffect(() => {setOpen(false); setIdentity("");},[reference,token]);
   if (!reference) return null;
-  const title = identity ? `Time breakdown · ${reference} · ${identity}` : `Time breakdown · ${reference}`;
-  return <><button type="button" className="request-timeline-link" title="View time breakdown" aria-label={`View time breakdown for ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
+  const title = identity ? `Complete lifecycle · ${reference} · ${identity}` : `Complete lifecycle · ${reference}`;
+  return <><button type="button" className="request-timeline-link" title="View complete lifecycle" aria-label={`View complete lifecycle for job reference ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
     {open && <Dialog title={title} className="request-timeline-modal" overlayClassName="request-timeline-overlay" close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} onLoaded={request => setIdentity(requestTimelineIdentity(request))} /></Dialog>}</>;
 }

@@ -47,5 +47,5 @@ test("the Maintenance Manager workload table shows Edit and Daily update actions
   const table = slice(source, "function BreakdownTable", "\nfunction ");
   assert.match(table, /<Pencil \/> Edit/);
   assert.match(table, /<MessageCircle \/> Daily update/);
-  assert.match(source, /onUpdateRequest=\{updateRequest\} onAddDailyRemark=\{addDailyRemark\} \/>/);
+  assert.match(source, /onUpdateRequest=\{updateRequest\} onAddDailyRemark=\{addDailyRemark\} TimelineButton=\{RequestTimelineButton\} \/>/);
 });

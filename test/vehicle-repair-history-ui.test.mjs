@@ -40,5 +40,7 @@ test("reports include a dedicated vehicle history category with three downloadab
   assert.match(source, /label="Download history"/);
   assert.match(source, /label: "Work completed"/);
   assert.match(source, /label: "Time since previous breakdown"/);
-  assert.match(source, /RequestProcessModal/);
+  assert.match(source, /function vehicleRepairHistoryColumns\(token\)/);
+  assert.match(source, /label: "Request ID"[^\n]+<RequestTimelineButton reference=\{request\.ref\} token=\{token\} Dialog=\{Modal\} \/>/);
+  assert.doesNotMatch(source, /RequestProcessModal/);
 });

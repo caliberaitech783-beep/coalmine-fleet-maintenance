@@ -39,22 +39,25 @@ test("repair and event chart context stays applied before the list filters", () 
   assert.match(source, /requestRecords=\{requestAssetDrilldown\} lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
 });
 
-test("the time breakdown opens from the Days of breakdown value in every list, and job references stay plain", () => {
+test("job references and duration cells open the complete lifecycle in every request list", () => {
   assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} Remarks=\{MaintenanceRemarks\} \/>/);
-  assert.match(browser, /\{requestRecords && <td><b>\{record\.requestReference\}<\/b><\/td>\}<td data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}>/);
+  assert.match(browser, /const referenceCell = \(record\) => \{/);
+  assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} \/>/);
+  assert.match(browser, /\{requestRecords && <td>\{referenceCell\(record\)\}<\/td>\}<td data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}>/);
   assert.match(source, /const assetDrilldownRows = requestDrilldownKey\(assetDrilldown\) \? rowsForAssetDrilldown\(assetDrilldown\) : fleetAssetRequestDetails\(rowsForAssetDrilldown\(assetDrilldown\), fleetDrilldownRequests\(assetDrilldown\)\)/);
   assert.match(source, /const requestDrilldownKey = \(key = ""\) => key === "open-cases" \|\| key\.startsWith\("stage-pipeline:"\) \|\| \["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"\]/);
   assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} label=\{label\} \/>/);
   assert.match(browser, /data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}/);
   assert.match(browser, /data-sort-value=\{sortableDate\(record\.requestStart\)\}/);
   assert.match(browser, /data-sort-value=\{calculateBreakdownMinutes\(record\.requestStart, record\.requestClosed, now\)\}>\{breakdownCell\(record\)\}/);
-  assert.match(source, /case "ref": return <td><b>\{r\.ref\}<\/b><\/td>;/);
+  assert.match(source, /case "ref": return <td><RequestTimelineButton reference=\{r\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>;/);
   assert.match(source, /case "breakdownDays": return <td><RequestTimelineButton reference=\{r\.ref\} token=\{authToken\} Dialog=\{Modal\} label=/);
-  assert.match(source, /<td><b>\{request\.ref\}<\/b><\/td><td>\{request\.door \? <a href="#vehicle-repair-history"/);
+  assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td><td>\{request\.door \? <a href="#vehicle-repair-history"/);
   assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} label=\{`\$\{age\} \$\{age === 1 \? "day" : "days"\}`\} \/><\/td>/);
   assert.match(source, /columns=\{withTimelineLinks\(withStageGapHighlights\(selectedReport\.columns\), session\?\.token \|\| authToken\)\}/);
   assert.match(source, /const timeKey = \["days", "tat", "hours"\]\.find/);
-  assert.doesNotMatch(source, /<td><RequestTimelineButton reference=\{(r|row|request)\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>/);
+  assert.match(source, /if \(\["ref", "reference"\]\.includes\(column\.key\)\)/);
+  assert.match(source, /<td><RequestTimelineButton reference=\{row\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>/);
 });
 
 test("status columns sort in lifecycle order and duration columns sort by elapsed time", () => {

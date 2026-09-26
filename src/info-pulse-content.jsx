@@ -41,7 +41,7 @@ function ChipRow({name, label, allLabel, options, value, choose}) {
 // Info Pulse: dashboard-style filters (region tabs, site and equipment/vehicle
 // chips, started-date range defaulting to today), four standing-time KPI cards
 // and one ranked list of open breakdowns, longest standing first.
-export default function InfoPulseContent({breakdowns = [], firstTripPending = [], session = null, scope, now, updatedAt, ready, error, refreshing, onRefresh, ExportMenu = null}) {
+export default function InfoPulseContent({breakdowns = [], firstTripPending = [], session = null, scope, now, updatedAt, ready, error, refreshing, onRefresh, ExportMenu = null, renderRequestReference = null}) {
   const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
   // BD balance as of today: every open breakdown started on or before today.
   const defaults = {region: 'all', site: '', category: '', from: '', to: today};
@@ -134,7 +134,7 @@ export default function InfoPulseContent({breakdowns = [], firstTripPending = []
             <div className="pulse-row-equipment">
               <span className="pulse-row-site"><MapPin size={13} aria-hidden="true" />{row.site}</span>
               <b className="pulse-row-vehicle"><Truck size={18} aria-hidden="true" />{request.door || request.reg || 'Not recorded'}</b>
-              <small>{[request.equipmentGroup || request.equipment, request.ref].filter(Boolean).join(' · ') || 'Reference not recorded'}</small>
+              <small>{request.equipmentGroup || request.equipment || 'Equipment group not recorded'}{request.ref && <> · {renderRequestReference ? renderRequestReference(request.ref) : request.ref}</>}</small>
               <span className="pulse-row-status"><i className="pulse-status-tag">{requestStatusLabel(request)}</i><i className={`pulse-tier-tag ${row.tier}`}>{firstTripSelected ? 'First trip pending' : row.tier === 'critical' ? 'Critical · 24h+' : row.tier === 'warning' ? 'Warning · 12h+' : 'Under 12h'}</i></span>
               <button type="button" className="pulse-updates-button" aria-label={`Daily updates for ${request.door || request.reg || request.ref || row.key}`} aria-expanded={updatesOpen} aria-controls={updatesId} onClick={() => setExpandedUpdates(current => ({...current, [row.key]: !current[row.key]}))}>Daily updates <b>{updates.length}</b><span aria-hidden="true">{updatesOpen ? '−' : '+'}</span></button>
             </div>

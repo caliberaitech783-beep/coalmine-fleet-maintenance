@@ -1233,7 +1233,7 @@ function formatMasterFieldValue(key, value) {
   return value;
 }
 
-function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
+function ManagerIdleConfirmation({ request, action, close, onConfirm, TimelineButton = null }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const submitLock = useRef(false);
@@ -1251,7 +1251,7 @@ function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
-        <div><span>Job reference</span><b>{request.ref}</b></div>
+        <div><span>Job reference</span>{TimelineButton ? <TimelineButton reference={request.ref} token={authToken} Dialog={Modal} /> : <b>{request.ref}</b>}</div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "—"}</b></div>
       </div>
@@ -1279,7 +1279,7 @@ function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
   </div>;
 }
 
-function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark }) {
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null }) {
   const [queueTab,setQueueTab]=useState("active");
   const [requestUpdate, setRequestUpdate] = useState(null);
   const [productionFirstTrip, setProductionFirstTrip] = useState(null);
@@ -1407,7 +1407,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </>}
     {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
     {productionFirstTrip && <ProductionFirstTripForm request={requestRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveManagerProductionFirstTrip} />}
-    {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
+    {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} TimelineButton={TimelineButton} />}
   </section>;
 }
 // Edit, Daily update and arrival red-flag dialogs opened from the Maintenance Manager's workload table.
@@ -2471,7 +2471,7 @@ const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "break
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal, requestActions = null } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td> : null;
-    case "ref": return <td><b>{r.ref}</b></td>;
+    case "ref": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openVehicleRepairHistory(r); }} aria-label={`View repair history for door number ${r.door}`} title="View breakdown and repair history">{r.door}</a> : "—"}</td>;
     case "make": return <td>{r.make || "—"}</td>;
@@ -2608,7 +2608,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
               <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
                 {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction: showActionColumn, onApproveIdeal, onCancelIdeal, requestActions })}</React.Fragment>) : <>
                 {showActionColumn && <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td>}
-                <td><b>{r.ref}</b></td>
+                <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openVehicleRepairHistory(r); }} aria-label={`View repair history for door number ${r.door}`} title="View breakdown and repair history">{r.door}</a> : "—"}</td>
                 {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
@@ -5958,7 +5958,7 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><b>{request.ref}</b></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
+                      <td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
                       <td>{formatTwelveHourDateTime(request.start)}</td><td>{formatTwelveHourDateTime(request.expectedCompletionAt)}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
@@ -6719,9 +6719,9 @@ const VEHICLE_HISTORY_OPEN_EVENT = "nerve-center:open-vehicle-history";
 function openVehicleRepairHistory(record) {
   window.dispatchEvent(new CustomEvent(VEHICLE_HISTORY_OPEN_EVENT, {detail: record}));
 }
-function vehicleRepairHistoryColumns(onRequestProcess) {
+function vehicleRepairHistoryColumns(token) {
   return [
-    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => request.ref && onRequestProcess ? <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)} aria-label={`View complete process for ${request.ref}`}><Activity />{request.ref}</button> : <b>{request.ref || "—"}</b>},
+    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={token} Dialog={Modal} />},
     {key: "nextBreakdown", label: "Time since previous breakdown", value: (request) => request.timeSincePreviousBreakdown, sortValue: (request) => request.gapMilliseconds ?? -1, render: (request) => request.breakdownSequence === 1 ? "—" : <strong>{request.timeSincePreviousBreakdown || "—"}</strong>},
     {key: "complaint", label: "Breakdown problem / reason", value: (request) => request.complaint || request.category},
     ...breakdownMeterColumns({stage: "opening"}),
@@ -6737,39 +6737,10 @@ function vehicleRepairHistoryColumns(onRequestProcess) {
   ];
 }
 
-function RequestProcessModal({ request, onClose }) {
-  if (!request) return null;
-  const stages = [
-    {label: "Production request opened", time: request.start, user: request.owner || request.requesterLogin, detail: request.complaint},
-    {label: "Maintenance completed", time: request.closedAt, user: request.closedBy, detail: request.maintenanceWork},
-    {label: "MIS verified", time: request.verifiedAt, user: request.verifiedBy, detail: request.verifiedAt ? "Closure verified by MIS" : "Awaiting MIS verification"},
-    {label: "First trip confirmed", time: firstTripTimestamp(request), user: request.firstTripBy, detail: request.firstTripDone ? "Vehicle returned to operation" : "Not recorded"},
-  ];
-  const detailRows = [
-    ["Door number", request.reportDoor || request.door], ["Vehicle / equipment", request.reportEquipment || request.equipment || request.equipmentGroup],
-    ["Make / model", [request.reportMake || request.make, request.reportModel || request.model].filter(Boolean).join(" / ")], ["Driver", request.driverName || request.driver],
-    ["Location", request.reportSite || request.site], ["Repair category", request.category || request.type],
-    ["Opening KMR/HMR", requestMeterReadingLabel(request, "opening")], ["Closing KMR/HMR", requestMeterReadingLabel(request, "closing")],
-    ["Expected completion", request.expectedCompletionAt ? formatTwelveHourDateTime(request.expectedCompletionAt) : ""], ["Current status", requestStatusLabel(request)],
-  ];
-  return <Modal title={`Complete request process · ${request.ref || "Request"}`} close={onClose} className="request-process-modal">
-    <div className="request-process-content">
-      <section className="request-process-timeline" aria-label="Request workflow timeline">
-        {stages.map((stage, index) => <article key={stage.label} className={stage.time ? "complete" : "pending"}>
-          <span>{stage.time ? <CheckCircle2 /> : <Clock />}</span>
-          <div><small>Step {index + 1}</small><h4>{stage.label}</h4><b>{stage.time ? formatTwelveHourDateTime(stage.time) : "Pending"}</b><p>{[stage.user, stage.detail].filter(Boolean).join(" · ") || "No additional information recorded"}</p></div>
-        </article>)}
-      </section>
-      <section className="request-process-details"><h4>Request information</h4><dl>{detailRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "—"}</dd></div>)}</dl></section>
-      <section className="request-process-notes"><h4>Maintenance updates</h4><div><b>Reported problem</b><p>{request.complaint || "—"}</p></div><div><b>Work completed</b><p>{request.maintenanceWork || "—"}</p></div><div><b>Daily remarks</b><MaintenanceRemarks remarks={request.dailyRemarks} category={request.category} /></div></section>
-    </div>
-  </Modal>;
-}
-
-function BreakdownOccurrencesModal({ summary, onClose, onRequestProcess }) {
+function BreakdownOccurrencesModal({ summary, onClose }) {
   const rows = summary?.breakdowns || [];
   const columns = [
-    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)}><Activity />{request.ref || "View request"}</button>},
+    {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} />},
     {key: "opened", label: "Breakdown time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "reason", label: "Breakdown reason", value: (request) => request.complaint || request.category},
@@ -6796,8 +6767,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
   const equipment = normalizeEquipmentGroup(vehicleDetails.equipmentGroup) || vehicleDetails.reportEquipment || vehicleDetails.equipment || "Equipment details not available";
   const model = vehicleDetails.reportModel || vehicleDetails.model || "";
   const completedRepairs = historyRows.filter((request) => ["closed", "verified"].includes(String(request.status || "").toLowerCase()) || request.closedAt);
-  const [requestProcessTarget, setRequestProcessTarget] = useState(null);
-  const columns = vehicleRepairHistoryColumns(setRequestProcessTarget);
+  const columns = vehicleRepairHistoryColumns(authToken);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
   const averageRepeatGap = historyRows.length > 1 ? historyRows.slice(1).reduce((sum, row) => sum + (row.gapMilliseconds || 0), 0) / (historyRows.length - 1) : 0;
@@ -6829,7 +6799,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
     <article className={`vehicle-last-repair${latestRepair ? "" : " empty"}`}>
       <div className="vehicle-last-repair-title"><Wrench /><span><small>What was done last time</small><h2>{latestRepair ? latestRepair.maintenanceWork || "Work details were not recorded" : "No completed repair has been recorded"}</h2></span></div>
       {latestRepair && <dl>
-        <div><dt>Job reference</dt><dd>{latestRepair.ref || "—"}</dd></div>
+        <div><dt>Job reference</dt><dd><RequestTimelineButton reference={latestRepair.ref} token={authToken} Dialog={Modal} /></dd></div>
         <div><dt>Reported problem</dt><dd>{latestRepair.complaint || "—"}</dd></div>
         <div><dt>Repair category</dt><dd>{latestRepair.category || "—"}</dd></div>
         <div><dt>Completed by</dt><dd>{latestRepair.closedBy || "—"}</dd></div>
@@ -6839,7 +6809,6 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
       <div className="vehicle-history-table-title"><div><h2>Complete breakdown history</h2><p>Oldest to newest. The interval shows how long after the previous breakdown this vehicle returned.</p></div><span>{historyRows.length} record{historyRows.length === 1 ? "" : "s"}</span></div>
       <div className="reports-detail-table emptytable"><ReportTable title={`${VEHICLE_HISTORY_REPORT} - ${door}`} layoutKey="Vehicle History Detail" columns={columns} visibleColumnKeys={visibleColumnKeys} onVisibleColumnsChange={setVisibleColumnKeys} rows={historyRows} emptyMessage="No maintenance history is available for this vehicle" rowKey={(request, index) => request.ref || `${door}-${index}`} toolbarTarget={tableToolbarTarget} toolbarPortal /></div>
     </div>
-    {requestProcessTarget && <RequestProcessModal request={requestProcessTarget} onClose={() => setRequestProcessTarget(null)} />}
   </section>;
 }
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, children }) {
@@ -6895,13 +6864,16 @@ function withStageGapHighlights(columns) {
     return <span className={`stage-gap${highlighted ? " slowest" : ""}`} title={highlighted ? "Longest wait of this request" : undefined}>{String(column.value?.(row) ?? "—")}</span>;
   } } : column);
 }
-// The request time breakdown opens from the time column (BD days, TAT or downtime); only when a report has none does it stay on the job reference.
+// Job references always open the complete lifecycle. Duration cells stay clickable as a second entry point.
 function withTimelineLinks(columns, token) {
   const timeKey = ["days", "tat", "hours"].find((key) => columns.some((column) => column.key === key));
-  const target = timeKey || "ref";
-  return columns.map((column) => column.key === target
-    ? { ...column, render: (row) => <RequestTimelineButton reference={row.ref} token={token} Dialog={Modal} label={timeKey ? String(column.value?.(row) ?? row[column.key] ?? "—") : undefined} /> }
-    : column);
+  return columns.map((column) => {
+    if (["ref", "reference"].includes(column.key)) return { ...column, render: (row) => row.ref
+      ? <RequestTimelineButton reference={row.ref} token={token} Dialog={Modal} label={String(column.value?.(row) ?? row.ref)} />
+      : column.render?.(row) ?? column.value?.(row) ?? "—" };
+    if (timeKey && column.key === timeKey) return { ...column, render: (row) => <RequestTimelineButton reference={row.ref} token={token} Dialog={Modal} label={String(column.value?.(row) ?? row[column.key] ?? "—")} /> };
+    return column;
+  });
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
@@ -6936,7 +6908,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
   const [reportVehicleHistoryTarget, setReportVehicleHistoryTarget] = useState(null);
-  const [reportRequestProcessTarget, setReportRequestProcessTarget] = useState(null);
   const [breakdownOccurrencesTarget, setBreakdownOccurrencesTarget] = useState(null);
   const [breakdownMonth, setBreakdownMonth] = useState(() => indiaDateTimeInputValue(new Date()).slice(0, 7));
   const [breakdownRegion, setBreakdownRegion] = useState("all");
@@ -7057,7 +7028,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
     .slice(0, 250), [reportRequests]);
   const requestColumns = withBreakdownMeterColumns([
-    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} />},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
     {key: "make", label: "Make", value: (request) => request.reportMake},
@@ -7112,7 +7083,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "expectedCompletionAt", label: "ETC", value: (request) => formatTimestamp(request.expectedCompletionAt,request), sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTimestamp(request.expectedCompletionAt,request)},
     {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
     {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
-    {key: "reference", label: "Job reference", value: (request) => request.ref},
+    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} />},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
   ], {closing: true});
@@ -7491,7 +7462,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             aria-selected={activeCategory.id === category.id}
             data-category={category.id}
             className={activeCategory.id === category.id ? "active" : ""}
-            onClick={() => { setReportVehicleHistoryTarget(null); setBreakdownOccurrencesTarget(null); setReportRequestProcessTarget(null); setActiveReportCategory(category.id); }}
+            onClick={() => { setReportVehicleHistoryTarget(null); setBreakdownOccurrencesTarget(null); setActiveReportCategory(category.id); }}
           >
             <span className="report-category-icon"><CategoryIcon aria-hidden="true" /></span>
             <span className="report-category-copy"><b>{category.label}</b><small>{category.description}</small></span>
@@ -7555,8 +7526,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         />
       )}
       </>}
-      {breakdownOccurrencesTarget && <BreakdownOccurrencesModal summary={breakdownOccurrencesTarget} onClose={() => setBreakdownOccurrencesTarget(null)} onRequestProcess={setReportRequestProcessTarget} />}
-      {reportRequestProcessTarget && <RequestProcessModal request={reportRequestProcessTarget} onClose={() => setReportRequestProcessTarget(null)} />}
+      {breakdownOccurrencesTarget && <BreakdownOccurrencesModal summary={breakdownOccurrencesTarget} onClose={() => setBreakdownOccurrencesTarget(null)} />}
     </section>
   );
 }
@@ -9282,7 +9252,7 @@ function RequestRedFlagForm({ request, close, onSave, flagKind = "mis" }) {
       finally { submitLock.current = false; setSaving(false); }
     }}>
       <div className="details request-linked-details">
-        <div><span>Job reference</span><b>{request.ref}</b></div>
+        <div><span>Job reference</span><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
       </div>
@@ -9500,7 +9470,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
-              <td><b>{row.ref}</b></td>
+              <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} /></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (onVehicleHistory) onVehicleHistory(row); else openVehicleRepairHistory(row); }} aria-label={`View repair history for door number ${row.door}`} title="View breakdown and repair history">{row.door}</a> : "—"}</td>
               {showMisPeople && <><td>{row.owner || row.requesterLogin || "—"}</td><td>{row.acceptedBy || "—"}</td><td>{row.closedBy || "—"}</td></>}
@@ -10161,7 +10131,7 @@ function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null,
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
+      <InfoPulseContent breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} renderRequestReference={(reference) => <RequestTimelineButton reference={reference} token={session?.token} Dialog={Modal} />} />
     </div>
   </div>, document.body);
 }
@@ -10268,10 +10238,10 @@ function NotificationRequestEntry({ reference, request = {}, token }) {
   const meterType = request.meterType || "KMR/HMR";
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
-      <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
+      <div><span>Maintenance request</span><h2><RequestTimelineButton reference={reference} token={token} Dialog={Modal} /></h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{requestStatusLabel(request)}</Status>
     </div>
-    <RequestTimelineButton reference={reference} token={token} Dialog={Modal} label="View time breakdown and correction history" />
+    <RequestTimelineButton reference={reference} token={token} Dialog={Modal} label="View complete lifecycle, remarks and correction history" />
     <dl className="notification-entry-fields">
       <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />
@@ -11391,7 +11361,7 @@ function App() {
           ) : active === "CD" ? (
             <CaliberDirectoryPage />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

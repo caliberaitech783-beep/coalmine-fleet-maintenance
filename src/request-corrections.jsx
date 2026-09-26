@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,Trash2,X} from 'lucide-react';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields,requestCorrectionReviewRemarkError} from '../request-correction-policy.mjs';
 import SearchableSelect from './searchable-select.jsx';
+import RequestTimelineButton from './request-timeline.jsx';
 import './request-corrections.css';
 import {TwelveHourDateTimeInput} from './twelve-hour-input.jsx';
 
@@ -77,7 +78,7 @@ function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions=
     void requestAction('review',{decision,remark},decision);
   };
   return <article className="correction-card">
-    <header><div><span>#{record.id} · {record.site}</span><h3>{record.requestReference}</h3><p>{type?.label||record.correctionType}</p></div><b className={`correction-status ${statusClass(record.status)}`}>{record.status}</b></header>
+    <header><div><span>#{record.id} · {record.site}</span><h3><RequestTimelineButton reference={record.requestReference} token={token} Dialog={Modal} /></h3><p>{type?.label||record.correctionType}</p></div><b className={`correction-status ${statusClass(record.status)}`}>{record.status}</b></header>
     {record.canManage&&!editing&&!confirmDelete&&<div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setValues({...record.originalValues,...record.proposedChanges});setReason(record.reason);setError('');setEditing(true)}}><Pencil /> Edit</button><button type="button" className="secondary danger" disabled={!!working} onClick={()=>{setError('');setConfirmDelete(true)}}><Trash2 /> Delete</button></div>}
     {editing&&<form className="correction-create" onSubmit={(event)=>{event.preventDefault();void requestAction('edit',{proposedChanges:values,reason})}}><b>Edit pending correction</b><p>Changes still require PM approval. The existing evidence image is retained.</p><fieldset disabled={!!working}><div className="correction-form-grid">{requestCorrectionFields(record.correctionType).map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div><label><span>Reason for correction *</span><textarea required minLength={10} maxLength={1000} rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} /></label></fieldset><div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setEditing(false);setError('')}}>Cancel</button><button type="submit" className="primary" disabled={!!working||reason.trim().length<10}>{working==='edit'?'Saving…':'Save changes'}</button></div></form>}
     {confirmDelete&&<div className="correction-delete-confirm" role="alert"><b>Delete correction #{record.id} for {record.requestReference}?</b><p>This removes the pending correction from the approval queue. The maintenance request stays unchanged and the correction remains in history.</p><div className="correction-manage"><button type="button" className="secondary" disabled={!!working} onClick={()=>{setConfirmDelete(false);setError('')}}>Cancel</button><button type="button" className="secondary danger" disabled={!!working} onClick={()=>requestAction('delete')}><Trash2 /> {working==='delete'?'Deleting…':'Confirm delete'}</button></div></div>}
@@ -93,7 +94,7 @@ function CorrectionCard({record,capabilities,token,Modal,onChanged,fieldOptions=
   </article>;
 }
 
-function NewCorrectionForm({requests,token,onSaved,allowedTypes=[],fieldOptions={}}){
+function NewCorrectionForm({requests,token,Dialog,onSaved,allowedTypes=[],fieldOptions={}}){
   const [reference,setReference]=useState('');
   const correctionTypes=allowedTypes.filter((key)=>REQUEST_CORRECTION_TYPES[key]);
   const [type,setType]=useState(correctionTypes[0]||'offRoad');
@@ -129,7 +130,7 @@ function NewCorrectionForm({requests,token,onSaved,allowedTypes=[],fieldOptions=
   return <form className="correction-create" onSubmit={submit}>
     <div className="correction-form-heading"><div><Pencil /><span><b>Request a correction</b><small>The live record remains unchanged until PM approval and final Admin correction.</small></span></div><b>Department manager request</b></div>
     <div className="correction-form-grid top"><SearchableSelect label="Maintenance request" options={requestOptions} value={reference} onChange={setReference} required placeholder="Search request, door, equipment, chassis, or site" emptyText="No matching maintenance request found." /><label><span>Correction type *</span><select value={type} onChange={(event)=>setType(event.target.value)}>{correctionTypes.map((key)=><option key={key} value={key}>{REQUEST_CORRECTION_TYPES[key].label}</option>)}</select></label></div>
-    {selected&&<><div className="correction-request-summary"><b>{selected.ref}</b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
+    {selected&&<><div className="correction-request-summary"><b><RequestTimelineButton reference={selected.ref} token={token} Dialog={Dialog} /></b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
     <label><span>Reason for correction * (minimum 10 characters)</span><textarea rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} placeholder="Explain the error, the correct value, and why the record must be changed." required /></label>
     <label className="correction-upload"><ImageUp /><span><b>{evidence?.name||'Upload correction evidence *'}</b><small>JPG, PNG, or WebP · maximum 5 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>readEvidence(event.target.files?.[0])} required={!evidence} /></label>
     {error&&<div className="correction-notice error">{error}</div>}
@@ -154,7 +155,7 @@ export default function RequestCorrections({session,requests=[],Dialog}){
   return <section className="request-corrections-page">
     <header className="correction-page-head"><div><span>CONTROLLED DATA CORRECTION</span><h1>{state.capabilities.canReview?'Correction approvals':state.capabilities.canCreate?'Request correction':'Admin correction'}</h1><p>The department manager requests with evidence, the assigned PM approves or rejects, and Admin applies only an approved correction. Every step is recorded in the Audit Trail.</p></div><button type="button" className="secondary" onClick={load} disabled={state.loading}><RefreshCw className={state.loading?'spin':''} /> Refresh</button></header>
     <div className="correction-kpis"><div><span>Awaiting PM</span><b>{pending}</b></div><div><span>Ready for Admin</span><b>{approved}</b></div><div><span>Total corrections</span><b>{state.records.length}</b></div></div>
-    {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} fieldOptions={state.fieldOptions||{}} />}
+    {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} Dialog={Dialog} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} fieldOptions={state.fieldOptions||{}} />}
     <div className="correction-list-tools"><label><Search /><input type="search" data-smart-search value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search request, user, site, reason, or status" /></label></div>
     <div className="correction-list-head"><div className="mobile-tabs" role="tablist">{['Open',REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.REJECTED,REQUEST_CORRECTION_STATUS.APPLIED,REQUEST_CORRECTION_STATUS.DELETED,'All'].map((value)=><button type="button" key={value} className={status===value?'active':''} onClick={()=>setStatus(value)}>{value}</button>)}</div><span>{visible.length} shown</span></div>
     {state.error&&<div className="correction-notice error">{state.error}</div>}
