@@ -88,7 +88,6 @@ import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,canDeletePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 import {isRequestAlertSuppressedUser,isRequestLifecycleAlert} from './whatsapp-recipient-policy.mjs';
-import {createMediaStorage,mediaObjectKey,safeMediaFilename,validMediaUploadDescriptor} from './media-storage.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -192,7 +191,6 @@ function sendDataUrlMedia(res,data,{name='attachment',fallbackType='application/
 const connectionString=process.env.DATABASE_URL;
 const databaseSsl=String(process.env.DATABASE_SSL||'').trim().toLowerCase()==='false'?false:{rejectUnauthorized:false};
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
-const mediaStorage=createMediaStorage(process.env);
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>formatDisplayDateTime(value);
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
@@ -984,23 +982,6 @@ async function migrate(){
       ON published_reports (short_code) WHERE short_code IS NOT NULL;
     CREATE INDEX IF NOT EXISTS published_reports_expires_at_idx
       ON published_reports (expires_at);
-    CREATE TABLE IF NOT EXISTS media_objects (
-      id UUID PRIMARY KEY,
-      storage_provider TEXT NOT NULL,
-      object_key TEXT NOT NULL UNIQUE,
-      original_name TEXT NOT NULL DEFAULT '',
-      content_type TEXT NOT NULL DEFAULT '',
-      size_bytes BIGINT NOT NULL DEFAULT 0,
-      purpose TEXT NOT NULL,
-      owner_login TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      completed_at TIMESTAMPTZ
-    );
-    CREATE INDEX IF NOT EXISTS media_objects_cleanup_idx ON media_objects (status, created_at);
-    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS first_trip_card_media_id UUID REFERENCES media_objects(id);
-    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_media_id UUID REFERENCES media_objects(id);
-    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_media_id UUID REFERENCES media_objects(id);
     CREATE TABLE IF NOT EXISTS crm_tickets (
       id BIGSERIAL PRIMARY KEY,
       reference TEXT UNIQUE,
@@ -1030,8 +1011,6 @@ async function migrate(){
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_data TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_name TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_type TEXT NOT NULL DEFAULT '';
-    ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS attachment_media_id UUID REFERENCES media_objects(id);
-    ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_media_id UUID REFERENCES media_objects(id);
     CREATE INDEX IF NOT EXISTS crm_tickets_creator_idx ON crm_tickets (creator_login, created_at DESC);
     CREATE INDEX IF NOT EXISTS crm_tickets_scope_idx ON crm_tickets (creator_role, site, created_at DESC);
     CREATE TABLE IF NOT EXISTS admin_lock_incidents (
@@ -2315,115 +2294,6 @@ async function requireSuper(req,res,next){
   }catch(error){next(error)}
 }
 
-const UUID_PATTERN=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const mediaSessionLogin=(session)=>String(session?.login||session?.name||'').trim().toLowerCase();
-
-function mediaPurposeAllowed(session,purpose){
-  if(purpose==='ticket-attachment')return true;
-  if(purpose==='ticket-resolution')return isTicketAdmin(session);
-  const administrator=session?.role==='super'&&session?.permissions?.adminLevel!=='Manager';
-  if(purpose==='request-opening-meter')return session?.permissions?.editRequests===true
-    &&(administrator||session?.assignedRole==='Maintenance User'||maintenanceManagerSession(session));
-  if(purpose==='request-closing-meter')return session?.permissions?.closeRequests===true
-    &&(administrator||session?.assignedRole==='Maintenance User');
-  if(purpose==='request-first-trip-card')return session?.permissions?.verifyRequests===true
-    &&(administrator||session?.assignedRole==='MIS User');
-  return false;
-}
-
-async function readyUploadedMedia(req,res,mediaId,purpose,client=pool){
-  const id=String(mediaId||'').trim();
-  if(!id)return null;
-  if(!UUID_PATTERN.test(id)){
-    res.status(400).json({error:'The uploaded media reference is invalid.'});
-    return false;
-  }
-  const {rows}=await client.query(`SELECT id,storage_provider,object_key,original_name,content_type,size_bytes,purpose,owner_login,status
-    FROM media_objects WHERE id=$1 LIMIT 1`,[id]);
-  const media=rows[0];
-  if(!media||media.status!=='ready'||media.purpose!==purpose||String(media.owner_login||'').toLowerCase()!==mediaSessionLogin(req.session)){
-    res.status(400).json({error:'The uploaded media is unavailable or does not belong to this request.'});
-    return false;
-  }
-  if(!mediaStorage||media.storage_provider!==mediaStorage.provider){
-    res.status(503).json({error:'The storage provider for this upload is unavailable.'});
-    return false;
-  }
-  return media;
-}
-
-async function storedMediaDownload(mediaId){
-  if(!mediaId||!mediaStorage)return null;
-  const {rows}=await pool.query(`SELECT id,storage_provider,object_key,original_name,content_type,size_bytes,status
-    FROM media_objects WHERE id=$1 LIMIT 1`,[mediaId]);
-  const media=rows[0];
-  if(!media||media.status!=='ready'||media.storage_provider!==mediaStorage.provider)return null;
-  return {...media,url:await mediaStorage.downloadUrl(media.object_key)};
-}
-
-async function cleanupOrphanedMedia(){
-  if(!mediaStorage)return {skipped:true,reason:'Object storage is not configured'};
-  const {rows}=await pool.query(`SELECT id,object_key FROM media_objects AS media
-    WHERE media.storage_provider=$1 AND media.created_at<NOW()-INTERVAL '24 hours'
-      AND NOT EXISTS (SELECT 1 FROM maintenance_requests WHERE first_trip_card_media_id=media.id OR opening_meter_media_id=media.id OR closing_meter_media_id=media.id)
-      AND NOT EXISTS (SELECT 1 FROM crm_tickets WHERE attachment_media_id=media.id OR resolution_attachment_media_id=media.id)
-    ORDER BY media.created_at ASC LIMIT 100`,[mediaStorage.provider]);
-  let deleted=0;
-  for(const row of rows){
-    await mediaStorage.delete(row.object_key);
-    const result=await pool.query('DELETE FROM media_objects WHERE id=$1',[row.id]);
-    deleted+=result.rowCount||0;
-  }
-  return {deleted};
-}
-
-app.get('/api/media/storage',requireSession,(_req,res)=>{
-  res.json({configured:Boolean(mediaStorage),provider:mediaStorage?.provider||''});
-});
-
-app.post('/api/media/uploads',requireSession,async(req,res,next)=>{
-  try{
-    if(!mediaStorage)return res.status(503).json({error:'Object storage is not configured. Set Azure Blob or S3 storage environment variables before uploading media.'});
-    const purpose=String(req.body?.purpose||'').trim();
-    const contentType=String(req.body?.contentType||'').trim().toLowerCase();
-    const size=Number(req.body?.size);
-    const originalName=safeMediaFilename(req.body?.fileName);
-    if(!validMediaUploadDescriptor({purpose,contentType,size}))return res.status(400).json({error:'Choose a supported, non-empty image, video, or PDF file.'});
-    if(!mediaPurposeAllowed(req.session,purpose))return res.status(403).json({error:'Your assigned role is not authorized to upload this media.'});
-    const id=randomUUID();
-    const objectKey=mediaObjectKey({id,purpose,fileName:originalName});
-    const upload=await mediaStorage.createUpload({objectKey,contentType});
-    await pool.query(`INSERT INTO media_objects
-      (id,storage_provider,object_key,original_name,content_type,size_bytes,purpose,owner_login,status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending')`,[
-      id,mediaStorage.provider,objectKey,originalName,contentType,size,purpose,mediaSessionLogin(req.session)
-    ]);
-    res.status(201).json({id,provider:mediaStorage.provider,...upload});
-  }catch(error){next(error)}
-});
-
-app.post('/api/media/uploads/:id/complete',requireSession,async(req,res,next)=>{
-  try{
-    if(!mediaStorage)return res.status(503).json({error:'Object storage is not configured.'});
-    const id=String(req.params.id||'').trim();
-    if(!UUID_PATTERN.test(id))return res.status(400).json({error:'The uploaded media reference is invalid.'});
-    const {rows}=await pool.query(`SELECT id,storage_provider,object_key,content_type,size_bytes,owner_login,status
-      FROM media_objects WHERE id=$1 LIMIT 1`,[id]);
-    const media=rows[0];
-    if(!media||String(media.owner_login||'').toLowerCase()!==mediaSessionLogin(req.session))return res.status(404).json({error:'Media upload not found.'});
-    if(media.storage_provider!==mediaStorage.provider)return res.status(409).json({error:'The configured storage provider has changed since this upload started.'});
-    if(media.status==='ready')return res.json({id:media.id});
-    const uploaded=await mediaStorage.inspect(media.object_key);
-    if(uploaded.size!==Number(media.size_bytes)||uploaded.contentType!==String(media.content_type||'').toLowerCase()){
-      await mediaStorage.delete(media.object_key).catch(()=>{});
-      await pool.query('DELETE FROM media_objects WHERE id=$1',[id]);
-      return res.status(400).json({error:'The uploaded file did not match the selected file metadata. Please choose it again.'});
-    }
-    await pool.query("UPDATE media_objects SET status='ready',completed_at=NOW() WHERE id=$1",[id]);
-    res.json({id:media.id});
-  }catch(error){next(error)}
-});
-
 app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
   try{
     const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
@@ -3329,7 +3199,6 @@ app.get('/api/health',async(_req,res)=>{
     res.json({
       status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
-      mediaStorage:{configured:Boolean(mediaStorage),provider:mediaStorage?.provider||''},
       performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},requestFeedCache:requestFeedCache.stats,slowRequestThresholdMs},
     });
   }catch(error){
@@ -3836,9 +3705,9 @@ async function currentDashboardAuthorization(session,client=pool){
 
 function ticketProjection(){
   return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,priority,
-    message,(message_audio <> '') AS "messageAudioAvailable",(attachment_data <> '' OR attachment_media_id IS NOT NULL) AS "attachmentAvailable",attachment_name AS "attachmentName",
+    message,(message_audio <> '') AS "messageAudioAvailable",(attachment_data <> '') AS "attachmentAvailable",attachment_name AS "attachmentName",
     attachment_type AS "attachmentType",status,resolution_message AS "resolutionMessage",(resolution_audio <> '') AS "resolutionAudioAvailable",
-    (resolution_attachment_data <> '' OR resolution_attachment_media_id IS NOT NULL) AS "resolutionAttachmentAvailable",resolution_attachment_name AS "resolutionAttachmentName",
+    (resolution_attachment_data <> '') AS "resolutionAttachmentAvailable",resolution_attachment_name AS "resolutionAttachmentName",
     resolution_attachment_type AS "resolutionAttachmentType",resolved_by AS "resolvedBy",
     to_char(resolved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "resolvedAt",
     to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"`;
@@ -4989,10 +4858,10 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
 });
 
 const ticketMediaFields={
-  'message-audio':{column:'message_audio',nameColumn:null,mediaColumn:null,fallbackName:'ticket-message.webm'},
-  attachment:{column:'attachment_data',nameColumn:'attachment_name',mediaColumn:'attachment_media_id',fallbackName:'ticket-attachment'},
-  'resolution-audio':{column:'resolution_audio',nameColumn:null,mediaColumn:null,fallbackName:'ticket-resolution.webm'},
-  'resolution-attachment':{column:'resolution_attachment_data',nameColumn:'resolution_attachment_name',mediaColumn:'resolution_attachment_media_id',fallbackName:'resolution-attachment'},
+  'message-audio':{column:'message_audio',nameColumn:null,fallbackName:'ticket-message.webm'},
+  attachment:{column:'attachment_data',nameColumn:'attachment_name',fallbackName:'ticket-attachment'},
+  'resolution-audio':{column:'resolution_audio',nameColumn:null,fallbackName:'ticket-resolution.webm'},
+  'resolution-attachment':{column:'resolution_attachment_data',nameColumn:'resolution_attachment_name',fallbackName:'resolution-attachment'},
 };
 
 // Ticket references contain "/" (TIC/SITE/DDMMYY/NNNNNN). Azure's front end decodes the %2F the browser sends,
@@ -5002,17 +4871,10 @@ app.get('/api/tickets/*reference/media/:kind',requireSession,async(req,res,next)
     const media=ticketMediaFields[String(req.params.kind||'')];
     if(!media)return res.status(404).json({error:'Ticket media is not available.'});
     const nameSelection=media.nameColumn?`,${media.nameColumn} AS name`:`,'' AS name`;
-    const objectSelection=media.mediaColumn?`,${media.mediaColumn} AS media_id`:`,NULL::uuid AS media_id`;
     const {rows}=await pool.query(`SELECT creator_login AS "creatorLogin",creator_role AS "creatorRole",site,
-      ${media.column} AS data${nameSelection}${objectSelection} FROM crm_tickets WHERE reference=$1`,[[].concat(req.params.reference??[]).join('/').trim()]);
+      ${media.column} AS data${nameSelection} FROM crm_tickets WHERE reference=$1`,[[].concat(req.params.reference??[]).join('/').trim()]);
     const ticket=rows[0];
     if(!ticket||!await ticketVisibleToSession(ticket,req.session))return res.status(404).json({error:'Ticket media is not available.'});
-    if(ticket.media_id){
-      const stored=await storedMediaDownload(ticket.media_id);
-      if(!stored)return res.status(404).json({error:'Ticket media is not available.'});
-      res.set('Cache-Control','private, no-store');
-      return res.redirect(302,stored.url);
-    }
     return sendDataUrlMedia(res,ticket.data,{name:ticket.name||media.fallbackName});
   }catch(error){next(error)}
 });
@@ -5031,20 +4893,13 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const priority=['Low','Medium','High'].includes(String(req.body?.priority||''))?String(req.body.priority):'';
     const message=String(req.body?.message||'').trim();
     const messageAudio=String(req.body?.messageAudio||'');
-    const attachmentMediaId=String(req.body?.attachmentMediaId||'').trim();
-    let attachmentData=String(req.body?.attachmentData||'');
-    let attachmentName=String(req.body?.attachmentName||'').slice(0,255);
-    let attachmentType=String(req.body?.attachmentType||'').slice(0,100);
+    const attachmentData=String(req.body?.attachmentData||'');
+    const attachmentName=String(req.body?.attachmentName||'').slice(0,255);
+    const attachmentType=String(req.body?.attachmentType||'').slice(0,100);
     if(!priority)return res.status(400).json({error:'Select a ticket priority.'});
     if(!message&&!messageAudio)return res.status(400).json({error:'Write a message or record an audio message.'});
     if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
-    const attachmentMedia=attachmentMediaId?await readyUploadedMedia(req,res,attachmentMediaId,'ticket-attachment',client):null;
-    if(attachmentMedia===false)return;
-    if(attachmentMedia){
-      attachmentData='';
-      attachmentName=attachmentMedia.original_name;
-      attachmentType=attachmentMedia.content_type;
-    }else if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
+    if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
     const user=await currentUserRecord(req.session,client);
     const assignedSites=userSiteSelection(user);
     const site=req.session.role==='super'
@@ -5055,9 +4910,9 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
 
     await client.query('BEGIN');
     const inserted=await client.query(`INSERT INTO crm_tickets
-      (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type,attachment_media_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id,created_at`,[
-      String(req.session.login||'').trim().toLowerCase(),String(req.session.name||'User'),creatorRole,site,category,priority,message,messageAudio,attachmentData,attachmentName,attachmentType,attachmentMedia?.id||null
+      (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,created_at`,[
+      String(req.session.login||'').trim().toLowerCase(),String(req.session.name||'User'),creatorRole,site,category,priority,message,messageAudio,attachmentData,attachmentName,attachmentType
     ]);
     const reference=ticketReference({site,date:new Date(inserted.rows[0].created_at),number:inserted.rows[0].id});
     const {rows}=await client.query(`UPDATE crm_tickets SET reference=$1 WHERE id=$2 RETURNING ${ticketProjection()}`,[reference,inserted.rows[0].id]);
@@ -5079,26 +4934,19 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
   try{
     const resolution=String(req.body?.resolutionMessage||'').trim();
     const resolutionAudio=String(req.body?.resolutionAudio||'');
-    const resolutionAttachmentMediaId=String(req.body?.resolutionAttachmentMediaId||'').trim();
-    let resolutionAttachmentData=String(req.body?.resolutionAttachmentData||'');
-    let resolutionAttachmentName=String(req.body?.resolutionAttachmentName||'').slice(0,255);
-    let resolutionAttachmentType=String(req.body?.resolutionAttachmentType||'').slice(0,100);
+    const resolutionAttachmentData=String(req.body?.resolutionAttachmentData||'');
+    const resolutionAttachmentName=String(req.body?.resolutionAttachmentName||'').slice(0,255);
+    const resolutionAttachmentType=String(req.body?.resolutionAttachmentType||'').slice(0,100);
     const reference=String(req.body?.reference||'').trim();
     if(!reference)return res.status(400).json({error:'Ticket reference is required.'});
     if(!resolution&&!resolutionAudio)return res.status(400).json({error:'Write a resolution message or record resolution audio.'});
     if(!validTicketMediaDataUrl(resolutionAudio,{kind:'audio'}))return res.status(400).json({error:'Resolution audio must be a supported recording up to 3 MB.'});
-    const resolutionAttachmentMedia=resolutionAttachmentMediaId?await readyUploadedMedia(req,res,resolutionAttachmentMediaId,'ticket-resolution',client):null;
-    if(resolutionAttachmentMedia===false)return;
-    if(resolutionAttachmentMedia){
-      resolutionAttachmentData='';
-      resolutionAttachmentName=resolutionAttachmentMedia.original_name;
-      resolutionAttachmentType=resolutionAttachmentMedia.content_type;
-    }else if(!validTicketMediaDataUrl(resolutionAttachmentData))return res.status(400).json({error:'Upload a supported resolution image or video up to 10 MB.'});
+    if(!validTicketMediaDataUrl(resolutionAttachmentData))return res.status(400).json({error:'Upload a supported resolution image or video up to 10 MB.'});
     await client.query('BEGIN');
     const result=await client.query(`UPDATE crm_tickets SET status='Resolved',resolution_message=$1,resolution_audio=$2,
-      resolution_attachment_data=$3,resolution_attachment_name=$4,resolution_attachment_type=$5,resolution_attachment_media_id=$8,resolved_by=$6,resolved_at=NOW()
+      resolution_attachment_data=$3,resolution_attachment_name=$4,resolution_attachment_type=$5,resolved_by=$6,resolved_at=NOW()
       WHERE reference=$7 AND status<>'Resolved' RETURNING ${ticketProjection()}`,[resolution,resolutionAudio,resolutionAttachmentData,
-      resolutionAttachmentName,resolutionAttachmentType,String(req.session.name||'Admin'),reference,resolutionAttachmentMedia?.id||null]);
+      resolutionAttachmentName,resolutionAttachmentType,String(req.session.name||'Admin'),reference]);
     if(!result.rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Open ticket not found.'})}
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
@@ -5277,15 +5125,15 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
-  first_trip_by AS "firstTripBy", (first_trip_card_image <> '' OR first_trip_card_media_id IS NOT NULL) AS "firstTripCardUploaded",
+  first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
   (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
   COALESCE((SELECT pfta.production_first_trip_by FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripBy",
   COALESCE((SELECT pfta.production_first_trip_login FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripLogin",
   COALESCE((SELECT pfta.production_first_trip_remark FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripRemark",
   meter_type AS "meterType", opening_meter_reading AS "openingMeterReading",
   opening_meter_readings AS "openingMeterReadings", closing_meter_readings AS "closingMeterReadings",
-  (opening_meter_file <> '' OR opening_meter_media_id IS NOT NULL) AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
-  closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '' OR closing_meter_media_id IS NOT NULL) AS "closingMeterFileUploaded",
+  (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
+  closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '') AS "closingMeterFileUploaded",
   closing_meter_file_name AS "closingMeterFileName"`;
 
 const infoPulseProjection=`reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
@@ -6089,7 +5937,6 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
   try{
     const reference=String(req.params.reference||'').trim();
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
-    const openingMeterMediaId=String(req.body?.openingMeterMediaId||'').trim();
     const explicitAcceptance=req.body?.acceptRequest===true;
     const editDelayedReason=approvedDelayedReason(req.body?.delayedReason);
     const normalizedMeterType=String(meterType).trim().toUpperCase();
@@ -6101,9 +5948,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     // Opening meter data is optional; validate it only when supplied.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
-    const openingMeterMedia=openingMeterMediaId?await readyUploadedMedia(req,res,openingMeterMediaId,'request-opening-meter'):null;
-    if(openingMeterMedia===false)return;
-    if(!openingMeterMedia&&openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     const previousExpectedAt=parseRequestTimelineTimestamp(before.expectedCompletionAt);
@@ -6116,15 +5961,12 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
       complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE '' END,
       accepted_at=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN NOW() ELSE accepted_at END,accepted_by=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,expected_completion_changed_at=CASE WHEN $13::boolean THEN NOW() ELSE expected_completion_changed_at END,meter_type=$4,
-      opening_meter_reading=$5,
-      opening_meter_file=CASE WHEN $14::uuid IS NOT NULL THEN '' WHEN $6<>'' THEN $6 ELSE opening_meter_file END,
-      opening_meter_file_name=CASE WHEN $14::uuid IS NOT NULL THEN $15 WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
-      opening_meter_media_id=COALESCE($14::uuid,opening_meter_media_id),
+      opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb,
       delayed_reason=CASE WHEN $12<>'' THEN $12 ELSE delayed_reason END
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
         AND (NOT $13::boolean OR expected_completion_changed_at IS NULL)
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,openingMeterMedia?.id||null,openingMeterMedia?.original_name||'']);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc]);
     if(!result.rows.length&&revisingEtc)throw etcChangeLimitError();
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
@@ -6150,23 +5992,17 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const openingMeterReading=String(req.body?.openingMeterReading||'').trim();
     const openingMeterFile=String(req.body?.openingMeterFile||'');
     const openingMeterFileName=String(req.body?.openingMeterFileName||'').trim().slice(0,255);
-    const openingMeterMediaId=String(req.body?.openingMeterMediaId||'').trim();
     const openingMeterReadings=req.body?.openingMeterReadings ?? {};
     const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     const closingMeterFile=String(req.body?.closingMeterFile||'');
     const closingMeterFileName=String(req.body?.closingMeterFileName||'').trim().slice(0,255);
-    const closingMeterMediaId=String(req.body?.closingMeterMediaId||'').trim();
     const closedAt=parseRequestTimelineTimestamp(`${closingDate}T${closingTime}`);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and 12-hour time with AM/PM.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
-    const openingMeterMedia=openingMeterMediaId?await readyUploadedMedia(req,res,openingMeterMediaId,'request-opening-meter'):null;
-    if(openingMeterMedia===false)return;
-    const closingMeterMedia=closingMeterMediaId?await readyUploadedMedia(req,res,closingMeterMediaId,'request-closing-meter'):null;
-    if(closingMeterMedia===false)return;
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
     if(req.session.role==='normal'){
@@ -6186,29 +6022,26 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     // Closing is never blocked for a missing delayed reason; the reason recorded from the Delayed reason column is kept as is.
     const effectiveDelayedReason=delayedReason||String(meterRows[0].delayed_reason||'').trim();
     if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
-    if(!openingMeterMedia&&openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
     if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
     if(closingMeterReading&&!validMeterReading(closingMeterReading))throw Object.assign(new Error('Enter a valid closing HMR/KMR reading.'),{status:400});
-    if(!closingMeterMedia&&closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.'),{status:400});
-    if(openingMeterReading||openingMeterFile||openingMeterMedia||closingMeterReading||closingMeterFile||closingMeterMedia||Object.keys(openingMeterReadings).length||Object.keys(closingMeterReadings).length){
+    if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.'),{status:400});
+    if(openingMeterReading||openingMeterFile||closingMeterReading||closingMeterFile||Object.keys(openingMeterReadings).length||Object.keys(closingMeterReadings).length){
       const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
       if(!['KMR','HMR'].includes(effectiveMeterType))throw Object.assign(new Error('Choose a valid KMR/HMR meter type.'),{status:400});
       await client.query(`UPDATE maintenance_requests SET meter_type=CASE WHEN meter_type='' THEN $1 ELSE meter_type END,
         opening_meter_reading=CASE WHEN $2<>'' THEN $2 ELSE opening_meter_reading END,
-        opening_meter_file=CASE WHEN $11::uuid IS NOT NULL THEN '' WHEN $3<>'' THEN $3 ELSE opening_meter_file END,
-        opening_meter_file_name=CASE WHEN $11::uuid IS NOT NULL THEN $12 WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END,
-        opening_meter_media_id=COALESCE($11::uuid,opening_meter_media_id),
+        opening_meter_file=CASE WHEN $3<>'' THEN $3 ELSE opening_meter_file END,
+        opening_meter_file_name=CASE WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END,
         opening_meter_readings=opening_meter_readings || $6::jsonb,
         closing_meter_readings=closing_meter_readings || $7::jsonb,
         closing_meter_reading=CASE WHEN $8<>'' THEN $8 ELSE closing_meter_reading END,
-        closing_meter_file=CASE WHEN $13::uuid IS NOT NULL THEN '' WHEN $9<>'' THEN $9 ELSE closing_meter_file END,
-        closing_meter_file_name=CASE WHEN $13::uuid IS NOT NULL THEN $14 WHEN $9<>'' THEN $10 ELSE closing_meter_file_name END,
-        closing_meter_media_id=COALESCE($13::uuid,closing_meter_media_id)
+        closing_meter_file=CASE WHEN $9<>'' THEN $9 ELSE closing_meter_file END,
+        closing_meter_file_name=CASE WHEN $9<>'' THEN $10 ELSE closing_meter_file_name END
         WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference,
           JSON.stringify(Object.fromEntries(Object.entries({...openingMeterReadings,...(openingMeterReading?{[effectiveMeterType]:openingMeterReading}:{})}).filter(([,value])=>value!==''))),
           JSON.stringify(Object.fromEntries(Object.entries({...closingMeterReadings,...(closingMeterReading?{[effectiveMeterType]:closingMeterReading}:{})}).filter(([,value])=>value!==''))),
-          closingMeterReading,closingMeterFile,closingMeterFileName,
-          openingMeterMedia?.id||null,openingMeterMedia?.original_name||'',closingMeterMedia?.id||null,closingMeterMedia?.original_name||'']);
+          closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
     const {rows}=ideal
       ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Idle',idle_reason=$3,
@@ -6473,14 +6306,11 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
-    const firstTripCardMediaId=String(req.body?.firstTripCardMediaId||'').trim();
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and 12-hour time with AM/PM.'});
-    const firstTripCardMedia=firstTripCardMediaId?await readyUploadedMedia(req,res,firstTripCardMediaId,'request-first-trip-card'):null;
-    if(firstTripCardMedia===false)return;
-    if(!firstTripCardMedia&&!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
+    if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
     const misUser=await currentUserRecord(req.session);
     const misScope=userSiteScope(misUser);
@@ -6501,8 +6331,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_card_media_id=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading}),firstTripCardMedia?.id||null]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading})]);
     if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
     });
@@ -6538,15 +6368,10 @@ app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('v
     const misUser=await currentUserRecord(req.session);
     const misScope=userSiteScope(misUser);
     if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can view trip cards.'});
-    const {rows}=await pool.query(`SELECT site,first_trip_card_image AS image,first_trip_card_media_id AS media_id FROM maintenance_requests
+    const {rows}=await pool.query(`SELECT site,first_trip_card_image AS image FROM maintenance_requests
       WHERE reference=$1 AND status='Closed' AND verified_at IS NOT NULL`,[reference]);
     if(!rows.length)return res.status(404).json({error:'Verified closed request not found.'});
     if(!reportScopeIncludesSite(misScope,rows[0].site))return res.status(403).json({error:'This request belongs to a different location.'});
-    if(rows[0].media_id){
-      const stored=await storedMediaDownload(rows[0].media_id);
-      if(!stored)return res.status(404).json({error:'Trip-card image is not available.'});
-      return res.json({image:stored.url});
-    }
     if(!validTripCardImageDataUrl(rows[0].image))return res.status(404).json({error:'Trip-card image is not available.'});
     res.json({image:rows[0].image});
   }catch(error){next(error)}
@@ -6558,8 +6383,7 @@ app.get('/api/requests/:reference/meter-file',requireSession,async(req,res,next)
     const stage=req.query.stage==='closing'?'closing':'opening';
     const {rows}=await pool.query(`SELECT requester_login,site,
       CASE WHEN $2='closing' THEN closing_meter_file ELSE opening_meter_file END AS file,
-      CASE WHEN $2='closing' THEN closing_meter_file_name ELSE opening_meter_file_name END AS name,
-      CASE WHEN $2='closing' THEN closing_meter_media_id ELSE opening_meter_media_id END AS media_id
+      CASE WHEN $2='closing' THEN closing_meter_file_name ELSE opening_meter_file_name END AS name
       FROM maintenance_requests WHERE reference=$1`,[reference,stage]);
     if(!rows.length)return res.status(404).json({error:'Maintenance request not found.'});
     const row=rows[0];
@@ -6573,11 +6397,6 @@ app.get('/api/requests/:reference/meter-file',requireSession,async(req,res,next)
       allowed=reportScopeIncludesSite(userSiteScope(user),row.site);
     }
     if(!allowed)return res.status(403).json({error:'You are not authorized to view this meter file.'});
-    if(row.media_id){
-      const stored=await storedMediaDownload(row.media_id);
-      if(!stored)return res.status(404).json({error:`${stage==='closing'?'Closing':'Opening'} meter file is not available.`});
-      return res.json({file:stored.url,name:stored.original_name||row.name||`${stage}-meter-evidence`});
-    }
     if(!validMeterEvidenceDataUrl(row.file))return res.status(404).json({error:`${stage==='closing'?'Closing':'Opening'} meter file is not available.`});
     res.json({file:row.file,name:row.name||`${stage}-meter-evidence`});
   }catch(error){next(error)}
@@ -7442,7 +7261,6 @@ async function initializeDatabase(){
         ()=>runScheduledBackup().then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)}).catch(error=>console.error('Scheduled database backup failed.',error)),
         ()=>auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error)),
         ()=>metaWhatsAppRuntimeEnv().then((whatsappEnv)=>whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID?syncStandardWhatsAppTemplates({submit:true}):null).then(result=>{if(result)console.log('Meta WhatsApp template synchronization completed.',result)}).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error)),
-        ()=>cleanupOrphanedMedia().then(result=>{if(!result?.skipped)console.log('Orphaned media cleanup completed.',result)}).catch(error=>console.error('Orphaned media cleanup failed.',error)),
       ];
       startupJobs.forEach((job,index)=>scheduleBackgroundStart(()=>void job(),3_000+(index*6_000)));
     }else{
@@ -7519,10 +7337,6 @@ if(scheduledJobsEnabled){
   databaseBackupTimer.unref?.();
   const adminLockAuditTimer=setStaggeredInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000,54_000);
   adminLockAuditTimer.unref?.();
-  const mediaCleanupTimer=setStaggeredInterval(()=>{
-    if(databaseReady)void cleanupOrphanedMedia().then(result=>{if(!result?.skipped)console.log('Scheduled orphaned media cleanup completed.',result)}).catch(error=>console.error('Scheduled orphaned media cleanup failed.',error));
-  },6*60*60*1000,61_000);
-  mediaCleanupTimer.unref?.();
 }
 const backupImportCleanupTimer=setStaggeredInterval(()=>{
   void prunePendingBackupImports().catch(error=>console.error('Backup import cleanup failed.',error));

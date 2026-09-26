@@ -29,7 +29,6 @@ env:
   AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
   AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
   AZURE_FRONT_DOOR_PROFILE: coalmine-afd-783
-  AZURE_MEDIA_CONTAINER: nerve-center-media
   LIVE_URL: https://bdms.cmll.in
 
 jobs:
@@ -151,64 +150,6 @@ jobs:
           test -n "$staging_host"
           printf 'STAGING_URL=https://%s\n' "$staging_host" >> "$GITHUB_ENV"
 
-      - name: Provision private media storage and configure both slots
-        shell: bash
-        run: |
-          set -euo pipefail
-          subscription_id="$(az account show --query id -o tsv)"
-          account_hash="$(printf '%s' "$subscription_id" | sha256sum | cut -c1-12)"
-          storage_account="cmfmedia${account_hash}"
-          location="$(az group show --name "$AZURE_RESOURCE_GROUP" --query location -o tsv)"
-
-          if ! az storage account show --resource-group "$AZURE_RESOURCE_GROUP" --name "$storage_account" --output none 2>/dev/null; then
-            az storage account create \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --name "$storage_account" \
-              --location "$location" \
-              --sku Standard_LRS \
-              --kind StorageV2 \
-              --https-only true \
-              --min-tls-version TLS1_2 \
-              --allow-blob-public-access false \
-              --allow-shared-key-access true \
-              --output none
-          fi
-
-          storage_key="$(az storage account keys list --resource-group "$AZURE_RESOURCE_GROUP" --account-name "$storage_account" --query '[0].value' -o tsv)"
-          storage_connection="$(az storage account show-connection-string --resource-group "$AZURE_RESOURCE_GROUP" --name "$storage_account" --query connectionString -o tsv)"
-          test -n "$storage_key"
-          test -n "$storage_connection"
-
-          az storage container create \
-            --name "$AZURE_MEDIA_CONTAINER" \
-            --account-name "$storage_account" \
-            --account-key "$storage_key" \
-            --public-access off \
-            --output none
-          az storage cors clear --services b --account-name "$storage_account" --account-key "$storage_key" --output none
-          az storage cors add \
-            --services b \
-            --methods GET HEAD OPTIONS PUT \
-            --origins "$LIVE_URL" "$STAGING_URL" \
-            --allowed-headers '*' \
-            --exposed-headers '*' \
-            --max-age 3600 \
-            --account-name "$storage_account" \
-            --account-key "$storage_key" \
-            --output none
-
-          az webapp config appsettings set \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --settings MEDIA_STORAGE_PROVIDER=azure "AZURE_STORAGE_CONNECTION_STRING=$storage_connection" AZURE_STORAGE_CONTAINER="$AZURE_MEDIA_CONTAINER" \
-            --output none
-          az webapp config appsettings set \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --slot staging \
-            --settings MEDIA_STORAGE_PROVIDER=azure "AZURE_STORAGE_CONNECTION_STRING=$storage_connection" AZURE_STORAGE_CONTAINER="$AZURE_MEDIA_CONTAINER" \
-            --output none
-
       - name: Deploy to Azure staging slot
         shell: bash
         run: |
@@ -229,7 +170,7 @@ jobs:
             # slot itself proves that the exact commit is healthy and isolated.
             for health_attempt in {1..12}; do
               if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deploy-recovery=${DEPLOY_SHA}")" && \
-                HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false||h.mediaStorage?.configured!==true||h.mediaStorage?.provider!=='azure') process.exit(1)"; then
+                HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
                 echo "Azure CLI reported a deployment error, but staging verified the exact commit: ${response}"
                 exit 0
               fi
@@ -250,7 +191,7 @@ jobs:
           az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
           for attempt in {1..24}; do
             if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deployment=${DEPLOY_SHA}")" && \
-              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false||h.mediaStorage?.configured!==true||h.mediaStorage?.provider!=='azure') process.exit(1)"; then
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
               echo "Staging verified at ${DEPLOY_SHA}: ${response}"
               break
             fi
@@ -275,7 +216,7 @@ jobs:
           az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --target-slot production
           for attempt in {1..24}; do
             if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?deployment=${DEPLOY_SHA}")" && \
-              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true||h.mediaStorage?.configured!==true||h.mediaStorage?.provider!=='azure') process.exit(1)"; then
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true) process.exit(1)"; then
               page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
               asset="$(printf '%s' "$page" | grep -oE 'src="/app-assets/[^"]+\.js"' | head -1 | cut -d'"' -f2)"
               test -n "$asset"
@@ -297,29 +238,6 @@ jobs:
           done
           echo "Automatic rollback did not restore a healthy response"
           exit 1
-
-      - name: Migrate legacy media to Blob Storage
-        shell: bash
-        run: |
-          set -euo pipefail
-          subscription_id="$(az account show --query id -o tsv)"
-          account_hash="$(printf '%s' "$subscription_id" | sha256sum | cut -c1-12)"
-          storage_account="cmfmedia${account_hash}"
-          storage_connection="$(az storage account show-connection-string --resource-group "$AZURE_RESOURCE_GROUP" --name "$storage_account" --query connectionString -o tsv)"
-          database_url="$(az webapp config appsettings list --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "[?name=='DATABASE_URL'].value | [0]" -o tsv)"
-          database_ssl="$(az webapp config appsettings list --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "[?name=='DATABASE_SSL'].value | [0]" -o tsv)"
-          test -n "$storage_connection"
-          test -n "$database_url"
-          migration_root="$RUNNER_TEMP/media-migration"
-          mkdir -p "$migration_root"
-          unzip -q packages/current/node-app.zip -d "$migration_root"
-          cd "$migration_root"
-          MEDIA_STORAGE_PROVIDER=azure \
-          AZURE_STORAGE_CONNECTION_STRING="$storage_connection" \
-          AZURE_STORAGE_CONTAINER="$AZURE_MEDIA_CONTAINER" \
-          DATABASE_URL="$database_url" \
-          DATABASE_SSL="${database_ssl:-true}" \
-          npm run media:migrate
 
       - name: Enforce Front Door-only production origin
         if: always()
