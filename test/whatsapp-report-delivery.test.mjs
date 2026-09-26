@@ -51,6 +51,7 @@ function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTe
     }},prepareTicketReportRows,buildTicketReportTable,buildTicketWhatsAppReport,resolveMobileAccess,reportScopeIncludesSite,
     publicBaseUrl:()=> 'https://reports.example',randomUUID:()=>String(++uuid).padStart(32,'0').split('').reverse().join(''),
     buildXlsxWorkbookBuffer:(_title,_columns,rows)=>Buffer.from(JSON.stringify(rows)),metaWhatsAppRuntimeEnv:async()=>({WHATSAPP_REPORT_SETTINGS:settings}),
+    telegramConfiguration:()=>({botToken:'',chatId:'',configured:false}),sendTelegramText:async()=>{},disconnectTelegramChat:async()=>{},
     sendMetaWhatsAppTemplate:async args=>{if(failTemplate)throw Object.assign(new Error('Template unavailable'),{metaCode:failTemplate===true?132001:undefined,code:typeof failTemplate==='string'?failTemplate:undefined});templates.push(args);},
     sendMetaWhatsAppText:async args=>texts.push(args),
     sendMetaWhatsAppDocument:async args=>documents.push(args),

@@ -211,7 +211,7 @@ function deliveryHarness({
       return {message,reportContext};
     },
     publicBaseUrl:()=>'https://example.invalid',metaWhatsAppRuntimeEnv:async()=>({}),
-    sendMetaWhatsAppTemplate:async(args)=>{if(fail)throw new Error('Template unavailable');sent.push(args);},mirrorToTelegramUsers:()=>{},
+    sendMetaWhatsAppTemplate:async(args)=>{if(fail)throw new Error('Template unavailable');sent.push(args);},mirrorToTelegramUsers:()=>{},telegramChatsByLogin:async()=>new Map(),sendReportToTelegram:async()=>false,reportDeliveryStatus:(whatsappSent,telegramSent)=>whatsappSent&&telegramSent?'Sent by WhatsApp and Telegram':telegramSent?'Sent by Telegram':'Sent',
     console:{error:(...args)=>errors.push(args)},
   };
   const api=new Function(...Object.keys(dependencies),`${schedulerSource};return {sendScheduledHierarchyReportBundles,sendRequestEventReports};`)(...Object.values(dependencies));

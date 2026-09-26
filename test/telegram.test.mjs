@@ -141,7 +141,10 @@ test("Server links accounts through one-time tokens and a secret-checked webhook
 
 test("Personal Telegram copies follow WhatsApp recipients and hierarchy reports", () => {
   assert.ok(server.includes("mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText"));
-  assert.ok(server.includes("mirrorToTelegramUsers({logins:[login],message:delivery.message,purpose:'consolidatedRequestReport'"));
+  assert.ok(server.includes("const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedRequestReport'):false;"));
+  assert.ok(server.includes("const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedTicketReport'):false;"));
+  assert.ok(server.includes("const telegramChat=await telegramChatForPhone(recipientPhone).catch(()=>'');"));
+  assert.ok(server.includes("ignoreSwitches:!whatsappReminder"));
   assert.ok(server.includes("Number(error.status)===403)await disconnectTelegramChat(chatId)"));
 });
 

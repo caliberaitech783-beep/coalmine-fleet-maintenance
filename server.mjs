@@ -3249,6 +3249,9 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   const {reportType,targetName,reportLevel='',recipientName='',recipientPhone='',message=''}=req.body||{};
   if(!reportType||!targetName||!recipientPhone||!message)
     return res.status(400).json({error:'Report type, target, recipient phone, and message are required.'});
+  // The same report also goes to the recipient's Telegram, found by their phone number.
+  const telegramChat=await telegramChatForPhone(recipientPhone).catch(()=>'');
+  const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,`${reportType}\n${targetName}\n\n${message}`,'manualReports'):false;
   try{
     const result=await sendMetaWhatsAppTemplate({
       to:recipientPhone,
@@ -3259,9 +3262,17 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id,report_type AS "reportType",target_name AS "targetName",report_level AS "reportLevel",
         recipient_name AS "recipientName",recipient_phone AS "recipientPhone",status,created_at AS "createdAt"`,
-      [reportType,targetName,reportLevel,recipientName,result.recipient,'Sent']);
+      [reportType,targetName,reportLevel,recipientName,result.recipient,reportDeliveryStatus(true,telegramSent)]);
     res.status(201).json({...rows[0],messageId:result.messageId});
   }catch(error){
+    if(telegramSent){
+      const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
+        (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING id,report_type AS "reportType",target_name AS "targetName",report_level AS "reportLevel",
+          recipient_name AS "recipientName",recipient_phone AS "recipientPhone",status,created_at AS "createdAt"`,
+        [reportType,targetName,reportLevel,recipientName,recipientPhone,`Sent by Telegram. WhatsApp failed: ${String(error?.message||'').slice(0,120)}`]).catch(()=>({rows:[{}]}));
+      return res.status(201).json(rows[0]);
+    }
     try{await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
       [reportType,targetName,reportLevel,recipientName,recipientPhone,'Failed'])}catch(historyError){console.error('Could not record failed WhatsApp delivery.',historyError)}
@@ -3833,7 +3844,7 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const usersByLogin=new Map();
   // Who receives an alert follows the saved site and role rules; the on/off
   // switches only decide whether WhatsApp sends, so they are ignored here.
-  const routingSettings={...reportSettings,enabled:true,events:Object.fromEntries(Object.entries(reportSettings.events||{}).map(([key,event])=>[key,{...event,enabled:true}]))};
+  const routingSettings=routingReportSettings(reportSettings);
   const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),routingSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
   const reportsOnlyLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isWhatsAppReportsOnlyRecipient(user)).map(user=>String(user.login||'').trim().toLowerCase()));
   for(const row of rows){
@@ -4287,10 +4298,42 @@ function crmReportGroups({user,profile,reportSettings,scheduleSettings,userSched
 }
 
 let consolidatedTicketReportRunning=false;
+// Scheduled reports reach connected users on Telegram even when WhatsApp is
+// switched off or they have no phone number. Who gets which report, when and
+// for which sites still comes from Report settings and the hierarchy.
+async function telegramChatsByLogin(){
+  if(!telegramConfiguration().botToken)return new Map();
+  const {rows}=await pool.query('SELECT login,chat_id AS "chatId" FROM telegram_user_links');
+  return new Map(rows.map(({login,chatId})=>[login,chatId]));
+}
+async function sendReportToTelegram(chatId,message,purpose){
+  try{await sendTelegramText({chatId,message,purpose});return true}
+  catch(error){
+    console.error('Telegram report delivery failed:',error.message);
+    if(Number(error.status)===403)await disconnectTelegramChat(chatId).catch(()=>{});
+    return false;
+  }
+}
+// Matches on the last 10 digits, so +91 and spacing differences do not matter.
+async function telegramChatForPhone(phone){
+  const digits=String(phone||'').replace(/\D/g,'').slice(-10);
+  if(digits.length<10||!telegramConfiguration().botToken)return '';
+  const {rows}=await pool.query(`SELECT l.chat_id FROM telegram_user_links l
+    JOIN master_records m ON m.master_name='Users & employees' AND lower(trim(m.record_data->>'login'))=l.login
+    WHERE right(regexp_replace(COALESCE(NULLIF(m.record_data->>'phone',''),NULLIF(m.record_data->>'phoneNo',''),m.record_data->>'phoneNumber',''),'\\D','','g'),10)=$1
+    LIMIT 1`,[digits]);
+  return rows[0]?.chat_id||'';
+}
+const reportDeliveryStatus=(whatsappSent,telegramSent)=>whatsappSent&&telegramSent?'Sent by WhatsApp and Telegram':telegramSent?'Sent by Telegram':'Sent';
+
 async function sendScheduledConsolidatedTicketReports(now=new Date()){
   if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
-  const reportSettings=await storedWhatsAppReportSettings();
-  if(!whatsappPurposeEnabled(reportSettings,'consolidatedTicketReport',now))return {skipped:true,reason:'paused by Report settings'};
+  const storedSettings=await storedWhatsAppReportSettings();
+  const whatsappOn=whatsappPurposeEnabled(storedSettings,'consolidatedTicketReport',now);
+  const telegramChats=await telegramChatsByLogin();
+  if(!whatsappOn&&!telegramChats.size)return {skipped:true,reason:'paused by Report settings'};
+  // The CRM switch pauses WhatsApp only; its days, times and roles still apply to Telegram.
+  const reportSettings={...storedSettings,crm:{...storedSettings.crm,enabled:true}};
   consolidatedTicketReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},{rows:equipmentRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
@@ -4310,6 +4353,8 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       if(!reportSettings.crm.recipientRoles.includes(crmRole))continue;
       const login=reportRecipientLogin(user),phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       if(!login)continue;
+      const telegramChat=telegramChats.get(login)||'';
+      if(!whatsappOn&&!telegramChat)continue;
       const designation=flowDesignationForUser(user,profile);
       const hierarchyRule=designation?hierarchyRuleForDesignation(hierarchyRows,designation):null;
       const scope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
@@ -4339,7 +4384,7 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
         const recipientName=String(user.employee||user.name||user.login||login);
         let status='Sent';
         try{
-          if(!phone)throw new Error('Phone number missing');
+          if(!phone&&!telegramChat)throw new Error('Phone number missing');
           const siteReports=[],siteBundles=[];
           for(const site of selectedSites){
             const selected=tickets.filter(ticket=>canonicalSiteName(ticket.site)===site);
@@ -4351,6 +4396,13 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
             siteReports.push(siteReportMessageContext({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl,summary:`${selected.length} tickets with activity | ${scopedOpen.length} open | ${scopedClosed.length} resolved`}));
           }
           const delivery=recipientReportMessage({kind:'CRM',window,reports:siteReports});
+          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedTicketReport'):false;
+          if(!whatsappOn||!phone){
+            if(!telegramSent)throw new Error(phone?'WhatsApp paused and Telegram delivery failed':'Phone number missing');
+            status=reportDeliveryStatus(false,true);
+          }else{
+          if(telegramSent)status=reportDeliveryStatus(true,true);
+          try{
           const env=await metaWhatsAppRuntimeEnv();
           try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env})}
           catch(templateError){
@@ -4363,6 +4415,12 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
             }else{
               await sendMetaWhatsAppText({to:phone,message:delivery.message,purpose:'consolidatedTicketReport'},{env});
             }
+          }
+          }catch(whatsappError){
+            // Telegram already delivered this slot; a retry would duplicate it there.
+            if(!telegramSent)throw whatsappError;
+            status=`Sent by Telegram. WhatsApp failed: ${String(whatsappError?.message||'').slice(0,120)}`;
+          }
           }
           sent++;
         }catch(error){status=`Failed - ${String(error?.message||'CRM delivery error').slice(0,160)}`;failed++;console.error(`CRM report failed for ${login}:`,error.message)}
@@ -4533,7 +4591,9 @@ let hierarchyReportRunning=false;
 async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(event)return {skipped:true,reason:'Individual events use alerts; reports are consolidated at scheduled times.'};
   if(!databaseReady||hierarchyReportRunning)return {skipped:true};
-  if(!whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now))return {skipped:true,reason:'paused by Report settings'};
+  const whatsappOn=whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now);
+  const telegramChats=await telegramChatsByLogin();
+  if(!whatsappOn&&!telegramChats.size)return {skipped:true,reason:'paused by Report settings'};
   hierarchyReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
@@ -4568,7 +4628,8 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       if(Array.isArray(recipientScope.sites)&&!recipientScope.sites.length){skipped++;continue}
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       const recipientName=String(user.employee||user.name||user.login||designation.label);
-      if(!phone){skipped++;continue}
+      const telegramChat=telegramChats.get(login)||'';
+      if(!telegramChat&&(!phone||!whatsappOn)){skipped++;continue}
       sourceData??=await directorReportSourceData();
       const sites=reportSites(sourceData,recipientScope);
       for(const group of dueGroups){
@@ -4593,9 +4654,20 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
             siteReports.push(bundle.reportContext);
           }
           const delivery=recipientReportMessage({window,reports:siteReports});
-          mirrorToTelegramUsers({logins:[login],message:delivery.message,purpose:'consolidatedRequestReport',reportSettings:await storedWhatsAppReportSettings(),reportType:'Consolidated fleet report',target:sites.map(displaySiteName).join(' | ')});
-          const env=await metaWhatsAppRuntimeEnv();
-          await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env});sent++;
+          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedRequestReport'):false;
+          if(whatsappOn&&phone){
+            try{
+              const env=await metaWhatsAppRuntimeEnv();
+              await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env});
+              status=reportDeliveryStatus(true,telegramSent);
+            }catch(whatsappError){
+              // Telegram already delivered this slot; a retry would duplicate it there.
+              if(!telegramSent)throw whatsappError;
+              status=`Sent by Telegram. WhatsApp failed: ${String(whatsappError?.message||'').slice(0,120)}`;
+            }
+          }else if(telegramSent)status=reportDeliveryStatus(false,true);
+          else throw new Error('Telegram delivery failed');
+          sent++;
         }catch(error){
           status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;failed++;
           console.error(`Hierarchy WhatsApp report failed for ${recipientName}:`,error.message);
@@ -5085,9 +5157,15 @@ async function attachDailyRemarks(rows,client=pool){
   return rows.map((row)=>({...row,delayedReason:approvedDelayedReason(row.delayedReason),dailyRemarks:grouped.get(row.ref)||[]}));
 }
 
-async function requestWorkflowWhatsAppLogins(client,{eventType,site}){
+// Site and role routing with the WhatsApp on/off switches ignored, for Telegram.
+function routingReportSettings(settings){
+  return {...settings,enabled:true,events:Object.fromEntries(Object.entries(settings.events||{}).map(([key,event])=>[key,{...event,enabled:true}]))};
+}
+
+async function requestWorkflowWhatsAppLogins(client,{eventType,site,ignoreSwitches=false}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-  return workflowWhatsAppRecipientLogins(rows,{eventType,site,settings:await storedWhatsAppReportSettings()});
+  const settings=await storedWhatsAppReportSettings();
+  return workflowWhatsAppRecipientLogins(rows,{eventType,site,settings:ignoreSwitches?routingReportSettings(settings):settings});
 }
 
 let workflowReminderRunning=false;
@@ -5118,7 +5196,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         offRoad:{...reportSettings.reminders.offRoad,enabled:true},idle:{...reportSettings.reminders.idle,enabled:true}}};
       const slotKey=workflowReminderSlot(eventType,eventTime,now,slotSettings);
       if(!slotKey)continue;
-      const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
+      const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site,ignoreSwitches:!whatsappReminder});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
       const reminderText=`SITE: ${request.site||'Not recorded'}\n${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}\n${equipmentDetails}\n${idle?`Idle since ${requestNotificationTime(eventTime)}. Reason: ${request.idleReason||'Not recorded'}`:`Off Road since ${requestNotificationTime(eventTime)}`}\n${workflowRequestLink(request.ref,publicBaseUrl())}`;
       if(telegramConfiguration().configured){

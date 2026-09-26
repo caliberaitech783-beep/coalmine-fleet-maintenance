@@ -59,11 +59,13 @@ test('the sender excludes reports-only logins and has no legacy blanket Super Ad
 
 test('workflow WhatsApp recipients are independently selected and rechecked at delivery',()=>{
   assert.match(server,/requestWorkflowWhatsAppLogins/);
-  assert.match(server,/workflowWhatsAppRecipientLogins\(rows,\{eventType,site,settings:await storedWhatsAppReportSettings\(\)\}\)/);
+  assert.match(server,/workflowWhatsAppRecipientLogins\(rows,\{eventType,site,settings:ignoreSwitches\?routingReportSettings\(settings\):settings\}\)/);
+  assert.match(server,/const settings=await storedWhatsAppReportSettings\(\);\s*return workflowWhatsAppRecipientLogins/);
   assert.match(server,/const workflowExcludedLogins=new Set/);
   assert.match(server,/if\(workflowExcludedLogins\.has\(login\)\|\|reportsOnlyLogins\.has\(login\)\)continue/);
   assert.match(server,/if\(workflowType&&!isWorkflowWhatsAppRecipient\(user,workflowType,site,routingSettings\)\)continue/);
-  assert.match(server,/const routingSettings=\{\.\.\.reportSettings,enabled:true,/);
+  assert.match(server,/const routingSettings=routingReportSettings\(reportSettings\);/);
+  assert.match(server,/function routingReportSettings\(settings\)\{\s*return \{\.\.\.settings,enabled:true,/);
   assert.match(server,/whatsappRecipients\?\?logins/);
 });
 
