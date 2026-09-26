@@ -43,6 +43,7 @@ test('general summary uses only verified requests with non-overlapping stages an
   const row={ref:'verified',start:'2026-09-01 08:00',acceptedAt:'2026-09-01 09:00',closedAt:'2026-09-01 12:00',firstTripAt:'2026-09-01 12:30',verifiedAt:'2026-09-01 17:00'};
   const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
   assert.equal(report.category,'general');
+  assert.equal(report.description,'MIS-verified requests with stage-wise TAT from submission to first trip; filters use the production submission date.');
   assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
   assert.deepEqual(report.columns.map(c=>c.key),['site','door','equipmentGroup','model','submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','complaint','category','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','ref','closureEvent']);
   for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt']) assert.equal(cell(report,key),row[key]);

@@ -48,7 +48,6 @@ test('Idle manager closure is identified without inventing a repair-completion e
   const report=summary([row]);
   assert.equal(value(report,row,'closureEvent'),'Manager on-road closure | Site manager');
   assert.match(report.columns.find(column=>column.key==='closedAt').label,/on-road approval/);
-  assert.match(report.description,/not a separately recorded repair completion/);
   assert.equal(value(report,row,'maintenanceTat'),'56s');
   assert.equal(report.columns.at(-1).key,'closureEvent','closure type is the last column');
   assert.equal(report.columns.at(-2).key,'ref','job reference sits beside closure type at the end');

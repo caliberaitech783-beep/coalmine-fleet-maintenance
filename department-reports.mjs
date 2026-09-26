@@ -125,7 +125,7 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       col('closedAt','Maintenance Closing Time',r => shiftTime(r,r.closedAt)),col('closedBy','Closed by'),
       ids[1],
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
-    report('general', REPORT_TITLES[14], 'MIS-verified requests only. Exact durations: waiting = submission to acceptance; maintenance = acceptance to request closure; return to work = closure to actual first trip. These stages do not overlap; overall = submission to first trip. Repair/closure elapsed and first-trip-to-verification lag are separate measures, not additional stages. For Idle cases, manager on-road approval is request closure, not a separately recorded repair completion; the acceptance-to-closure interval includes the Idle approval wait. Missing or reversed timestamps are not treated as zero. Date filters continue to use production submission.', [
+    report('general', REPORT_TITLES[14], 'MIS-verified requests with stage-wise TAT from submission to first trip; filters use the production submission date.', [
       // Location leads, then asset identifiers; job reference and closure type close the row in both the report and its exports.
       site,
       ...base.slice(0,4).filter(column => column.key !== 'chassis'),
