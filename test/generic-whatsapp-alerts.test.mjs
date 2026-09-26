@@ -224,8 +224,9 @@ for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
       if(pause==='quietHours')api.settings.quietHours.enabled=true;
       const result=await api.sendWhatsAppNotifications(api.client,['creator','super'],'REF/1','Message',{templateKey:purpose,parameters:[]});
       assert.deepEqual(result,[{login:'creator',status:'Skipped - paused by Report settings'},{login:'super',status:'Skipped - paused by Report settings'}]);
-      assert.equal(api.queries.length,0);
-      assert.deepEqual(api.telegramUsers.flatMap(options=>options.logins),['creator','super'],'Telegram keeps full messaging while WhatsApp is paused');
+      assert.ok(api.queries.every(({sql})=>sql.includes("master_name='Users & employees'")),'a pause only reads recipients; nothing is sent or logged');
+      assert.equal(api.templates.length+api.texts.length+api.history.length,0);
+      assert.deepEqual(api.telegramUsers.flatMap(options=>options.logins),['creator'],'while WhatsApp is paused Telegram still follows the site and role rules, so leadership is not added');
       if(purpose==='dailyUpdate'){
         await api.addTicketNotifications(api.client,['creator','manager'],'REF/1','Message',{templateKey:purpose,parameters:[]},{site:'Sasti OB'});
         assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager']);

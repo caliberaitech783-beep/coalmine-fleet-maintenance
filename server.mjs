@@ -3826,28 +3826,30 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nNerve Center notification\n${message}`;
   if(telegramGroup)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,message:telegramText});
   if(!logins.length)return [];
-  if(!whatsappPurposeEnabled(reportSettings,messagePurpose)){
-    // A WhatsApp pause or quiet hours only reduce paid WhatsApp; Telegram still gets the alert.
-    mirrorToTelegramUsers({logins,message:telegramText,purpose:messagePurpose,target:reference});
-    return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
-  }
+  const whatsappActive=whatsappPurposeEnabled(reportSettings,messagePurpose);
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
   const usersByLogin=new Map();
-  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),reportSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
+  // Who receives an alert follows the saved site and role rules; the on/off
+  // switches only decide whether WhatsApp sends, so they are ignored here.
+  const routingSettings={...reportSettings,enabled:true,events:Object.fromEntries(Object.entries(reportSettings.events||{}).map(([key,event])=>[key,{...event,enabled:true}]))};
+  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),routingSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
   const reportsOnlyLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isWhatsAppReportsOnlyRecipient(user)).map(user=>String(user.login||'').trim().toLowerCase()));
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(workflowExcludedLogins.has(login)||reportsOnlyLogins.has(login))continue;
-    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site,reportSettings))continue;
+    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site,routingSettings))continue;
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
     if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
   const eligibleLogins=[...usersByLogin.keys()];
+  // Telegram goes to exactly the users WhatsApp would select (same site, role and
+  // leadership rules). A WhatsApp pause or quiet hours only stop paid WhatsApp.
   mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText,purpose:messagePurpose,target:reference});
+  if(!whatsappActive)return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
   const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,

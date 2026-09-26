@@ -62,7 +62,8 @@ test('workflow WhatsApp recipients are independently selected and rechecked at d
   assert.match(server,/workflowWhatsAppRecipientLogins\(rows,\{eventType,site,settings:await storedWhatsAppReportSettings\(\)\}\)/);
   assert.match(server,/const workflowExcludedLogins=new Set/);
   assert.match(server,/if\(workflowExcludedLogins\.has\(login\)\|\|reportsOnlyLogins\.has\(login\)\)continue/);
-  assert.match(server,/if\(workflowType&&!isWorkflowWhatsAppRecipient\(user,workflowType,site,reportSettings\)\)continue/);
+  assert.match(server,/if\(workflowType&&!isWorkflowWhatsAppRecipient\(user,workflowType,site,routingSettings\)\)continue/);
+  assert.match(server,/const routingSettings=\{\.\.\.reportSettings,enabled:true,/);
   assert.match(server,/whatsappRecipients\?\?logins/);
 });
 
