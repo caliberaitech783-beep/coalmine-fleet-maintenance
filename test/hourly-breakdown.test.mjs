@@ -78,6 +78,6 @@ test("hour selector and site filters render the report inline in the inherited t
     const sites = all().find(node => node.className === "sites");
     sites.children[3].onclick();
     assert.match(nodes(report).find(node => node.tag === "h2").textContent, /Majri OB · Last 2 hours/);
-    assert.deepEqual(nodes(report).filter(node => node.tag === "th").map(node => node.textContent), ["Sites", "Door No", "In\/Out", "BD Timing"]);
+    assert.deepEqual(nodes(report).filter(node => node.tag === "th").map(node => node.textContent), ["Sites", "Door No", "In\/Out", "HMR", "KMR", "BD Timing"]);
   } finally { globalThis.window = previousWindow; globalThis.document = previousDocument; }
 });

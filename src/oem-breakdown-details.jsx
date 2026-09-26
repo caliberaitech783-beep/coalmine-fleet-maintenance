@@ -6,6 +6,7 @@ import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldo
 import { groupOemRecordsBySite } from "./oem-dashboard-filters.mjs";
 import {ProtectedAudio} from "./protected-media.jsx";
 import { dailyUpdatesExportText } from "./daily-updates-order.mjs";
+import { breakdownMeterColumns } from "../breakdown-meter-columns.mjs";
 import "./oem-breakdown-details.css";
 
 // Sorting the Daily remarks column orders rows by their most recent update (server stamps are "YYYY-MM-DD HH:MM").
@@ -15,6 +16,7 @@ const extraColumns = [
   { key: "oem", label: "OEM", render: record => record.make || "—" },
   { key: "createdBy", label: "Created by", render: record => record.requestDetails.owner || record.requestDetails.requesterLogin || "—" },
   { key: "closedBy", label: "Closed by", render: record => record.requestDetails.closedBy || "—" },
+  ...breakdownMeterColumns({ stage: "closing", source: record => record.requestDetails }).map(column => ({ ...column, render: column.value })),
   { key: "tat", label: "Turn around time (TAT)", render: record => record.requestDetails.hours || "—" },
   { key: "idleReason", label: "Idle reason", render: record => record.requestDetails.idleReason || "—" },
 ];

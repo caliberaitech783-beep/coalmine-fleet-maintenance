@@ -8,6 +8,7 @@ import { matchesSmartSearch } from '../smart-search.mjs';
 import * as acceptance from '../request-acceptance.mjs';
 import {requestStatusLabel, requestStatusSortRank} from '../src/request-status.mjs';
 import {requestMeterReadings, requestMeterReadingLabel} from '../request-equipment.mjs';
+import {breakdownMeterValue} from '../breakdown-meter-columns.mjs';
 import {isDurationColumn, compareDurationValues, defaultDurationSort} from '../src/duration-sort.mjs';
 import {calculateBreakdownMinutes} from '../breakdown-duration.mjs';
 import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
@@ -46,7 +47,7 @@ function harness(name = 'MobileWorkflowTable') {
   };
   const scope = {
     isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes, dailyUpdatesExportText,
-    requestMeterReadings, requestMeterReadingLabel,
+    requestMeterReadings, requestMeterReadingLabel, breakdownMeterValue,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
     ...acceptance, requestStatusLabel, requestStatusSortRank, durationLabelMinutes: () => -1, elapsedMilliseconds: () => null, parseDateRange: () => null, matchesDateRange: () => false, cellMatchesFilterValues: (text, selected) => !selected || String(text || "") === selected, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
     ActionsTable: ({ children }) => React.createElement('table', {}, children), MaintenanceRemarks: Null, Modal: Null,

@@ -28,6 +28,7 @@ import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
 import {isDurationColumn, compareDurationValues} from "../src/duration-sort.mjs";
 import * as sectionExport from "../src/dashboard-section-export.mjs";
 import {requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
+import * as meterColumns from "../breakdown-meter-columns.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function Dashboard("), source.indexOf("const PRODUCTION_REQUEST_COLUMNS"));
@@ -200,7 +201,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
     ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport,
-    availabilityRequestsForDate, dashboardFleetSnapshot,
+    availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel,

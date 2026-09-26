@@ -321,10 +321,14 @@ test("the real browser and shared table render OEM controls and numbered exports
     const siteHtml = renderToStaticMarkup(h(Browser, props));
     assert.match(siteHtml, /<h4>WCL · Sasti OB<\/h4>/);
     assert.doesNotMatch(siteHtml, /Request site|Current location/);
-    const columnCount = requestRecords ? 14 : 10;
+    // Opening HMR / KMR always follow Model, so both layouts carry two meter columns.
+    const columnCount = requestRecords ? 16 : 12;
     for (const model of exports) {
       assert.equal(model.columns.length, columnCount, "site column is removed from numbered print/export models");
       assert.ok(!model.columns.some(column => ["Request site", "Current location"].includes(column.label)));
+      // The shared table keeps meter readings beside the breakdown reason when a request list has one.
+      const meterAnchor = requestRecords ? "Breakdown reason" : "Model", anchorAt = model.columns.findIndex(column => column.label === meterAnchor);
+      assert.deepEqual(model.columns.slice(anchorAt, anchorAt + 3).map(column => column.label), [meterAnchor, "Opening HMR", "Opening KMR"]);
       assert.equal(model.columns[0].value(model.rows[0]), 1);
       assert.equal(model.columns.find(column => column.label === "Machine / Door no.").value(model.rows[0]), "T10");
     }

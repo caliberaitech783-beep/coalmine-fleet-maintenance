@@ -1,5 +1,6 @@
 import { parseRequestTimelineTimestamp } from "../request-timeline.mjs";
 import { displaySiteName, REGION_DATA } from "../region-scope.mjs";
+import { breakdownMeterValue } from "../breakdown-meter-columns.mjs";
 
 export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
   const end = Number(now), start = end - hours * 3600000;
@@ -14,6 +15,9 @@ export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
       door: request.door || "—", direction, timestamp,
       startedAt: parseRequestTimelineTimestamp(request.start || request.startedAt || request.createdAt)?.getTime() ?? null,
       closedAt: parseRequestTimelineTimestamp(request.closedAt)?.getTime() ?? null,
+      // BD In shows the readings taken when the breakdown was raised, BD Out the readings at closure.
+      hmr: breakdownMeterValue(request, "HMR", direction === "Out" ? "closing" : "opening"),
+      kmr: breakdownMeterValue(request, "KMR", direction === "Out" ? "closing" : "opening"),
     }] : [];
   })).sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -96,14 +100,14 @@ export function openHourlyBreakdownTab(requests) {
     el("p", "Counts include BD In and BD Out events. Pink: BD In · Green: BD Out", report, "legend");
     const table = el("table", null, el("div", null, report, "scroll"));
     const header = el("tr", null, el("thead", null, table));
-    for (const label of ["Sites", "Door No", "In/Out", "BD Timing"]) el("th", label, header).scope = "col";
+    for (const label of ["Sites", "Door No", "In/Out", "HMR", "KMR", "BD Timing"]) el("th", label, header).scope = "col";
     const body = el("tbody", null, table);
     for (const row of view.rows) {
       const tr = el("tr", null, body);
-      el("td", row.site, tr); el("td", row.door, tr); el("td", row.direction, tr);
+      el("td", row.site, tr); el("td", row.door, tr); el("td", row.direction, tr); el("td", row.hmr, tr); el("td", row.kmr, tr);
       el("td", format(row.timestamp), tr, row.direction.toLowerCase());
     }
-    if (!view.rows.length) el("td", "No breakdown activity in this time window.", el("tr", null, body)).colSpan = 4;
+    if (!view.rows.length) el("td", "No breakdown activity in this time window.", el("tr", null, body)).colSpan = 6;
   };
   for (let hours = 1; hours <= 10; hours++) {
     const button = el("button", `${hours} ${hours === 1 ? "hour" : "hours"}`, box);

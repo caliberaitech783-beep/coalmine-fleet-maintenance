@@ -63,7 +63,10 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     assert.equal(table.printTitle, table.exportTitle, title);
     assert.doesNotMatch(html, /1 of 1 records/); // The shared toolbar owns the only count.
     assert.equal(table.toolbarPortal, true);
-    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 14 + expected.length + (event === "idle" ? 3 : 0), title);
+    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 16 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0), title);
+    // Every lifecycle list shows opening meter readings; lists with a Closed column add the closing readings.
+    assert.equal(columns.some(column => column.label === "Closing HMR"), expected.includes("Closed"), title);
+    assert.ok(columns.some(column => column.label === "Opening KMR"), title);
     if (event === "idle") {
       assert.equal(columns[3].label, "Idle Vehicle Date");
       assert.equal(columns[columns.findIndex(column => column.label === "Breakdown reason") + 1].label, "Idle reason");
@@ -73,7 +76,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
     if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
     const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
-    assert.ok(empty.includes(`colSpan="${14 + expected.length + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
+    assert.ok(empty.includes(`colSpan="${16 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
   }
 });
 

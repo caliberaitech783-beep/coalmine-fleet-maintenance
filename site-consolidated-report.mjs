@@ -4,6 +4,7 @@ import {displaySiteName} from './region-scope.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {buildDirectorReportTables} from './director-report-bundle.mjs';
 import {availabilityRows} from './department-reports.mjs';
+import {breakdownMeterValue} from './breakdown-meter-columns.mjs';
 
 const clean=value=>String(value??'').trim();
 export const REQUEST_REPORT_EVENTS=[
@@ -42,6 +43,8 @@ function requestBeforeEnd(request,end){
   if(!next.idealApprovedAt)next.idealApprovedBy='';
   if(!next.closedAt){
     next.closedBy='';
+    // Closing meter readings are recorded at closure, so a case still open at window end has none yet.
+    next.closingMeterReadings={};next.closingMeterReading='';
     if(parseReportTimestamp(request.closedAt)>=end){next.maintenanceWork='';next.delayedReason='';}
     next.status=next.idealRequestedAt&&!next.idealApprovedAt?'Idle':next.inProgressAt?'In progress':next.acceptedAt?'Accepted':'Open';
   }
@@ -51,7 +54,7 @@ const dateLabel=value=>value?formatDisplayDateTime(value):'';
 export const FLEET_ACTIVITY_COLUMNS=[
   'Request reference','Equipment / door','Site','Activity in this window','Status at window end',
   'Opened at (IST)','Closed at (IST)','MIS verified at (IST)','Idle since (IST)',
-  'Complaint','Maintenance work / updates','Idle / delay reason','Reported by',
+  'Complaint','Opening HMR','Opening KMR','Closing HMR','Closing KMR','Maintenance work / updates','Idle / delay reason','Reported by',
 ].map(label=>({label}));
 
 export function fleetActivityTable(requests,window){
@@ -63,6 +66,7 @@ export function fleetActivityTable(requests,window){
       snapshot.verifiedAt?'MIS verified':snapshot.status,
       dateLabel(snapshot.start),dateLabel(snapshot.closedAt),dateLabel(snapshot.verifiedAt),dateLabel(snapshot.idealRequestedAt),
       request.complaint||'',
+      breakdownMeterValue(snapshot,'HMR'),breakdownMeterValue(snapshot,'KMR'),breakdownMeterValue(snapshot,'HMR','closing'),breakdownMeterValue(snapshot,'KMR','closing'),
       [snapshot.maintenanceWork,...snapshot.dailyRemarks.filter(remark=>timestampInReportWindow(remark.createdAt,window)).map(remark=>`${dateLabel(remark.createdAt)}: ${remark.remark||''}`)].filter(Boolean).join('\n'),
       [snapshot.idleReason,snapshot.delayedReason,...snapshot.dailyRemarks.filter(remark=>timestampInReportWindow(remark.createdAt,window)).map(remark=>remark.delayReason)].filter(Boolean).join('; '),
       request.owner||request.requesterLogin||'',

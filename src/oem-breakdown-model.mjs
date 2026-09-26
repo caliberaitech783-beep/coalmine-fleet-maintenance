@@ -4,6 +4,7 @@ import { indiaDateTimeEpoch } from "../report-date-range.mjs";
 import { parseReportTimestamp } from "../report-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import { requestStatusLabel } from "./request-status.mjs";
+import { breakdownMeterFields } from "../breakdown-meter-columns.mjs";
 
 const text = (value) => String(value ?? "").trim();
 const normalize = (value) => text(value).toLowerCase();
@@ -172,6 +173,7 @@ export function createOemBreakdownSelection(chart, selection = {}) {
     repairCategory: request.category || "—",
     delayedReason: request.delayedReason || "—",
     breakdownReason: request.complaint || "—",
+    ...breakdownMeterFields(request),
     requestDetails: request,
   })));
   return { ...selection, oem, rows, records, label: selected?.label || "All OEMs", equipmentGroupLabel, color: selected?.color || "", regions: chart.sites.reduce((regions, site) => {

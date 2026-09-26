@@ -41,7 +41,10 @@ test('the report lists every stage in order with the wait before it', () => {
   assert.equal(cell(report, row, 'raisedToVerified'), '1d 1h 0m');
   assert.equal(cell(report, row, 'slowestStage'), 'On Road → Production first trip · 12h 0m');
   assert.equal(cell(report, row, 'acceptedBy'), 'Maintenance User 1');
-  assert.ok(report.columns.length <= 24, 'exports refuse a report wider than 24 columns');
+  const keys = report.columns.map((column) => column.key);
+  assert.deepEqual(keys.slice(keys.indexOf('equipmentGroup'), keys.indexOf('equipmentGroup') + 4), ['equipmentGroup', 'openingHmr', 'openingKmr', 'raisedAt']);
+  assert.deepEqual(keys.slice(keys.indexOf('closedAt'), keys.indexOf('closedAt') + 4), ['closedAt', 'closedBy', 'closingHmr', 'closingKmr']);
+  assert.ok(report.columns.length <= 48, 'exports refuse a report wider than the 48-column route limit');
 });
 
 test('every wait column sorts by real elapsed time, not as text', () => {

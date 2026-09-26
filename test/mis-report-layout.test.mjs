@@ -6,12 +6,12 @@ import {buildSiteInOutReportRows,buildInOutReportRows,IN_OUT_REPORT_COLUMNS} fro
 test('MIS reports have the approved column order and wrapping',()=>{
   const reports=buildDepartmentReports();
   const expected={
-    '30 Min. Mismatch':['site','door','equipmentGroup','model','category','closedAt','firstTrip','difference','mismatch','complaint','driverName','ref','chassis','verifiedBy'],
-    'Unverified Cases':['site','door','equipmentGroup','model','category','closedAt','delay','complaint','ref','chassis'],
-    'MIS Turn Around Time':['site','door','equipmentGroup','model','category','closedAt','verifiedAt','firstTripAt','closeToMis','closeToFirstTrip','firstTripToMis','complaint','verifiedBy','ref','chassis'],
+    '30 Min. Mismatch':['site','door','equipmentGroup','model','category','closedAt','closingHmr','closingKmr','firstTrip','difference','mismatch','complaint','openingHmr','openingKmr','driverName','ref','chassis','verifiedBy'],
+    'Unverified Cases':['site','door','equipmentGroup','model','category','closedAt','delay','closingHmr','closingKmr','complaint','openingHmr','openingKmr','ref','chassis'],
+    'MIS Turn Around Time':['site','door','equipmentGroup','model','category','closedAt','closingHmr','closingKmr','verifiedAt','firstTripAt','closeToMis','closeToFirstTrip','firstTripToMis','complaint','openingHmr','openingKmr','verifiedBy','ref','chassis'],
     'Total Fleet':['site','door','equipmentName','model','make','itemSpecification','chassis'],
     'Total In and out count report':['site','date','opened','closed','net','pendingClose','verified','idle','pendingVerification','averageTat'],
-    'MIS Red Flag Report':['site','door','equipmentGroup','model','category','ref','misFlaggedAt','misFlaggedBy','misFlagRemark','closedAt','closedBy','chassis'],
+    'MIS Red Flag Report':['site','door','equipmentGroup','model','openingHmr','openingKmr','category','ref','misFlaggedAt','misFlaggedBy','misFlagRemark','closedAt','closedBy','closingHmr','closingKmr','chassis'],
   };
   for(const [title,keys] of Object.entries(expected)) assert.deepEqual(reports.find(r=>r.title===title).columns.map(c=>c.key),keys,title);
   assert.equal(reports.find(r=>r.title==='30 Min. Mismatch').columns.find(c=>c.key==='difference').label,'TAT');

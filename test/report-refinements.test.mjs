@@ -38,11 +38,11 @@ test('approved columns and unverified queue match MIS requests',()=>{
   const requests=[{ref:'a',status:'Closed',closedAt:'2026-09-08 10:00'}, {ref:'b',status:'Closed',closedAt:'2026-09-08 10:00',verifiedAt:'2026-09-08 11:00'}, {ref:'c',status:'Open'}, {ref:'d',status:'Closed',closedBy:'sanskar manohare'}];
   const reports=buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-08'});
   assert.deepEqual(reports.find(r=>r.title==='Unverified Cases').rows,requests.filter(r=>r.status==='Closed'&&!r.verifiedAt).filter(visibleInMisRequests));
-  assert.deepEqual(reports.find(r=>r.title==='Total Request Submitted Report').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','complaint','category','ref']);
+  assert.deepEqual(reports.find(r=>r.title==='Total Request Submitted Report').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','complaint','openingHmr','openingKmr','closingHmr','closingKmr','category','ref']);
   const columns=reports.find(r=>r.title.includes('Ticket Acceptance')).columns;
   assert.equal(columns[columns.findIndex(c=>c.key==='acceptedAt')-1].key,'submittedAt');
-  assert.deepEqual(columns.map(c=>c.key),['status','site','door','equipmentGroup','model','submittedAt','acceptedAt','difference','acceptedBy','ref','complaint','category']);
-  assert.deepEqual(reports.find(r=>r.title==='Maintenance Status Pending').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','acceptedAt','delay','remark','complaint','category','ref']);
+  assert.deepEqual(columns.map(c=>c.key),['status','site','door','equipmentGroup','model','submittedAt','acceptedAt','difference','acceptedBy','ref','complaint','openingHmr','openingKmr','closingHmr','closingKmr','category']);
+  assert.deepEqual(reports.find(r=>r.title==='Maintenance Status Pending').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','acceptedAt','delay','remark','complaint','openingHmr','openingKmr','category','ref']);
   for(const title of ['Total Request Submitted Report','Ticket Acceptance from Maintenance (Timelinewise)','Maintenance Status Pending'])assert.ok(!reports.find(r=>r.title===title).columns.some(c=>/chassis/i.test(c.label)),`${title} has no chassis column`);
   assert.equal(reports[0].columns.find(c=>c.key==='acceptedAt').label,'Maintenance Acceptance Date & Time');
 });
@@ -60,7 +60,7 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
     now,
   });
   const recent=tables.find(table=>table.title==='Recent Breakdown Cases');
-  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','complaint','started','expectedCompletionAt','closedAt','tat','reference','createdBy','closedBy']);
+  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','complaint','openingHmr','openingKmr','started','expectedCompletionAt','closedAt','closingHmr','closingKmr','tat','reference','createdBy','closedBy']);
   assert.equal(recent.columns.find(column=>column.key==='complaint').label,'Reason / Complaint');
   const cell=(row,key)=>row[recent.columns.findIndex(column=>column.key===key)];
   const pending=recent.rows.find(row=>cell(row,'reference')==='REQ-P');
@@ -80,12 +80,12 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
 test('maintenance reports lead with Location and Door no., close with chassis, and wrap the red flag reason',()=>{
   const reports=buildDepartmentReports({requests:[],equipmentRecords:[{door:'D1',chassisNo:'CH-1',currentLocation:'Sasti OB',model:'M1'}],now,from:'2026-09-01',to:'2026-09-07'});
   const keys=title=>reports.find(r=>r.title===title).columns.map(c=>c.key);
-  assert.deepEqual(keys('Turn Around Time for Repair'),['site','door','equipmentGroup','model','category','acceptedAt','closedAt','tat','complaint','ref','chassis']);
-  assert.deepEqual(keys('Open Off road Cases'),['site','door','equipmentGroup','model','category','start','days','complaint','ref','chassis']);
+  assert.deepEqual(keys('Turn Around Time for Repair'),['site','door','equipmentGroup','model','category','acceptedAt','closedAt','closingHmr','closingKmr','tat','complaint','openingHmr','openingKmr','ref','chassis']);
+  assert.deepEqual(keys('Open Off road Cases'),['site','door','equipmentGroup','model','category','start','days','complaint','openingHmr','openingKmr','ref','chassis']);
   assert.deepEqual(keys('Availability Report'),['site','door','equipmentGroup','model','productive','breakdown','available','percentage','chassis']);
   const availability=reports.find(r=>r.title==='Availability Report');
   assert.equal(availability.columns[0].value(availability.rows[0]),'Sasti OB','availability location comes from the equipment master');
   const redFlag=reports.find(r=>r.title==='Vehicle Arrival Red Flag Report');
-  assert.deepEqual(redFlag.columns.map(c=>c.key),['status','site','door','equipmentGroup','model','category','start','arrivalFlaggedAt','arrivalFlagRemark','flagWaitingTime','chassis','arrivalFlaggedBy','ref']);
+  assert.deepEqual(redFlag.columns.map(c=>c.key),['status','site','door','equipmentGroup','model','openingHmr','openingKmr','closingHmr','closingKmr','category','start','arrivalFlaggedAt','arrivalFlagRemark','flagWaitingTime','chassis','arrivalFlaggedBy','ref']);
   assert.equal(redFlag.columns.find(c=>c.key==='arrivalFlagRemark').wrap,true);
 });

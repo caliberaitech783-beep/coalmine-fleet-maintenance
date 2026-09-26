@@ -47,22 +47,22 @@ test("site fleet tables omit only the redundant column and retain counts, record
   assert.equal(hidden, original.replace("<th>Current location</th>", "").replace("<td>Majri OB</td>", ""));
   assert.ok(!hidden.includes("1 of 1 records")); // Counts belong to the shared toolbar, not the browser heading.
   assert.ok(hidden.includes('data-export-title="Majri OB · Vehicle records · WCL"'));
-  assert.equal((hidden.match(/<th[ >]/g) || []).length, 9);
-  assert.equal((hidden.match(/<td[ >]/g) || []).length, 9);
+  assert.equal((hidden.match(/<th[ >]/g) || []).length, 11);
+  assert.equal((hidden.match(/<td[ >]/g) || []).length, 11);
 });
 
 test("other request drilldowns retain Request site even if the fleet-only option is passed", () => {
   const html = render({ requestRecords: true, hideCurrentLocation: true });
   assert.ok(html.includes("<th>Request site</th>"));
   assert.ok(html.includes("<td>Majri OB</td>"));
-  assert.equal((html.match(/<th[ >]/g) || []).length, 14);
+  assert.equal((html.match(/<th[ >]/g) || []).length, 16);
 });
 
 test("empty site fleet lists span exactly their visible columns", () => {
-  assert.ok(render({ rows: [], hideCurrentLocation: true }).includes('colSpan="9"'));
-  assert.ok(render({ rows: [] }).includes('colSpan="10"'));
-  assert.ok(render({ rows: [], requestRecords: true, lifecycleRecords: true, hideCurrentLocation: true }).includes('colSpan="17"'));
-  assert.ok(render({ rows: [], requestRecords: true, showBdClosingTime: true }).includes('colSpan="15"'));
+  assert.ok(render({ rows: [], hideCurrentLocation: true }).includes('colSpan="11"'));
+  assert.ok(render({ rows: [] }).includes('colSpan="12"'));
+  assert.ok(render({ rows: [], requestRecords: true, lifecycleRecords: true, hideCurrentLocation: true }).includes('colSpan="21"'));
+  assert.ok(render({ rows: [], requestRecords: true, showBdClosingTime: true }).includes('colSpan="19"'));
 });
 
 test("every equipment and vehicle site bar hides category in both fleet and breakdown views", () => {
@@ -84,14 +84,14 @@ test("single-category bar lists omit only the category column with counts and ot
     const original = render(props), hidden = render({ ...props, hideEquipmentCategory: true });
     assert.equal(hidden, original.replace("<th>Equipment category</th>", "").replace(`<td>${category}</td>`, ""));
     assert.ok(!hidden.includes("1 of 1 records"));
-    assert.equal((hidden.match(/<th[ >]/g) || []).length, 8);
-    assert.equal((hidden.match(/<td[ >]/g) || []).length, 8);
+    assert.equal((hidden.match(/<th[ >]/g) || []).length, 10);
+    assert.equal((hidden.match(/<td[ >]/g) || []).length, 10);
   }
 });
 
 test("category visibility keeps empty tables aligned and request lists unchanged", () => {
-  assert.ok(render({ rows: [], hideEquipmentCategory: true }).includes('colSpan="9"'));
-  assert.ok(render({ rows: [], hideEquipmentCategory: true, hideCurrentLocation: true }).includes('colSpan="8"'));
+  assert.ok(render({ rows: [], hideEquipmentCategory: true }).includes('colSpan="11"'));
+  assert.ok(render({ rows: [], hideEquipmentCategory: true, hideCurrentLocation: true }).includes('colSpan="10"'));
   assert.equal(render({ requestRecords: true, hideEquipmentCategory: true }), render({ requestRecords: true }));
   assert.equal(render({ requestRecords: true, lifecycleRecords: true, hideEquipmentCategory: true }), render({ requestRecords: true, lifecycleRecords: true }));
 });

@@ -45,7 +45,7 @@ test('general summary uses only verified requests with non-overlapping stages an
   assert.equal(report.category,'general');
   assert.equal(report.description,'MIS-verified requests with stage-wise TAT from submission to first trip; filters use the production submission date.');
   assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
-  assert.deepEqual(report.columns.map(c=>c.key),['site','door','equipmentGroup','model','submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','complaint','category','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','ref','closureEvent']);
+  assert.deepEqual(report.columns.map(c=>c.key),['site','door','equipmentGroup','model','submittedAt','acceptedAt','closedAt','closingHmr','closingKmr','firstTripAt','verifiedAt','complaint','openingHmr','openingKmr','category','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','ref','closureEvent']);
   for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt']) assert.equal(cell(report,key),row[key]);
   assert.equal(cell(report,'acceptedAt',{...row,acceptedAt:''}),'Not recorded');
   assert.equal(cell(report,'firstTripAt',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'2026-09-01 12:30:00');
@@ -238,7 +238,8 @@ test('MIS report retains saved concerns after verification with the same reason 
 });
 test('unverified cases delay counts hours and minutes since closure, then days once past 24 hours',()=>{
   const report=build([{status:'Closed',closedAt:'2026-09-07 09:15'}]).find(r=>r.title==='Unverified Cases');
-  assert.equal(report.columns.findIndex(c=>c.key==='delay'),report.columns.findIndex(c=>c.key==='closedAt')+1);
+  // Closing meter readings sit directly after the closing time; the delay since closure follows them.
+  assert.deepEqual(report.columns.slice(report.columns.findIndex(c=>c.key==='closedAt'),report.columns.findIndex(c=>c.key==='closedAt')+4).map(c=>c.key),['closedAt','delay','closingHmr','closingKmr']);
   assert.equal(report.columns.find(c=>c.key==='delay').label,'Delay');
   assert.equal(cell(report,'delay'),'2h 45m');
   for(const [closedAt,expected] of [['2026-09-07 11:59','0h 1m'],['2026-09-06 12:00:01','23h 59m'],['2026-09-06 12:00','1d 0h'],['2026-09-04 09:30','3d 2h'],['2026-09-07 12:30','0h 0m'],['invalid','Not recorded'],['','Not recorded']]) {

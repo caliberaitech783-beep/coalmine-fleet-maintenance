@@ -41,7 +41,7 @@ test('site artifacts never mix sites and activity section preserves cases hidden
 test('a later closure or verification does not rewrite the status of an earlier reporting window',()=>{
   const rows=fleetActivityTable([request('later',{status:'Closed',closedAt:'2026-09-15 08:00:00',verifiedAt:'2026-09-15 09:00:00',maintenanceWork:'Future closure work',delayedReason:'Future reason'})],window).rows;
   assert.equal(rows[0][4],'Open');assert.equal(rows[0][6],'');assert.equal(rows[0][7],'');
-  assert.equal(rows[0][10],'');assert.equal(rows[0][11],'');
+  assert.equal(rows[0][14],'');assert.equal(rows[0][15],'');
 });
 
 test('activity snapshots distinguish accepted and in-progress requests from unaccepted Open work',()=>{

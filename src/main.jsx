@@ -113,6 +113,7 @@ import {
   requestMeterReadingLabel,
   requestWithEquipmentMasterDetails,
 } from "../request-equipment.mjs";
+import { breakdownMeterColumns, breakdownMeterFields, breakdownMeterValue, withBreakdownMeterColumns } from "../breakdown-meter-columns.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_DEFAULT_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, masterAccessAllows, navigationPermissionsForView} from "../admin-access.mjs";
@@ -1984,6 +1985,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       delayedReason: request.delayedReason || "—",
       breakdownReason: request.complaint || "—",
       idleReason: request.idleReason || "—",
+      ...breakdownMeterFields(request, equipment ? [equipment] : []),
       dailyRemarks: Array.isArray(request.dailyRemarks) ? request.dailyRemarks : [],
       requestIdleAt: request.idealRequestedAt || request.idleRequestedAt || "",
       requestStart: request.start || "—",
@@ -2465,7 +2467,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "start", "expectedCompletionAt", "status", "dailyRemarks", "ref", "createdBy", "requesterRole"];
+const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "openingHmr", "openingKmr", "start", "expectedCompletionAt", "status", "dailyRemarks", "ref", "createdBy", "requesterRole"];
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal, requestActions = null } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td> : null;
@@ -2476,6 +2478,10 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "model": return <td>{r.model || "—"}</td>;
     case "site": return <td><MapPin /> {r.site}</td>;
     case "complaint": return <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>;
+    case "openingHmr": return <td>{breakdownMeterValue(r, "HMR")}</td>;
+    case "openingKmr": return <td>{breakdownMeterValue(r, "KMR")}</td>;
+    case "closingHmr": return <td>{breakdownMeterValue(r, "HMR", "closing")}</td>;
+    case "closingKmr": return <td>{breakdownMeterValue(r, "KMR", "closing")}</td>;
     case "createdBy": return <td>{r.owner || r.requesterLogin || "—"}</td>;
     case "requesterRole": return <td>{r.requesterRole || "—"}</td>;
     case "closedBy": return <td>{r.closedBy || "—"}</td>;
@@ -2532,11 +2538,11 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [showBreakdownDays]);
   const columns = [
       ...(showActionColumn ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
-      ...(showReason ? [["complaint", "Breakdown reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showUserRole ? [["requesterRole", "User role"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
+      ...(showReason ? [["complaint", "Breakdown reason"]] : []), ["openingHmr", "Opening HMR"], ["openingKmr", "Opening KMR"], ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showUserRole ? [["requesterRole", "User role"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["expectedCompletionAt", "ETC"], ...(showClosedAt ? [["closedAt", closedAtLabel]] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["expectedCompletionAt", "ETC"], ...(showClosedAt ? [["closedAt", closedAtLabel], ...(showCompletionDetails ? [] : [["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]])] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
     ],
     orderedColumns = columnOrder ? [...columns.filter(([key]) => key === "requestAction"), ...columnOrder.map((orderKey) => columns.find(([key]) => key === orderKey)).filter(Boolean)] : columns,
@@ -2556,8 +2562,10 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
         if (key === "requesterRole") return row.requesterRole || "—";
-        if (key === "closingHmr") return requestMeterReadings(row, "closing").HMR || "—";
-        if (key === "closingKmr") return requestMeterReadings(row, "closing").KMR || "—";
+        if (key === "openingHmr") return breakdownMeterValue(row, "HMR");
+        if (key === "openingKmr") return breakdownMeterValue(row, "KMR");
+        if (key === "closingHmr") return breakdownMeterValue(row, "HMR", "closing");
+        if (key === "closingKmr") return breakdownMeterValue(row, "KMR", "closing");
         if (key === "start") return formatTwelveHourDateTime(row.start);
         if (key === "expectedCompletionAt") return formatTwelveHourDateTime(row.expectedCompletionAt);
         if (key === "closedAt") return formatTwelveHourDateTime(row.closedAt);
@@ -2608,6 +2616,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                   <MapPin /> {r.site}
                 </td>
                 {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>}
+                <td>{breakdownMeterValue(r, "HMR")}</td>
+                <td>{breakdownMeterValue(r, "KMR")}</td>
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showUserRole && <td>{r.requesterRole || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
@@ -2619,6 +2629,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{formatTwelveHourDateTime(r.expectedCompletionAt)}</td>
                 {showClosedAt && <td>{formatTwelveHourDateTime(r.closedAt)}</td>}
+                {showClosedAt && !showCompletionDetails && <><td>{breakdownMeterValue(r, "HMR", "closing")}</td><td>{breakdownMeterValue(r, "KMR", "closing")}</td></>}
                 <td>{showBreakdownDays ? r.hours : <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={r.hours || "—"} />}</td>
                 <td>
                   <Status>{requestStatusLabel(r)}</Status>
@@ -6713,11 +6724,13 @@ function vehicleRepairHistoryColumns(onRequestProcess) {
     {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => request.ref && onRequestProcess ? <button type="button" className="request-process-link" onClick={() => onRequestProcess(request)} aria-label={`View complete process for ${request.ref}`}><Activity />{request.ref}</button> : <b>{request.ref || "—"}</b>},
     {key: "nextBreakdown", label: "Time since previous breakdown", value: (request) => request.timeSincePreviousBreakdown, sortValue: (request) => request.gapMilliseconds ?? -1, render: (request) => request.breakdownSequence === 1 ? "—" : <strong>{request.timeSincePreviousBreakdown || "—"}</strong>},
     {key: "complaint", label: "Breakdown problem / reason", value: (request) => request.complaint || request.category},
+    ...breakdownMeterColumns({stage: "opening"}),
     {key: "site", label: "Breakdown location", value: (request) => request.reportSite || request.site},
     {key: "driver", label: "Driver at that time", value: (request) => request.driverName || request.driver},
     {key: "openedAt", label: "Breakdown opened", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "closedAt", label: "Maintenance closed", value: (request) => request.closedAt, sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
+    ...breakdownMeterColumns({stage: "closing"}),
     {key: "tat", label: "Downtime / TAT", value: (request) => request.hours || elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt)},
     {key: "repair", label: "Work completed", value: (request) => request.maintenanceWork},
     {key: "status", label: "Status", value: requestStatusLabel, sortValue: (request) => requestStatusSortRank(requestStatusLabel(request)), render: (request) => <Status>{requestStatusLabel(request)}</Status>},
@@ -6760,6 +6773,8 @@ function BreakdownOccurrencesModal({ summary, onClose, onRequestProcess }) {
     {key: "opened", label: "Breakdown time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "reason", label: "Breakdown reason", value: (request) => request.complaint || request.category},
+    ...breakdownMeterColumns({stage: "opening"}),
+    ...breakdownMeterColumns({stage: "closing"}),
     {key: "location", label: "Location", value: (request) => request.reportSite || request.site},
     {key: "driver", label: "Driver", value: (request) => request.driverName || request.driver},
     {key: "status", label: "Status", value: requestStatusLabel, sortValue: (request) => requestStatusSortRank(requestStatusLabel(request)), render: (request) => <Status>{requestStatusLabel(request)}</Status>},
@@ -7041,7 +7056,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const recentBreakdownRows = useMemo(() => [...reportRequests]
     .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
     .slice(0, 250), [reportRequests]);
-  const requestColumns = [
+  const requestColumns = withBreakdownMeterColumns([
     {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
@@ -7053,7 +7068,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start,request), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start,request)},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => formatTimestamp(request.expectedCompletionAt,request), sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTimestamp(request.expectedCompletionAt,request)},
-  ];
+  ]);
   const idleVehicleColumns = [
     {...requestColumns.find((column) => column.key === "site"), render: (request) => <b>{request.reportSite || "—"}</b>},
     ...requestColumns.filter((column) => !["site", "equipment"].includes(column.key)),
@@ -7062,6 +7077,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ...requestColumns,
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
     {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt,request), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt,request)},
+    ...breakdownMeterColumns({stage: "closing"}),
   ];
   const misColumns = [
     ...closureColumns,
@@ -7086,7 +7102,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "model", label: "Model", value: (record) => record.modelNo || record.model},
     {key: "driver", label: "Driver", value: (record) => record.driver},
   ];
-  const recentBreakdownColumns = [
+  const recentBreakdownColumns = withBreakdownMeterColumns([
     {key: "status", label: "Status", value: (request) => recentBreakdownStatus(request, reportNow), render: (request) => <Status>{recentBreakdownStatus(request, reportNow)}</Status>},
     {key: "site", label: "Location", value: (request) => request.reportSite, render: (request) => <b>{request.reportSite || "—"}</b>},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
@@ -7099,7 +7115,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "reference", label: "Job reference", value: (request) => request.ref},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
-  ];
+  ], {closing: true});
   const vehicleHistoryOverviewColumns = [
     {key: "door", label: "Door number", value: (record) => record.reportDoor, render: (record) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(record)} aria-label={`Open complete history for ${record.reportDoor || record.reportEquipment}`}><History />{record.reportDoor || "View history"}</button>},
     {key: "driver", label: "Current / latest driver", value: (record) => record.driverName},
@@ -7112,6 +7128,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "breakdowns", label: "Total breakdowns", value: (record) => record.breakdownCount, sortValue: (record) => record.breakdownCount, render: (record) => <strong>{record.breakdownCount}</strong>},
     {key: "latest", label: "Latest breakdown", value: (record) => record.latestBreakdownAt, sortValue: (record) => record.latestBreakdownAt, render: (record) => record.latestBreakdownAt ? formatTwelveHourDateTime(record.latestBreakdownAt) : "No breakdown recorded"},
     {key: "expectedCompletionAt", label: "Latest ETC", value: (record) => record.expectedCompletionAt, sortValue: (record) => record.expectedCompletionAt, render: (record) => formatTwelveHourDateTime(record.expectedCompletionAt)},
+    ...breakdownMeterColumns({stage: "latest", source: (record) => record.latestBreakdownAt ? record : null}),
   ];
   const maximumBreakdownColumns = [
     {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <b>{row.reportDoor || row.reportEquipment || "—"}</b>},
@@ -7119,6 +7136,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "equipment", label: "Vehicle / equipment", value: (row) => row.reportEquipment},
     {key: "site", label: "Latest location", value: (row) => row.reportSite},
     {key: "latestReason", label: "Latest breakdown reason", value: (row) => row.breakdowns.at(-1)?.complaint || row.breakdowns.at(-1)?.category},
+    ...breakdownMeterColumns({stage: "latest", source: (row) => row.breakdowns.at(-1)}),
   ];
   const vehicleCommonRemarkColumns = [
     {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(row)}><History />{row.reportDoor || row.reportEquipment || "View history"}</button>},
@@ -9511,7 +9529,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               </td>}
               {!actionsFirst && workflowActions(row, lockedIdeal)}
             </tr>;
-          }) : <tr><td colSpan={11 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showUserRole ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 1 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={11 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showUserRole ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 1 : 0) + (showMeterData ? 4 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </ActionsTable>
     </div>{remainingWorkflowRows > 0 && <div className="workflow-table-load-more" role="status"><span>Showing {visibleWorkflowRows.length} of {sortedRows.length} records</span><button type="button" onClick={() => setVisibleRowLimit((limit) => Math.min(limit + WORKFLOW_RENDER_BATCH, sortedRows.length))}>Show next {Math.min(WORKFLOW_RENDER_BATCH, remainingWorkflowRows)}</button></div>}</>
@@ -10843,7 +10861,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMisPeople showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} showUserRole {...adminDeleteProps} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMisPeople showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
       {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays showClosedAt />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} showStatusFilter={false} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} closedTimeAfterStarted {...adminDeleteProps} />}</section></>}
-      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} {...adminDeleteProps} /></section></>}
+      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime showMeterData onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} {...adminDeleteProps} /></section></>}
       </>}
       </div>}
     </main>

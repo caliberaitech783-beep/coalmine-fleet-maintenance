@@ -10,10 +10,15 @@ import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} f
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 import {formatShiftDateTime} from './shift-report-time.mjs';
 import {STAGE_TIMING_GAPS,STAGE_TIMING_TOTALS,stageTimingRow,stageGapLabel,slowestStageLabel} from './stage-timing-report.mjs';
+import {withBreakdownMeterColumns} from './breakdown-meter-columns.mjs';
 
 const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report', 'Request Stage Timing'];
 export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
 export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
+// Availability, fleet, transfer and In/Out reports list assets or daily counts, not breakdown requests.
+const NON_BREAKDOWN_REPORTS = new Set([REPORT_TITLES[2], REPORT_TITLES[6], REPORT_TITLES[7], REPORT_TITLES[8]]);
+// Reports that list only open cases have no closing readings yet.
+const OPEN_ONLY_REPORTS = new Set([REPORT_TITLES[1], REPORT_TITLES[11]]);
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
@@ -98,7 +103,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
     : (clean(value)||emptyValue);
   const open = requests.filter(r => ['open','in progress','awaiting parts'].includes(status(r)) && !r.closedAt);
   const finished = requests.filter(r => r.closedAt);
-  return [
+  const reports = [
     // Maintenance reports lead with Location and Door no.; chassis closes the row.
     report('maintenance', REPORT_TITLES[0], 'Maintenance acceptance to repair closure. TAT = Repair Closed Date & Time minus Maintenance Acceptance Date & Time.', [...maintenanceLead,col('acceptedAt','Maintenance Acceptance Date & Time',r => shiftTime(r,acceptanceTime(r),'Not accepted')),col('closedAt','Rep. Closed',r => shiftTime(r,r.closedAt)),col('tat','TAT',r => duration(acceptanceTime(r),r.closedAt)),base[4],ref,ids[1]], finished, r => r.closedAt),
     report('maintenance', REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests. BD duration shows completed days and hours since production submission.', [...maintenanceLead,col('start','Rep. Started',r => shiftTime(r,r.start)),col('days','BD Days / Hrs',r => breakdownDaysHours(r.start,now)),base[4],ref,ids[1]],open),
@@ -182,4 +187,6 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       ref,
     ],requests,r => r.start || r.createdAt),
   ];
+  // Every breakdown report carries the HMR / KMR readings of each request.
+  return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)})});
 }

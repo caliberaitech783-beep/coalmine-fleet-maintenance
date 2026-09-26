@@ -12,6 +12,7 @@ import {indiaDateTimeInputValue} from './report-date-range.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {recordCountLine,withSerialColumn} from './serial-column.mjs';
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
+import {breakdownMeterColumns,withBreakdownMeterColumns} from './breakdown-meter-columns.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
@@ -172,7 +173,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
   const shiftTime=(request,value,emptyValue='-')=>shiftRecords.length
     ? formatShiftDateTime(value,{site:request.reportSite||request.site||request.currentLocation||request.location,shifts:shiftRecords,emptyValue})
     : cell(value);
-  const requestColumns=[
+  const requestColumns=withBreakdownMeterColumns([
     {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},
     {key:'equipment',label:'Equipment / vehicle',value:(request)=>request.reportEquipment},
     {key:'door',label:'Door no.',value:(request)=>request.reportDoor},
@@ -184,8 +185,8 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
     {key:'started',label:'Opened at',value:(request)=>shiftTime(request,request.start)},
     {key:'expectedCompletionAt',label:'ETC',value:(request)=>shiftTime(request,request.expectedCompletionAt)},
-  ];
-  const closureColumns=[...requestColumns,{key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},{key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)}];
+  ]);
+  const closureColumns=[...requestColumns,{key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},{key:'closedAt',label:'Closed at',value:(request)=>shiftTime(request,request.closedAt)},...breakdownMeterColumns({stage:'closing'})];
   const misColumns=[...closureColumns,{key:'verifiedBy',label:'MIS user',value:(request)=>request.verifiedBy},{key:'verifiedAt',label:'MIS verified at',value:(request)=>shiftTime(request,request.verifiedAt)},{key:'firstTripAt',label:'First trip time',value:(request)=>shiftTime(request,firstTripTimestamp(request))}];
   const idleVehicleColumns=[requestColumns.find((column)=>column.key==='site'),...requestColumns.filter((column)=>!['site','equipment'].includes(column.key))];
   const fleetColumns=[
@@ -205,7 +206,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'model',label:'Model',value:(record)=>record.modelNo||record.model},
     {key:'driver',label:'Driver',value:(record)=>record.driver},
   ];
-  const recentBreakdownColumns=[
+  const recentBreakdownColumns=withBreakdownMeterColumns([
     {key:'status',label:'Status',value:(request)=>recentBreakdownStatus(request,now)},
     {key:'site',label:'Location',value:(request)=>request.reportSite},
     {key:'door',label:'Door no.',value:(request)=>request.reportDoor},
@@ -218,7 +219,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
     {key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},
-  ];
+  ],{closing:true});
   return [
     table(DIRECTOR_REPORT_TITLES[0],'Production','Open production breakdown cases grouped with location and category details.',requestColumns,openBreakdownRows),
     table(DIRECTOR_REPORT_TITLES[1],'Maintenance','Closed maintenance breakdown cases with location, category, closure user, and closure time.',closureColumns,closedBreakdownRows),

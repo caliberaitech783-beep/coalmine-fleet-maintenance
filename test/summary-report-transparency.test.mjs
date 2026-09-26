@@ -57,12 +57,15 @@ test('Idle manager closure is identified without inventing a repair-completion e
   assert.equal(value(report,{...r4,closedAt:''},'closureEvent'),'Closure time not recorded | Maintenance actor');
 });
 
-test('Summary UI values and scheduled Excel/PDF data share the same 19-column definitions',async()=>{
+test('Summary UI values and scheduled Excel/PDF data share the same 23-column definitions',async()=>{
   const rows=Object.freeze([r1,r4]);
   const before=JSON.stringify(rows);
   const report=summary(rows);
   const table=buildDirectorReportTables({requests:rows,now:new Date('2026-09-08T23:00:00+05:30')}).find(table=>table.title==='Summary Report');
-  assert.equal(report.columns.length,19);
+  assert.equal(report.columns.length,23);
+  const keys=report.columns.map(column=>column.key);
+  assert.deepEqual(keys.slice(keys.indexOf('closedAt'),keys.indexOf('closedAt')+3),['closedAt','closingHmr','closingKmr'],'closing meter readings follow the closing time');
+  assert.deepEqual(keys.slice(keys.indexOf('complaint'),keys.indexOf('complaint')+3),['complaint','openingHmr','openingKmr'],'opening meter readings follow the breakdown reason');
   assert.deepEqual(table.columns.map(column=>column.key),report.columns.map(column=>column.key));
   for(const [index,row] of rows.entries())for(const key of ['waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','closureEvent']){
     assert.equal(table.rows[index][table.columns.findIndex(column=>column.key===key)],value(report,row,key));
