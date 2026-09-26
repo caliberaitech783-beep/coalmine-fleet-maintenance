@@ -84,7 +84,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
-import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,canDeletePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 import {isRequestAlertSuppressedUser,isRequestLifecycleAlert} from './whatsapp-recipient-policy.mjs';
 
@@ -5416,7 +5416,9 @@ function registerRequestCorrectionRoutes(){
     if(!context.administrator&&!context.pm&&!context.requester)return res.status(403).json({error:'This account cannot access request corrections.'});
     const {rows}=await pool.query(`SELECT ${requestCorrectionProjection} FROM request_corrections ORDER BY requested_at DESC,id DESC`);
     res.set('Cache-Control','private, no-store');
-    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)).map((row)=>({...row,canManage:canManagePendingCorrection(row,{...context,inScope:reportScopeIncludesSite(context.scope,row.site)})})),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes},
+    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)).map((row)=>({...row,
+      canManage:canManagePendingCorrection(row,{...context,inScope:reportScopeIncludesSite(context.scope,row.site)}),
+      canDelete:canDeletePendingCorrection(row,{...context,inScope:reportScopeIncludesSite(context.scope,row.site)})})),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes},
       fieldOptions:context.requester||context.administrator?{breakdownTypes:await correctionBreakdownTypes()}:{}});
   }catch(error){next(error)}
 });
@@ -5490,9 +5492,12 @@ function registerRequestCorrectionRoutes(){
       const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
       const before=rows[0];
       if(!before)throw Object.assign(new Error('Correction request not found.'),{status:404});
-      if(!canManagePendingCorrection(before,{...context,inScope:reportScopeIncludesSite(context.scope,before.site)}))
-        throw Object.assign(new Error('Only an Admin or the requesting department manager can edit or delete a pending correction.'),{status:403});
       const deleting=req.method==='DELETE';
+      const scopedContext={...context,inScope:reportScopeIncludesSite(context.scope,before.site)};
+      const permitted=deleting?canDeletePendingCorrection(before,scopedContext):canManagePendingCorrection(before,scopedContext);
+      if(!permitted)throw Object.assign(new Error(deleting
+        ?'Only the assigned site Project Manager can delete a pending correction.'
+        :'Only an Admin or the requesting department manager can edit a pending correction.'),{status:403});
       let saved;
       if(deleting){
         saved=(await client.query(`UPDATE request_corrections SET status=$1 WHERE id=$2 RETURNING ${requestCorrectionProjection}`,[REQUEST_CORRECTION_STATUS.DELETED,id])).rows[0];

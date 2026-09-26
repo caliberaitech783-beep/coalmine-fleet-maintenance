@@ -15,6 +15,10 @@ export function canManagePendingCorrection(record,context){
   ));
 }
 
+export function canDeletePendingCorrection(record,context){
+  return record?.status===REQUEST_CORRECTION_STATUS.PENDING&&context.pm===true&&context.inScope===true;
+}
+
 export const REQUEST_CORRECTION_TYPES=Object.freeze({
   offRoad:{
     label:'Production Off Road entry',

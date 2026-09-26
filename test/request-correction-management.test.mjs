@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {canManagePendingCorrection,REQUEST_CORRECTION_STATUS as STATUS} from '../request-correction-policy.mjs';
+import {canManagePendingCorrection,canDeletePendingCorrection,REQUEST_CORRECTION_STATUS as STATUS,requestCorrectionTypesForRole} from '../request-correction-policy.mjs';
 
 const record={status:STATUS.PENDING,requestedByLogin:' Manager ',correctionType:'onRoad'};
 const owner={requester:true,login:'manager',allowedTypes:['onRoad'],inScope:true};
@@ -13,6 +13,23 @@ test('pending corrections can be managed by their department manager or an admin
 test('reviewed and deleted corrections stay immutable for all roles',()=>{
   for(const status of [STATUS.APPROVED,STATUS.REJECTED,STATUS.APPLIED,STATUS.DELETED]){
     for(const context of [owner,{administrator:true}])assert.equal(canManagePendingCorrection({...record,status},context),false);
+    assert.equal(canDeletePendingCorrection({...record,status},{pm:true,inScope:true}),false);
+  }
+});
+
+test('department managers retain edit while only the assigned site PM can delete',()=>{
+  for(const role of ['Production Manager','Maintenance Manager','MIS Manager']){
+    const allowedTypes=requestCorrectionTypesForRole(role);
+    for(const correctionType of allowedTypes){
+      const entry={...record,correctionType};
+      const manager={...owner,allowedTypes};
+      assert.equal(canManagePendingCorrection(entry,manager),true,role);
+      assert.equal(canDeletePendingCorrection(entry,manager),false,role);
+      assert.equal(canDeletePendingCorrection(entry,{pm:true,inScope:true}),true);
+    }
+  }
+  for(const context of [{},{administrator:true},{...owner,administrator:true},{pm:true,inScope:false},{pm:true}]){
+    assert.equal(canDeletePendingCorrection(record,context),false);
   }
 });
 test('pending correction endpoints lock the row, validate edits and retain deletion history',async()=>{
@@ -23,11 +40,15 @@ test('pending correction endpoints lock the row, validate edits and retain delet
   const handler=server.slice(server.indexOf('async function managePendingCorrection'),server.indexOf("app.patch('/api/request-corrections/:id/review'"));
   assert.match(handler,/FOR UPDATE/);
   assert.match(handler,/canManagePendingCorrection\(before/);
+  assert.match(handler,/deleting\?canDeletePendingCorrection\(before,scopedContext\):canManagePendingCorrection\(before,scopedContext\)/);
+  assert.match(server,/canDelete:canDeletePendingCorrection\(row/);
   assert.match(handler,/normalizeRequestCorrectionChanges/);
   assert.match(handler,/REQUEST_CORRECTION_STATUS.DELETED/);
   assert.doesNotMatch(handler,/DELETE FROM|UPDATE maintenance_requests/);
   assert.match(handler,/req.audit=/);
   assert.match(view,/record.canManage/);
+  assert.match(view,/record.canDelete&&<button[^]*?<Trash2 \/> Delete/);
+  assert.match(view,/record.canDelete&&confirmDelete/);
   assert.match(view,/Confirm delete/);
   assert.match(view,/Save changes/);
   assert.match(view,/REQUEST_CORRECTION_STATUS.DELETED,'All'/);
@@ -41,15 +62,24 @@ test('management handler commits valid changes and rolls back denied or invalid 
     const before={...record,id:1,status,site:'Site A',requestReference:'REQ-1',originalValues:{closedBy:'Original name'},proposedChanges:{closedBy:'Wrong name'},reason:'Original correction reason'};
     const queries=[];let saved,released=false,error;
     const client={async query(sql,args){queries.push({sql,args});if(sql.startsWith('SELECT'))return {rows:[before]};if(sql.startsWith('UPDATE')){saved={...before,...(method==='DELETE'?{status:args[0]}:{proposedChanges:JSON.parse(args[0]),reason:args[1]})};return {rows:[saved]}}return {rows:[]}},release(){released=true}};
-    const handler=new Function('pool','requestCorrectionAccessContext','requestCorrectionProjection','canManagePendingCorrection','reportScopeIncludesSite','REQUEST_CORRECTION_STATUS','normalizeRequestCorrectionChanges','correctionBreakdownTypes','requestCorrectionChangedFields',`${source}; return managePendingCorrection;`)(
-      {connect:async()=>client},async()=>context,'fixture',canManagePendingCorrection,()=>context.inScope,STATUS,normalizeRequestCorrectionChanges,async()=>[],requestCorrectionChangedFields);
+    const handler=new Function('pool','requestCorrectionAccessContext','requestCorrectionProjection','canManagePendingCorrection','canDeletePendingCorrection','reportScopeIncludesSite','REQUEST_CORRECTION_STATUS','normalizeRequestCorrectionChanges','correctionBreakdownTypes','requestCorrectionChangedFields',`${source}; return managePendingCorrection;`)(
+      {connect:async()=>client},async()=>context,'fixture',canManagePendingCorrection,canDeletePendingCorrection,()=>context.inScope,STATUS,normalizeRequestCorrectionChanges,async()=>[],requestCorrectionChangedFields);
     const req={params:{id:'1'},method,body,session:{}};let result;
     await handler(req,{json(value){result=value}},problem=>{error=problem});
     assert.equal(released,true);
     return {queries,req,result,error};
   }
   const edit=await run();assert.equal(edit.error,undefined);assert.equal(edit.result.proposedChanges.closedBy,'Correct name');assert.equal(edit.result.status,STATUS.PENDING);assert.equal(edit.req.audit.action,'Edit pending correction');assert.equal(edit.queries.at(-1).sql,'COMMIT');
-  const deletion=await run({method:'DELETE',context:{administrator:true}});assert.equal(deletion.result.status,STATUS.DELETED);assert.equal(deletion.req.audit.action,'Delete pending correction');
+  const deletion=await run({method:'DELETE',context:{pm:true,inScope:true}});assert.equal(deletion.error,undefined);assert.equal(deletion.result.status,STATUS.DELETED);assert.equal(deletion.req.audit.action,'Delete pending correction');
+  for(const context of [owner,{administrator:true},{pm:true,inScope:false},{requester:true,inScope:true,login:'manager',allowedTypes:['onRoad'],pm:false}]){
+    const denied=await run({method:'DELETE',context});
+    assert.equal(denied.error.status,403);
+    assert.equal(denied.queries.some(({sql})=>sql.startsWith('UPDATE')),false);
+    assert.equal(denied.queries.at(-1).sql,'ROLLBACK');
+  }
+  const reviewed=await run({method:'DELETE',context:{pm:true,inScope:true},status:STATUS.APPROVED});
+  assert.equal(reviewed.error.status,403);
+  assert.equal(reviewed.queries.some(({sql})=>sql.startsWith('UPDATE')),false);
   for(const options of [{context:{...owner,login:'someone-else'}},{context:{...owner,inScope:false}},{status:STATUS.APPROVED},{method:'DELETE',status:STATUS.APPLIED},{body:{reason:'short',proposedChanges:{closedBy:'Changed'}}},{body:{reason:'Valid correction reason',proposedChanges:{closedBy:'Original name'}}}]){
     const denied=await run(options);assert.ok(denied.error);assert.equal(denied.result,undefined);assert.equal(denied.queries.at(-1).sql,'ROLLBACK');assert.equal(denied.queries.some(({sql})=>sql.startsWith('UPDATE')),false);
   }
