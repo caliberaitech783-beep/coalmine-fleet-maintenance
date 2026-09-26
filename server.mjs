@@ -3843,8 +3843,14 @@ async function deliverToTelegramUsers({logins,message,purpose,reportType='System
   const config=telegramConfiguration();
   const wanted=[...new Set((logins||[]).map(value=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   if(!config.botToken||!wanted.length)return [];
-  const {rows}=await pool.query(`SELECT login,chat_id AS "chatId" FROM telegram_user_links WHERE login=ANY($1::text[])`,[wanted]);
-  return Promise.all(rows.map(async({login,chatId})=>{
+  // The history shows the employee name, as the WhatsApp rows do.
+  const {rows}=await pool.query(`SELECT l.login,l.chat_id AS "chatId",
+      COALESCE(NULLIF(trim(m.record_data->>'employee'),''),NULLIF(trim(m.record_data->>'name'),''),l.login) AS "name"
+    FROM telegram_user_links l
+    LEFT JOIN LATERAL (SELECT record_data FROM master_records WHERE master_name='Users & employees'
+      AND lower(trim(record_data->>'login'))=l.login LIMIT 1) m ON TRUE
+    WHERE l.login=ANY($1::text[])`,[wanted]);
+  return Promise.all(rows.map(async({login,chatId,name})=>{
     let status='Sent';
     try{await sendTelegramText({message,purpose,chatId})}
     catch(error){
@@ -3855,7 +3861,7 @@ async function deliverToTelegramUsers({logins,message,purpose,reportType='System
     }
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [reportType,String(target||''),'Telegram',login,'Telegram',status]).catch(error=>console.error('Could not record Telegram delivery.',error.message));
+      [reportType,String(target||''),'Telegram',String(name||login),'Telegram',status]).catch(error=>console.error('Could not record Telegram delivery.',error.message));
     return {login,status};
   }));
 }

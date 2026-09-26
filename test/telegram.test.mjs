@@ -238,3 +238,8 @@ test("Only BDMS administrators are invited to and admitted into the admin group"
   assert.ok(server.includes("await followTelegramGroupMigration(chatId,error.migrateToChatId);"));
   assert.match(source, /Invite all admins to the group/);
 });
+
+test("Telegram delivery history shows the employee name like WhatsApp rows", () => {
+  assert.ok(server.includes("COALESCE(NULLIF(trim(m.record_data->>'employee'),''),NULLIF(trim(m.record_data->>'name'),''),l.login) AS \"name\""));
+  assert.ok(server.includes("[reportType,String(target||''),'Telegram',String(name||login),'Telegram',status]"));
+});
