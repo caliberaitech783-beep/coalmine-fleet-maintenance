@@ -11,7 +11,11 @@ test('shared time controls display AM/PM and submit machine-compatible hidden va
   assert.match(source,/formatTimeInputValue/);
   assert.match(source,/parseTwelveHourTime/);
   assert.match(source,/type="hidden" name=\{name\} value=\{machineValue/);
-  assert.match(source,/placeholder=\{includeSeconds \? '07:00:00 PM' : '07:00 PM'\}/);
+  assert.match(source,/<option value="" disabled>HH<\/option>/);
+  assert.match(source,/<option value="" disabled>MM<\/option>/);
+  assert.match(source,/<option value="" disabled>SS<\/option>/);
+  assert.match(source,/<option value="" disabled>AM\/PM<\/option>/);
+  assert.doesNotMatch(source,/type="text"|placeholder=/);
 });
 
 test('all editable time-of-day surfaces use shared 12-hour controls',()=>{

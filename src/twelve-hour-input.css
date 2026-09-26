@@ -1,27 +1,53 @@
-.twelve-hour-time-input {
+.twelve-hour-time-selects {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
   font-variant-numeric: tabular-nums;
-  text-transform: uppercase;
+}
+
+.twelve-hour-time-selects select {
+  flex: 1 1 62px;
+  min-width: 58px;
+  width: auto;
+}
+
+.twelve-hour-time-selects .twelve-hour-period-select {
+  flex-basis: 78px;
+  min-width: 76px;
+}
+
+.twelve-hour-time-separator {
+  flex: 0 0 auto;
+  font-weight: 800;
 }
 
 .twelve-hour-datetime-input {
   display: grid;
-  grid-template-columns: minmax(132px, 1fr) minmax(132px, 0.85fr);
+  grid-template-columns: minmax(132px, 0.8fr) minmax(250px, 1.2fr);
   gap: 8px;
   width: 100%;
 }
 
-.twelve-hour-datetime-input > input {
+.twelve-hour-datetime-input > input,
+.twelve-hour-datetime-input > .twelve-hour-time-selects {
   min-width: 0;
   width: 100%;
 }
 
-.report-time-field .twelve-hour-time-input,
-.wrs-time-slots .twelve-hour-time-input {
-  width: 132px;
+.report-time-field .twelve-hour-time-selects,
+.wrs-time-slots .twelve-hour-time-selects {
+  width: min(100%, 290px);
 }
 
 @media (max-width: 560px) {
   .twelve-hour-datetime-input {
     grid-template-columns: 1fr;
+  }
+
+  .twelve-hour-time-selects select {
+    padding-left: 6px;
+    padding-right: 6px;
   }
 }
