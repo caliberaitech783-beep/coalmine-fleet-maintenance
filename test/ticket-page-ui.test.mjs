@@ -88,6 +88,28 @@ const createdCallback = app => {
   return all(app.render(), node => node.type === TicketCreateForm)[0].props.onCreated;
 };
 
+test("status count drilldowns filter rows and exports and update after resolution", async () => {
+  const app=harness(admin);
+  app.render();app.effects();
+  app.requests[0].respond([ticket('OPEN'),ticket('DONE','Production','Resolved'),ticket('CLOSED','Production','Closed')]);await settle();
+  let tree=app.render();
+  assert.ok(button(tree,'Open tickets 1'));
+  assert.ok(button(tree,'Closed tickets 2'));
+  button(tree,'Open tickets 1').props.onClick();tree=app.render();
+  assert.deepEqual(rows(tree).map(row=>row.reference),['OPEN']);
+  assert.equal(button(tree,'Open tickets 1').props['aria-pressed'],true);
+  button(tree,'Resolve').props.onClick();tree=app.render();
+  all(tree,node=>node.type===TicketResolutionForm)[0].props.onResolved(ticket('OPEN','Production','Resolved'));
+  tree=app.render();
+  assert.deepEqual(rows(tree),[]);
+  assert.ok(button(tree,'Open tickets 0'));
+  button(tree,'Closed tickets 3').props.onClick();tree=app.render();
+  assert.equal(rows(tree).length,3);
+  assert.equal(button(tree,'Resolve'),undefined);
+  button(tree,'All 3').props.onClick();
+  assert.equal(rows(app.render()).length,3);
+});
+
 test("Tickets refresh on focus/visibility and once a minute without blanking rows or polling hidden tabs", async () => {
   const app = harness();
   app.render(); app.effects();
