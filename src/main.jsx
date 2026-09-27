@@ -974,30 +974,39 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 <span className="nav-label">{name}</span>
               </button></div>
             ))}
-            {/* The seven C-Dir masters sit under one "C-Dir Masters" entry that expands in place. */}
-            {cdirMasterNav.length > 0 && <div className="nav-config-row"><button
-              type="button"
-              className={`workspace-menu-item cdir-masters-toggle${cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`}
-              data-workspace="users"
-              aria-expanded={cdirMastersOpen}
-              onClick={(event) => { event.stopPropagation(); setCdirMastersOpen((value) => !value); }}
+            {/* "C-Dir Masters" opens a clock face of icons; pointing at an icon shows the full master name. */}
+            {cdirMasterNav.length > 0 && <div
+              className={`cdir-masters-hub${cdirMastersOpen ? " open" : ""}`}
+              onPointerEnter={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(true); }}
+              onPointerLeave={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(false); }}
             >
-              <span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span>
-              <span className="nav-label">C-Dir Masters</span>
-              <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
-            </button></div>}
-            {cdirMastersOpen && <div className="cdir-masters-submenu" role="group" aria-label="C-Dir Masters">
-              {cdirMasterNav.map(([name, Icon, menuKey]) => (
-                <div className="nav-config-row cdir-masters-item" key={name}><button
-                  role="menuitem"
-                  className={`workspace-menu-item${active === name ? " active" : ""}`}
-                  data-workspace={menuKey || "master"}
-                  onClick={(event) => selectMaster(name, event)}
-                >
-                  <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span>
-                  <span className="nav-label">{name.replace(/^C-Dir /, "")}</span>
-                </button></div>
-              ))}
+              <div className="nav-config-row"><button
+                type="button"
+                className={`workspace-menu-item cdir-masters-toggle${cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`}
+                data-workspace="users"
+                aria-expanded={cdirMastersOpen}
+                aria-haspopup="menu"
+                onClick={(event) => { event.stopPropagation(); setCdirMastersOpen((value) => !value); }}
+              >
+                <span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span>
+                <span className="nav-label">C-Dir Masters</span>
+                <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
+              </button></div>
+              {cdirMastersOpen && <div className="cdir-clock" role="menu" aria-label="C-Dir Masters" style={{"--count": cdirMasterNav.length}}>
+                <span className="cdir-clock-center" aria-hidden="true">C-Dir</span>
+                {cdirMasterNav.map(([name, Icon], index) => (
+                  <button
+                    key={name}
+                    type="button"
+                    role="menuitem"
+                    className={`cdir-clock-item${active === name ? " active" : ""}`}
+                    style={{"--i": index}}
+                    data-label={name}
+                    aria-label={name}
+                    onClick={(event) => selectMaster(name, event)}
+                  ><Icon aria-hidden="true" /></button>
+                ))}
+              </div>}
             </div>}
           </div>
         </div>}

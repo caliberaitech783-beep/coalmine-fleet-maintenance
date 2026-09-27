@@ -124,15 +124,21 @@ test("small and capital letters are one value, saved in capitals", () => {
   assert.ok(server.includes("if(isCdirMaster(master))return cdirCleanRecord(master,record);"));
 });
 
-test("the Masters menu groups the C-Dir masters under one expandable C-Dir Masters entry", () => {
+test("C-Dir Masters opens a clock face of icons that show their full names", () => {
   const list = source.match(/const cdirMasterNavItems = \[[\s\S]*?\];/)?.[0] || "";
   for (const key of Object.keys(CDIR_MASTERS)) assert.ok(list.includes(`[CDIR_MASTERS.${key},`), key);
   assert.doesNotMatch(source.match(/const masterNav = \[[\s\S]*?\];/)[0], /CDIR_MASTERS/, "C-Dir masters are not listed flat");
   assert.ok(source.includes('<span className="nav-label">C-Dir Masters</span>'));
   assert.ok(source.includes("aria-expanded={cdirMastersOpen}"));
-  assert.ok(source.includes('{cdirMastersOpen && <div className="cdir-masters-submenu" role="group" aria-label="C-Dir Masters">'));
+  assert.ok(source.includes('{cdirMastersOpen && <div className="cdir-clock" role="menu" aria-label="C-Dir Masters" style={{"--count": cdirMasterNav.length}}>'));
+  assert.ok(source.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(true); }}'), "opens on hover");
+  assert.ok(source.includes("data-label={name}") && source.includes("aria-label={name}"), "icons carry the full master name");
+  assert.ok(source.includes('><Icon aria-hidden="true" /></button>'), "icons only");
   assert.ok(source.includes('const [cdirMastersOpen, setCdirMastersOpen] = useState(() => isCdirMaster(active));'));
   assert.ok(source.includes("[...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)"), "C-Dir master pages stay reachable");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
-  assert.match(css, /\.cdir-masters-submenu \{/);
+  assert.match(css, /\.cdir-clock-item \{[\s\S]*?transform: rotate\(calc\(var\(--i\) \* 360deg \/ var\(--count\)\)\) translateY/, "icons placed around a circle");
+  assert.match(css, /\.cdir-clock-item::after \{\s*content: attr\(data-label\);/, "full name tooltip");
+  assert.match(css, /\.cdir-clock-item:hover::after/);
+  assert.match(css, /\.cdir-masters-hub\.open button\.cdir-masters-toggle,/, "entry is highlighted while open");
 });

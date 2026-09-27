@@ -917,10 +917,116 @@
   scrollbar-color: #3b5a8c #10213f;
 }
 
-/* "C-Dir Masters" groups the seven C-Dir masters and expands in place. */
+/* "C-Dir Masters": highlighted on hover or click, it opens a clock face of the
+   seven C-Dir master icons; each icon shows its full name when pointed at. */
+.cdir-masters-hub { position: relative; }
+/* Keeps the clock open while the pointer crosses the gap to it. */
+.cdir-masters-hub.open::after { content: ""; position: absolute; top: -40px; left: 100%; width: 18px; height: calc(100% + 80px); }
 .app > aside nav .masters-dropdown button.cdir-masters-toggle { display: flex; align-items: center; }
-.cdir-masters-chevron { width: 15px; height: 15px; margin-left: auto; flex: 0 0 auto; transition: transform 0.15s ease; }
-.cdir-masters-toggle[aria-expanded="true"] .cdir-masters-chevron { transform: rotate(180deg); }
-.cdir-masters-submenu { display: grid; gap: 2px; margin: 2px 0 4px 18px; padding-left: 8px; border-left: 1px solid #ffffff33; }
-.cdir-masters-submenu .workspace-icon { transform: scale(0.85); }
-@media (prefers-reduced-motion: reduce) { .cdir-masters-chevron { transition: none; } }
+.app > aside nav .masters-dropdown .cdir-masters-hub.open button.cdir-masters-toggle,
+.app > aside nav .masters-dropdown button.cdir-masters-toggle:hover,
+.app > aside nav .masters-dropdown button.cdir-masters-toggle:focus-visible {
+  background: linear-gradient(110deg, #6d3fd1, #c32e6d);
+  box-shadow: 0 0 0 2px #ffd166, 0 8px 22px #c32e6d66;
+  color: #fff;
+}
+.cdir-masters-chevron { width: 15px; height: 15px; margin-left: auto; flex: 0 0 auto; transform: rotate(-90deg); transition: transform 0.15s ease; }
+.cdir-masters-hub.open .cdir-masters-chevron { transform: rotate(0deg); }
+.app > aside nav .masters-dropdown .cdir-clock {
+  --radius: 86px;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 14px);
+  z-index: 40;
+  width: 236px;
+  height: 236px;
+  margin-top: -118px;
+  border: 1px solid #ffd16688;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1b2f55 0 34%, #10213f 35% 100%);
+  box-shadow: 0 16px 40px #07122577, inset 0 0 0 6px #ffffff0d;
+  animation: cdir-clock-in 0.18s ease-out;
+}
+/* Twelve small hour marks around the rim, like a clock. */
+.app > aside nav .masters-dropdown .cdir-clock::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from -1deg, #ffffff55 0 2deg, transparent 2deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 calc(100% - 8px), #000 calc(100% - 7px));
+  mask: radial-gradient(circle, transparent 0 calc(100% - 8px), #000 calc(100% - 7px));
+  pointer-events: none;
+}
+.cdir-clock-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6d3fd1, #c32e6d);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+.app > aside nav .masters-dropdown .cdir-clock-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  padding: 0;
+  border: 1px solid #ffffff44;
+  border-radius: 50%;
+  background: #243a63;
+  color: #fff;
+  cursor: pointer;
+  transform: rotate(calc(var(--i) * 360deg / var(--count))) translateY(calc(var(--radius) * -1)) rotate(calc(var(--i) * -360deg / var(--count)));
+  transition: background 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease;
+}
+.app > aside nav .masters-dropdown .cdir-clock-item svg { width: 20px; height: 20px; }
+.app > aside nav .masters-dropdown .cdir-clock-item:hover, .app > aside nav .masters-dropdown .cdir-clock-item:focus-visible, .app > aside nav .masters-dropdown .cdir-clock-item.active {
+  background: linear-gradient(135deg, #6d3fd1, #c32e6d);
+  box-shadow: 0 0 0 2px #ffd166, 0 6px 16px #c32e6d88;
+  scale: 1.12;
+  outline: none;
+}
+/* The full master name appears when the icon is pointed at or focused. */
+.app > aside nav .masters-dropdown .cdir-clock-item::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 2;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #fff;
+  color: #10213f;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px #07122555;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.app > aside nav .masters-dropdown .cdir-clock-item:hover::after, .app > aside nav .masters-dropdown .cdir-clock-item:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+@keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+/* Phones and narrow screens: the clock opens below the entry instead of beside it. */
+@media (max-width: 1250px) {
+  .app > aside nav .masters-dropdown .cdir-clock { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
+  .cdir-masters-hub.open::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cdir-masters-chevron, .app > aside nav .masters-dropdown .cdir-clock-item, .app > aside nav .masters-dropdown .cdir-clock-item::after { transition: none; }
+  .app > aside nav .masters-dropdown .cdir-clock { animation: none; }
+}
