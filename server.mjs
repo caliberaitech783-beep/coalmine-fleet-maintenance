@@ -41,6 +41,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail} from './ticket-email.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
+import {HOUSEKEEPING_CATEGORIES,housekeepingCategory,purgeRequestError} from './data-housekeeping.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
 import {ANNOUNCEMENT_ACTIVE_DAYS,announcementImageBinary,announcementImageError,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
@@ -1606,6 +1607,81 @@ app.put('/api/log-retention',requireSuper,requireAdministrator,async(req,res,nex
       changedFields:LOG_RETENTION_KEYS.filter((key)=>before[key]!==next[key]).map((key)=>({field:`${LOG_RETENTION_LABELS[key]} days kept`,before:String(before[key]),after:String(next[key])}))};
     res.set('Cache-Control','no-store');
     res.json(await storedLogRetention());
+  }catch(error){next(error)}
+});
+
+// Admin > Database > Retention rules: run the automatic clean-up now instead of
+// waiting for the next five-minute check.
+app.post('/api/log-retention/run',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    await pool.query("DELETE FROM app_metadata WHERE key='log_retention_last_run'");
+    const result=await runLogRetention();
+    // Written directly: the audit middleware only keeps routes it knows as
+    // administration, and this one is new.
+    req.audit=false;
+    await appendAuditEvent(req,{eventType:'Administration',module:'Database',action:'Run automatic clean-up now',targetType:'Log retention',
+      targetReference:result?.skipped?`Skipped: ${result.reason}`:'Clean-up completed',
+      changedFields:Object.entries(result||{}).filter(([key,value])=>/Deleted$|Cleared$/.test(key)&&value).map(([key,value])=>({field:key,before:'',after:String(value)})),
+      statusCode:200});
+    res.set('Cache-Control','no-store');
+    res.json({result,retention:await storedLogRetention()});
+  }catch(error){next(error)}
+});
+
+// Admin > Database > Purge data. GET lists what can be purged with the storage
+// each part takes and, when a window is given, how many rows it would remove.
+// Only logs, delivery history, notifications and old photos/audio are listed;
+// business records can never be purged here.
+async function housekeepingOverview(cutoff){
+  const {rows:sizes}=await pool.query(`SELECT relname AS table,pg_total_relation_size(c.oid)::bigint AS bytes
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind='r' AND relname=ANY($1)`,
+    [[...new Set(HOUSEKEEPING_CATEGORIES.flatMap((category)=>category.tables))]]);
+  const bytesFor=(tables)=>tables.reduce((sum,table)=>sum+Number(sizes.find((row)=>row.table===table)?.bytes||0),0);
+  const retention=await storedLogRetention();
+  const categories=[];
+  for(const category of HOUSEKEEPING_CATEGORIES){
+    const matching=cutoff?Number((await pool.query(category.count,[cutoff.toISOString()])).rows[0]?.count||0):null;
+    categories.push({key:category.key,label:category.label,description:category.description,retentionKey:category.retentionKey,
+      keepDays:retention[category.retentionKey],bytes:bytesFor(category.tables),size:formatBytes(bytesFor(category.tables)),matching});
+  }
+  const {rows:[database]}=await pool.query('SELECT pg_database_size(current_database())::bigint AS bytes');
+  return {categories,databaseSize:formatBytes(Number(database?.bytes||0)),retention};
+}
+app.get('/api/data-housekeeping',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const hasWindow=req.query.olderThanDays!==undefined||req.query.upToDate!==undefined;
+    const window=hasWindow?housekeepingCutoff(req.query):null;
+    if(window?.error)return res.status(400).json({error:window.error});
+    res.set('Cache-Control','no-store');
+    res.json({...await housekeepingOverview(window?.cutoff),cutoff:window?.cutoff?.toISOString()||null,window:window?.label||''});
+  }catch(error){next(error)}
+});
+app.post('/api/data-housekeeping/purge',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const body=req.body||{};
+    const invalid=purgeRequestError(body);
+    if(invalid)return res.status(400).json({error:invalid});
+    const category=housekeepingCategory(body.category);
+    const {error,cutoff,label,fields}=housekeepingCutoff({olderThanDays:body.olderThanDays,upToDate:body.upToDate},category.label);
+    if(error)return res.status(400).json({error});
+    const client=await pool.connect();
+    let removed=0;
+    try{
+      await client.query('BEGIN');
+      for(const statement of category.purge)removed+=Number((await client.query(statement,[cutoff.toISOString()])).rowCount||0);
+      await client.query('COMMIT');
+    }catch(purgeError){await client.query('ROLLBACK').catch(()=>{});throw purgeError}
+    finally{client.release()}
+    const reason=String(body.reason).trim().slice(0,500);
+    // Written after the delete so an Audit Trail purge keeps its own entry.
+    req.audit=false;
+    await appendAuditEvent(req,{
+      eventType:'Administration',module:'Database',action:'Purge data',targetType:category.label,targetReference:label,
+      reason:`${reason} — ${category.key==='media'?'cleared photos and audio on':'removed'} ${removed} record(s) before ${formatDisplayDateTime(cutoff)}`,
+      changedFields:[{field:'Data',before:'',after:category.label},...fields,{field:'Records affected',before:'',after:String(removed)}],
+      statusCode:200});
+    res.set('Cache-Control','no-store');
+    res.json({category:category.key,removed,cutoff:cutoff.toISOString(),...await housekeepingOverview(null)});
   }catch(error){next(error)}
 });
 

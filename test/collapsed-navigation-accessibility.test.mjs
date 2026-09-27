@@ -30,7 +30,7 @@ function harness(initialWidth) {
     masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true,
-    profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(),
+    profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(), databaseToolPages: new Set(),
     ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon"].map(name => [name, Null])),
   };
   const Side = new Function(...Object.keys(scope), `${code}; return Side;`)(...Object.values(scope));
