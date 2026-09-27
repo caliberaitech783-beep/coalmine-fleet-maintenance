@@ -1079,6 +1079,8 @@
 .app > aside nav .masters-dropdown .cdir-clock .cdir-clock-center,
 .app > aside nav .masters-dropdown .cdir-clock::before { display: none; }
 .app > aside nav .masters-dropdown .cdir-clock { border: 0; background: none; }
+/* C-Dir Masters keeps its "C-Dir" circle in the middle of the ring. */
+.app > aside nav .masters-dropdown .cdir-clock:not(.half) .cdir-clock-center { display: grid; }
 /* C-Dir Masters: the ring of icons sits close to the menu and rises from its row,
    so it stays on screen even though the entry is at the bottom of the menu. */
 .app > aside nav .masters-dropdown .cdir-clock:not(.half) { top: auto; bottom: -12px; left: calc(100% + 2px); margin-top: 0; }
