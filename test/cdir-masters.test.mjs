@@ -123,3 +123,16 @@ test("small and capital letters are one value, saved in capitals", () => {
   assert.ok(server.includes("const cdirDuplicate=isCdirMaster(master)?await cdirDuplicateError(master,[storedRecord],id):'';"));
   assert.ok(server.includes("if(isCdirMaster(master))return cdirCleanRecord(master,record);"));
 });
+
+test("the Masters menu groups the C-Dir masters under one expandable C-Dir Masters entry", () => {
+  const list = source.match(/const cdirMasterNavItems = \[[\s\S]*?\];/)?.[0] || "";
+  for (const key of Object.keys(CDIR_MASTERS)) assert.ok(list.includes(`[CDIR_MASTERS.${key},`), key);
+  assert.doesNotMatch(source.match(/const masterNav = \[[\s\S]*?\];/)[0], /CDIR_MASTERS/, "C-Dir masters are not listed flat");
+  assert.ok(source.includes('<span className="nav-label">C-Dir Masters</span>'));
+  assert.ok(source.includes("aria-expanded={cdirMastersOpen}"));
+  assert.ok(source.includes('{cdirMastersOpen && <div className="cdir-masters-submenu" role="group" aria-label="C-Dir Masters">'));
+  assert.ok(source.includes('const [cdirMastersOpen, setCdirMastersOpen] = useState(() => isCdirMaster(active));'));
+  assert.ok(source.includes("[...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)"), "C-Dir master pages stay reachable");
+  const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
+  assert.match(css, /\.cdir-masters-submenu \{/);
+});

@@ -404,7 +404,9 @@ const masterNav = [
   ["Vehicle transfers", ArrowRightLeft, "transfers"],
   ["Hierarchy master", Network, "hierarchy"],
   ["OEM master", ShieldCheck, "oem"],
-  // C-Dir (Caliber Directory) masters: Admin and Super Admin only.
+];
+// C-Dir (Caliber Directory) masters, shown under one "C-Dir Masters" entry. Admin and Super Admin only.
+const cdirMasterNavItems = [
   [CDIR_MASTERS.employee, BookUser, "users"],
   [CDIR_MASTERS.contact, Contact, "users"],
   [CDIR_MASTERS.designation, BadgeCheck, "hierarchy"],
@@ -843,6 +845,7 @@ function Login({ onLogin, theme, toggleTheme }) {
 }
 function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", activeReportCategory = "general" }) {
   const [mastersOpen, setMastersOpen] = useState(false);
+  const [cdirMastersOpen, setCdirMastersOpen] = useState(() => isCdirMaster(active));
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [whatsappSelectionClosed, setWhatsappSelectionClosed] = useState(false);
@@ -909,9 +912,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const correctionRequestAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
+  const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
+  const allowedMasterNav = [...visibleMasterNav, ...cdirMasterNav];
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
-  const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;
+  const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && (visibleMasterNav.length > 0 || cdirMasterNav.length > 0);
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
@@ -944,7 +949,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setMastersSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={`header-nav-item${visibleMasterNav.some(([name]) => name === active) ? " active" : ""}`}
+            className={`header-nav-item${allowedMasterNav.some(([name]) => name === active) ? " active" : ""}`}
             data-nav="masters"
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
@@ -969,6 +974,31 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 <span className="nav-label">{name}</span>
               </button></div>
             ))}
+            {/* The seven C-Dir masters sit under one "C-Dir Masters" entry that expands in place. */}
+            {cdirMasterNav.length > 0 && <div className="nav-config-row"><button
+              type="button"
+              className={`workspace-menu-item cdir-masters-toggle${cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`}
+              data-workspace="users"
+              aria-expanded={cdirMastersOpen}
+              onClick={(event) => { event.stopPropagation(); setCdirMastersOpen((value) => !value); }}
+            >
+              <span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span>
+              <span className="nav-label">C-Dir Masters</span>
+              <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
+            </button></div>}
+            {cdirMastersOpen && <div className="cdir-masters-submenu" role="group" aria-label="C-Dir Masters">
+              {cdirMasterNav.map(([name, Icon, menuKey]) => (
+                <div className="nav-config-row cdir-masters-item" key={name}><button
+                  role="menuitem"
+                  className={`workspace-menu-item${active === name ? " active" : ""}`}
+                  data-workspace={menuKey || "master"}
+                  onClick={(event) => selectMaster(name, event)}
+                >
+                  <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span>
+                  <span className="nav-label">{name.replace(/^C-Dir /, "")}</span>
+                </button></div>
+              ))}
+            </div>}
           </div>
         </div>}
         {canViewWhatsApp && <div
@@ -10993,7 +11023,7 @@ function App() {
     if(ORGANISATION_PAGE_NAMES.includes(name))return isAdministrator;
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
-    if (masterNav.some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
+    if ([...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
@@ -11002,7 +11032,7 @@ function App() {
   };
   const firstAccessibleAdminPage = () => {
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
-    const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
+    const firstMaster = [...masterNav, ...cdirMasterNavItems].find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
     if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
