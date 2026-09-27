@@ -224,6 +224,7 @@ import {
   Volume2,
   LifeBuoy,
   ImagePlus,
+  Database,
   BookUser,
   Contact,
   BadgeCheck,
@@ -384,6 +385,8 @@ const adminNav = [
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
+// The backup pages open from one "Database" entry in the Admin menu.
+const adminDatabaseNav = adminNav.filter(([name]) => backupAdminPages.has(name));
 // Badge colour / animation key for each Administration menu entry (topbar.css).
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
@@ -843,9 +846,53 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
+// A menu entry that opens a clock face of icons: pointing at or clicking the entry
+// highlights it and shows its pages as icons around a centre label, and each icon
+// shows its full page name when pointed at. Used for C-Dir Masters and Database.
+// "hours" places the icons on those clock hours (a half clock opens inside the menu).
+function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null }) {
+  const [open, setOpen] = useState(() => items.some(([name]) => name === active));
+  const clockRef = useRef(null);
+  // A half clock opens inside a scrolling menu; bring it into view when it opens.
+  useEffect(() => { if (open && hours) clockRef.current?.scrollIntoView?.({block: "nearest"}); }, [open, hours]);
+  if (!items.length) return null;
+  return <div
+    className={`cdir-masters-hub${hours ? " half" : ""}${open ? " open" : ""}`}
+    onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}
+    onPointerLeave={(event) => { if (event.pointerType === "mouse") setOpen(false); }}
+  >
+    <div className="nav-config-row"><button
+      type="button"
+      className={`workspace-menu-item cdir-masters-toggle${items.some(([name]) => name === active) ? " active" : ""}`}
+      data-workspace={workspace}
+      aria-expanded={open}
+      aria-haspopup="menu"
+      onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
+    >
+      <span className="workspace-icon" aria-hidden="true"><EntryIcon /><i className="workspace-icon-glow" /></span>
+      <span className="nav-label">{label}</span>
+      <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
+    </button></div>
+    {open && <div ref={clockRef} className={`cdir-clock${hours ? " half" : ""}`} role="menu" aria-label={label}>
+      <span className="cdir-clock-center" aria-hidden="true">{centerLabel}</span>
+      {items.map(([name, Icon], index) => (
+        <button
+          key={name}
+          type="button"
+          role="menuitem"
+          className={`cdir-clock-item${active === name ? " active" : ""}`}
+          style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}
+          data-label={name}
+          aria-label={name}
+          onClick={(event) => onSelect(name, event)}
+        ><Icon aria-hidden="true" /></button>
+      ))}
+    </div>}
+  </div>;
+}
+
 function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", activeReportCategory = "general" }) {
   const [mastersOpen, setMastersOpen] = useState(false);
-  const [cdirMastersOpen, setCdirMastersOpen] = useState(() => isCdirMaster(active));
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [whatsappSelectionClosed, setWhatsappSelectionClosed] = useState(false);
@@ -974,40 +1021,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 <span className="nav-label">{name}</span>
               </button></div>
             ))}
-            {/* "C-Dir Masters" opens a clock face of icons; pointing at an icon shows the full master name. */}
-            {cdirMasterNav.length > 0 && <div
-              className={`cdir-masters-hub${cdirMastersOpen ? " open" : ""}`}
-              onPointerEnter={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(true); }}
-              onPointerLeave={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(false); }}
-            >
-              <div className="nav-config-row"><button
-                type="button"
-                className={`workspace-menu-item cdir-masters-toggle${cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`}
-                data-workspace="users"
-                aria-expanded={cdirMastersOpen}
-                aria-haspopup="menu"
-                onClick={(event) => { event.stopPropagation(); setCdirMastersOpen((value) => !value); }}
-              >
-                <span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span>
-                <span className="nav-label">C-Dir Masters</span>
-                <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
-              </button></div>
-              {cdirMastersOpen && <div className="cdir-clock" role="menu" aria-label="C-Dir Masters" style={{"--count": cdirMasterNav.length}}>
-                <span className="cdir-clock-center" aria-hidden="true">C-Dir</span>
-                {cdirMasterNav.map(([name, Icon], index) => (
-                  <button
-                    key={name}
-                    type="button"
-                    role="menuitem"
-                    className={`cdir-clock-item${active === name ? " active" : ""}`}
-                    style={{"--i": index}}
-                    data-label={name}
-                    aria-label={name}
-                    onClick={(event) => selectMaster(name, event)}
-                  ><Icon aria-hidden="true" /></button>
-                ))}
-              </div>}
-            </div>}
+            {/* The seven C-Dir masters open as a clock face of icons. */}
+            <ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />
           </div>
         </div>}
         {canViewWhatsApp && <div
@@ -1110,8 +1125,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
         >
           <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
-            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
+            {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
+            {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
+            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
         </div>}
         {visibleNav.filter(([name]) => name === "CD").map(([n, I]) => (

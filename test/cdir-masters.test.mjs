@@ -128,17 +128,30 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
   const list = source.match(/const cdirMasterNavItems = \[[\s\S]*?\];/)?.[0] || "";
   for (const key of Object.keys(CDIR_MASTERS)) assert.ok(list.includes(`[CDIR_MASTERS.${key},`), key);
   assert.doesNotMatch(source.match(/const masterNav = \[[\s\S]*?\];/)[0], /CDIR_MASTERS/, "C-Dir masters are not listed flat");
-  assert.ok(source.includes('<span className="nav-label">C-Dir Masters</span>'));
-  assert.ok(source.includes("aria-expanded={cdirMastersOpen}"));
-  assert.ok(source.includes('{cdirMastersOpen && <div className="cdir-clock" role="menu" aria-label="C-Dir Masters" style={{"--count": cdirMasterNav.length}}>'));
-  assert.ok(source.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setCdirMastersOpen(true); }}'), "opens on hover");
-  assert.ok(source.includes("data-label={name}") && source.includes("aria-label={name}"), "icons carry the full master name");
-  assert.ok(source.includes('><Icon aria-hidden="true" /></button>'), "icons only");
-  assert.ok(source.includes('const [cdirMastersOpen, setCdirMastersOpen] = useState(() => isCdirMaster(active));'));
+  assert.ok(source.includes('<ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />'));
+  const clock = source.slice(source.indexOf("function ClockMenu("), source.indexOf("function Side("));
+  assert.ok(clock.includes("aria-expanded={open}"));
+  assert.ok(clock.includes('{open && <div ref={clockRef} className={`cdir-clock${hours ? " half" : ""}`} role="menu" aria-label={label}>'));
+  assert.ok(clock.includes('style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}'), "icons on a full clock or on given hours");
+  assert.ok(clock.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}'), "opens on hover");
+  assert.ok(clock.includes("data-label={name}") && clock.includes("aria-label={name}"), "icons carry the full page name");
+  assert.ok(clock.includes('><Icon aria-hidden="true" /></button>'), "icons only");
+  assert.ok(clock.includes("const [open, setOpen] = useState(() => items.some(([name]) => name === active));"), "opens by itself on one of its pages");
   assert.ok(source.includes("[...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)"), "C-Dir master pages stay reachable");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
-  assert.match(css, /\.cdir-clock-item \{[\s\S]*?transform: rotate\(calc\(var\(--i\) \* 360deg \/ var\(--count\)\)\) translateY/, "icons placed around a circle");
+  assert.match(css, /\.cdir-clock-item \{[\s\S]*?transform: rotate\(var\(--angle\)\) translateY\(calc\(var\(--radius\) \* -1\)\) rotate\(calc\(var\(--angle\) \* -1\)\);/, "icons placed around a circle");
   assert.match(css, /\.cdir-clock-item::after \{\s*content: attr\(data-label\);/, "full name tooltip");
   assert.match(css, /\.cdir-clock-item:hover::after/);
   assert.match(css, /\.cdir-masters-hub\.open button\.cdir-masters-toggle,/, "entry is highlighted while open");
+});
+
+test("the Admin menu ends with a Database half clock (2 to 5 o'clock) for the four backup pages", () => {
+  assert.ok(source.includes('const adminDatabaseNav = adminNav.filter(([name]) => backupAdminPages.has(name));'));
+  assert.ok(source.includes("{adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=>"), "backup pages are not listed flat");
+  const menu = source.slice(source.indexOf('className="masters-dropdown admin-dropdown"'), source.indexOf("{visibleNav.filter(([name]) => name === \"CD\")"));
+  const locks = menu.indexOf('active === "Admin locks"'), database = menu.indexOf('<ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]}');
+  assert.ok(locks > 0 && database > locks, "Database is the last Admin entry, after Audit Trail and Admin locks");
+  assert.ok(source.includes("if(backupAdminPages.has(name))return isAdministrator;"), "backup pages keep their Admin-only access");
+  const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
+  assert.match(css, /\.masters-dropdown \.cdir-clock\.half \{[\s\S]*?position: relative;/, "the half clock opens inside the menu, never off-screen");
 });

@@ -970,9 +970,10 @@
   border-radius: 50%;
   background: linear-gradient(135deg, #6d3fd1, #c32e6d);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
+  text-align: center;
 }
 .app > aside nav .masters-dropdown .cdir-clock-item {
   position: absolute;
@@ -989,7 +990,7 @@
   background: #243a63;
   color: #fff;
   cursor: pointer;
-  transform: rotate(calc(var(--i) * 360deg / var(--count))) translateY(calc(var(--radius) * -1)) rotate(calc(var(--i) * -360deg / var(--count)));
+  transform: rotate(var(--angle)) translateY(calc(var(--radius) * -1)) rotate(calc(var(--angle) * -1));
   transition: background 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease;
 }
 .app > aside nav .masters-dropdown .cdir-clock-item svg { width: 20px; height: 20px; }
@@ -1020,10 +1021,32 @@
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 .app > aside nav .masters-dropdown .cdir-clock-item:hover::after, .app > aside nav .masters-dropdown .cdir-clock-item:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+/* Half clock (Database): opens inside the menu below its entry, with the icons on
+   2, 3, 4 and 5 o'clock around a centre on the left, so it never leaves the screen. */
+.cdir-masters-hub.half.open::after { display: none; }
+.app > aside nav .masters-dropdown .cdir-clock.half {
+  --radius: 96px;
+  --cx: 46px;
+  --cy: 76px;
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 100%;
+  height: 200px;
+  margin: 6px 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: radial-gradient(circle at var(--cx) var(--cy), #1b2f55 0 34px, #10213f 35px 124px, #ffd16655 125px 126px, transparent 127px);
+  box-shadow: none;
+}
+.app > aside nav .masters-dropdown .cdir-clock.half::before { display: none; }
+.app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-center,
+.app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-item { top: var(--cy); left: var(--cx); }
+.app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-center { font-size: 10px; }
 @keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
-  .app > aside nav .masters-dropdown .cdir-clock { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
+  .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
   .cdir-masters-hub.open::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
