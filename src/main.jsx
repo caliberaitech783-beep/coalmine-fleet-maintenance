@@ -1063,8 +1063,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
-            {/* The WhatsApp pages open downward: the "WhatsApp" half circle at the top, icons close around it on 4, 5, 7 and 8 o'clock. */}
-            <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[4, 5, 7, 8, 6, 3].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} keyFor={whatsappMenuKey} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
+            {/* The WhatsApp pages open downward: the "WhatsApp" half circle at the top, icons evenly spaced close around its lower half so none touch. */}
+            <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3.6, 5.2, 6.8, 8.4, 6, 3].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} keyFor={whatsappMenuKey} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
           </div>
         </div>}
         {permissions.adminLevel !== "Manager" && <div

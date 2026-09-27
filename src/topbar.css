@@ -1108,7 +1108,14 @@
   box-shadow: none;
 }
 /* Like Database: the icons hug the half circle, measured from the middle of its flat top. */
-.app > aside nav .whatsapp-dropdown .cdir-clock.half.down { --cy: 0px; --radius: 90px; height: 116px; margin-top: 0; }
+.app > aside nav .whatsapp-dropdown .cdir-clock.half.down { --cy: 0px; --radius: 98px; height: 146px; margin-top: 0; }
+/* The icon being pointed at, and its name, always sit above the neighbouring icons. */
+.app > aside nav .masters-dropdown .cdir-clock-item:hover,
+.app > aside nav .masters-dropdown .cdir-clock-item:focus-visible { z-index: 5; }
+/* Under the WhatsApp half circle the name shows below the icon, clear of the menu bar. */
+.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-item::after { top: calc(100% + 8px); bottom: auto; transform: translate(-50%, -4px); }
+.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-item:hover::after,
+.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-item:focus-visible::after { transform: translate(-50%, 0); }
 /* Half-circle centres: WhatsApp's is a bowl with its flat side on top, just under
    the menu name; Database's is a "D" with its flat side against its entry. */
 .app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-center {

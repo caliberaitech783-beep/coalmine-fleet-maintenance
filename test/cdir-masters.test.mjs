@@ -162,6 +162,6 @@ test("Database opens beside the Admin menu and WhatsApp opens downward with What
   assert.match(css, /\.cdir-clock\.half\.beside \{\s*top: 50%;\s*left: calc\(100% \+ 10px\);/, "Database half clock opens to the right");
   assert.match(css, /\.admin-dropdown:has\(\.cdir-clock\.half\.beside\) \{ max-height: none; overflow: visible; \}/, "the Admin menu does not clip it");
   assert.match(css, /\.cdir-clock\.half\.down \{\s*--cx: 50%;\s*--cy: 48px;/, "WhatsApp centre at the top middle");
-  assert.ok(source.includes('<ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[4, 5, 7, 8, 6, 3].slice(0, visibleWhatsAppNav.length)}'));
+  assert.ok(source.includes('<ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3.6, 5.2, 6.8, 8.4, 6, 3].slice(0, visibleWhatsAppNav.length)}'));
   assert.ok(source.includes('onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)}'), "choosing a WhatsApp page still closes the menu");
 });
