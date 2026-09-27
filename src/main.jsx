@@ -31,6 +31,7 @@ import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./
 import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import UserProfile from "./user-profile.jsx";
 import TelegramGate from "./telegram-gate.jsx";
+import DiagnosticsPage from "./diagnostics-page.jsx";
 import TicketResolutionNotices from "./ticket-resolution-notices.jsx";
 import ReturnedCorrectionGate from "./returned-correction-gate.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
@@ -226,6 +227,7 @@ import {
   LifeBuoy,
   ImagePlus,
   Database,
+  Stethoscope,
   BookUser,
   Contact,
   BadgeCheck,
@@ -388,7 +390,8 @@ const adminNav = [
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
 // The backup pages open from one "Database" entry in the Admin menu.
-const adminDatabaseNav = adminNav.filter(([name]) => backupAdminPages.has(name));
+// Diagnostics (a health check of every service) opens from the same Database clock.
+const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope]];
 // Badge colour / animation key for each Administration menu entry (topbar.css).
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
@@ -1144,7 +1147,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
-            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]} keyFor={(name) => adminMenuKeys[name]} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
+            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
         </div>}
         {visibleNav.filter(([name]) => name === "CD").map(([n, I]) => (
@@ -11058,7 +11061,7 @@ function App() {
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
-    if(backupAdminPages.has(name))return isAdministrator;
+    if(backupAdminPages.has(name)||name==="Diagnostics")return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Recovery guide")return isAdministrator;
     if(name==="Print helper")return isAdministrator;
@@ -11495,6 +11498,8 @@ function App() {
             <UserSessionsPage session={session} />
           ) : active === "Recovery guide" ? (
             <RecoveryGuide onNavigate={selectMenu} />
+          ) : active === "Diagnostics" ? (
+            <DiagnosticsPage token={authToken} />
           ) : backupAdminPages.has(active) ? (
             <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
           ) : active === "Vehicle transfers" ? (

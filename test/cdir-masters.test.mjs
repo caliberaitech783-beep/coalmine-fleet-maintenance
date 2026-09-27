@@ -146,13 +146,13 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
   assert.match(css, /\.cdir-masters-hub\.open button\.cdir-masters-toggle,/, "entry is highlighted while open");
 });
 
-test("the Admin menu ends with a Database half clock (2 to 5 o'clock) for the four backup pages", () => {
-  assert.ok(source.includes('const adminDatabaseNav = adminNav.filter(([name]) => backupAdminPages.has(name));'));
+test("the Admin menu ends with a Database half clock for the backup pages and Diagnostics", () => {
+  assert.ok(source.includes('const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope]];'));
   assert.ok(source.includes("{adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=>"), "backup pages are not listed flat");
   const menu = source.slice(source.indexOf('className="masters-dropdown admin-dropdown"'), source.indexOf("{visibleNav.filter(([name]) => name === \"CD\")"));
-  const locks = menu.indexOf('active === "Admin locks"'), database = menu.indexOf('<ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]}');
+  const locks = menu.indexOf('active === "Admin locks"'), database = menu.indexOf('<ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)}');
   assert.ok(locks > 0 && database > locks, "Database is the last Admin entry, after Audit Trail and Admin locks");
-  assert.ok(source.includes("if(backupAdminPages.has(name))return isAdministrator;"), "backup pages keep their Admin-only access");
+  assert.ok(source.includes('if(backupAdminPages.has(name)||name==="Diagnostics")return isAdministrator;'), "backup pages and Diagnostics keep their Admin-only access");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
   assert.match(css, /\.masters-dropdown \.cdir-clock\.half \{[\s\S]*?position: relative;/, "the half clock opens inside the menu, never off-screen");
 });

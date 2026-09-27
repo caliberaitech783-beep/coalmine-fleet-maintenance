@@ -39,7 +39,8 @@ import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleE
 import {withFleetDriverNames} from './fleet-driver-names.mjs';
 import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
-import {sendTicketRaisedEmail} from './ticket-email.mjs';
+import {createTicketMailer,sendTicketRaisedEmail} from './ticket-email.mjs';
+import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
 import {ANNOUNCEMENT_ACTIVE_DAYS,announcementImageBinary,announcementImageError,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
@@ -52,7 +53,7 @@ import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
 import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
-import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
+import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus} from './telegram.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -3620,6 +3621,86 @@ async function cdirReferenceCount(master,record){
   }
   return count;
 }
+
+// ---------- Diagnostics: one health check of everything BDMS depends on ----------
+async function messageDeliveryCounts(channel){
+  const telegram=channel==='Telegram';
+  const {rows}=await pool.query(`SELECT
+      COUNT(*) FILTER (WHERE status LIKE 'Sent%')::int AS sent,
+      COUNT(*) FILTER (WHERE status LIKE 'Failed%')::int AS failed,
+      (ARRAY_AGG(status ORDER BY created_at DESC) FILTER (WHERE status LIKE 'Failed%'))[1] AS "lastError"
+    FROM whatsapp_alert_history
+    WHERE created_at>NOW()-INTERVAL '24 hours'
+      AND ((recipient_phone='Telegram' OR recipient_name='Telegram group' OR status LIKE 'Sent by Telegram%')=$1)`,[telegram]);
+  return rows[0]||{};
+}
+
+const plural=(count,word)=>`${count} ${word}${count===1?'':'s'}`;
+function diagnosticChecks(){
+  return [
+    {key:'app',label:'App server',run:async()=>{
+      const memory=process.memoryUsage().rss;
+      const hours=process.uptime()/3600;
+      return {detail:`Running version ${deploymentSha?deploymentSha.slice(0,8):'(local build)'} for ${hours<1?plural(Math.max(1,Math.round(hours*60)),'minute'):plural(Math.round(hours),'hour')}.`,
+        facts:[['Node.js',process.version],['Memory in use',formatBytes(memory)],['Scheduled jobs',scheduledJobsEnabled?'Running':'Switched off on this server']]};
+    }},
+    {key:'database',label:'BDMS database',run:async()=>{
+      if(!databaseReady)diagnosticState('fail',databaseError||'The database is not ready.');
+      const started=Date.now();
+      const {rows}=await pool.query('SELECT pg_database_size(current_database())::bigint AS size');
+      const ms=Date.now()-started;
+      const facts=[['Response time',`${ms} ms`],['Database size',formatBytes(rows[0].size)],['Connections',`${pool.totalCount} open, ${pool.idleCount} idle, ${pool.waitingCount} waiting`]];
+      return ms>1500?{status:'warn',detail:`The database answered slowly (${ms} ms).`,facts}:{detail:`The database answered in ${ms} ms.`,facts};
+    }},
+    {key:'backups',label:'Backups',run:async()=>{
+      const {rows}=await pool.query(`SELECT status,completed_at AS "completedAt",started_at AS "startedAt",error_message AS "errorMessage",size_bytes AS size
+        FROM backup_runs ORDER BY started_at DESC LIMIT 1`);
+      return {...backupDiagnostic(rows[0]),facts:rows[0]?[['Last backup size',formatBytes(rows[0].size)]]:[]};
+    }},
+    {key:'oracle',label:'Oracle ERP',run:async()=>{
+      if(!oracleConfigured)diagnosticState('off','Oracle settings are not configured on this server.');
+      const health=await oracleHealth();
+      return {detail:'Connected (read-only).',facts:[['Database',health.databaseName||'—'],['User',health.sessionUser||'—']]};
+    }},
+    {key:'telegram',label:'Telegram',run:async()=>{
+      const config=telegramConfiguration();
+      if(!config.botToken)diagnosticState('off','Telegram is not set up (no bot token).');
+      const group=await telegramGroupSettings();
+      const status=await telegramStatus({env:{...process.env,TELEGRAM_DEFAULT_CHAT_ID:group.chatId}});
+      const [webhook,deliveries,{rows}]=await Promise.all([
+        ensureTelegramWebhook(publicBaseUrl()).catch(error=>({lastError:error.message})),
+        messageDeliveryCounts('Telegram'),
+        pool.query('SELECT COUNT(*)::int AS count FROM telegram_user_links'),
+      ]);
+      const facts=[['Bot',status.botUsername?`@${status.botUsername}`:'—'],['Admin group',status.chatTitle||'—'],['Connected users',String(rows[0].count)],['Sent in 24 h',String(deliveries.sent||0)]];
+      if(webhook.lastError)return {status:'warn',detail:`Telegram cannot reach the app: ${webhook.lastError}`,facts};
+      return {...deliveryDiagnostic(deliveries,'Telegram'),facts};
+    }},
+    {key:'whatsapp',label:'WhatsApp',run:async()=>{
+      const env=await metaWhatsAppRuntimeEnv();
+      if(env.META_WHATSAPP_DELIVERY_PAUSED==='true')diagnosticState('off','WhatsApp delivery is switched off in Report settings.');
+      const config=metaWhatsAppConfiguration(env);
+      if(!config.configured)diagnosticState('off','WhatsApp is not configured.');
+      const deliveries=await messageDeliveryCounts('WhatsApp');
+      return {...deliveryDiagnostic(deliveries,'WhatsApp'),facts:[['Provider',config.provider==='fast2sms'?'Fast2SMS':'Meta Cloud API'],['Sent in 24 h',String(deliveries.sent||0)],['Failed in 24 h',String(deliveries.failed||0)]]};
+    }},
+    {key:'email',label:'Email',run:async()=>{
+      const {config,transporter}=createTicketMailer();
+      if(!transporter)diagnosticState('off','Email (SMTP) is not configured.');
+      await transporter.verify();
+      transporter.close?.();
+      return {detail:`Signed in to ${config.host} as ${config.user}.`,facts:[['Server',`${config.host}:${config.port}`]]};
+    }},
+  ];
+}
+
+app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json(await runDiagnostics(diagnosticChecks()));
+  }catch(error){next(error)}
+});
 
 app.get('/api/oracle/health',requireSuper,async(_req,res)=>{
   if(!oracleConfigured)return res.status(503).json({configured:false,connected:false,error:'Oracle database settings are not configured.'});
