@@ -132,7 +132,12 @@ export function auditRouteDetails(method = "", path = "") {
   return { module: segment.replace(/\b\w/g, (letter) => letter.toUpperCase()), eventType: "Activity", action: `${action}: ${route}` };
 }
 
-export function auditShouldRecord(method = "", path = "", {statusCode = 0} = {}) {
+// Event types kept out of the audit trail; the Audit log screen hides them too.
+export const AUDIT_HIDDEN_EVENT_TYPES = new Set(["Activity", "Workflow", "Workflow timeline"]);
+
+// eventType is the one a handler set on req.audit. A visible one is recorded even
+// when the route's default is Activity, so tagged admin actions are not dropped.
+export function auditShouldRecord(method = "", path = "", {statusCode = 0, eventType = ""} = {}) {
   const verb = String(method).toUpperCase();
   const route = String(path).replace(/\/+$/, "") || "/";
   const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
@@ -141,8 +146,10 @@ export function auditShouldRecord(method = "", path = "", {statusCode = 0} = {})
   if (route === "/api/session-heartbeat") return false;
   if (!failed && (route === "/api/login" || route === "/api/logout")) return false;
   if (!failed && route.startsWith("/api/requests")) return false;
-  if (!failed && auditRouteDetails(verb, route).eventType === "Activity") return false;
   if (failed) return route.startsWith("/api/");
+  const explicitType = String(eventType || "").trim();
+  if (explicitType) return !AUDIT_HIDDEN_EVENT_TYPES.has(explicitType) && route.startsWith("/api/");
+  if (auditRouteDetails(verb, route).eventType === "Activity") return false;
   if (mutating) return route.startsWith("/api/");
   if (verb === "GET" && /^\/api\/(?:exports|reports|backups)\/.+\/(?:download|export)$/.test(route)) return true;
   if (verb === "GET" && /^\/api\/backups\/[^/]+\/download$/.test(route)) return true;

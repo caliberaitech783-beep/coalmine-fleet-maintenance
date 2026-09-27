@@ -43,7 +43,7 @@ test('backup history never presents failed or running jobs as zero-byte recovery
 
 test('manual, scheduled, export, import and restore backup actions are written to Audit Trail',()=>{
   assert.match(server,/event_type NOT IN \('Activity','Workflow','Workflow timeline'\)/);
-  assert.match(server,/auditShouldRecord\(req\.method,req\.path,\{statusCode:res\.statusCode\}\)/);
+  assert.match(server,/auditShouldRecord\(req\.method,req\.path,\{statusCode:res\.statusCode,eventType:req\.audit\?\.eventType\}\)/);
   assert.match(server,/appendScheduledBackupAudit/);
   assert.match(server,/action:'Create scheduled backup'/);
   assert.match(server,/action:'Create stored backup'/);

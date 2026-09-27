@@ -95,7 +95,7 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /duration_ms INTEGER NOT NULL DEFAULT 0/);
   assert.match(server, /error_code TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.post\('\/api\/logout',requireSession/);
-  assert.match(server, /auditShouldRecord\(req\.method,req\.path,\{statusCode:res\.statusCode\}\)/);
+  assert.match(server, /auditShouldRecord\(req\.method,req\.path,\{statusCode:res\.statusCode,eventType:req\.audit\?\.eventType\}\)/);
   assert.match(server, /AUDIT_VISIBLE_SCOPE_SQL/);
   assert.match(server, /event_type NOT IN \('Activity','Workflow','Workflow timeline'\)/);
   assert.match(server, /lower\(action\) IN \('login','logout','administrator login','user login'\)/);

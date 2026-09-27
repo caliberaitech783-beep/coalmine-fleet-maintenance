@@ -75,7 +75,7 @@ import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirector
 import {buildSiteFleetReportTables,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow} from './site-consolidated-report.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request-conflict.mjs';
-import {auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
+import {AUDIT_HIDDEN_EVENT_TYPES,auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {requestDeletionBlocker,requestDeletionSnapshot,normalizeDeletionReferences,REQUEST_BULK_DELETE_LIMIT} from './request-deletion.mjs';
 import {duplicateUsername,lockUsernamesForWrite} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
@@ -331,7 +331,6 @@ const auditSessionId=(req)=>{
 const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
 const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
 const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
-const AUDIT_HIDDEN_EVENT_TYPES=new Set(['Activity','Workflow','Workflow timeline']);
 const AUDIT_HIDDEN_SECURITY_ACTIONS=new Set(['login','logout','administrator login','user login']);
 function auditEventHidden(eventType='',action=''){
   const cleanEvent=auditClean(eventType,80);
@@ -1330,7 +1329,7 @@ app.use((req,res,next)=>{
   res.on('finish',()=>{
     if(req.audit===false)return;
     const outcome=res.statusCode>=200&&res.statusCode<400?'Success':'Failed';
-    if(!auditShouldRecord(req.method,req.path,{statusCode:res.statusCode}))return;
+    if(!auditShouldRecord(req.method,req.path,{statusCode:res.statusCode,eventType:req.audit?.eventType}))return;
     req.auditStatusCode=res.statusCode;
     req.auditDurationMs=Date.now()-startedAt;
     void appendAuditEvent(req,{
@@ -2657,7 +2656,8 @@ app.post('/api/remote-assistance/:assistanceId/commands',requireSuper,requireAdm
     const {rows}=await pool.query(`INSERT INTO remote_assistance_commands (assistance_id,command_type,payload)
       VALUES ($1,$2,$3::jsonb) RETURNING id`,[assistanceId,commandType,JSON.stringify(payload)]);
     const target=active.rows[0];
-    req.audit={eventType:'Security',module:'Remote assistance',action:`Remote ${commandType}`,targetType:'User session',targetReference:target.target_login||target.target_name||assistanceId,reason:'Action performed inside the approved BDMS tab',changedFields:[]};
+    // Scroll and input are sent per event and keystroke; only clicks are audited.
+    req.audit=commandType!=='click'?false:{eventType:'Security',module:'Remote assistance',action:`Remote ${commandType}`,targetType:'User session',targetReference:target.target_login||target.target_name||assistanceId,reason:'Action performed inside the approved BDMS tab',changedFields:[]};
     res.status(201).json({commandId:rows[0].id});
   }catch(error){next(error)}
 });
