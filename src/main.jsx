@@ -855,7 +855,7 @@ function Login({ onLogin, theme, toggleTheme }) {
 // clock beside the menu; one that would run off the screen opens inside the menu
 // instead. "alwaysOpen" shows only the clock (the menu itself is the entry), and
 // "down" puts the centre at the top with the icons fanning out below it.
-function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null, alwaysOpen = false, down = false, labelFor = (name) => name }) {
+function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null, alwaysOpen = false, down = false, labelFor = (name) => name, keyFor = (name, key) => key || "master" }) {
   const [openState, setOpen] = useState(() => items.some(([name]) => name === active));
   const [inside, setInside] = useState(alwaysOpen);
   const clockRef = useRef(null);
@@ -872,7 +872,7 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
   if (!items.length) return null;
   const clock = open && <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>
     <span className="cdir-clock-center" aria-hidden="true">{centerLabel}</span>
-    {items.map(([name, Icon], index) => (
+    {items.map(([name, Icon, menuKey], index) => (
       <button
         key={name}
         type="button"
@@ -882,7 +882,10 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
         data-label={labelFor(name)}
         aria-label={labelFor(name)}
         onClick={(event) => onSelect(name, event)}
-      ><Icon aria-hidden="true" /></button>
+      >
+        {/* The same coloured badge the page has in the plain menu list. */}
+        <span className="workspace-menu-item cdir-clock-badge" data-workspace={keyFor(name, menuKey)} aria-hidden="true"><span className="workspace-icon"><Icon /><i className="workspace-icon-glow" /></span></span>
+      </button>
     ))}
   </div>;
   if (alwaysOpen) return clock;
@@ -1061,7 +1064,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {/* The WhatsApp pages open downward: "WhatsApp" at the top, icons on 3, 5, 7 and 9 o'clock. */}
-            <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3, 5, 7, 9, 4, 8].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
+            <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3, 5, 7, 9, 4, 8].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} keyFor={whatsappMenuKey} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
           </div>
         </div>}
         {permissions.adminLevel !== "Manager" && <div
@@ -1141,7 +1144,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
-            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
+            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={[2, 3, 4, 5]} keyFor={(name) => adminMenuKeys[name]} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
         </div>}
         {visibleNav.filter(([name]) => name === "CD").map(([n, I]) => (

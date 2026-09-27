@@ -1078,14 +1078,27 @@
    marks and no arc line. Each icon still shows its full name when pointed at. */
 .app > aside nav .masters-dropdown .cdir-clock .cdir-clock-center,
 .app > aside nav .masters-dropdown .cdir-clock::before { display: none; }
-.app > aside nav .masters-dropdown .cdir-clock { border: 0; background: none; }
+.app > aside nav .masters-dropdown .cdir-clock,
+.app > aside nav .masters-dropdown .cdir-clock.half,
+.app > aside nav .masters-dropdown .cdir-clock.half.down { border: 0; background: none; }
 /* C-Dir Masters keeps its "C-Dir" circle in the middle of the ring. */
 .app > aside nav .masters-dropdown .cdir-clock:not(.half) .cdir-clock-center { display: grid; }
 /* C-Dir Masters: the ring of icons sits close to the menu and rises from its row,
    so it stays on screen even though the entry is at the bottom of the menu. */
 .app > aside nav .masters-dropdown .cdir-clock:not(.half) { top: auto; bottom: -12px; left: calc(100% + 2px); margin-top: 0; }
-/* WhatsApp: without the centre label the icons move up to the top of the menu. */
-.app > aside nav .masters-dropdown .cdir-clock.half.down { --cy: 26px; height: 140px; }
+/* The clock icons are the menus' own coloured badges (as in the plain lists):
+   the button itself is only a transparent holder that lifts on hover. */
+.app > aside nav .masters-dropdown .cdir-clock-item,
+.app > aside nav .masters-dropdown .cdir-clock-item:hover,
+.app > aside nav .masters-dropdown .cdir-clock-item:focus-visible,
+.app > aside nav .masters-dropdown .cdir-clock-item.active { border: 0; background: none; box-shadow: none; }
+.app > aside nav .masters-dropdown .cdir-clock-item:hover,
+.app > aside nav .masters-dropdown .cdir-clock-item:focus-visible { scale: 1.1; }
+.cdir-clock-badge { display: grid; place-items: center; }
+/* WhatsApp: like Database but upside down. The menu panel disappears, "WhatsApp"
+   sits in the centre just below the menu name, and the icons curve beneath it. */
+.app > aside nav .whatsapp-dropdown:has(.cdir-clock) { border: 0; background: none; box-shadow: none; }
+.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-center { display: grid; }
 @keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
