@@ -1098,11 +1098,33 @@
 /* WhatsApp: like Database but upside down. The menu panel disappears, "WhatsApp"
    sits in the centre just below the menu name, and the icons curve beneath it. */
 .app > aside nav .whatsapp-dropdown:has(.cdir-clock) { border: 0; background: none; box-shadow: none; }
-.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-center { display: grid; }
+/* Half-circle centres: WhatsApp's is a bowl with its flat side on top, just under
+   the menu name; Database's is a "D" with its flat side against its entry. */
+.app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-center {
+  display: grid;
+  top: 0;
+  width: 104px;
+  height: 52px;
+  margin: 0 0 0 -52px;
+  border-radius: 0 0 52px 52px;
+  padding-bottom: 6px;
+}
+.app > aside nav .masters-dropdown .cdir-clock.half.beside .cdir-clock-center {
+  display: grid;
+  top: var(--cy);
+  left: 0;
+  width: 58px;
+  height: 108px;
+  margin: -54px 0 0;
+  border-radius: 0 54px 54px 0;
+  padding-right: 4px;
+}
+.app > aside nav .masters-dropdown .cdir-clock.half.beside { --cx: 0px; --radius: 100px; left: calc(100% + 8px); width: 136px; }
 @keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
   .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; bottom: auto; left: auto; margin: 10px auto 6px; }
+  .app > aside nav .masters-dropdown .cdir-clock.half.beside .cdir-clock-center { display: none; }
   .app > aside nav .masters-dropdown .cdir-clock.half.beside { --radius: 96px; --cx: 46px; position: relative; top: auto; left: auto; width: 100%; margin: 6px 0 2px; filter: none; }
   .cdir-masters-hub.open::after { display: none; }
 }
