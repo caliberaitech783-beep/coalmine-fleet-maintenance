@@ -1,4 +1,5 @@
 import express from 'express';
+import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
 import {currentBirthdayNames} from './info-pulse-birthdays.mjs';
 import compression from 'compression';
 import {createNotificationFeed} from './notification-feed.mjs';
@@ -611,10 +612,15 @@ async function migrate(){
       applied_by_name TEXT NOT NULL DEFAULT '',
       applied_at TIMESTAMPTZ
     );
+    ALTER TABLE request_corrections ADD COLUMN IF NOT EXISTS apply_error TEXT NOT NULL DEFAULT '';
+    ALTER TABLE request_corrections ADD COLUMN IF NOT EXISTS returned_at TIMESTAMPTZ;
+    ALTER TABLE request_corrections ADD COLUMN IF NOT EXISTS returned_by TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS request_corrections_request_idx ON request_corrections (request_reference,requested_at DESC);
     CREATE INDEX IF NOT EXISTS request_corrections_status_idx ON request_corrections (status,site,requested_at DESC);
     CREATE UNIQUE INDEX IF NOT EXISTS request_corrections_open_idx ON request_corrections (request_reference,correction_type)
       WHERE status IN ('Pending PM approval','Approved');
+    CREATE UNIQUE INDEX IF NOT EXISTS request_corrections_unresolved_idx ON request_corrections (request_reference,correction_type)
+      WHERE status IN ('Pending PM approval','Approved','Returned for correction');
     CREATE TABLE IF NOT EXISTS master_records (
       id BIGSERIAL PRIMARY KEY,
       master_name TEXT NOT NULL,
@@ -5350,6 +5356,7 @@ const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,a
 
 const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
   original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
+  apply_error AS "applyError",returned_at AS "returnedAt",returned_by AS "returnedBy",
   evidence_name AS "evidenceName",evidence_type AS "evidenceType",
   requested_by_login AS "requestedByLogin",requested_by_name AS "requestedByName",requested_at AS "requestedAt",
   reviewed_by_login AS "reviewedByLogin",reviewed_by_name AS "reviewedByName",reviewed_at AS "reviewedAt",review_remark AS "reviewRemark",
@@ -5424,6 +5431,44 @@ function correctionValuesStillMatch(type,current,original,proposed){
 }
 
 function registerRequestCorrectionRoutes(){
+  app.get('/api/request-corrections/returned',requireSession,async(req,res,next)=>{
+    try{
+      const login=String(req.session.login||'').trim().toLowerCase();
+      const {rows}=await pool.query(`SELECT ${requestCorrectionProjection} FROM request_corrections
+        WHERE lower(trim(requested_by_login))=$1 AND status=$2 ORDER BY returned_at,id`,[login,REQUEST_CORRECTION_STATUS.RETURNED]);
+      const sources=rows.length?(await pool.query(`SELECT ${requestCorrectionSourceProjection} FROM maintenance_requests WHERE reference=ANY($1::text[])`,[rows.map(row=>row.requestReference)])).rows:[];
+      const byReference=new Map(sources.map(row=>[row.reference,row]));
+      res.set('Cache-Control','private, no-store');
+      res.json({records:rows.map(row=>{const current=byReference.get(row.requestReference);return {...row,canManage:true,canDelete:true,
+        ...(current?{currentValues:requestCorrectionSnapshot(current,row.correctionType),currentTimeline:{'Production submission':current.startedAt,'Maintenance acceptance':current.acceptedAt,'Maintenance closure':current.closedAt,'First trip':current.firstTripAt,'MIS verification':current.verifiedAt}}:{})};}),fieldOptions:rows.length?{breakdownTypes:await correctionBreakdownTypes()}:{}});
+    }catch(error){next(error)}
+  });
+
+  app.patch('/api/request-corrections/:id/admin-decision',requireSession,async(req,res,next)=>{
+    const client=await pool.connect();
+    try{
+      const access=await requestCorrectionAccessContext(req.session,client);
+      if(!access.administrator)return res.status(403).json({error:'Only Admin can return or reject an approved correction.'});
+      const id=Number(req.params.id),decision=req.body?.decision,remark=String(req.body?.remark||'').trim();
+      if(!Number.isSafeInteger(id)||id<=0||!['revert','reject'].includes(decision))return res.status(400).json({error:'Select a valid correction and decision.'});
+      if(decision==='reject'&&requestCorrectionReviewRemarkError(remark))return res.status(400).json({error:'Enter an Admin rejection reason between 5 and 1,000 characters.'});
+      await client.query('BEGIN');
+      const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
+      const before=rows[0];
+      if(!before)throw Object.assign(new Error('Correction request not found.'),{status:404});
+      if(decision==='revert'&&(!before.applyError||![REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.RETURNED].includes(before.status)))throw Object.assign(new Error('Revert is available only for a correction with a recorded application error.'),{status:409});
+      if(decision==='reject'&&before.status!==REQUEST_CORRECTION_STATUS.APPROVED)throw Object.assign(new Error('Only an approved correction can be rejected by Admin.'),{status:409});
+      const status=decision==='revert'?REQUEST_CORRECTION_STATUS.RETURNED:REQUEST_CORRECTION_STATUS.REJECTED;
+      const saved=(await client.query(`UPDATE request_corrections SET status=$1,returned_at=NOW(),returned_by=$2,
+        apply_error=CASE WHEN $3='reject' THEN $4 ELSE apply_error END WHERE id=$5 RETURNING ${requestCorrectionProjection}`,
+        [status,req.session.name||access.login,decision,remark,id])).rows[0];
+      await client.query('COMMIT');
+      await addTicketNotificationsBestEffort(pool,[saved.requestedByLogin],saved.requestReference,`Correction #${id} for ${saved.requestReference}: ${decision==='revert'?'returned for editing or deletion':'rejected by Admin'}. ${decision==='revert'?saved.applyError:remark}`,null,{whatsapp:false});
+      req.audit={eventType:'Correction',module:'Maintenance Requests',action:decision==='revert'?'Revert correction to requester':'Admin rejected approved correction',targetType:'Maintenance request',targetReference:saved.requestReference,reason:decision==='revert'?saved.applyError:remark,changedFields:[{field:'Correction status',before:before.status,after:status}]};
+      res.json(saved);
+    }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+  });
+
   app.get('/api/request-corrections',requireSession,async(req,res,next)=>{
   try{
     const context=await requestCorrectionAccessContext(req.session);
@@ -5518,18 +5563,35 @@ function registerRequestCorrectionRoutes(){
       }else{
         const reason=String(req.body?.reason||'').trim();
         if(reason.length<10||reason.length>1000)throw Object.assign(new Error('Enter a correction reason between 10 and 1,000 characters.'),{status:400});
-        const proposedChanges=normalizeRequestCorrectionChanges(before.correctionType,req.body?.proposedChanges||{},before.originalValues);
+        let originalValues=before.originalValues;
+        let currentSource=null;
+        if(before.status===REQUEST_CORRECTION_STATUS.RETURNED){
+          const current=await client.query(`SELECT ${requestCorrectionSourceProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[before.requestReference]);
+          currentSource=current.rows[0];
+          if(!currentSource)throw Object.assign(new Error('The maintenance request no longer exists.'),{status:404});
+          originalValues=requestCorrectionSnapshot(currentSource,before.correctionType);
+        }
+        const proposedChanges=normalizeRequestCorrectionChanges(before.correctionType,req.body?.proposedChanges||{},originalValues);
+        if(currentSource)validateReturnedCorrection(currentSource,proposedChanges,reason);
         if(Object.prototype.hasOwnProperty.call(proposedChanges,'category')){
           const options=await correctionBreakdownTypes(client);
           if(options.length&&!options.some((name)=>name.toLowerCase()===String(proposedChanges.category).trim().toLowerCase()))throw Object.assign(new Error('Select a Breakdown type from the list.'),{status:400});
         }
-        saved=(await client.query(`UPDATE request_corrections SET proposed_changes=$1::jsonb,reason=$2 WHERE id=$3 RETURNING ${requestCorrectionProjection}`,[JSON.stringify(proposedChanges),reason,id])).rows[0];
+        if(currentSource){
+          saved=(await client.query(`UPDATE request_corrections SET proposed_changes=$1::jsonb,reason=$2,original_values=$3::jsonb,status=$4,
+            apply_error='',returned_at=NULL,returned_by='',reviewed_by_login='',reviewed_by_name='',reviewed_at=NULL,review_remark=''
+            WHERE id=$5 RETURNING ${requestCorrectionProjection}`,[JSON.stringify(proposedChanges),reason,JSON.stringify(originalValues),REQUEST_CORRECTION_STATUS.PENDING,id])).rows[0];
+        }else saved=(await client.query(`UPDATE request_corrections SET proposed_changes=$1::jsonb,reason=$2 WHERE id=$3 RETURNING ${requestCorrectionProjection}`,[JSON.stringify(proposedChanges),reason,id])).rows[0];
       }
       await client.query('COMMIT');
       req.audit={eventType:'Correction',module:'Maintenance Requests',action:deleting?'Delete pending correction':'Edit pending correction',targetType:'Maintenance request',targetReference:before.requestReference,reason:saved.reason,
-        changedFields:[{field:'Correction ID',before:String(id),after:String(id)},...(deleting?[{field:'Correction status',before:before.status,after:saved.status}]:[
+        changedFields:[{field:'Correction ID',before:String(id),after:String(id)},{field:'Recorded application error',before:before.applyError||'',after:saved.applyError||''},{field:'Correction status',before:before.status,after:saved.status},...(deleting?[]:[
           ...requestCorrectionChangedFields(before.correctionType,{...before.originalValues,...before.proposedChanges},Object.fromEntries([...new Set([...Object.keys(before.proposedChanges),...Object.keys(saved.proposedChanges)])].map((key)=>[key,saved.proposedChanges[key]??before.originalValues[key]]))),
           {field:'Reason',before:before.reason,after:saved.reason}])]};
+      if(before.status===REQUEST_CORRECTION_STATUS.RETURNED&&!deleting){
+        const pmLogins=(await correctionProjectManagerLogins(pool,saved.site)).filter(login=>login!==context.login);
+        await addTicketNotificationsBestEffort(pool,pmLogins,saved.requestReference,`Returned correction #${id} was edited by ${saved.requestedByName} and needs fresh PM approval.`,null,{whatsapp:false});
+      }
       res.json(saved);
     }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
   }
@@ -5567,6 +5629,7 @@ function registerRequestCorrectionRoutes(){
 
   app.patch('/api/request-corrections/:id/apply',requireSession,async(req,res,next)=>{
   const client=await pool.connect();
+  let failedCorrection=null;
   try{
     const access=await requestCorrectionAccessContext(req.session,client);
     if(!access.administrator)return res.status(403).json({error:'Only an Admin or Super Admin can apply an approved correction.'});
@@ -5577,12 +5640,13 @@ function registerRequestCorrectionRoutes(){
     const correction=correctionResult.rows[0];
     if(!correction){await client.query('ROLLBACK');return res.status(404).json({error:'Correction request not found.'})}
     if(correction.status!==REQUEST_CORRECTION_STATUS.APPROVED){await client.query('ROLLBACK');return res.status(409).json({error:'This correction is locked until the assigned PM approves it.'})}
+    await client.query('SAVEPOINT correction_apply');
+    failedCorrection=correction;
     const requestResult=await client.query(`SELECT ${requestCorrectionSourceProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[correction.requestReference]);
     const before=requestResult.rows[0];
     if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'The maintenance request no longer exists.'})}
     if(!correctionValuesStillMatch(correction.correctionType,before,correction.originalValues,correction.proposedChanges)){
-      await client.query('ROLLBACK');
-      return res.status(409).json({error:'The original request changed after this correction was submitted. Create a new correction from the latest values.'});
+      throw Object.assign(new Error('The original request changed after this correction was submitted. Edit this correction using the latest values.'),{status:409,code:'CORRECTION_STALE'});
     }
     const timelineKey={startedAt:'start',acceptedAt:'acceptedAt',expectedCompletionAt:'expectedCompletionAt',closedAt:'closedAt',firstTripAt:'firstTripAt',verifiedAt:'verifiedAt'};
     const timelineChanges=Object.fromEntries(Object.entries(correction.proposedChanges).filter(([key])=>timelineKey[key]).map(([key,value])=>[timelineKey[key],value||null]));
@@ -5602,12 +5666,23 @@ function registerRequestCorrectionRoutes(){
       [REQUEST_CORRECTION_STATUS.APPLIED,String(req.session.login||'').trim().toLowerCase(),req.session.name||req.session.login||'Administrator',id]);
     await client.query('COMMIT');
     const saved=updated.rows[0];
+    failedCorrection=null;
     const pmLogins=await correctionProjectManagerLogins(pool,saved.site);
     await addTicketNotificationsBestEffort(pool,[...pmLogins,saved.requestedByLogin],saved.requestReference,`Approved correction ${saved.id} was applied to ${saved.requestReference} by ${saved.appliedByName}.`,null,{whatsapp:false});
     req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Apply approved correction',targetType:'Maintenance request',targetReference:saved.requestReference,reason:saved.reason,
       changedFields:[...requestCorrectionChangedFields(saved.correctionType,saved.originalValues,saved.proposedChanges),{field:'Correction status',before:REQUEST_CORRECTION_STATUS.APPROVED,after:REQUEST_CORRECTION_STATUS.APPLIED}]};
     res.json(saved);
-  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+  }catch(error){
+    if(failedCorrection&&correctionErrorIsActionable(error)){
+      try{
+        await returnFailedCorrection(client,failedCorrection,error,req.session.name||req.session.login||'Admin');
+        await addTicketNotificationsBestEffort(pool,[failedCorrection.requestedByLogin],failedCorrection.requestReference,`Correction #${failedCorrection.id} was returned: ${error.message} Edit or delete this correction to continue.`,null,{whatsapp:false});
+        req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Automatically return correction after application error',targetType:'Maintenance request',targetReference:failedCorrection.requestReference,reason:error.message,changedFields:[{field:'Correction status',before:REQUEST_CORRECTION_STATUS.APPROVED,after:REQUEST_CORRECTION_STATUS.RETURNED}]};
+        return res.status(409).json({error:error.message,returned:true});
+      }catch(returnError){await client.query('ROLLBACK').catch(()=>{});return next(returnError)}
+    }
+    await client.query('ROLLBACK').catch(()=>{});next(error);
+  }finally{client.release()}
 });
 }
 

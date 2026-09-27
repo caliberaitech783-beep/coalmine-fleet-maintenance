@@ -1,0 +1,10 @@
+.returned-correction-gate { width:min(1050px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:24px; overflow:auto; border:2px solid #773a9c; border-radius:16px; background:var(--panel,#fff); color:var(--ink,#1e293b); box-shadow:0 20px 80px #0005; }
+.returned-correction-gate::backdrop { background:#10182ab8; backdrop-filter:blur(4px); }
+.returned-correction-gate>header { margin-bottom:20px; }
+.returned-correction-gate>header h2 { margin:0 0 8px; }
+.returned-correction-gate>header p { margin:0; line-height:1.6; }
+.returned-correction-gate .correction-card { margin-bottom:18px; }
+.returned-correction-evidence { padding:16px; border:1px solid var(--line,#ddd); }
+.returned-correction-evidence>header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.correction-status.returned-for-correction { background:#fff0d4; color:#885500; }
+@media(max-width:600px) { .returned-correction-gate { padding:14px; width:calc(100vw - 16px); max-height:calc(100dvh - 16px); } }

@@ -6,9 +6,16 @@ export const REQUEST_CORRECTION_STATUS=Object.freeze({
   REJECTED:'Rejected',
   APPLIED:'Applied',
   DELETED:'Deleted',
+  RETURNED:'Returned for correction',
 });
 
+export function isReturnedCorrectionOwner(record,context){
+  return record?.status===REQUEST_CORRECTION_STATUS.RETURNED&&Boolean(context.login)
+    &&String(record.requestedByLogin||'').trim().toLowerCase()===context.login;
+}
+
 export function canManagePendingCorrection(record,context){
+  if(isReturnedCorrectionOwner(record,context))return true;
   return record?.status===REQUEST_CORRECTION_STATUS.PENDING&&(context.administrator===true||(
     context.requester===true&&context.inScope===true&&context.allowedTypes?.includes(record.correctionType)
     &&String(record.requestedByLogin||'').trim().toLowerCase()===context.login
@@ -16,6 +23,7 @@ export function canManagePendingCorrection(record,context){
 }
 
 export function canDeletePendingCorrection(record,context){
+  if(isReturnedCorrectionOwner(record,context))return true;
   return record?.status===REQUEST_CORRECTION_STATUS.PENDING&&context.pm===true&&context.inScope===true;
 }
 
