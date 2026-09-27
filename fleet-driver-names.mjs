@@ -1,5 +1,12 @@
 const text = value => String(value ?? '').trim();
 const key = value => text(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+const aliases = values => [...new Set(values.flatMap(value=>{
+  const full=key(value);
+  // Older vehicle logbooks can store only the registration, while the master
+  // stores a door prefix plus registration. Ambiguity checks still apply.
+  const plate=full.match(/[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}(?![0-9])/)?.[0];
+  return [full,plate].filter(Boolean);
+}))];
 
 // Never join an ambiguous label to an arbitrary vehicle. Oracle's stable ID wins.
 export function withFleetDriverNames(equipment = [], drivers = []) {
@@ -7,15 +14,15 @@ export function withFleetDriverNames(equipment = [], drivers = []) {
   for (const driver of drivers) {
     if (!text(driver.driverName)) continue;
     if (text(driver.oracleEquipmentTno)) byId.set(text(driver.oracleEquipmentTno), driver);
-    for (const alias of new Set([driver.equipmentId, driver.equipmentName, driver.oracleEquipmentNo, driver.vehicleNo].map(key).filter(Boolean))) {
+    for (const alias of aliases([driver.equipmentId, driver.equipmentName, driver.oracleEquipmentNo, driver.vehicleNo])) {
       if (!byAlias.has(alias)) byAlias.set(alias, driver);
       else if (byAlias.get(alias) !== driver) byAlias.set(alias, null);
     }
   }
   return equipment.map(record => {
     const id = text(record.oracleEquipmentTno);
-    const matches = new Set([record.equipmentId, record.equipmentName, record.oracleEquipmentNo, record.door, record.reg]
-      .map(key).filter(Boolean).map(alias => byAlias.get(alias)).filter(Boolean)
+    const matches = new Set(aliases([record.equipmentId, record.equipmentName, record.oracleEquipmentNo, record.door, record.reg])
+      .map(alias => byAlias.get(alias)).filter(Boolean)
       .filter(driver => !id || !text(driver.oracleEquipmentTno) || id === text(driver.oracleEquipmentTno)));
     const driver = byId.get(id) || (matches.size === 1 ? [...matches][0] : null);
     return driver ? {...record, logbookDriverName: text(driver.driverName), logbookDriverAt: driver.driverAt} : record;

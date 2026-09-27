@@ -4347,14 +4347,16 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
     if (syncingOracle) return;
     setSyncingOracle(true);
     try {
-      const response = await fetch("/api/oracle/equipment-transfers/sync", {
+      const response = await fetch(name === "Equipment master" ? "/api/oracle/fleet-details/sync" : "/api/oracle/equipment-transfers/sync", {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
-      alert(`${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
+      alert(name === "Equipment master"
+        ? `ERP sync completed. ${details.updated || 0} vehicles updated. Driver names available: ${details.driversFound || 0}/${details.total || 0}. Models available: ${details.modelsFound || 0}/${details.total || 0}. ${details.missingDrivers || 0} driver names and ${details.missingModels || 0} models still need source data or matching ERP records.`
+        : `${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
       window.location.reload();
     } catch (error) {
       alert(error.message || "Could not synchronize equipment transfers.");
@@ -4387,9 +4389,9 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
   return (
     <>
       <div className="master-actions">
-        {name === "Vehicle transfers" && (
+        {["Vehicle transfers", "Equipment master"].includes(name) && (
           <button className="secondary" type="button" onClick={syncOracle} disabled={syncingOracle}>
-            <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : "Sync Oracle"}
+            <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : name === "Equipment master" ? "Sync drivers & models" : "Sync Oracle"}
           </button>
         )}
         {onDeleteAll && (

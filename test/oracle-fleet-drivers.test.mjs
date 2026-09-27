@@ -13,6 +13,8 @@ test('fleet driver lookup batches both logbooks, closes connections, shares and 
       calls++;
       assert.match(sql, /cmpl\.equipmentlogbook/);
       assert.match(sql, /cmpl\.vehiclelogbook/);
+      assert.match(sql, /cmpl\.equipmenttransfer/);
+      assert.match(sql, /emp.employeecode = transfer.drivercode/);
       assert.match(sql, /ORDER BY log_date DESC, log_tno DESC/);
       assert.match(sql, /ranked.result_rank = 1/);
       assert.match(sql, /log.vehiclelogbookdate <= SYSDATE/);
@@ -33,5 +35,8 @@ test('fleet driver lookup batches both logbooks, closes connections, shares and 
     assert.equal(await oracleLatestFleetDrivers(), first);
     assert.equal(calls, 2);
     assert.equal(closed, 2);
+    await oracleLatestFleetDrivers({refresh:true});
+    assert.equal(calls,3);
+    assert.equal(closed,3);
   } finally {oracledb.createPool=original;}
 });

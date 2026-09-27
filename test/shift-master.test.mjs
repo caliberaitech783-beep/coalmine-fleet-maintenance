@@ -26,14 +26,15 @@ test('Shift Master accepts workbook headers, normalizes time, and validates effe
   assert.equal(displaySiteName(normalizeOperationalSiteFields({site:'Gouri OB'}).site),'Gauri Pauni OB (2nd)');
 });
 
-test('Shift Master is wired into navigation, CRUD, seed data, and Equipment Master hides Sync Oracle',()=>{
+test('Shift Master is wired into navigation, CRUD, seed data, and Equipment Master exposes only targeted ERP sync',()=>{
   const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(client,/\["Shift Master", Clock, "shift"\]/);
   assert.match(client,/"Shift Master": \[/);
   assert.match(client,/name === "Shift Master" \? privilegeSiteOptions/);
-  assert.match(client,/name === "Vehicle transfers" && \(/);
-  assert.doesNotMatch(client,/\["Equipment master", "Vehicle transfers"\]\.includes\(name\)/);
+  assert.match(client,/name === "Equipment master" \? "\/api\/oracle\/fleet-details\/sync" : "\/api\/oracle\/equipment-transfers\/sync"/);
+  assert.match(client,/"Sync drivers & models" : "Sync Oracle"/);
+  assert.doesNotMatch(client,/fetch\("\/api\/oracle\/equipment\/sync"/);
   assert.match(server,/shift_master_defaults_seeded_v1/);
   assert.match(server,/master==='Equipment master'\|\|master==='Shift Master'/);
   assert.match(server,/normalizeShiftRecord\(record\)/);

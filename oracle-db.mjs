@@ -120,8 +120,8 @@ export async function oracleDriverLookup({ date, time, location, equipmentNo }) 
 
 let fleetDriversCache;
 let fleetDriversPromise;
-export async function oracleLatestFleetDrivers() {
-  if (fleetDriversCache && Date.now() < fleetDriversCache.expiresAt) return fleetDriversCache.rows;
+export async function oracleLatestFleetDrivers({refresh=false} = {}) {
+  if (!refresh && fleetDriversCache && Date.now() < fleetDriversCache.expiresAt) return fleetDriversCache.rows;
   if (fleetDriversPromise) return fleetDriversPromise;
   fleetDriversPromise = (async () => {
     const pool = await oraclePool();
@@ -150,6 +150,12 @@ export async function oracleLatestFleetDrivers() {
              FROM cmpl.vehiclelogbook log
              JOIN cmpl.employee emp ON emp.employeecode = log.operatorcode
              WHERE TRIM(emp.employeename) IS NOT NULL AND log.vehiclelogbookdate <= SYSDATE
+             UNION ALL
+             SELECT transfer.equipmenttno, CAST(NULL AS VARCHAR2(200)), emp.employeename,
+                    transfer.equipmenttransferdate, transfer.tno, 'Transfer'
+             FROM cmpl.equipmenttransfer transfer
+             JOIN cmpl.employee emp ON emp.employeecode = transfer.drivercode
+             WHERE TRIM(emp.employeename) IS NOT NULL AND transfer.equipmenttransferdate <= SYSDATE
            ) candidates
          ) ranked
          LEFT JOIN cmpl.equipment equipment ON equipment.tno = ranked.equipment_tno
@@ -248,7 +254,8 @@ export async function oracleEquipmentMasterRecords() {
                    WHERE specification.itemspecificationcode = equipment.itemspecificationcode), equipment.itemspecificationcode) AS item_specification,
               TO_CHAR(equipment.equipmentacquisitiondate, 'YYYY-MM-DD') AS acquisition_date,
               NVL(equipment.manufacturername, NVL(equipment.manufacturemakecode, equipment.manufacturermakecode)) AS make_name,
-              NVL(equipment.manufacturermodelno, equipment.manufacturemodelcode) AS model_name,
+              COALESCE(NULLIF(NULLIF(TRIM(equipment.manufacturermodelno), '-'), '—'),
+                       NULLIF(NULLIF(TRIM(equipment.manufacturemodelcode), '-'), '—')) AS model_name,
               equipment.manufacturerserialno AS manufacturer_serial_no,
               equipment.engineno AS engine_no,
               equipment.chasisno AS chassis_no,

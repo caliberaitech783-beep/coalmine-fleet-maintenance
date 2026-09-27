@@ -1,4 +1,5 @@
 import express from 'express';
+import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
 import {currentBirthdayNames} from './info-pulse-birthdays.mjs';
 import compression from 'compression';
@@ -3703,6 +3704,25 @@ async function syncOracleEquipmentMaster(){
   })().finally(()=>{equipmentMasterSyncPromise=undefined});
   return equipmentMasterSyncPromise;
 }
+
+app.post('/api/oracle/fleet-details/sync',requireSuper,async(req,res,next)=>{
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle ERP sync is not configured.'});
+  let client;
+  try{
+    const [equipment,drivers]=await Promise.all([oracleEquipmentMasterRecords(),oracleLatestFleetDrivers({refresh:true})]);
+    client=await pool.connect();
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('oracle-equipment-master-sync'))");
+    const {rows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' FOR UPDATE");
+    const {updates,summary}=fleetErpUpdates(rows,equipment,drivers);
+    if(updates.length)await client.query(`UPDATE master_records AS target SET record_data=incoming.value->'record'
+      FROM jsonb_array_elements($1::jsonb) AS incoming(value)
+      WHERE target.id=(incoming.value->>'id')::bigint AND target.master_name='Equipment master'`,[JSON.stringify(updates)]);
+    await client.query('COMMIT');
+    req.audit={eventType:'Update',module:'Oracle synchronization',action:'Sync ERP fleet drivers and models',targetType:'Equipment master',reason:JSON.stringify(summary)};
+    res.json(summary);
+  }catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client?.release()}
+});
 
 app.post('/api/oracle/equipment/sync',requireSuper,async(_req,res)=>{
   if(!oracleConfigured)return res.status(503).json({error:'Oracle equipment sync is not configured.'});
