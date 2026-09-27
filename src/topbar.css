@@ -1048,9 +1048,15 @@
   top: 50%;
   left: calc(100% + 10px);
   margin-top: calc(var(--cy) * -1);
-  /* Beside the menu it is transparent too: only the gold arc and the icons show. */
-  background: radial-gradient(circle at var(--cx) var(--cy), transparent 0 124px, #ffd166cc 125px 126px, transparent 127px);
+  /* Beside the menu only the icons show: no background and no arc line. */
+  background: none;
+  /* No centre circle here: the arc's centre sits on the entry itself, so the icons
+     curve right beside it. */
+  --radius: 84px;
+  --cx: -30px;
+  width: 110px;
 }
+.app > aside nav .masters-dropdown .cdir-clock.half.beside .cdir-clock-center { display: none; }
 .app > aside nav .masters-dropdown .cdir-clock.half.inside {
   position: relative;
   top: auto;
@@ -1072,7 +1078,8 @@
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
   .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
-  .app > aside nav .masters-dropdown .cdir-clock.half.beside { position: relative; top: auto; left: auto; width: 100%; margin: 6px 0 2px; filter: none; }
+  .app > aside nav .masters-dropdown .cdir-clock.half.beside { --radius: 96px; --cx: 46px; position: relative; top: auto; left: auto; width: 100%; margin: 6px 0 2px; filter: none; }
+  .app > aside nav .masters-dropdown .cdir-clock.half.beside .cdir-clock-center { display: grid; }
   .cdir-masters-hub.open::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
