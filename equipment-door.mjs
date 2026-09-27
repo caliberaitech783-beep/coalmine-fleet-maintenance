@@ -3,16 +3,18 @@ const text = value => String(value ?? '').trim();
 const key = value => text(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
 // Imported equipment names contain the fleet door label (for example
-// "WT22 - MP66ZD0582"). Registration/serial/chassis are identity keys, not doors.
+// "WT22 - MP66ZD0582"). When no door label exists, use registration as the
+// shared display/create fallback. Never substitute a chassis or serial number.
 export function equipmentDoorNumber(record = {}) {
-  const nonDoors = new Set([record.reg, record.registration, record.chassisNo,
+  const usable = value => key(value) && !['na','notavailable','notapplicable','unknown','none','null'].includes(key(value));
+  const nonDoors = new Set([record.reg, record.registration, record.registrationNumber, record.chassisNo,
     record.chassis, record.manufacturerSerialNo, record.engineNo].map(key).filter(Boolean));
   const door = text(record.door);
-  if (door && !nonDoors.has(key(door))) return door;
+  if (usable(door) && !nonDoors.has(key(door))) return door;
   const name = text(record.equipmentName);
   if (name && /\d/.test(name) && !nonDoors.has(key(name)) &&
       ![record.model, record.modelNo, record.itemName, record.group, record.category].some(value => key(value) && key(value) === key(name))) return name;
-  return '';
+  return [record.reg,record.registration,record.registrationNumber].map(text).find(usable) || '';
 }
 
 // Build once per feed, rather than scanning the master again for every row.
@@ -45,7 +47,8 @@ export function createRequestDoorResolver(records = []) {
       if (!door) return request;
       return {...request, door, ...(Object.hasOwn(request, 'reportDoor') ? {reportDoor: door} : {})};
     }
-    return request;
+    const fallback = !key(request.door) ? equipmentDoorNumber(request) : '';
+    return fallback ? {...request,door:fallback,...(Object.hasOwn(request,'reportDoor')?{reportDoor:fallback}:{})} : request;
   };
 }
 

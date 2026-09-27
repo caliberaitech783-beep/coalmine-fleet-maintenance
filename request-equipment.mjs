@@ -16,7 +16,7 @@ function equipmentReference(value) {
 const requestEquipmentLookupCache = new WeakMap();
 const emptyRequestEquipmentLookup = {
   references: new Map(),
-  resolveDoor: (request) => request,
+  resolveDoor: createRequestDoorResolver([]),
 };
 
 function requestEquipmentLookup(records = []) {

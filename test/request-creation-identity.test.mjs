@@ -10,7 +10,7 @@ test('selected equipment with no report door retains its master identity through
     {equipmentName:'REG-101', reg:'REG-101', chassisNo:'CH-101'},
     {equipmentName:'D85ESS-2', model:'D85ESS-2', chassisNo:'CH-101'},
   ]) {
-    assert.equal(requestEquipmentDetails(record).door, '');
+    assert.equal(requestEquipmentDetails(record).door, record.reg || '');
     const details = requestEquipmentCreationDetails(record);
     assert.ok(details.door);
     const payload = {ref:'REQ-1', ...details, complaint:'Track shoe reinforcement work'};

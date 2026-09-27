@@ -20,6 +20,16 @@ const requests = [
   {ref: "REQ-4", door: "EX-20", start: "2026-09-11 09:00", status: "Closed", maintenanceWork: "Serviced"},
 ];
 
+test('registration fallback keeps fleet history and driver attached to the same vehicle',()=>{
+  const equipment={door:'',reg:'UP64AT9857',equipmentName:'UP64AT9857',chassisNo:'CH123'};
+  const request={...equipment,ref:'REQ-REG',start:'2026-09-27 10:00',driverName:'Driver'};
+  const [row]=vehicleFleetRows([equipment],[request]);
+  assert.equal(row.reportDoor,'UP64AT9857');
+  assert.equal(row.breakdownCount,1);
+  assert.equal(row.driverName,'Driver');
+  assert.equal(vehicleRepairHistoryRows([request],row)[0].ref,'REQ-REG');
+});
+
 test("vehicle repair history groups normalized door numbers and sorts newest first", () => {
   assert.equal(vehicleHistoryKey(requests[0]), "door:v-173");
   assert.deepEqual(vehicleRepairHistoryRows(requests, requests[0]).map((row) => row.ref), ["REQ-3", "REQ-2", "REQ-1"]);
