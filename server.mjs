@@ -1015,6 +1015,7 @@ async function migrate(){
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'Medium';
+    ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_acknowledged_at TIMESTAMPTZ;
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_data TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_name TEXT NOT NULL DEFAULT '';
@@ -5067,6 +5068,30 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
+app.get('/api/tickets/resolution-notices',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||'').trim().toLowerCase();
+    const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets
+      WHERE lower(trim(creator_login))=$1 AND status='Resolved' AND resolution_acknowledged_at IS NULL
+      ORDER BY resolved_at DESC,id DESC`,[login]);
+    res.set('Cache-Control','private, no-store');
+    res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.patch('/api/tickets/acknowledge-resolution',requireSession,async(req,res,next)=>{
+  try{
+    const reference=String(req.body?.reference||'').trim();
+    const login=String(req.session.login||'').trim().toLowerCase();
+    if(!reference)return res.status(400).json({error:'Ticket reference is required.'});
+    const {rows}=await pool.query(`UPDATE crm_tickets SET resolution_acknowledged_at=COALESCE(resolution_acknowledged_at,NOW())
+      WHERE reference=$1 AND lower(trim(creator_login))=$2 AND status='Resolved' RETURNING reference`,[reference,login]);
+    if(!rows.length)return res.status(404).json({error:'Your resolved ticket was not found.'});
+    req.audit={eventType:'Update',module:'Tickets',action:'Acknowledge ticket resolution',targetType:'CRM ticket',targetReference:reference};
+    res.json({reference,acknowledged:true});
+  }catch(error){next(error)}
+});
+
 app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
   if(!isTicketAdmin(req.session))return res.status(403).json({error:'Only an Admin can resolve tickets.'});
   const client=await pool.connect();
@@ -5083,7 +5108,7 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     if(!validTicketMediaDataUrl(resolutionAttachmentData))return res.status(400).json({error:'Upload a supported resolution image or video up to 10 MB.'});
     await client.query('BEGIN');
     const result=await client.query(`UPDATE crm_tickets SET status='Resolved',resolution_message=$1,resolution_audio=$2,
-      resolution_attachment_data=$3,resolution_attachment_name=$4,resolution_attachment_type=$5,resolved_by=$6,resolved_at=NOW()
+      resolution_attachment_data=$3,resolution_attachment_name=$4,resolution_attachment_type=$5,resolved_by=$6,resolved_at=NOW(),resolution_acknowledged_at=NULL
       WHERE reference=$7 AND status<>'Resolved' RETURNING ${ticketProjection()}`,[resolution,resolutionAudio,resolutionAttachmentData,
       resolutionAttachmentName,resolutionAttachmentType,String(req.session.name||'Admin'),reference]);
     if(!result.rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Open ticket not found.'})}

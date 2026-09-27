@@ -31,6 +31,7 @@ import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./
 import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import UserProfile from "./user-profile.jsx";
 import TelegramGate from "./telegram-gate.jsx";
+import TicketResolutionNotices from "./ticket-resolution-notices.jsx";
 import ReturnedCorrectionGate from "./returned-correction-gate.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
 import { playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS } from "./notification-chime.mjs";
@@ -11416,6 +11417,7 @@ function App() {
         <SessionMessageInbox session={session} />
         <TelegramGate token={authToken} logout={logout} />
         <ReturnedCorrectionGate key={authToken} token={authToken} />
+        <TicketResolutionNotices key={authToken} token={authToken} />
         <RemoteAssistanceAgent session={session} />
         {globalVehicleHistoryDialog}
       </>
@@ -11550,6 +11552,7 @@ function App() {
       <SessionMessageInbox session={session} />
       <TelegramGate token={authToken} logout={logout} />
       <ReturnedCorrectionGate key={authToken} token={authToken} />
+        <TicketResolutionNotices key={authToken} token={authToken} />
       <RemoteAssistanceAgent session={session} />
       {globalVehicleHistoryDialog}
     </div>
