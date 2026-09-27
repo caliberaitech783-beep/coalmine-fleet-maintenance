@@ -616,6 +616,7 @@
 .workspace-menu-item[data-workspace="import"] .workspace-icon { --ws-a: #22d3ee; --ws-b: #0e7490; --ws-shadow: rgba(14, 116, 144, 0.45); --ws-ring: rgba(34, 211, 238, 0.4); }
 .workspace-menu-item[data-workspace="schedule"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #0369a1; --ws-shadow: rgba(3, 105, 161, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
 .workspace-menu-item[data-workspace="diagnostics"] .workspace-icon { --ws-a: #f472b6; --ws-b: #9d174d; --ws-shadow: rgba(157, 23, 77, 0.45); --ws-ring: rgba(244, 114, 182, 0.4); }
+.workspace-menu-item[data-workspace="storage"] .workspace-icon { --ws-a: #60a5fa; --ws-b: #1d4ed8; --ws-shadow: rgba(29, 78, 216, 0.45); --ws-ring: rgba(96, 165, 250, 0.4); }
 .workspace-menu-item[data-workspace="retention"] .workspace-icon { --ws-a: #2dd4bf; --ws-b: #0f766e; --ws-shadow: rgba(15, 118, 110, 0.45); --ws-ring: rgba(45, 212, 191, 0.4); }
 .workspace-menu-item[data-workspace="purge"] .workspace-icon { --ws-a: #f87171; --ws-b: #b91c1c; --ws-shadow: rgba(185, 28, 28, 0.45); --ws-ring: rgba(248, 113, 113, 0.4); }
 .workspace-menu-item[data-workspace="recovery"] .workspace-icon { --ws-a: #fb923c; --ws-b: #dc2626; --ws-shadow: rgba(220, 38, 38, 0.45); --ws-ring: rgba(251, 146, 60, 0.4); }

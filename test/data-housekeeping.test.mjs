@@ -35,8 +35,8 @@ test("a purge needs a known category, a reason and a typed DELETE", () => {
 test("Retention rules and Purge data are Admin-only pages in the Database clock", () => {
   for (const route of ["app.get('/api/data-housekeeping',requireSuper,requireAdministrator,", "app.post('/api/data-housekeeping/purge',requireSuper,requireAdministrator,", "app.post('/api/log-retention/run',requireSuper,requireAdministrator,"]) assert.ok(server.includes(route), route);
   assert.ok(server.includes("const invalid=purgeRequestError(body);"));
-  assert.ok(source.includes('const databaseToolPages = new Set(["Diagnostics", "Retention rules", "Purge data"]);'));
-  assert.ok(source.includes('["Retention rules", CalendarClock], ["Purge data", Eraser]];'));
+  assert.ok(source.includes('const databaseToolPages = new Set(["Diagnostics", "Storage management", "Retention rules", "Purge data"]);'));
+  assert.ok(source.includes('["Storage management", HardDrive], ["Retention rules", CalendarClock], ["Purge data", Eraser]];'));
   assert.ok(source.includes("<RetentionRulesPage token={authToken} />"));
   assert.ok(source.includes("<PurgeDataPage token={authToken} />"));
 });

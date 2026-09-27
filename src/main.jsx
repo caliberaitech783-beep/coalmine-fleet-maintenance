@@ -33,6 +33,7 @@ import UserProfile from "./user-profile.jsx";
 import TelegramGate from "./telegram-gate.jsx";
 import DiagnosticsPage from "./diagnostics-page.jsx";
 import { PurgeDataPage, RetentionRulesPage } from "./data-housekeeping-page.jsx";
+import StorageManagementPage from "./storage-management-page.jsx";
 import TicketResolutionNotices from "./ticket-resolution-notices.jsx";
 import ReturnedCorrectionGate from "./returned-correction-gate.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
@@ -393,17 +394,18 @@ const adminNav = [
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
 // The backup pages open from one "Database" entry in the Admin menu.
-// Diagnostics (a health check of every service), Retention rules and Purge data
+// Diagnostics (a health check of every service), Storage management, Retention
+// rules and Purge data
 // open from the same Database clock. All are Admin and Super Admin only.
-const databaseToolPages = new Set(["Diagnostics", "Retention rules", "Purge data"]);
-const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope], ["Retention rules", CalendarClock], ["Purge data", Eraser]];
+const databaseToolPages = new Set(["Diagnostics", "Storage management", "Retention rules", "Purge data"]);
+const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope], ["Storage management", HardDrive], ["Retention rules", CalendarClock], ["Purge data", Eraser]];
 // Badge colour / animation key for each Administration menu entry (topbar.css).
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
   "Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery",
   "Backup": "backup", "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule",
   "Audit Trail": "history", "Admin locks": "locks",
-  "Diagnostics": "diagnostics", "Retention rules": "retention", "Purge data": "purge",
+  "Diagnostics": "diagnostics", "Storage management": "storage", "Retention rules": "retention", "Purge data": "purge",
 };
 // [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [
@@ -11506,6 +11508,8 @@ function App() {
             <RecoveryGuide onNavigate={selectMenu} />
           ) : active === "Diagnostics" ? (
             <DiagnosticsPage token={authToken} />
+          ) : active === "Storage management" ? (
+            <StorageManagementPage token={authToken} onNavigate={selectMenu} />
           ) : active === "Retention rules" ? (
             <RetentionRulesPage token={authToken} />
           ) : active === "Purge data" ? (

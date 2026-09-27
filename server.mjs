@@ -42,6 +42,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {createTicketMailer,sendTicketRaisedEmail} from './ticket-email.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
 import {HOUSEKEEPING_CATEGORIES,housekeepingCategory,purgeRequestError} from './data-housekeeping.mjs';
+import {PURGEABLE_TABLES,deadRowShare,diskState,sharePercent,tableLabel} from './storage-management.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
 import {ANNOUNCEMENT_ACTIVE_DAYS,announcementImageBinary,announcementImageError,announcementReaderKey,announcementReaderKeys,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
@@ -1681,6 +1682,57 @@ app.post('/api/data-housekeeping/purge',requireSuper,requireAdministrator,async(
       statusCode:200});
     res.set('Cache-Control','no-store');
     res.json({category:category.key,removed,cutoff:cutoff.toISOString(),...await housekeepingOverview(null)});
+  }catch(error){next(error)}
+});
+
+// Admin > Database > Storage management: where the space goes. Read-only; the
+// page links to Purge data and Retention rules to free space.
+async function backupDiskUsage(){
+  // The backup folder may not exist yet; its nearest existing parent is on the same disk.
+  for(let folder=backupStorageRoot;;folder=path.dirname(folder)){
+    try{const stats=await fs.statfs(folder);return {totalBytes:Number(stats.blocks)*Number(stats.bsize),freeBytes:Number(stats.bavail)*Number(stats.bsize)};}
+    catch{if(path.dirname(folder)===folder)return {totalBytes:0,freeBytes:0};}
+  }
+}
+app.get('/api/storage-overview',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const [{rows:[database]},{rows:tables},{rows:[media]},{rows:[announcementImages]},{rows:[backups]},{settings:backupSettings},disk]=await Promise.all([
+      pool.query('SELECT pg_database_size(current_database())::bigint AS bytes'),
+      pool.query(`SELECT c.relname AS name,pg_total_relation_size(c.oid)::bigint AS total,pg_relation_size(c.oid)::bigint AS data,
+          pg_indexes_size(c.oid)::bigint AS indexes,COALESCE(s.n_live_tup,0)::bigint AS live,COALESCE(s.n_dead_tup,0)::bigint AS dead,
+          GREATEST(c.reltuples,0)::bigint AS estimate,
+          GREATEST(s.last_vacuum,s.last_autovacuum) AS vacuumed
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_stat_user_tables s ON s.relid=c.oid
+        WHERE n.nspname=current_schema() AND c.relkind='r' ORDER BY 2 DESC`),
+      pool.query(`SELECT
+          COALESCE(SUM(octet_length(complaint_audio)+octet_length(complaint_media::text)+octet_length(maintenance_audio)+octet_length(first_trip_card_image)),0)::bigint AS total,
+          COALESCE(SUM(octet_length(complaint_audio)+octet_length(complaint_media::text)+octet_length(maintenance_audio)+octet_length(first_trip_card_image)) FILTER (WHERE verified_at IS NOT NULL),0)::bigint AS verified,
+          COUNT(*) FILTER (WHERE complaint_audio<>'' OR complaint_media<>'[]'::jsonb OR maintenance_audio<>'' OR first_trip_card_image<>'')::int AS requests,
+          COUNT(*) FILTER (WHERE verified_at IS NOT NULL AND (complaint_audio<>'' OR complaint_media<>'[]'::jsonb OR maintenance_audio<>'' OR first_trip_card_image<>''))::int AS "verifiedRequests"
+        FROM maintenance_requests`),
+      pool.query("SELECT COALESCE(SUM(octet_length(image_data)),0)::bigint AS bytes,COUNT(*) FILTER (WHERE image_data<>'')::int AS count FROM announcements"),
+      pool.query(`SELECT COUNT(*)::int AS count,COALESCE(SUM(size_bytes),0)::bigint AS bytes,MAX(completed_at) AS latest
+        FROM backup_runs WHERE status='Completed' AND storage_path<>''`),
+      readBackupSettings(),
+      backupDiskUsage(),
+    ]);
+    const databaseBytes=Number(database?.bytes||0);
+    const retention=await storedLogRetention();
+    res.set('Cache-Control','no-store');
+    res.json({
+      checkedAt:new Date().toISOString(),
+      database:{bytes:databaseBytes,size:formatBytes(databaseBytes),tableCount:tables.length},
+      tables:tables.map((table)=>({name:table.name,label:tableLabel(table.name),bytes:Number(table.total),size:formatBytes(table.total),
+        dataSize:formatBytes(table.data),indexSize:formatBytes(table.indexes),rows:Math.max(Number(table.estimate),Number(table.live)),deadPercent:deadRowShare(table.live,table.dead),
+        share:sharePercent(table.total,databaseBytes),purgeable:PURGEABLE_TABLES.has(table.name),vacuumedAt:table.vacuumed||null})),
+      media:{bytes:Number(media.total),size:formatBytes(media.total),requests:media.requests,
+        verifiedBytes:Number(media.verified),verifiedSize:formatBytes(media.verified),verifiedRequests:media.verifiedRequests,
+        mediaDays:retention.mediaDays,
+        announcementBytes:Number(announcementImages.bytes),announcementSize:formatBytes(announcementImages.bytes),announcementImages:announcementImages.count},
+      backups:{count:backups.count,bytes:Number(backups.bytes),size:formatBytes(backups.bytes),latestAt:backups.latest||null,
+        maxBackups:backupSettings.maxBackups,retentionDays:backupSettings.retentionDays},
+      disk:{...diskState(disk.totalBytes,disk.freeBytes),total:disk.totalBytes?formatBytes(disk.totalBytes):'',free:disk.totalBytes?formatBytes(disk.freeBytes):''},
+    });
   }catch(error){next(error)}
 });
 
