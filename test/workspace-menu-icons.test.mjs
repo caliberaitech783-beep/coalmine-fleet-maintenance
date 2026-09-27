@@ -26,7 +26,7 @@ test('the three icons get their own gradient badge and animation, with reduced m
 test('the WhatsApp Integration menu uses the same badge markup with its own colours and animations',()=>{
   assert.match(source,/const whatsappMenuKey = \(name\) => \(\{ "Meta API setup": "setup", "Daily site-wise report": "site", "Daily OEM report": "oem", "WhatsApp alert history": "history" \}\)\[name\] \|\| "whatsapp";/);
   // The WhatsApp pages now open as a downward half clock of icons with their full names.
-  assert.match(source,/<ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items=\{visibleWhatsAppNav\} hours=\{\[3, 5, 7, 9, 4, 8\]\.slice\(0, visibleWhatsAppNav\.length\)\} labelFor=\{navigationLabel\}/);
+  assert.match(source,/<ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items=\{visibleWhatsAppNav\} hours=\{\[4, 5, 7, 8, 6, 3\]\.slice\(0, visibleWhatsAppNav\.length\)\} labelFor=\{navigationLabel\}/);
   for(const key of ['setup','site','oem','history'])assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
   assert.match(styles,/\[data-workspace="setup"\]:hover \.workspace-icon svg[\s\S]*animation: ws-spin/);
   assert.match(styles,/\[data-workspace="site"\]:hover \.workspace-icon svg[\s\S]*animation: ws-rise/);

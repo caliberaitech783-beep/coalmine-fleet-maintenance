@@ -1107,7 +1107,8 @@
   background: none;
   box-shadow: none;
 }
-.app > aside nav .whatsapp-dropdown .cdir-clock.half.down { margin-top: 0; }
+/* Like Database: the icons hug the half circle, measured from the middle of its flat top. */
+.app > aside nav .whatsapp-dropdown .cdir-clock.half.down { --cy: 0px; --radius: 90px; height: 116px; margin-top: 0; }
 /* Half-circle centres: WhatsApp's is a bowl with its flat side on top, just under
    the menu name; Database's is a "D" with its flat side against its entry. */
 .app > aside nav .masters-dropdown .cdir-clock.half.down .cdir-clock-center {
