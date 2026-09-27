@@ -29,7 +29,8 @@ import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,va
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
-import {accessAllows,managerRoleSelection,masterAccessAllows,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
+import {accessAllows,managerRoleSelection,masterAccessAllows,normalizeAdminLevel,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
+import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
@@ -3506,6 +3507,118 @@ app.post('/api/telegram/webhook',async(req,res)=>{
   }catch(error){console.error('Telegram webhook update failed.',error.message)}
 });
 
+// ---------- C-Dir (Caliber Directory) masters ----------
+// Only Admin and Super Admin may change them; Managers cannot even read them.
+function cdirWriteError(req,master){
+  if(!isCdirMaster(master))return '';
+  return req.session?.role==='super'&&normalizeAdminLevel(req.session?.permissions?.adminLevel)!=='Manager'
+    ?'':'Only an Admin or Super Admin can change the C-Dir masters.';
+}
+const cdirCleanRecord=(master,record={})=>cdirNormalizeRecord(master,Object.fromEntries(Object.entries(record).filter(([key])=>key!=='id')
+  .map(([key,value])=>[key,typeof value==='string'?value.trim():value])));
+// One value per master, whatever its letters: "Store" and "STORE" cannot both exist.
+async function cdirDuplicateError(master,records,excludeId=null){
+  const key=CDIR_UNIQUE_KEYS[master];
+  if(!key)return '';
+  const {rows}=await pool.query('SELECT id,record_data FROM master_records WHERE master_name=$1',[master]);
+  const seen=new Set(rows.filter(row=>Number(row.id)!==Number(excludeId)).map(row=>cdirCaps(row.record_data?.[key])));
+  for(const record of records){
+    const value=cdirCaps(record[key]);
+    if(!value)continue;
+    if(seen.has(value))return `"${record[key]}" already exists in the ${master}.`;
+    seen.add(value);
+  }
+  return '';
+}
+async function cdirMasterRecords(names=CDIR_MASTER_NAMES,client=pool){
+  const {rows}=await client.query('SELECT master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[names]);
+  const grouped=Object.fromEntries(names.map(name=>[name,[]]));
+  for(const row of rows)grouped[row.master_name].push(row.record_data||{});
+  return grouped;
+}
+async function cdirEmployeeValidationError(records){
+  const masters=await cdirMasterRecords([CDIR_MASTERS.site,CDIR_MASTERS.category]);
+  for(const [index,record] of records.entries()){
+    const error=cdirEmployeeError(record,masters);
+    if(error)return records.length>1?`Row ${index+2}: ${error}`:error;
+  }
+  return '';
+}
+
+// The first start copies the generated directory file into the masters, once.
+// Afterwards the masters are the only source, even if an administrator empties one.
+const CDIR_SEEDED_SETTING_KEY='cdir_masters_seeded';
+async function seedCdirMasters(){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('cdir-masters-seed'))");
+    const seeded=await client.query('SELECT 1 FROM app_settings WHERE setting_key=$1',[CDIR_SEEDED_SETTING_KEY]);
+    if(seeded.rowCount){await client.query('ROLLBACK');return {seeded:false}}
+    const existing=await client.query('SELECT COUNT(*)::int AS count FROM master_records WHERE master_name=ANY($1::text[])',[CDIR_MASTER_NAMES]);
+    let inserted=0;
+    if(!existing.rows[0].count){
+      const data=JSON.parse(await fs.readFile(path.join(root,'public','cd','directory-data.json'),'utf8'));
+      for(const [master,records] of Object.entries(cdirMastersFromDirectory(data))){
+        if(!records.length)continue;
+        const result=await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT $1,value FROM jsonb_array_elements($2::jsonb) WITH ORDINALITY AS item(value,position) ORDER BY position`,[master,JSON.stringify(records)]);
+        inserted+=result.rowCount;
+      }
+    }
+    await client.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO NOTHING`,[CDIR_SEEDED_SETTING_KEY,JSON.stringify({at:new Date().toISOString(),records:inserted})]);
+    await client.query('COMMIT');
+    return {seeded:true,records:inserted};
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release()}
+}
+
+// Builds the C-Dir page data from the masters; before the first import it falls back to the file.
+async function cdirDirectory(){
+  const masters=await cdirMasterRecords();
+  if(!masters[CDIR_MASTERS.site].length&&!masters[CDIR_MASTERS.employee].length)
+    return JSON.parse(await fs.readFile(path.join(root,'public','cd','directory-data.json'),'utf8'));
+  return cdirDirectoryFromMasters(masters,{generated:`${formatDisplayDate(new Date())} (live from Masters)`});
+}
+
+app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
+  try{
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json(await cdirDirectory());
+  }catch(error){next(error)}
+});
+
+// Renaming a site, category, designation, department or region updates the records using it.
+async function cascadeCdirRename(master,previousRecord,storedRecord){
+  const rule=CDIR_CASCADES[master];
+  if(!rule)return 0;
+  const before=String(previousRecord?.[rule.key]??'').trim(),after=String(storedRecord?.[rule.key]??'').trim();
+  if(!before||!after||before===after)return 0;
+  let updated=0;
+  for(const [dependent,field] of rule.dependents){
+    const result=await pool.query(`UPDATE master_records SET record_data=jsonb_set(record_data,ARRAY[$3::text],to_jsonb($4::text))
+      WHERE master_name=$1 AND lower(trim(record_data->>$3))=lower($2)`,[dependent,before,field,after]);
+    updated+=result.rowCount;
+  }
+  return updated;
+}
+
+async function cdirReferenceCount(master,record){
+  const rule=CDIR_CASCADES[master];
+  const value=String(record?.[rule?.key]??'').trim();
+  if(!rule||!value)return 0;
+  let count=0;
+  for(const [dependent,field] of rule.dependents){
+    const {rows}=await pool.query(`SELECT COUNT(*)::int AS count FROM master_records WHERE master_name=$1 AND lower(trim(record_data->>$2))=lower($3)`,[dependent,field,value]);
+    count+=rows[0].count;
+  }
+  return count;
+}
+
 app.get('/api/oracle/health',requireSuper,async(_req,res)=>{
   if(!oracleConfigured)return res.status(503).json({configured:false,connected:false,error:'Oracle database settings are not configured.'});
   try{
@@ -5268,7 +5381,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
 app.get('/api/info-pulse/birthdays',requireSession,async(req,res,next)=>{
   try{
     res.set('Cache-Control','private, no-store');
-    res.json({names:await currentBirthdayNames()});
+    res.json({names:await currentBirthdayNames(new Date(),{loadRoster:cdirDirectory})});
   }catch(error){next(error)}
 });
 
@@ -6650,6 +6763,8 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
     if(master==='Vehicle transfers')return res.status(409).json({error:'Use the controlled Vehicle transfers workflow so both PM approvals and the Vehicle Master update are recorded.'});
+    const cdirError=cdirWriteError(req,master);
+    if(cdirError)return res.status(403).json({error:cdirError});
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
@@ -6659,6 +6774,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     try{
       prepared=records.map((record,index)=>{
         try{
+          if(isCdirMaster(master))return cdirCleanRecord(master,record);
           if(master==='Shift Master')return normalizeOperationalSiteFields(normalizeShiftRecord(record));
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
@@ -6668,6 +6784,12 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
     }catch(error){return res.status(400).json({error:error.message})}
+    if(master===CDIR_MASTERS.employee){
+      const employeeError=await cdirEmployeeValidationError(prepared);
+      if(employeeError)return res.status(400).json({error:employeeError});
+    }
+    const cdirDuplicate=isCdirMaster(master)?await cdirDuplicateError(master,prepared):'';
+    if(cdirDuplicate)return res.status(409).json({error:cdirDuplicate});
     let rows;
     if(master==='Users & employees'){
       const client=await pool.connect();
@@ -6825,6 +6947,8 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
     if(master==='Vehicle transfers')return res.status(409).json({error:'Vehicle transfer workflow records cannot be edited directly.'});
+    const cdirError=cdirWriteError(req,master);
+    if(cdirError)return res.status(403).json({error:cdirError});
     const id=Number(req.params.id);
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
@@ -6832,9 +6956,15 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;
-    let storedRecord=master==='Shift Master'
+    let storedRecord=isCdirMaster(master)?cdirCleanRecord(master,record):master==='Shift Master'
       ?normalizeOperationalSiteFields(normalizeShiftRecord(record))
       :normalizeOperationalSiteFields(record);
+    if(master===CDIR_MASTERS.employee){
+      const employeeError=await cdirEmployeeValidationError([storedRecord]);
+      if(employeeError)return res.status(400).json({error:employeeError});
+    }
+    const cdirDuplicate=isCdirMaster(master)?await cdirDuplicateError(master,[storedRecord],id):'';
+    if(cdirDuplicate)return res.status(409).json({error:cdirDuplicate});
     if(master==='Users & employees'){
       if((isTrueSuperAdmin(record)||isTrueSuperAdmin(previousRecord))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
@@ -6914,7 +7044,9 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       [JSON.stringify(storedRecord),id,master]
     );
     if(!rows.length)return res.status(404).json({error:'Master record not found.'});
-    req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||storedRecord.door||storedRecord.repairType||storedRecord.shiftCode||id),changedFields:auditChangedFields(previousRecord,storedRecord)};
+    const cascaded=isCdirMaster(master)?await cascadeCdirRename(master,previousRecord,storedRecord):0;
+    req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||storedRecord.door||storedRecord.repairType||storedRecord.shiftCode||storedRecord.name||storedRecord.designation||storedRecord.department||storedRecord.code||id),changedFields:auditChangedFields(previousRecord,storedRecord),
+      ...(cascaded?{reason:`Rename also updated ${cascaded} linked C-Dir record${cascaded===1?'':'s'}.`}:{})};
     res.json({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
   }catch(error){next(error)}
 });
@@ -6922,6 +7054,8 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
 app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
+    const cdirError=cdirWriteError(req,master);
+    if(cdirError)return res.status(403).json({error:cdirError});
     if(!master)return res.status(400).json({error:'A master name is required.'});
     if(master==='Users & employees')return res.status(403).json({error:'User accounts cannot be deleted in bulk.'});
     if(master==='Breakdown master'){
@@ -6961,6 +7095,8 @@ app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
 app.delete('/api/masters/:master/selected',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
+    const cdirError=cdirWriteError(req,master);
+    if(cdirError)return res.status(403).json({error:cdirError});
     if(master!=='Equipment master')return res.status(403).json({error:'Selected-record deletion is only available for Equipment master.'});
     const reason=String(req.get(AUDIT_REASON_HEADER)||'').trim();
     if(!reason)return res.status(400).json({error:'A deletion reason is required for the Audit Trail.'});
@@ -6984,6 +7120,10 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const existingRecordResult=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     const deletedRecord=existingRecordResult.rows[0]?.record_data;
     if(!deletedRecord)return res.status(404).json({error:'Master record not found.'});
+    const cdirError=cdirWriteError(req,master);
+    if(cdirError)return res.status(403).json({error:cdirError});
+    const cdirInUse=isCdirMaster(master)?await cdirReferenceCount(master,deletedRecord):0;
+    if(cdirInUse)return res.status(409).json({error:`${cdirInUse} C-Dir record${cdirInUse===1?' uses':'s use'} this value. Change or delete them first.`});
     if(master==='Users & employees'){
       if(isTrueSuperAdmin(deletedRecord)&&!isTrueSuperAdmin(req.session.permissions))return res.status(403).json({error:'Only a Super Admin can delete Super Admin accounts.'});
       const client=await pool.connect();
@@ -7304,6 +7444,9 @@ async function initializeDatabase(){
     await migrate();
     databaseReady=true;
     databaseError='';
+    await seedCdirMasters()
+      .then(result=>result.seeded&&console.log(`C-Dir masters created from the directory file (${result.records} records).`))
+      .catch(error=>console.error('Could not create the C-Dir masters from the directory file.',error.message));
     // Users who connected before the profile fields existed get them filled in.
     await pool.query(`UPDATE master_records m SET record_data=m.record_data||jsonb_build_object(
         'telegramChatId',l.chat_id,'telegramUsername',l.telegram_username,'telegramLinkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'))

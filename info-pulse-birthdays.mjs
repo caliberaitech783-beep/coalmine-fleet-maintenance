@@ -16,7 +16,9 @@ export function birthdayNames(roster, date = new Date()) {
 }
 
 let rosterPromise;
-export async function currentBirthdayNames(date = new Date()) {
+// The server passes loadRoster to read the live C-Dir masters; the file is the fallback.
+export async function currentBirthdayNames(date = new Date(), {loadRoster} = {}) {
+  if (loadRoster) return birthdayNames(await loadRoster(), date);
   rosterPromise ||= readFile(new URL('./public/cd/directory-data.json', import.meta.url), 'utf8')
     .then(JSON.parse).catch(error => {rosterPromise = undefined; throw error;});
   return birthdayNames(await rosterPromise, date);

@@ -51,6 +51,7 @@ function render(name, componentName) {
     privilegeAccessOptions: ["Super User", "Mobile User"], mobileUserRoleOptions: ["Maintenance User"],
     mobileRoleAuthority: {"Maintenance User": "Edit requests"}, persistedUserTypeOptions: ["Mobile User", "Super Admin"],
     isCheckedValue: value => value === true, privilegeAccessValue: value => value || "", privilegeSelectionValue: value => value || "",
+    cdirFieldKind: () => false, CDirFieldInput: () => null, isCdirMaster: () => false,
     useSortableRows: rows => [rows, {}, () => {}], sortCollator: new Intl.Collator(),
     SearchableSelect: SearchableSelectFixture, TwelveHourTimeInput: TwelveHourTimeInputFixture,
     ...Object.fromEntries(["RefreshCw", "Trash2", "Save", "Upload", "Plus", "X", "Search", "Pencil", "CheckCircle2", "LockKeyhole", "Modal", "ExportMenu", "MultiTextField", "UserTypeAccessFields", "TableParameterFilter", "ActionsTable", "FilterableHeader", "MasterActions"].map(key => [key, Null])),

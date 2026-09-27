@@ -38,6 +38,7 @@ import LiveTemperatureChip from "./live-temperature-chip.jsx";
 import {REQUEST_CORRECTION_MANAGER_ROLES} from "../request-correction-policy.mjs";
 import EquipmentCombobox from "./equipment-combobox.jsx";
 import SearchableSelect from "./searchable-select.jsx";
+import {CDIR_MASTERS, CDIR_MASTER_FIELDS, isCdirMaster} from "../cdir-masters.mjs";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import OemBreakdownChart from "./oem-breakdown-chart.jsx";
@@ -223,6 +224,12 @@ import {
   Volume2,
   LifeBuoy,
   ImagePlus,
+  BookUser,
+  Contact,
+  BadgeCheck,
+  Briefcase,
+  MapPinned,
+  Tags,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -397,6 +404,14 @@ const masterNav = [
   ["Vehicle transfers", ArrowRightLeft, "transfers"],
   ["Hierarchy master", Network, "hierarchy"],
   ["OEM master", ShieldCheck, "oem"],
+  // C-Dir (Caliber Directory) masters: Admin and Super Admin only.
+  [CDIR_MASTERS.employee, BookUser, "users"],
+  [CDIR_MASTERS.contact, Contact, "users"],
+  [CDIR_MASTERS.designation, BadgeCheck, "hierarchy"],
+  [CDIR_MASTERS.department, Briefcase, "hierarchy"],
+  [CDIR_MASTERS.site, Building2, "region"],
+  [CDIR_MASTERS.category, Tags, "subcategory"],
+  [CDIR_MASTERS.region, MapPinned, "region"],
 ];
 const whatsappNav = [
   ["Meta API setup", Settings],
@@ -1223,7 +1238,7 @@ const dashboardKpiExportColumns = [
   { label: "Location / Period", value: (row) => row.scope },
   { label: "Details", value: (row) => row.details },
 ];
-const masterDateFields = new Set(["acquisitionDate", "transferDate", "lastMaintenanceDate"]);
+const masterDateFields = new Set(["acquisitionDate", "transferDate", "lastMaintenanceDate", "dob", "doj"]);
 masterDateFields.add("effectiveFrom");
 masterDateFields.add("effectiveTo");
 const masterDateTimeFields = new Set(["start", "createdAt", "updatedAt", "closedAt", "verifiedAt"]);
@@ -4203,6 +4218,27 @@ function MultiTextField({ name, label, value = "" }) {
   );
 }
 
+// C-Dir master fields: "ref:<master>:<key>" picks a value kept in another master,
+// "options:A|B" is a fixed list. A saved value missing from the list stays selectable.
+Object.assign(masterFields, CDIR_MASTER_FIELDS);
+const cdirFieldKind = (type) => /^(ref|options):/.test(String(type || ""));
+function CDirFieldInput({ name, label, type, defaultValue = "", required = false }) {
+  const [, refMaster = "", refKey = ""] = String(type).startsWith("ref:") ? String(type).split(":") : [];
+  const [records] = useMasterRecords(refMaster || "C-Dir none", [], {enabled: Boolean(refMaster)});
+  const current = String(defaultValue ?? "");
+  if (!refMaster) {
+    const options = String(type).slice("options:".length).split("|");
+    return <label>{label}{required ? " *" : ""}<select name={name} required={required} defaultValue={current}>
+      {current && !options.includes(current) && <option value={current}>{current}</option>}
+      {options.map((option) => <option key={option} value={option}>{option || "Not set"}</option>)}
+    </select></label>;
+  }
+  const values = [...new Set(records.map((record) => String(record[refKey] ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return <SearchableSelect label={label} name={name} required={required} defaultValue={current}
+    options={[...(current && !values.includes(current) ? [current] : []), ...values].map((value) => ({value, label: value}))}
+    placeholder={`Search ${label.toLowerCase()}`} emptyText={`Not in the ${refMaster}. Add it there first.`} />;
+}
+
 function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelected, selectedRecords = [], onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
@@ -4419,6 +4455,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
+                cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} required={key === fields[0][0]} /> :
                 name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
                   <MultiTextField key={key} name={key} label={label} />
                 ) : type === "multi-checkbox" ? (
@@ -7547,7 +7584,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Breakdown Sub-Category" || name === "Delayed Reason" || name === "Shift Master",
+    canManageRows = isCdirMaster(name) || name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Breakdown Sub-Category" || name === "Delayed Reason" || name === "Shift Master",
     masterValue = (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
@@ -7637,7 +7674,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     } catch (error) { alert(error.message); }
   };
   const deleteRow = async (record) => {
-    const recordName = record.oem || record.employee || record.login || record.username || [record.site,record.shiftName].filter(Boolean).join(" · ") || "this record";
+    const recordName = record.oem || record.employee || record.login || record.username || (isCdirMaster(name) && (record.name || record.designation || record.department || record.code)) || [record.site,record.shiftName].filter(Boolean).join(" · ") || "this record";
     if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
     const reason = window.prompt(`Enter the reason for deleting ${recordName}:`, "");
     if (reason === null) return;
@@ -7820,9 +7857,9 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     <td className="row-actions">
                       {name === "Users & employees" && <button aria-label={`Change password for ${row.employee || row.login || "employee"}`} onClick={() => setChangingPassword(row)}><LockKeyhole /> Change password</button>}
                       {name !== "Privilege" && (
-                        <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
+                        <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
-                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
+                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
                     </td>
                   )}
                 </tr>
@@ -7844,6 +7881,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
+              cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} defaultValue={editing[key]} required={key === fields[0][0]} /> :
               name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
                 <MultiTextField key={key} name={key} label={label} value={editing[key]} />
               ) : type === "multi-checkbox" ? (
