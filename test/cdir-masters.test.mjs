@@ -131,12 +131,13 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
   assert.ok(source.includes('<ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />'));
   const clock = source.slice(source.indexOf("function ClockMenu("), source.indexOf("function Side("));
   assert.ok(clock.includes("aria-expanded={open}"));
-  assert.ok(clock.includes('{open && <div ref={clockRef} className={`cdir-clock${hours ? " half" : ""}`} role="menu" aria-label={label}>'));
+  assert.ok(clock.includes('const clock = open && <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>'));
   assert.ok(clock.includes('style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}'), "icons on a full clock or on given hours");
   assert.ok(clock.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}'), "opens on hover");
-  assert.ok(clock.includes("data-label={name}") && clock.includes("aria-label={name}"), "icons carry the full page name");
+  assert.ok(clock.includes("data-label={labelFor(name)}") && clock.includes("aria-label={labelFor(name)}"), "icons carry the full page name");
   assert.ok(clock.includes('><Icon aria-hidden="true" /></button>'), "icons only");
-  assert.ok(clock.includes("const [open, setOpen] = useState(() => items.some(([name]) => name === active));"), "opens by itself on one of its pages");
+  assert.ok(clock.includes("const [openState, setOpen] = useState(() => items.some(([name]) => name === active));"), "opens by itself on one of its pages");
+  assert.ok(clock.includes("if (rect && rect.right > window.innerWidth - 8) setInside(true);"), "a half clock that would leave the screen opens inside the menu");
   assert.ok(source.includes("[...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)"), "C-Dir master pages stay reachable");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
   assert.match(css, /\.cdir-clock-item \{[\s\S]*?transform: rotate\(var\(--angle\)\) translateY\(calc\(var\(--radius\) \* -1\)\) rotate\(calc\(var\(--angle\) \* -1\)\);/, "icons placed around a circle");
@@ -154,4 +155,13 @@ test("the Admin menu ends with a Database half clock (2 to 5 o'clock) for the fo
   assert.ok(source.includes("if(backupAdminPages.has(name))return isAdministrator;"), "backup pages keep their Admin-only access");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
   assert.match(css, /\.masters-dropdown \.cdir-clock\.half \{[\s\S]*?position: relative;/, "the half clock opens inside the menu, never off-screen");
+});
+
+test("Database opens beside the Admin menu and WhatsApp opens downward with WhatsApp in the centre", () => {
+  const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
+  assert.match(css, /\.cdir-clock\.half\.beside \{\s*top: 50%;\s*left: calc\(100% \+ 10px\);/, "Database half clock opens to the right");
+  assert.match(css, /\.admin-dropdown:has\(\.cdir-clock\.half\.beside\) \{ max-height: none; overflow: visible; \}/, "the Admin menu does not clip it");
+  assert.match(css, /\.cdir-clock\.half\.down \{\s*--cx: 50%;\s*--cy: 48px;/, "WhatsApp centre at the top middle");
+  assert.ok(source.includes('<ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3, 5, 7, 9, 4, 8].slice(0, visibleWhatsAppNav.length)}'));
+  assert.ok(source.includes('onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)}'), "choosing a WhatsApp page still closes the menu");
 });

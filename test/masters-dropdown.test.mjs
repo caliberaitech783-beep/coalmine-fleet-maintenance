@@ -21,7 +21,7 @@ test("every desktop submenu closes after one of its destinations is selected", a
     assert.match(source, new RegExp(`onPointerLeave=\\{\\(\\) => set${menu}SelectionClosed\\(false\\)\\}`));
   }
   assert.match(source, /const selectDropdownPage = \(page, event, setSelectionClosed\) => \{[\s\S]*?setSelectionClosed\(true\);[\s\S]*?event\.currentTarget\.blur\(\);/);
-  assert.match(source, /selectDropdownPage\(name, event, setWhatsappSelectionClosed\)/);
+  assert.match(source, /selectDropdownPage\(page, event, setWhatsappSelectionClosed\)/);
   assert.match(source, /selectDropdownPage\(name, event, setWorkspacesSelectionClosed\)/);
   assert.match(source, /selectDropdownPage\(name,event,setAdminSelectionClosed\)/);
   assert.match(source, /event\.currentTarget\.blur\(\)/);

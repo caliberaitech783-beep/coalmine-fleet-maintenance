@@ -1021,32 +1021,54 @@
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 .app > aside nav .masters-dropdown .cdir-clock-item:hover::after, .app > aside nav .masters-dropdown .cdir-clock-item:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
-/* Half clock (Database): opens inside the menu below its entry, with the icons on
-   2, 3, 4 and 5 o'clock around a centre on the left, so it never leaves the screen. */
-.cdir-masters-hub.half.open::after { display: none; }
+/* Half clock (Database, WhatsApp Integration): the icons sit on 2, 3, 4 and 5
+   o'clock around a centre on the left. "beside" opens it to the right of the menu;
+   "inside" opens it in the menu below its entry (used by WhatsApp, and when there
+   is no room beside). */
 .app > aside nav .masters-dropdown .cdir-clock.half {
   --radius: 96px;
   --cx: 46px;
   --cy: 76px;
-  position: relative;
-  top: auto;
-  left: auto;
-  width: 100%;
+  width: 172px;
   height: 200px;
-  margin: 6px 0 2px;
   border: 0;
   border-radius: 0;
-  background: radial-gradient(circle at var(--cx) var(--cy), #1b2f55 0 34px, #10213f 35px 124px, #ffd16655 125px 126px, transparent 127px);
+  background: radial-gradient(circle at var(--cx) var(--cy), #1b2f55 0 34px, #10213f 35px 124px, #ffd16699 125px 126px, transparent 127px);
   box-shadow: none;
 }
 .app > aside nav .masters-dropdown .cdir-clock.half::before { display: none; }
 .app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-center,
 .app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-item { top: var(--cy); left: var(--cx); }
 .app > aside nav .masters-dropdown .cdir-clock.half .cdir-clock-center { font-size: 10px; }
+.app > aside nav .masters-dropdown .cdir-clock.half.beside {
+  top: 50%;
+  left: calc(100% + 10px);
+  margin-top: calc(var(--cy) * -1);
+  filter: drop-shadow(0 14px 26px #07122566);
+}
+.app > aside nav .masters-dropdown .cdir-clock.half.inside {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 100%;
+  margin: 6px 0 2px;
+}
+.cdir-masters-hub.half.inside.open::after { display: none; }
+/* Downward half clock (WhatsApp): the centre sits at the top middle and the icons
+   fan out below it, so the menu reads top to bottom. */
+.app > aside nav .masters-dropdown .cdir-clock.half.down {
+  --cx: 50%;
+  --cy: 48px;
+  height: 172px;
+  background: radial-gradient(circle at var(--cx) var(--cy), #1b2f55 0 34px, #10213f 35px 124px, #ffd16699 125px 126px, transparent 127px);
+}
+/* While the Database clock is open beside it, the Admin menu must not clip it. */
+.app > aside nav .admin-dropdown:has(.cdir-clock.half.beside) { max-height: none; overflow: visible; }
 @keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
   .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
+  .app > aside nav .masters-dropdown .cdir-clock.half.beside { position: relative; top: auto; left: auto; width: 100%; margin: 6px 0 2px; filter: none; }
   .cdir-masters-hub.open::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

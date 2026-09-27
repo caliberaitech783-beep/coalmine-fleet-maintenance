@@ -849,16 +849,44 @@ function Login({ onLogin, theme, toggleTheme }) {
 }
 // A menu entry that opens a clock face of icons: pointing at or clicking the entry
 // highlights it and shows its pages as icons around a centre label, and each icon
-// shows its full page name when pointed at. Used for C-Dir Masters and Database.
-// "hours" places the icons on those clock hours (a half clock opens inside the menu).
-function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null }) {
-  const [open, setOpen] = useState(() => items.some(([name]) => name === active));
+// shows its full page name when pointed at. Used for C-Dir Masters, Database and
+// WhatsApp Integration. "hours" places the icons on those clock hours as a half
+// clock beside the menu; one that would run off the screen opens inside the menu
+// instead. "alwaysOpen" shows only the clock (the menu itself is the entry), and
+// "down" puts the centre at the top with the icons fanning out below it.
+function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null, alwaysOpen = false, down = false, labelFor = (name) => name }) {
+  const [openState, setOpen] = useState(() => items.some(([name]) => name === active));
+  const [inside, setInside] = useState(alwaysOpen);
   const clockRef = useRef(null);
-  // A half clock opens inside a scrolling menu; bring it into view when it opens.
-  useEffect(() => { if (open && hours) clockRef.current?.scrollIntoView?.({block: "nearest"}); }, [open, hours]);
+  const open = alwaysOpen || openState;
+  useEffect(() => {
+    if (!open || !hours) return;
+    if (!alwaysOpen) {
+      const rect = clockRef.current?.getBoundingClientRect?.();
+      if (rect && rect.right > window.innerWidth - 8) setInside(true);
+    }
+    if (inside) clockRef.current?.scrollIntoView?.({block: "nearest"});
+  }, [open, hours, inside, alwaysOpen]);
+  useEffect(() => { if (!open && !alwaysOpen) setInside(false); }, [open, alwaysOpen]);
   if (!items.length) return null;
+  const clock = open && <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>
+    <span className="cdir-clock-center" aria-hidden="true">{centerLabel}</span>
+    {items.map(([name, Icon], index) => (
+      <button
+        key={name}
+        type="button"
+        role="menuitem"
+        className={`cdir-clock-item${active === name ? " active" : ""}`}
+        style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}
+        data-label={labelFor(name)}
+        aria-label={labelFor(name)}
+        onClick={(event) => onSelect(name, event)}
+      ><Icon aria-hidden="true" /></button>
+    ))}
+  </div>;
+  if (alwaysOpen) return clock;
   return <div
-    className={`cdir-masters-hub${hours ? " half" : ""}${open ? " open" : ""}`}
+    className={`cdir-masters-hub${hours ? " half" : ""}${inside ? " inside" : ""}${open ? " open" : ""}`}
     onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}
     onPointerLeave={(event) => { if (event.pointerType === "mouse") setOpen(false); }}
   >
@@ -874,21 +902,7 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
       <span className="nav-label">{label}</span>
       <ChevronDown className="cdir-masters-chevron" aria-hidden="true" />
     </button></div>
-    {open && <div ref={clockRef} className={`cdir-clock${hours ? " half" : ""}`} role="menu" aria-label={label}>
-      <span className="cdir-clock-center" aria-hidden="true">{centerLabel}</span>
-      {items.map(([name, Icon], index) => (
-        <button
-          key={name}
-          type="button"
-          role="menuitem"
-          className={`cdir-clock-item${active === name ? " active" : ""}`}
-          style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}
-          data-label={name}
-          aria-label={name}
-          onClick={(event) => onSelect(name, event)}
-        ><Icon aria-hidden="true" /></button>
-      ))}
-    </div>}
+    {clock}
   </div>;
 }
 
@@ -1045,11 +1059,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
-            {visibleWhatsAppNav.map(([name, Icon]) => (
-              <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name ? " active" : ""}`} data-workspace={whatsappMenuKey(name)} onClick={(event) => selectDropdownPage(name, event, setWhatsappSelectionClosed)}>
-                <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{navigationLabel(name)}</span>
-              </button></div>
-            ))}
+            {/* The WhatsApp pages open downward: "WhatsApp" at the top, icons on 3, 5, 7 and 9 o'clock. */}
+            <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3, 5, 7, 9, 4, 8].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
           </div>
         </div>}
         {permissions.adminLevel !== "Manager" && <div

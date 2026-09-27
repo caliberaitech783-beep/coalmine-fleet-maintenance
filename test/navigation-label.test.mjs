@@ -19,7 +19,8 @@ test("navigation, breadcrumb, page title and access checkboxes render the label"
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /import \{navigationLabel\} from "\.\.\/navigation-visibility\.mjs";/);
   assert.match(source, /Operations <ChevronRight \/> <b>\{navigationLabel\(active\)\}<\/b>/);
-  assert.match(source, /<span className="nav-label">\{navigationLabel\(name\)\}<\/span>/);
+  // WhatsApp menu icons carry the navigation label as their name and tooltip.
+  assert.match(source, /labelFor=\{navigationLabel\}/);
   assert.match(source, /<h1>\{navigationLabel\(type\)\}<\/h1>/);
   assert.match(source, /<span>\{navigationLabel\(option\)\}<\/span>/);
   assert.match(source, /<h2>Daily site-wise reports dispatch<\/h2>/);
