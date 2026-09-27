@@ -1074,12 +1074,21 @@
 }
 /* While the Database clock is open beside it, the Admin menu must not clip it. */
 .app > aside nav .admin-dropdown:has(.cdir-clock.half.beside) { max-height: none; overflow: visible; }
+/* Every clock menu shows only its icons: no centre circle, no ring, no hour
+   marks and no arc line. Each icon still shows its full name when pointed at. */
+.app > aside nav .masters-dropdown .cdir-clock .cdir-clock-center,
+.app > aside nav .masters-dropdown .cdir-clock::before { display: none; }
+.app > aside nav .masters-dropdown .cdir-clock { border: 0; background: none; }
+/* C-Dir Masters: the ring of icons sits close to the menu and rises from its row,
+   so it stays on screen even though the entry is at the bottom of the menu. */
+.app > aside nav .masters-dropdown .cdir-clock:not(.half) { top: auto; bottom: -12px; left: calc(100% + 2px); margin-top: 0; }
+/* WhatsApp: without the centre label the icons move up to the top of the menu. */
+.app > aside nav .masters-dropdown .cdir-clock.half.down { --cy: 26px; height: 140px; }
 @keyframes cdir-clock-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 /* Phones and narrow screens: the clock opens below the entry instead of beside it. */
 @media (max-width: 1250px) {
-  .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; left: auto; margin: 10px auto 6px; }
+  .app > aside nav .masters-dropdown .cdir-clock:not(.half) { position: relative; top: auto; bottom: auto; left: auto; margin: 10px auto 6px; }
   .app > aside nav .masters-dropdown .cdir-clock.half.beside { --radius: 96px; --cx: 46px; position: relative; top: auto; left: auto; width: 100%; margin: 6px 0 2px; filter: none; }
-  .app > aside nav .masters-dropdown .cdir-clock.half.beside .cdir-clock-center { display: grid; }
   .cdir-masters-hub.open::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
