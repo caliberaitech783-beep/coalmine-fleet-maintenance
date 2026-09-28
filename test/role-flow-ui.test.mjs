@@ -81,7 +81,7 @@ function harness(name, extra = {}) {
   return {render(props) { cursor = 0; return component(name === "ManagerDashboard" ? {requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props} : props); }};
 }
 
-const opened = {ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "stupal", door: "V1", chassis: "C1", status: "Open", site: "Sasti OB"};
+const opened = {ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "stupal", door: "V1", chassis: "C1", status: "Open", site: "Sasti OB", category: "Breakdown"};
 const accepted = {...opened, status: "In progress", acceptedBy: "Sanskar Manohare", acceptedAt: "2026-09-08 10:10:00"};
 const idle = {...accepted, status: "Idle", idealRequestedBy: "Sanskar Manohare", idleReason: "No work"};
 const closed = {...idle, status: "Closed", closedBy: "maimaintenance manager", idealApprovedBy: "maimaintenance manager", closedAt: "2026-09-08 12:00:00"};

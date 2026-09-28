@@ -9679,7 +9679,12 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const [formError,setFormError] = useState("");
   const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
   const etcDelayed = etcChanged && expectedCompletionAt.slice(0,16) > initialEtc;
-  const [editCategory, setEditCategory] = useState(request.category || "");
+  const [editCategory, setEditCategory] = useState(() => String(request.category || "").trim());
+  // Retain the saved/user-selected value while the master list loads or refreshes.
+  const editCategoryOptions = [...new Set([
+    ...repairTypeRecords.filter(record => record.id != null).map(record => String(record.repairType || "").trim()).filter(Boolean),
+    ...(editCategory ? [editCategory] : []),
+  ])];
   const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
   const etcDelayedReasonOptions = etcDelayed ? delayedReasonsForRepairType(editCategory, delayedReasonRecords || []) : [];
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
@@ -9695,6 +9700,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       if (arrivalRedFlagRequired(request)) { onRequireArrivalFlag?.(request); return; }
       const form = new FormData(event.currentTarget);
       const correctionReason = String(form.get("correctionReason") || "").trim();
+      if (!editCategory) return setFormError("Choose a breakdown type before accepting or saving this request.");
       if (etcChanged && !correctionReason) return setFormError("Explain why the expected completion time is being changed.");
       setFormError("");
       submitLock.current = true;
@@ -9702,7 +9708,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: editCategory, complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -9710,18 +9716,13 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
-          <select name="category" required defaultValue={request.category || ""} onChange={(event) => setEditCategory(event.target.value)} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
+          <select name="category" required value={editCategory} onChange={(event) => setEditCategory(event.target.value)} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
             <option value="" disabled>
               {!repairTypesLoaded ? "Loading repair types..." : repairTypeRecords.length ? "Select repair type" : "No repair types available"}
             </option>
-            {request.category && !repairTypeRecords.some((record) => String(record.repairType || "").trim() === String(request.category).trim()) && (
-              <option value={request.category}>{request.category}</option>
-            )}
-            {repairTypeRecords
-              .filter((record) => record.id != null && String(record.repairType || "").trim())
-              .map((record) => (
-                <option key={record.id} value={String(record.repairType).trim()}>
-                  {String(record.repairType).trim()}
+            {editCategoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
                 </option>
               ))}
           </select>

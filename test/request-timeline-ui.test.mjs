@@ -309,6 +309,44 @@ test("editing unchanged ETC preserves minute display without a correction prompt
   assert.equal(field(app.render(), "correctionReason"), undefined);
 });
 
+for (const category of ["OTHERS", "Other", "AC SYSTEM", "Breakdown"]) test(`acceptance preserves ${category} while repair types load and refresh`, async () => {
+  const app = harness("RequestEditForm");
+  const saved = [];
+  const props = {...editProps({category, acceptedAt: null}), repairTypesLoaded: false, repairTypeRecords: [], onSave: async payload => saved.push(payload)};
+  let tree = app.render(props);
+  assert.equal(field(tree, "category").props.value, category);
+  assert.equal(field(tree, "category").props.defaultValue, undefined);
+  tree = app.render({...props, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "PREVENTIVE"}, {id: 2, repairType: category}]});
+  assert.equal(field(tree, "category").props.value, category);
+  tree = app.render({...props, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "PREVENTIVE"}]});
+  assert.ok(all(tree, node => node.type === "option" && node.props.value === category).length);
+  await submit(tree, submitValues({category: "PREVENTIVE"}));
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].category, category);
+});
+
+test("intentional breakdown type changes survive master refresh and are saved", async () => {
+  const app = harness("RequestEditForm");
+  const saved = [];
+  const props = {...editProps({category: "OTHERS"}), onSave: async payload => saved.push(payload)};
+  let tree = app.render(props);
+  field(tree, "category").props.onChange({target: {value: "AC SYSTEM"}});
+  tree = app.render({...props, repairTypeRecords: [{id: 1, repairType: "PREVENTIVE"}]});
+  assert.equal(field(tree, "category").props.value, "AC SYSTEM");
+  assert.ok(all(tree, node => node.type === "option" && node.props.value === "AC SYSTEM").length);
+  await submit(tree, submitValues({category: "PREVENTIVE"}));
+  assert.equal(saved[0].category, "AC SYSTEM");
+});
+
+test("missing breakdown type cannot silently default to the first master option", async () => {
+  const app = harness("RequestEditForm");
+  const saved = [];
+  const tree = app.render({...editProps({category: ""}), repairTypeRecords: [{id: 1, repairType: "PREVENTIVE"}], onSave: async payload => saved.push(payload)});
+  await submit(tree, submitValues({category: "PREVENTIVE"}));
+  assert.equal(saved.length, 0);
+  assert.match(alerts(app.render()), /Choose a breakdown type/);
+});
+
 test("initial ETC has no correction reason and pending acceptance is not invented from device time", () => {
   const app = harness("RequestEditForm");
   let tree = app.render(editProps({expectedCompletionAt: "", acceptedAt: null, acceptanceRequired: true}));
