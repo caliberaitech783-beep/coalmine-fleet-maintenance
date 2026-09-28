@@ -1990,7 +1990,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // Keep all six compact series together for each date in the selected site and range.
   const requestLifecycleReadings = [
     { key: "production", color: "opened", label: "Production Request", value: requestLifecycleRows.production.length },
-    { key: "closed", color: "closed", label: "Closed", value: maintenanceClosedRows.length },
+    { key: "closed", color: "closed", label: "Closed", value: requestLifecycleRows.closed.length },
     { key: "verified", color: "verified", label: "Verified", value: requestLifecycleRows.verified.length },
     { key: "idle", color: "idle", label: "Idle Vehicles", value: requestLifecycleRows.idle.length },
     { key: "opened", color: "maintenance", label: "Open in Maintenance", value: requestLifecycleAvailability.maintenance },
@@ -2175,7 +2175,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       // Daily bars count every closure; the undated Closed / Open in MIS cards count only pending verification.
       if (event === "production" && date) return requestAssetRows(requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date));
       if (event === "mis") return requestAssetRows(date ? maintenanceClosedRows.filter((record) => requestEventDate(record, "closed") === date) : maintenanceClosedRows);
-      const rows = event === "closed" && !date ? maintenanceClosedRows : requestLifecycleRows[event] || [];
+      const rows = requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
     return [];
@@ -2483,7 +2483,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
-            {[{ key: "production", className: "opened", label: "Production Request", note: "Production + Maintenance", value: requestLifecycleRows.production.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: maintenanceClosedRows.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Active in Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.className || item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
+            {[{ key: "production", className: "opened", label: "Production Request", note: "Production + Maintenance", value: requestLifecycleRows.production.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Active in Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.className || item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-days mine-request-grouped-readings" style={{ gridTemplateColumns: `repeat(${requestLifecycleTrend.length}, minmax(100px, 1fr))` }}>

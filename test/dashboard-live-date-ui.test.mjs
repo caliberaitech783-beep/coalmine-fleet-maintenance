@@ -517,6 +517,32 @@ const activate = (node) => {
   else node.props.onClick();
 };
 
+test("Closed card, graph and linked list include verified closures while Open in MIS stays pending only", () => {
+  const rows = [
+    {ref:'PENDING',closedAt:`${todayKey} 09:00:00`},
+    {ref:'VERIFIED',closedAt:`${todayKey} 10:00:00`,verifiedAt:`${todayKey} 11:00:00`},
+    {ref:'OLDER-CLOSURE',closedAt:'2020-01-02 09:00:00',verifiedAt:`${todayKey} 11:00:00`},
+  ].map(row => ({...row,site:'Sasti OB',status:'Closed',start:'2020-01-01 08:00:00',category:'Breakdown'}));
+  const view=harness();
+  let tree=view.render(rows);
+  const card=(key)=>byClass(byClass(tree,'mine-request-lifecycle-summary'),key);
+  const number=(node)=>text(findAll(node,child=>child.type==='strong')[0]);
+  assert.equal(number(card('closed')),'2');
+  assert.equal(number(card('mis')),'1');
+  assert.equal(number(card('verified')),'2');
+  const bar=byLabel(tree,`${todayLabel}: 2 Closed requests`);
+  assert.ok(bar);
+  activate(card('closed'));
+  tree=view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(row=>row.requestReference).sort(),['PENDING','VERIFIED']);
+  activate(bar);
+  tree=view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(row=>row.requestReference).sort(),['PENDING','VERIFIED']);
+  activate(card('mis'));
+  tree=view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(row=>row.requestReference),['PENDING']);
+});
+
 test("lifecycle region filters its cards and linked rows independently of the dashboard", () => {
   const equipment = [...assets, {id: 4, door: "N1", category: "Vehicle", currentLocation: "Jayant OB", status: "Operational"}];
   const rows = [
