@@ -87,7 +87,8 @@ export function breakdownTypeShare(records = [], startDate = "", endDate = "", r
     ...repairTypes.map((record) => typeof record === "string" ? record : record?.repairType).filter((value) => String(value || "").trim()).map(normalizedBreakdownType),
     ...Object.keys(counts),
   ])];
-  return labels.map((label) => ({
+  const orderedLabels = [...labels.filter((label) => label !== "Others"), ...labels.filter((label) => label === "Others")];
+  return orderedLabels.map((label) => ({
     label,
     count: counts[label] || 0,
     percentage: total ? Math.round(((counts[label] || 0) / total) * 100) : 0,

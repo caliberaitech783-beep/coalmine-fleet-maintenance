@@ -37,3 +37,13 @@ test("BD type mix includes every master category and preserves legacy categories
   assert.ok(breakdownTypeShare([], '', '', masters).some(item => item.label==='Tyre System' && item.count===0));
   assert.equal(normalizedBreakdownType('Other'),normalizedBreakdownType('OTHERS'));
 });
+
+test("Others stays last without changing other category order or values", () => {
+  const rows = ['Other', 'OTHERS', 'Electrical'].map(category => ({category}));
+  const mix = breakdownTypeShare(rows, '', '', ['Others', 'Tyre System', 'Electrical']);
+  assert.deepEqual(mix.map(item => item.label), ['Breakdown', 'Accidental', 'Preventive', 'Aggregate Repair', 'Super Structure', 'WGM', 'Tyre System', 'Electrical', 'Others']);
+  assert.deepEqual(mix.at(-1), {label:'Others', count:2, percentage:67});
+  assert.equal(mix.find(item => item.label==='Electrical').percentage,33);
+  assert.equal(breakdownTypeShare([], '', '', ['Others','Electrical']).at(-1).label,'Others');
+  assert.ok(!breakdownTypeShare([]).some(item => item.label==='Others'));
+});
