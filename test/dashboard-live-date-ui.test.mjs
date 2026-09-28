@@ -102,6 +102,15 @@ const setLifecycleFrom = (view, value, rows) => {
   return view.render(rows);
 };
 
+test("BD Type Mix renders master categories with no requests as well as new request categories", () => {
+  const view = harness({repairTypes:[{repairType:'TYRE SYSTEM'},{repairType:'AC SYSTEM'}]});
+  const tree = view.render([{ref:'TYRE-1',site:'Sasti OB',category:'TYRE SYSTEM',status:'Open',start:`${todayKey} 09:00`}]);
+  const mix = byLabel(tree,'Breakdown type percentage of open BD balance');
+  assert.match(text(mix),/Tyre System100%1 request/);
+  assert.match(text(mix),/AC System0%0 requests/);
+  assert.doesNotMatch(text(mix),/all six/);
+});
+
 test("BD In components appear only for default today and return on reset", () => {
   const rows = [
     {ref: "OPENING", site: "Sasti OB", status: "Open", start: "2020-01-01 09:00", category: "Breakdown"},
@@ -182,7 +191,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.equal(button(tree, "Reset dates").props.disabled, true);
 });
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown"} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = []} = {}) {
   const slots = [];
   let cursor = 0;
   let initialized = false;
@@ -192,6 +201,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    useMasterRecords: () => [repairTypes],
     requestEquipmentDetails,
     requestsVisibleToDashboard,
     encodeDateRange, parseDateRange,

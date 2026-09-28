@@ -10,7 +10,11 @@ export const normalizedBreakdownType = (value) => {
   if (["aggregate", "aggregate repair"].includes(normalized)) return "Aggregate Repair";
   if (["super structure", "superstructure"].includes(normalized)) return "Super Structure";
   if (normalized === "wgm") return "WGM";
-  return "";
+  if (["other", "others"].includes(normalized)) return "Others";
+  if (normalized === "ac system") return "AC System";
+  if (normalized === "ground engaging tools get") return "Ground Engaging Tools (GET)";
+  if (normalized === "under carriage track") return "Under Carriage/Track";
+  return normalized ? normalized.replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Unspecified";
 };
 
 export function breakdownOpenedDate(record = {}) {
@@ -70,7 +74,7 @@ export function dailyBreakdownMovement(records = [], startDate = "", endDate = "
   return rows;
 }
 
-export function breakdownTypeShare(records = [], startDate = "", endDate = "") {
+export function breakdownTypeShare(records = [], startDate = "", endDate = "", repairTypes = []) {
   const incoming = records.filter((record) => matchesBreakdownMovement(record, startDate, endDate, "incoming"));
   const total = incoming.length;
   const counts = incoming.reduce((result, record) => {
@@ -78,7 +82,12 @@ export function breakdownTypeShare(records = [], startDate = "", endDate = "") {
     if (label) result[label] = (result[label] || 0) + 1;
     return result;
   }, {});
-  return BREAKDOWN_TYPE_LABELS.map((label) => ({
+  const labels = [...new Set([
+    ...BREAKDOWN_TYPE_LABELS,
+    ...repairTypes.map((record) => typeof record === "string" ? record : record?.repairType).filter((value) => String(value || "").trim()).map(normalizedBreakdownType),
+    ...Object.keys(counts),
+  ])];
+  return labels.map((label) => ({
     label,
     count: counts[label] || 0,
     percentage: total ? Math.round(((counts[label] || 0) / total) * 100) : 0,

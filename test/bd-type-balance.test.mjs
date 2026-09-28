@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { breakdownTypeShare } from "../dashboard-breakdown-movement.mjs";
+import { breakdownTypeShare, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { movementRequestRows } from "../src/dashboard-card-actions.mjs";
 
 test("BD type mix uses open balance, including carryover and excluding closed and idle", () => {
@@ -19,4 +19,21 @@ test("BD type mix uses open balance, including carryover and excluding closed an
     assert.equal(item.percentage, Math.round(counts[item.label] / 73 * 100));
   }
   assert.ok(breakdownTypeShare([]).every(item => item.count === 0 && item.percentage === 0));
+});
+
+test("BD type mix includes every master category and preserves legacy categories and exact drilldown counts", () => {
+  const categories = ['PREVENTIVE','WGM','SUPER STRUCTURE','ACCIDENTAL','AGGREGATE REPAIR','TYRE SYSTEM','AC SYSTEM','DRIVE LINE','OTHERS','GROUND ENGAGING TOOLS (GET)','SCHEDULED SERVICE','SUSPENSION','ELECTRICAL','HYDRAULIC SYSTEM','UNDER CARRIAGE/TRACK'];
+  const masters = [...categories.map(repairType => ({repairType})), {repairType:'ac system'}, {repairType:'Future type'}];
+  const rows = [...categories, 'Breakdown', 'Legacy type'].map(category => ({category,status:'Open',start:'2026-09-01'}));
+  const mix = breakdownTypeShare(rows, '', '', masters);
+  for (const category of categories) assert.ok(mix.some(item => item.label === normalizedBreakdownType(category)));
+  assert.equal(new Set(mix.map(item => item.label)).size, mix.length);
+  assert.equal(mix.reduce((sum,item) => sum+item.count,0), rows.length);
+  assert.equal(mix.find(item => item.label==='Future Type').count,0);
+  for (const item of mix) {
+    assert.equal(item.count, rows.filter(row => normalizedBreakdownType(row.category)===item.label).length);
+    assert.equal(item.percentage,Math.round(item.count/rows.length*100));
+  }
+  assert.ok(breakdownTypeShare([], '', '', masters).some(item => item.label==='Tyre System' && item.count===0));
+  assert.equal(normalizedBreakdownType('Other'),normalizedBreakdownType('OTHERS'));
 });

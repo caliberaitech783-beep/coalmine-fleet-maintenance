@@ -1559,6 +1559,7 @@ function oemChartPlotSpace(article) {
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
+  const [dashboardRepairTypes] = useMasterRecords("Repair type master");
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
   useEffect(() => {
@@ -1815,8 +1816,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownMovementTotals = breakdownMovementForRangeForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
   // Match the open balance card: retain carryover, exclude closed and idle cases.
   const breakdownTypeSummary = dashboardShift === "all"
-    ? breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"))
-    : breakdownTypeShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"));
+    ? breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardRepairTypes)
+    : breakdownTypeShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardRepairTypes);
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
@@ -1832,7 +1833,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
   const breakdownDetailRows = dailyBreakdownMovementForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTotals = breakdownMovementForRangeForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"));
+  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardRepairTypes);
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
@@ -2371,7 +2372,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
             <section {...cardAction(movementKey("active-balance"), "All open BD balance types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
-              <header><div><b>BD Type Mix</b><small>Open BD balance · all six maintenance types</small></div><span>Percentage share of open BD balance</span></header>
+              <header><div><b>BD Type Mix</b><small>Open BD balance · all maintenance types</small></div><span>Percentage share of open BD balance</span></header>
               <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("active-balance", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">

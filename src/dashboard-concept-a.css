@@ -881,6 +881,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-type-mix :is(article, button):nth-child(6) { --type-color: #248b9f; }
 .mine-breakdown-type-mix :is(article, button) > span { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; min-width: 0; }
 .mine-breakdown-type-mix :is(article, button) > span b { overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button) > span b { white-space: normal; overflow-wrap: anywhere; }
+.mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(n+7) { border-top: 1px solid var(--mine-line, var(--line)); }
 .mine-breakdown-type-mix :is(article, button) > span strong { flex: 0 0 auto; color: var(--type-color); font: 900 13px/1 Manrope; }
 .mine-breakdown-type-mix :is(article, button) > i { display: block; height: 5px; overflow: hidden; border-radius: 3px; background: var(--mine-line, var(--line)); }
 .mine-breakdown-type-mix :is(article, button) > i > b { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--type-color); }
