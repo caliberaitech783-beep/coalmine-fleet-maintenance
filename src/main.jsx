@@ -9887,7 +9887,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
         const meterType = requestMeterTypeForRequest(request, equipmentRecords);
-        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
+        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripRemark: String(form.get("firstTripRemark") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
       } catch (error) {
         setFormError(error?.message || "Could not verify this request. Please try again.");
       } finally {
@@ -9922,6 +9922,9 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
           }} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button>
           <small>JPEG, PNG or WebP · maximum 5 MB</small>
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
+        </label>
+        <label className="full">Trip-card update remark (optional)
+          <textarea name="firstTripRemark" rows={3} maxLength={2000} defaultValue={request.firstTripRemark || ""} placeholder="Add a remark about any delay in updating the trip card." />
         </label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}

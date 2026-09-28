@@ -546,7 +546,8 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
-      ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '';
+      ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_readings JSONB NOT NULL DEFAULT '{}';
@@ -5499,6 +5500,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
+  first_trip_remark AS "firstTripRemark",
   (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
   COALESCE((SELECT pfta.production_first_trip_by FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripBy",
   COALESCE((SELECT pfta.production_first_trip_login FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripLogin",
@@ -6748,6 +6750,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
+    const firstTripRemark=String(req.body?.firstTripRemark||'').trim();
+    if(firstTripRemark.length>2000)return res.status(400).json({error:'Trip-card update remark must be 2000 characters or fewer.'});
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
@@ -6773,8 +6777,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading})]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading}),firstTripRemark]);
     if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
     });

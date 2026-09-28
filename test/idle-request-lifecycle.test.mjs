@@ -94,6 +94,31 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
   };
 }
 
+test('MIS verification saves optional trip-card remarks and rejects oversized remarks',async()=>{
+  for(const remark of [undefined,'','  Trip card was received late.  ']){
+    const app=harness('verify',{row:{...pending,status:'Closed',closedAt:'2026-09-08T10:30:00.000Z'}});
+    const result=await app.call({body:{firstTripRemark:remark}});
+    assert.equal(result.status,200);
+    const update=app.queries.find(({sql})=>sql.startsWith('UPDATE maintenance_requests'));
+    assert.match(update.sql,/first_trip_remark=\$10/);
+    assert.equal(update.values[9],String(remark||'').trim());
+  }
+  const app=harness('verify',{row:{...pending,status:'Closed',closedAt:'2026-09-08T10:30:00.000Z'}});
+  assert.equal((await app.call({body:{firstTripRemark:'x'.repeat(2001)}})).status,400);
+  assert.equal(app.mutations,0);
+});
+
+test('MIS trip-card remark is optional and below the upload in the shared verification form',()=>{
+  const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const form=client.slice(client.indexOf('function VerifyRequestForm('),client.indexOf('function ProductionFirstTripForm('));
+  assert.ok(form.indexOf('name="firstTripRemark"')>form.indexOf('name="firstTripCardImage"'));
+  assert.match(form,/<textarea name="firstTripRemark"[^>]*maxLength=\{2000\}/);
+  assert.doesNotMatch(form,/<textarea name="firstTripRemark"[^>]*required/);
+  assert.match(form,/firstTripRemark: String\(form.get\("firstTripRemark"\)/);
+  assert.match(source,/ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT ''/);
+  assert.match(source,/first_trip_remark AS "firstTripRemark"/);
+});
+
 test('manager on-road approval closes Idle and legacy Ideal requests for MIS without losing request identity or evidence',async()=>{
   for(const status of ['Idle','Ideal']){
     const app=harness('approve',{row:{...pending,status}});
