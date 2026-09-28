@@ -49,10 +49,10 @@ export function bdBalanceChange(opening, closing) {
 export function dailyBdRecordsForMetric(records, from, to, metric, options = {}) {
   const matchesShift = typeof options.matchesShift === 'function' ? options.matchesShift : () => true;
   if (metric === 'idle') {
-    const legacy = dailyBdRecordsForMetric(records, from, to, 'balance', options).filter(record => ['idle','ideal'].includes(String(record.status || '').toLowerCase()));
+    const legacy = dailyBdRecordsForMetric(records, from, to, 'balance', options).filter(record => ['idle','ideal'].includes(String(record.status || '').trim().toLowerCase()));
     return [...legacy, ...records.filter(record => {
       const entered = requestDateKey(record.idealRequestedAt || record.idleRequestedAt);
-      return String(record.status || '').toLowerCase() === 'closed' && isIdleVehicleRequest(record) && entered && entered >= from && entered <= to && matchesShift(record, 'idle');
+      return String(record.status || '').trim().toLowerCase() === 'closed' && isIdleVehicleRequest(record) && entered && entered >= from && entered <= to && matchesShift(record, 'idle');
     })];
   }
   if (metric === 'active-balance' || metric === 'idle') {

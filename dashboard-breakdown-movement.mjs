@@ -35,7 +35,7 @@ export function breakdownClosedDate(record = {}) {
 export function matchesBreakdownMovement(record, start = "", end = "", metric = "all") {
   if (["balance", "active-balance", "idle"].includes(metric)) {
     const idle = isIdleVehicleRequest(record);
-    if (metric === "idle" && String(record.status || "").toLowerCase() === "closed") {
+    if (metric === "idle" && String(record.status || "").trim().toLowerCase() === "closed") {
       const entered = dateKey(record.idealRequestedAt || record.idleRequestedAt);
       return idle && (!start || entered >= start) && (!end || entered <= end);
     }
