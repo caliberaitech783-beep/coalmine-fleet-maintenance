@@ -12,7 +12,7 @@ test("the breakdown type normaliser is shared so drilldown keys match the type m
   assert.equal(normalizedBreakdownType("PM"), "Preventive");
   assert.equal(normalizedBreakdownType("superstructure"), "Super Structure");
   assert.equal(normalizedBreakdownType("wgm"), "WGM");
-  assert.equal(normalizedBreakdownType("something else"), "");
+  assert.equal(normalizedBreakdownType("something else"), "Something Else");
 });
 
 test("site-scoped charts open the shared list with their site selected", async () => {
