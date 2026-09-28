@@ -25,7 +25,7 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.ok(browser.includes('<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th>{idleDateFilter && <><th>Idle reason</th><th>Days of idle</th></>}</>}'));
   assert.match(browser, /<td>\{record\.repairCategory\}<\/td><td>\{record\.delayedReason \|\| "—"\}<\/td>/);
   assert.match(browser, /formatBreakdownDaysHours\(record\.requestStart, record\.requestClosed, now\)/);
-  assert.match(browser, /<Status>\{record\.requestStatus \|\| "—"\}<\/Status>/);
+  assert.match(browser, /<Status>\{idleDateFilter \? "Idle" : record\.requestStatus \|\| "—"\}<\/Status>/);
   assert.match(browser, /showClosedColumn && <th>Closed<\/th>/);
   assert.match(browser, /showVerificationColumns && <><th>MIS verified at<\/th><th>First trip time<\/th>/);
 });
@@ -43,11 +43,11 @@ test("job references and duration cells open the complete lifecycle in every req
   assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} Remarks=\{MaintenanceRemarks\} \/>/);
   assert.match(browser, /const referenceCell = \(record\) => \{/);
   assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} \/>/);
-  assert.match(browser, /\{requestRecords && <td>\{referenceCell\(record\)\}<\/td>\}<td data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}>/);
+  assert.match(browser, /\{requestRecords && <td>\{referenceCell\(record\)\}<\/td>\}<td data-sort-value=\{requestStatusSortRank\(idleDateFilter \? "Idle" : record\.requestStatus\)\}>/);
   assert.match(source, /const assetDrilldownRows = requestDrilldownKey\(assetDrilldown\) \? rowsForAssetDrilldown\(assetDrilldown\) : fleetAssetRequestDetails\(rowsForAssetDrilldown\(assetDrilldown\), fleetDrilldownRequests\(assetDrilldown\)\)/);
   assert.match(source, /const requestDrilldownKey = \(key = ""\) => key === "open-cases" \|\| key\.startsWith\("stage-pipeline:"\) \|\| \["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"\]/);
   assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} label=\{label\} \/>/);
-  assert.match(browser, /data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}/);
+  assert.match(browser, /data-sort-value=\{requestStatusSortRank\(idleDateFilter \? "Idle" : record\.requestStatus\)\}/);
   assert.match(browser, /data-sort-value=\{sortableDate\(record\.requestStart\)\}/);
   assert.match(browser, /data-sort-value=\{calculateBreakdownMinutes\(record\.requestStart, record\.requestClosed, now\)\}>\{breakdownCell\(record\)\}/);
   assert.match(source, /case "ref": return <td><RequestTimelineButton reference=\{r\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>;/);

@@ -74,6 +74,7 @@ export default function DashboardRecordBrowser({ rows, toolbarTarget: hostToolba
   // A host (the OEM drilldown) may place the table actions in its own title row.
   const toolbarTarget = hostToolbarTarget || ownToolbarTarget;
   // Opening balances already select carried requests in the parent; Started must not filter them again.
+  // Idle drilldowns display vehicle state; other lists retain maintenance request status.
   const idleDateFilter = lifecycleEvent === "idle" || /\bidle\b/i.test(title);
   const datedRows = movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => idleDateFilter ? record.requestIdleAt : record.requestStart) : rows;
   // With no internal hierarchy, the parent supplies the complete filtered selection.
