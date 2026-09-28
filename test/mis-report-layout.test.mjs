@@ -21,14 +21,14 @@ test('MIS reports have the approved column order and wrapping',()=>{
 
 test('MIS daily counts stay separate by location without changing the General register',()=>{
   const requests=[
-    {site:'Sasti OB',start:'2026-09-09 08:00',closedAt:'2026-09-10 10:00'},
-    {site:'Majri OB',start:'2026-09-09 09:00'},
+    {site:'Sasti OC',start:'2026-09-09 08:00',closedAt:'2026-09-10 10:00'},
+    {site:'Majri OC',start:'2026-09-09 09:00'},
   ];
   const options={today:new Date('2026-09-10T12:00:00+05:30')};
   const rows=buildSiteInOutReportRows(requests,options);
   assert.equal(rows.length,4);
-  const sasti=rows.find(r=>r.date==='2026-09-10'&&r.site==='Sasti OB');
-  const majri=rows.find(r=>r.date==='2026-09-10'&&r.site==='Majri OB');
+  const sasti=rows.find(r=>r.date==='2026-09-10'&&r.site==='Sasti OC');
+  const majri=rows.find(r=>r.date==='2026-09-10'&&r.site==='Majri OC');
   assert.equal(sasti.closed,1);assert.equal(sasti.net,-1);assert.equal(sasti.pendingClose,0);
   assert.equal(majri.closed,0);assert.equal(majri.pendingClose,1);
   assert.equal(buildInOutReportRows(requests,options).length,2);

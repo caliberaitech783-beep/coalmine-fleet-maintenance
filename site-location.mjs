@@ -29,6 +29,8 @@ export function canonicalSiteName(value = "") {
     .toLowerCase()
     .replace(/\(\s*2nd\s*\)/g, " 2nd")
     .replace(/[^a-z0-9]+/g, " ")
+    // Preserve stable site identity while accepting the renamed OC labels.
+    .replace(/\boc\b/g, "ob")
     .trim()
     .replace(/\s+/g, " ");
   return SITE_ALIASES.get(normalized) || normalized;

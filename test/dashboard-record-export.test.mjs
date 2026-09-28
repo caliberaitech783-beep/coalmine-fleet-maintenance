@@ -10,19 +10,19 @@ const h = React.createElement;
 
 test("chart exports respect region, cascading filters, table filters, sort and displayed columns", () => {
   const records = [
-    { id: 1, currentLocation: "Sasti OB", category: "Vehicle", door: "T10", status: "Closed" },
-    { id: 2, currentLocation: "Sasti OB", category: "Vehicle", door: "T2", status: "Closed" },
-    { id: 3, currentLocation: "Sasti OB", category: "Vehicle", door: "T1", status: "Open" },
-    { id: 4, currentLocation: "Jayant OB", category: "Vehicle", door: "N1", status: "Closed" },
-    { id: 5, currentLocation: "Sasti OB", category: "Equipment", door: "E1", status: "Closed" },
-    { id: 6, currentLocation: "Majri OB", category: "Vehicle", door: "M1", status: "Closed" },
+    { id: 1, currentLocation: "Sasti OC", category: "Vehicle", door: "T10", status: "Closed" },
+    { id: 2, currentLocation: "Sasti OC", category: "Vehicle", door: "T2", status: "Closed" },
+    { id: 3, currentLocation: "Sasti OC", category: "Vehicle", door: "T1", status: "Open" },
+    { id: 4, currentLocation: "Jayant OC", category: "Vehicle", door: "N1", status: "Closed" },
+    { id: 5, currentLocation: "Sasti OC", category: "Equipment", door: "E1", status: "Closed" },
+    { id: 6, currentLocation: "Majri OC", category: "Vehicle", door: "M1", status: "Closed" },
   ];
-  const view = drilldownView(records, REGION_DATA, { region: "WCL", site: "Sasti OB", category: "Total vehicles" });
+  const view = drilldownView(records, REGION_DATA, { region: "WCL", site: "Sasti OC", category: "Total vehicles" });
   const { columns } = tableModel(h("thead", {}, h("tr", {}, ...["Machine", "Site", "Status"].map((label) => h("th", { key: label }, label)))));
   const rows = view.rows.map((record) => h("tr", { key: record.id }, h("td", {}, h("b", {}, record.door)), h("td", {}, record.currentLocation), h("td", {}, record.status)));
   const exported = tableExportModel(rows, columns, [columns[1].key, columns[0].key], { [columns[2].key]: "Closed" }, { key: columns[0].key, direction: "asc" });
   assert.deepEqual(exported.columns.map(({ label }) => label), ["Site", "Machine"]);
-  assert.deepEqual(exported.rows.map((row) => exported.columns.map((column) => column.value(row))), [["Sasti OB", "T2"], ["Sasti OB", "T10"]]);
+  assert.deepEqual(exported.rows.map((row) => exported.columns.map((column) => column.value(row))), [["Sasti OC", "T2"], ["Sasti OC", "T10"]]);
   assert.deepEqual(rows.map((row) => row.key), ["1", "2", "3"]);
   assert.deepEqual(tableExportModel(rows, columns, [columns[0].key], { [columns[2].key]: "Missing" }).rows, []);
 });

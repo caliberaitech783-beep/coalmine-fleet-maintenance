@@ -74,7 +74,7 @@ export function SaveReportDialog({ title = "", defaultName = "", existingNames =
   return <Dialog title="Save report" onClose={onClose} labelledBy="save-report-title">
     <form className="saved-report-form" onSubmit={submit}>
       <p className="saved-report-context">{title ? <>Saves the current view of <b>{title}</b>: visible columns, filters, sort order and date range.</> : "Saves the current view: visible columns, filters, sort order and date range."}</p>
-      <label><span>Report name</span><input ref={inputRef} autoFocus type="text" maxLength="80" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} placeholder="e.g. Sasti OB open breakdowns" /></label>
+      <label><span>Report name</span><input ref={inputRef} autoFocus type="text" maxLength="80" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} placeholder="e.g. Sasti OC open breakdowns" /></label>
       {replaces && !error && <p className="saved-report-hint">A report with this name exists and will be replaced.</p>}
       {error && <p className="saved-report-error" role="alert">{error}</p>}
       <footer><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="primary" disabled={saving || !clean}><Save />{saving ? "Saving…" : replaces ? "Replace report" : "Save report"}</button></footer>

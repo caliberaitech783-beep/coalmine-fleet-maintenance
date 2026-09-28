@@ -19,14 +19,14 @@ const now=new Date('2026-09-15T15:00:00+05:30');
 const users=[
   {login:'admin',userType:'Super User',adminLevel:'Admin',phone:'9000000001'},
   {login:'super',userType:'Super User',adminLevel:'Super Admin',phone:'9000000002'},
-  {login:'manager',userType:'Super User',adminLevel:'Manager',managerRole:'Maintenance Manager',site:'Sasti OB',phone:'9000000003'},
+  {login:'manager',userType:'Super User',adminLevel:'Manager',managerRole:'Maintenance Manager',site:'Sasti OC',phone:'9000000003'},
   {login:'unassigned-manager',userType:'Super User',adminLevel:'Manager',managerRole:'Maintenance Manager',phone:'9000000004'},
 ];
 function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTemplate=false,failFiles=false,overrides=new Map(),records=null,recipientUsers=users}={}){
   const templates=[],documents=[],texts=[],pdfs=[],queries=[],claims=new Map();let uuid=0;
   const ticketRows=records||[
-    {reference:'TIC/1',site:'Sasti OB',openedAt:'2026-09-15T10:00:00+05:30',status:'Open',creatorRole:'Production User'},
-    {reference:'TIC/2',site:'Majri OB',openedAt:'2026-09-15T11:00:00+05:30',status:'Open',creatorRole:'MIS User'},
+    {reference:'TIC/1',site:'Sasti OC',openedAt:'2026-09-15T10:00:00+05:30',status:'Open',creatorRole:'Production User'},
+    {reference:'TIC/2',site:'Majri OC',openedAt:'2026-09-15T11:00:00+05:30',status:'Open',creatorRole:'MIS User'},
   ];
   const dependencies={siteReportMessageContext,recipientReportMessage,databaseReady:true,storedWhatsAppReportSettings:async()=>settings,whatsappPurposeEnabled,ticketReportWindow,scheduledReportWindowsDue,
     storedHierarchyReportScheduleSettings:async()=>defaultHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides:async()=>overrides,
@@ -37,7 +37,7 @@ function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTe
       if(sql.startsWith('INSERT INTO published_reports')&&(typeof failFiles==='function'?failFiles():failFiles))throw new Error('File storage failed');
       if(sql.includes('FROM crm_tickets'))return {rows:empty?[]:ticketRows};
       if(sql.includes("master_name='Users & employees'"))return {rows:recipientUsers.map(record_data=>({record_data}))};
-      if(sql.includes("master_name='Equipment master'"))return {rows:['Sasti OB','Majri OB'].map(currentLocation=>({record_data:{currentLocation}}))};
+      if(sql.includes("master_name='Equipment master'"))return {rows:['Sasti OC','Majri OC'].map(currentLocation=>({record_data:{currentLocation}}))};
       if(sql.startsWith('INSERT INTO whatsapp_consolidated_report_runs')){
         const key=args.join('|'),previous=claims.get(key);
         if(previous&&(!previous.status.startsWith('Failed')||previous.attempts>=3))return {rows:[],rowCount:0};
@@ -70,10 +70,10 @@ test('CRM sends one message per recipient with all selected site files and dedup
   assert.equal(harness.pdfs.length,2);
   for(const pdf of harness.pdfs){assert.equal(pdf.openTickets.length,1);assert.ok(pdf.openTickets.every(ticket=>ticket.site===pdf.scopeLabel));}
   const manager=harness.templates.filter(message=>message.to==='9000000003');
-  assert.equal(manager.length,1);assert.match(manager[0].parameters[0],/^\*LOCATIONS: Sasti OB\*/);assert.doesNotMatch(manager[0].parameters[0],/Majri/);
+  assert.equal(manager.length,1);assert.match(manager[0].parameters[0],/^\*LOCATIONS: Sasti OC\*/);assert.doesNotMatch(manager[0].parameters[0],/Majri/);
   const admin=harness.templates.find(message=>message.to==='9000000001');
-  assert.match(admin.parameters[0],/^\*LOCATIONS: Majri OB \| Sasti OB\*/);
-  assert.match(admin.parameters[0],/\*SITE: Majri OB\*/);assert.match(admin.parameters[0],/\*SITE: Sasti OB\*/);
+  assert.match(admin.parameters[0],/^\*LOCATIONS: Majri OC \| Sasti OC\*/);
+  assert.match(admin.parameters[0],/\*SITE: Majri OC\*/);assert.match(admin.parameters[0],/\*SITE: Sasti OC\*/);
   for(const message of harness.templates){assert.match(message.parameters[0],/\*PDF - .+:\* https:\/\/reports.example\/r\//);assert.match(message.parameters[0],/Excel - .+:\* https:\/\/reports.example\/r\//);}
   assert.equal(harness.queries.filter(q=>q.sql.startsWith('INSERT INTO published_reports')).length,2);
   assert.equal((await harness.send(now)).sent,0);assert.equal(harness.templates.length,3);
@@ -93,17 +93,17 @@ test('CRM pauses, recipient selections and empty-site preferences are enforced b
 
 const crmRoleUsers=[...users,
   ...[
-    {login:'legacy-project',adminLevel:'Project Manager',site:'Sasti OB'},
-    {login:'legacy-project-title',adminLevel:'Admin',designation:'Project Manager',site:'Sasti OB'},
-    {login:'admin-department-manager',adminLevel:'Admin',designation:'Maintenance Manager',managerSites:'Majri OB'},
-    {login:'implicit-manager',designation:'Production Manager',site:'Sasti OB'},
-    {login:'multi-role-manager',adminLevel:'Admin',managerRole:'Project Manager | Production Manager | MIS Manager',site:'Sasti OB'},
+    {login:'legacy-project',adminLevel:'Project Manager',site:'Sasti OC'},
+    {login:'legacy-project-title',adminLevel:'Admin',designation:'Project Manager',site:'Sasti OC'},
+    {login:'admin-department-manager',adminLevel:'Admin',designation:'Maintenance Manager',managerSites:'Majri OC'},
+    {login:'implicit-manager',designation:'Production Manager',site:'Sasti OC'},
+    {login:'multi-role-manager',adminLevel:'Admin',managerRole:'Project Manager | Production Manager | MIS Manager',site:'Sasti OC'},
     {login:'unassigned-legacy-manager',adminLevel:'Project Manager'},
     {login:'director-admin',adminLevel:'Admin',designation:'Director'},
     {login:'named-director-admin',adminLevel:'Admin',employee:'Rahul Chadda',managerRole:'Production Manager'},
-    {login:'director-manager',adminLevel:'Manager',designation:'Director',managerRole:'Production Manager',site:'Majri OB'},
+    {login:'director-manager',adminLevel:'Manager',designation:'Director',managerRole:'Production Manager',site:'Majri OC'},
     {login:'titled-super',adminLevel:'Super Admin',designation:'Director',managerRole:'Project Manager'},
-    {login:'mobile',userType:'Mobile User',assignedRole:'Production User',site:'Sasti OB'},
+    {login:'mobile',userType:'Mobile User',assignedRole:'Production User',site:'Sasti OC'},
   ].map((user,index)=>({userType:'Super User',phone:`90000000${String(index+10).padStart(2,'0')}`,...user})),
 ];
 const crmRoleExpected={
@@ -125,12 +125,12 @@ for(const selectedRole of ['Manager','Admin','Super Admin','default']){
     for(const login of crmRoleExpected.Manager.filter(login=>expected.includes(login))){
       const messages=delivered.filter(item=>item.login===login);
       assert.equal(messages.length,1,`${login} must retain its assigned site scope`);
-      assert.match(messages[0].message,['admin-department-manager','director-manager'].includes(login)?/^\*LOCATIONS: Majri OB\*/:/^\*LOCATIONS: Sasti OB\*/);
+      assert.match(messages[0].message,['admin-department-manager','director-manager'].includes(login)?/^\*LOCATIONS: Majri OC\*/:/^\*LOCATIONS: Sasti OC\*/);
     }
     for(const login of [...crmRoleExpected.Admin,...crmRoleExpected['Super Admin']].filter(login=>expected.includes(login))){
       const messages=delivered.filter(item=>item.login===login);
       assert.equal(messages.length,1,`${login} gets both report sites in one message`);
-      assert.match(messages[0].message,/\*SITE: Majri OB\*/);assert.match(messages[0].message,/\*SITE: Sasti OB\*/);
+      assert.match(messages[0].message,/\*SITE: Majri OC\*/);assert.match(messages[0].message,/\*SITE: Sasti OC\*/);
     }
     assert.equal(result.sent,delivered.length);
   });
@@ -138,7 +138,7 @@ for(const selectedRole of ['Manager','Admin','Super Admin','default']){
 
 test('CRM personal timetable overrides only that recipient and uses previous actual slot',async()=>{
   const schedule={designationKey:'maintenanceManager',enabled:true,schedules:[{key:'personal',cadence:'daily',times:['07:00','15:00','19:00'],reports:['Location wise opened BD']}]};
-  const harness=crmHarness({overrides:new Map([['manager',schedule]]),records:[{reference:'EVENING',site:'Sasti OB',openedAt:'2026-09-15T16:00:00+05:30',status:'Open'}]});
+  const harness=crmHarness({overrides:new Map([['manager',schedule]]),records:[{reference:'EVENING',site:'Sasti OC',openedAt:'2026-09-15T16:00:00+05:30',status:'Open'}]});
   const result=await harness.send(new Date('2026-09-15T19:01:00+05:30'));
   assert.equal(result.sent,1);assert.equal(harness.templates[0].to,'9000000003');
   assert.equal(harness.pdfs[0].start.toISOString(),'2026-09-15T09:30:00.000Z');
@@ -150,10 +150,10 @@ test('CRM personal timetable overrides only that recipient and uses previous act
 test('CRM fallback delivers both close slots within grace, keeps legacy claim keys and deduplicates repeated polls',async()=>{
   const settings=defaultWhatsAppReportSettings();settings.crm.times=['15:00','15:10'];
   const records=[
-    {reference:'BEFORE',site:'Sasti OB',openedAt:'2026-09-15T14:59:59+05:30',status:'Open'},
-    {reference:'BOUNDARY',site:'Sasti OB',openedAt:'2026-09-15T15:00:00+05:30',status:'Open'},
-    {reference:'AFTER',site:'Sasti OB',openedAt:'2026-09-15T15:09:59+05:30',status:'Open'},
-    {reference:'NEXT',site:'Sasti OB',openedAt:'2026-09-15T15:10:00+05:30',status:'Open'},
+    {reference:'BEFORE',site:'Sasti OC',openedAt:'2026-09-15T14:59:59+05:30',status:'Open'},
+    {reference:'BOUNDARY',site:'Sasti OC',openedAt:'2026-09-15T15:00:00+05:30',status:'Open'},
+    {reference:'AFTER',site:'Sasti OC',openedAt:'2026-09-15T15:09:59+05:30',status:'Open'},
+    {reference:'NEXT',site:'Sasti OC',openedAt:'2026-09-15T15:10:00+05:30',status:'Open'},
   ];
   const harness=crmHarness({settings,records,recipientUsers:[users[2]]});
   const first=await harness.send(new Date('2026-09-15T15:15:00+05:30'));
@@ -193,13 +193,13 @@ test('CRM fallback retries a failed earlier slot while the successful adjacent s
 
 test('CRM includes raised-and-resolved cases and reconstructs resolution at the window boundary',async()=>{
   const records=[
-    {reference:'BOTH',site:'Sasti OB',openedAt:'2026-09-15T09:00:00+05:30',resolvedAt:'2026-09-15T11:00:00+05:30',status:'Resolved'},
-    {reference:'LATER',site:'Sasti OB',openedAt:'2026-09-15T10:00:00+05:30',resolvedAt:'2026-09-15T16:00:00+05:30',status:'Resolved'},
-    {reference:'OLD',site:'Sasti OB',openedAt:'2026-09-14T10:00:00+05:30',status:'Open'},
-    {reference:'BOUNDARY',site:'Sasti OB',openedAt:'2026-09-15T15:00:00+05:30',status:'Open'},
+    {reference:'BOTH',site:'Sasti OC',openedAt:'2026-09-15T09:00:00+05:30',resolvedAt:'2026-09-15T11:00:00+05:30',status:'Resolved'},
+    {reference:'LATER',site:'Sasti OC',openedAt:'2026-09-15T10:00:00+05:30',resolvedAt:'2026-09-15T16:00:00+05:30',status:'Resolved'},
+    {reference:'OLD',site:'Sasti OC',openedAt:'2026-09-14T10:00:00+05:30',status:'Open'},
+    {reference:'BOUNDARY',site:'Sasti OC',openedAt:'2026-09-15T15:00:00+05:30',status:'Open'},
   ];
   const harness=crmHarness({records});await harness.send(now);
-  const pdf=harness.pdfs.find(item=>item.scopeLabel==='Sasti OB');
+  const pdf=harness.pdfs.find(item=>item.scopeLabel==='Sasti OC');
   assert.deepEqual(pdf.openTickets.map(item=>item.reference),['LATER']);
   assert.deepEqual(pdf.closedTickets.map(item=>item.reference),['BOTH']);
 });
@@ -207,7 +207,7 @@ test('CRM includes raised-and-resolved cases and reconstructs resolution at the 
 test('CRM fallback still sends one message per recipient and never retries an uncertain response',async()=>{
   const fallback=crmHarness({failTemplate:true});assert.equal((await fallback.send(now)).sent,3);assert.equal(fallback.documents.length,1);assert.equal(fallback.texts.length,2);
   assert.ok(fallback.documents.every(item=>/\*Excel - .+:\* https:\/\/reports.example\/r\//.test(item.caption)));
-  for(const text of fallback.texts){assert.match(text.message,/SITE: Sasti OB/);assert.match(text.message,/SITE: Majri OB/);}
+  for(const text of fallback.texts){assert.match(text.message,/SITE: Sasti OC/);assert.match(text.message,/SITE: Majri OC/);}
   for(const code of ['WHATSAPP_POLICY_PAUSED','network']){
     const paused=crmHarness({failTemplate:code});assert.equal((await paused.send(now)).failed,3);assert.equal(paused.documents.length,0);assert.equal(paused.texts.length,0);
   }
@@ -222,8 +222,8 @@ test('failure to publish the second site sends no partial message and retries th
   assert.equal(harness.claims.size,1);
   const retry=await harness.send(new Date(now.getTime()+60000));
   assert.equal(retry.sent,1);assert.equal(retry.failed,0);assert.equal(harness.templates.length,1);
-  assert.match(harness.templates[0].parameters[0],/\*SITE: Majri OB\*/);
-  assert.match(harness.templates[0].parameters[0],/\*SITE: Sasti OB\*/);
+  assert.match(harness.templates[0].parameters[0],/\*SITE: Majri OC\*/);
+  assert.match(harness.templates[0].parameters[0],/\*SITE: Sasti OC\*/);
   assert.equal([...harness.claims.values()][0].attempts,2);
   assert.equal((await harness.send(new Date(now.getTime()+120000))).sent,0);
   assert.equal(harness.templates.length,1);

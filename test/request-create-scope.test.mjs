@@ -14,7 +14,7 @@ const creationGuard=source.slice(source.indexOf('async function createRequestWit
 const route=source.slice(source.indexOf("app.post('/api/requests',"),source.indexOf("app.patch('/api/requests/:reference',"));
 const production={role:'normal',assignedRole:'Production User',name:'Stupal Moon',login:'Stupal',permissions:{createRequests:true}};
 
-async function create({user={site:'Sasti OB'},session=production,body={}}={}){
+async function create({user={site:'Sasti OC'},session=production,body={}}={}){
   let handlers;
   const calls=[],followups=[];
   const context={
@@ -35,7 +35,7 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
   };
   context.pool.connect=async()=>({query:context.pool.query,release(){}});
   runInNewContext(`${auth}\n${creationGuard}\n${route}`,context);
-  const req={testSession:session,body:{ref:'REQ-LOCAL-CREATE',door:'LOCAL-01',chassis:'LOCAL-CHASSIS',site:'Sasti OB',complaint:'Isolated test',start:'2026-09-08 10:00:00',meterType:'HMR',...body}};
+  const req={testSession:session,body:{ref:'REQ-LOCAL-CREATE',door:'LOCAL-01',chassis:'LOCAL-CHASSIS',site:'Sasti OC',complaint:'Isolated test',start:'2026-09-08 10:00:00',meterType:'HMR',...body}};
   const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
   for(const handler of handlers){
     let advanced=false,error;
@@ -49,9 +49,9 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
 
 test('normal users cannot create other-site or unassigned requests, even through a forged client payload',async()=>{
   for(const assignedRole of ['Production User','Maintenance User'])for(const [user,body] of [
-    [{site:'Sasti OB'},{site:'Majri OB'}],
-    [{},{site:'Sasti OB'}],
-    [{site:'Sasti OB'},{site:''}],
+    [{site:'Sasti OC'},{site:'Majri OC'}],
+    [{},{site:'Sasti OC'}],
+    [{site:'Sasti OC'},{site:''}],
   ]){
     const result=await create({session:{...production,assignedRole},user,body});
     assert.equal(result.status,403);
@@ -61,7 +61,7 @@ test('normal users cannot create other-site or unassigned requests, even through
 });
 
 test('canonical site aliases and location/currentLocation profile fallbacks permit valid local creation',async()=>{
-  for(const user of [{site:'SASTI'},{location:' sasti ob '},{currentLocation:'Sasti OB'}]){
+  for(const user of [{site:'SASTI'},{location:' sasti ob '},{currentLocation:'Sasti OC'}]){
     const result=await create({user});
     assert.equal(result.status,201);
     assert.equal(result.body.owner,'Stupal Moon');
@@ -72,19 +72,19 @@ test('canonical site aliases and location/currentLocation profile fallbacks perm
 });
 
 test('each selected site accepts a request while an excluded site is rejected',async()=>{
-  const user={site:'Sasti OB | Jayant OB',managerRegion:'All'};
-  for(const assignedRole of ['Production User','Maintenance User'])for(const site of ['Sasti OB','Jayant OB','Majri OB']){
+  const user={site:'Sasti OC | Jayant OC',managerRegion:'All'};
+  for(const assignedRole of ['Production User','Maintenance User'])for(const site of ['Sasti OC','Jayant OC','Majri OC']){
     const result=await create({user,session:{...production,assignedRole},body:{site}});
-    assert.equal(result.status,site==='Majri OB'?403:201,`${assignedRole}: ${site}`);
-    assert.equal(result.calls.filter(call=>call.kind==='insert').length,site==='Majri OB'?0:1);
+    assert.equal(result.status,site==='Majri OC'?403:201,`${assignedRole}: ${site}`);
+    assert.equal(result.calls.filter(call=>call.kind==='insert').length,site==='Majri OC'?0:1);
   }
 });
 
 test('authorized Super/Admin creation remains available without an operational site constraint',async()=>{
   for(const adminLevel of ['Admin','Super Admin']){
-    const result=await create({user:{},session:{...production,role:'super',permissions:{adminLevel,createRequests:true}},body:{site:'Majri OB'}});
+    const result=await create({user:{},session:{...production,role:'super',permissions:{adminLevel,createRequests:true}},body:{site:'Majri OC'}});
     assert.equal(result.status,201);
-    assert.equal(result.body.site,'Majri OB');
+    assert.equal(result.body.site,'Majri OC');
   }
   const forbidden=await create({session:{...production,permissions:{createRequests:false}}});
   assert.equal(forbidden.status,403);

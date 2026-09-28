@@ -45,14 +45,14 @@ const chip = (tree, group, label) => descendants(byLabel(tree, group), node => n
 const kpi = (tree, label) => Number(text(descendants(descendants(tree, node => String(node.props['aria-label'] || '').startsWith(`${label}: `))[0], node => node.props.className === 'pulse-kpi-count')[0]));
 const kpiCounts = tree => Object.fromEntries(['BD balance', 'Critical', 'Warning', 'Open'].map(label => [label, kpi(tree, label)]));
 const REQUESTS = [
-  {ref: 'REQ-V167', door: 'V167', reg: 'MH34BZ3284', site: 'Dhoptala OB (2nd)', equipmentGroup: 'VOLVO TIPPERS', meterType: 'KMR', status: 'Open', start: '2026-09-16 06:02', expectedCompletionAt: '2026-09-16 06:20', complaint: 'RHS 2nd axle main leaf spring broken'},
-  {ref: 'REQ-S145', door: 'S145', site: 'Sasti OB', equipmentGroup: 'SCANIA TIPPERS', status: 'Open', start: '2026-09-16 09:36', expectedCompletionAt: '2026-09-16 13:00', complaint: 'Third axle oil seal leakage'},
-  {ref: 'REQ-D38', door: 'D38', site: 'Majri OB', equipmentGroup: 'DOZERS', meterType: 'HMR', status: 'Open', start: '2026-09-14 08:01', complaint: 'LHS track chain loose and battery terminal damage', dailyRemarks: [{createdAt: '2026-09-14 18:00', authorName: 'Site team', remark: 'Chain inspected', delayReason: 'Vendor inspection pending'}, {createdAt: '2026-09-15 18:30', authorName: 'Maintenance team', remark: 'Battery replaced', delayReason: 'Awaiting track chain from supplier'}]},
-  {ref: 'REQ-W1', door: 'W1', site: 'Majri OB', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise', overdueReason: 'Gear box sent to workshop', dailyRemarks: [{createdAt: '2026-09-16 08:00', remark: 'Opened gear box', delayReason: 'Spares not in stock'}]},
-  {ref: 'REQ-J9', door: 'J9', site: 'Jayant OB', equipmentGroup: 'DRILL MACHINE', status: 'Open', start: '2026-09-16 02:00', complaint: 'Compressor fault'},
-  {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OB', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
-  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-22 08:00', closedAt: '2026-09-22 09:00', complaint: 'Brake liner broken'},
-  {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OB', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
+  {ref: 'REQ-V167', door: 'V167', reg: 'MH34BZ3284', site: 'Dhoptala OC (2nd)', equipmentGroup: 'VOLVO TIPPERS', meterType: 'KMR', status: 'Open', start: '2026-09-16 06:02', expectedCompletionAt: '2026-09-16 06:20', complaint: 'RHS 2nd axle main leaf spring broken'},
+  {ref: 'REQ-S145', door: 'S145', site: 'Sasti OC', equipmentGroup: 'SCANIA TIPPERS', status: 'Open', start: '2026-09-16 09:36', expectedCompletionAt: '2026-09-16 13:00', complaint: 'Third axle oil seal leakage'},
+  {ref: 'REQ-D38', door: 'D38', site: 'Majri OC', equipmentGroup: 'DOZERS', meterType: 'HMR', status: 'Open', start: '2026-09-14 08:01', complaint: 'LHS track chain loose and battery terminal damage', dailyRemarks: [{createdAt: '2026-09-14 18:00', authorName: 'Site team', remark: 'Chain inspected', delayReason: 'Vendor inspection pending'}, {createdAt: '2026-09-15 18:30', authorName: 'Maintenance team', remark: 'Battery replaced', delayReason: 'Awaiting track chain from supplier'}]},
+  {ref: 'REQ-W1', door: 'W1', site: 'Majri OC', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise', overdueReason: 'Gear box sent to workshop', dailyRemarks: [{createdAt: '2026-09-16 08:00', remark: 'Opened gear box', delayReason: 'Spares not in stock'}]},
+  {ref: 'REQ-J9', door: 'J9', site: 'Jayant OC', equipmentGroup: 'DRILL MACHINE', status: 'Open', start: '2026-09-16 02:00', complaint: 'Compressor fault'},
+  {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OC', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
+  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OC', status: 'Closed', start: '2026-09-22 08:00', closedAt: '2026-09-22 09:00', complaint: 'Brake liner broken'},
+  {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OC', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
 ];
 function harness() {
   const slots = [], effects = [], timers = [];
@@ -124,7 +124,7 @@ test('opens as the BD balance until today in IST: no From, To = today, every ope
   assert.match(html(tree), /Filters All regions · Until 16-09-2026/);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-reset')[0].props.disabled, true);
   // A breakdown dated after "today" (clock skew) stays out; reopening on another day moves the bound to that day.
-  const future = render({requests: [...REQUESTS, {ref: 'REQ-FUTURE', door: 'F1', site: 'Sasti OB', status: 'Open', start: '2026-09-17 01:00', complaint: 'Clock skew'}]});
+  const future = render({requests: [...REQUESTS, {ref: 'REQ-FUTURE', door: 'F1', site: 'Sasti OC', status: 'Open', start: '2026-09-17 01:00', complaint: 'Clock skew'}]});
   assert.ok(byLabel(future, 'BD balance: 5'));
   const later = render({now: NOW + 86_400_000});
   assert.deepEqual([byLabel(later, 'Info Pulse from date').props.value, byLabel(later, 'Info Pulse to date').props.value], ['', '2026-09-17']);
@@ -147,7 +147,7 @@ test('All dates lists every open breakdown longest standing first with its reaso
   assert.deepEqual(descendants(list, node => node.props.className === 'pulse-rank').map(text), ['1', '2', '3', '4', '5']);
   const body = html(list);
   for (const reason of ['LHS track chain loose and battery terminal damage', 'Gear box noise', 'RHS 2nd axle main leaf spring broken', 'Third axle oil seal leakage']) assert.ok(body.includes(reason), reason);
-  assert.ok(body.includes('Majri OB') && body.includes('DOZERS · REQ-D38') && body.includes('VOLVO TIPPERS · REQ-V167'));
+  assert.ok(body.includes('Majri OC') && body.includes('DOZERS · REQ-D38') && body.includes('VOLVO TIPPERS · REQ-V167'));
   for (const excluded of ['E110', 'S55', 'S6', 'No operator', 'Brake liner']) assert.ok(!body.includes(excluded), `${excluded} excluded`);
   assert.match(html(tree), /5 of 5 breakdowns · All regions · All dates/);
 });
@@ -210,25 +210,25 @@ test('region tabs, site chips and equipment/vehicle chips cascade with counts li
   let tree = app.render();
   assert.deepEqual(chips(tree, 'Breakdowns by region'), ['All regions:5', 'WCL:4', 'NCL:1']);
   assert.equal(chip(tree, 'Breakdowns by region', 'All regions').props['aria-selected'], true);
-  assert.deepEqual(chips(tree, 'Site choices'), ['All sites:5', 'Dhoptala OB (2nd):1', 'Jayant OB:1', 'Majri OB:2', 'Sasti OB:1']);
+  assert.deepEqual(chips(tree, 'Site choices'), ['All sites:5', 'Dhoptala OC (2nd):1', 'Jayant OC:1', 'Majri OC:2', 'Sasti OC:1']);
   assert.deepEqual(chips(tree, 'Equipment / Vehicle choices'), ['All equipment & vehicles:5', 'Equipment:2', 'Vehicles:3']);
   chip(tree, 'Breakdowns by region', 'WCL').props.onClick();
   tree = app.render();
   assert.equal(chip(tree, 'Breakdowns by region', 'WCL').props['aria-selected'], true);
-  assert.deepEqual(chips(tree, 'Site choices'), ['All sites:4', 'Dhoptala OB (2nd):1', 'Majri OB:2', 'Sasti OB:1']);
+  assert.deepEqual(chips(tree, 'Site choices'), ['All sites:4', 'Dhoptala OC (2nd):1', 'Majri OC:2', 'Sasti OC:1']);
   assert.deepEqual(kpiCounts(tree), {'BD balance': 4, Critical: 1, Warning: 1, Open: 2});
   assert.match(html(tree), /Every open breakdown in WCL/);
-  chip(tree, 'Site choices', 'Majri OB').props.onClick();
+  chip(tree, 'Site choices', 'Majri OC').props.onClick();
   tree = app.render();
-  assert.equal(chip(tree, 'Site choices', 'Majri OB').props['aria-pressed'], true);
+  assert.equal(chip(tree, 'Site choices', 'Majri OC').props['aria-pressed'], true);
   assert.deepEqual(chips(tree, 'Equipment / Vehicle choices'), ['All equipment & vehicles:2', 'Equipment:1', 'Vehicles:1']);
   assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['D38', 'W1']);
-  assert.match(html(tree), /Every open breakdown in Majri OB/);
+  assert.match(html(tree), /Every open breakdown in Majri OC/);
   assert.match(html(tree), /2 of 5 records/);
   chip(tree, 'Equipment / Vehicle choices', 'Vehicles').props.onClick();
   tree = app.render();
   assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['W1']);
-  assert.match(html(tree), /Filters WCL · Majri OB · Vehicles · All dates/);
+  assert.match(html(tree), /Filters WCL · Majri OC · Vehicles · All dates/);
   // Changing the region clears the site and category below it.
   chip(tree, 'Breakdowns by region', 'NCL').props.onClick();
   tree = app.render();
@@ -244,16 +244,16 @@ test('region tabs, site chips and equipment/vehicle chips cascade with counts li
 });
 
 test('single-region and single-site scopes hide the region tabs and site chips but keep the date and category filters', () => {
-  const single = REQUESTS.filter(request => request.site === 'Sasti OB');
-  const tree = render({requests: single, scope: {label: 'Sasti OB', sites: ['Sasti OB']}});
+  const single = REQUESTS.filter(request => request.site === 'Sasti OC');
+  const tree = render({requests: single, scope: {label: 'Sasti OC', sites: ['Sasti OC']}});
   assert.equal(byLabel(tree, 'Breakdowns by region'), undefined);
   assert.equal(byLabel(tree, 'Site choices'), undefined);
   assert.match(html(tree), /Filters WCL · Until 16-09-2026/);
   assert.deepEqual(chips(tree, 'Equipment / Vehicle choices'), ['All equipment & vehicles:1', 'Vehicles:1']);
   assert.ok(byLabel(tree, 'Info Pulse from date') && byLabel(tree, 'Info Pulse to date'));
-  const wcl = render({requests: REQUESTS.filter(request => request.site !== 'Jayant OB'), scope: {label: 'WCL', sites: ['Sasti OB', 'Majri OB', 'Dhoptala OB (2nd)']}});
+  const wcl = render({requests: REQUESTS.filter(request => request.site !== 'Jayant OC'), scope: {label: 'WCL', sites: ['Sasti OC', 'Majri OC', 'Dhoptala OC (2nd)']}});
   assert.equal(byLabel(wcl, 'Breakdowns by region'), undefined);
-  assert.deepEqual(chips(wcl, 'Site choices'), ['All sites:4', 'Dhoptala OB (2nd):1', 'Majri OB:2', 'Sasti OB:1']);
+  assert.deepEqual(chips(wcl, 'Site choices'), ['All sites:4', 'Dhoptala OC (2nd):1', 'Majri OC:2', 'Sasti OC:1']);
 });
 
 test('the started-date range is inclusive on IST days, presets set today-anchored ranges, and a reversed range is flagged', () => {
@@ -295,7 +295,7 @@ test('equipment and vehicle classification uses the meter type first and the gro
   assert.equal(data.infoPulseAssetCategory({equipmentGroup: 'DRILL MACHINE'}), 'Equipment');
   assert.equal(data.infoPulseAssetCategory({}), 'Equipment');
   assert.deepEqual(data.infoPulseRegions(null).map(region => `${region.code}:${region.sites.length}`), ['WCL:5', 'NCL:3']);
-  assert.deepEqual(data.infoPulseRegions(['sasti ob', 'Jayant OB']).map(region => `${region.code}:${region.sites.join('|')}`), ['WCL:Sasti OB', 'NCL:Jayant OB']);
+  assert.deepEqual(data.infoPulseRegions(['sasti ob', 'Jayant OC']).map(region => `${region.code}:${region.sites.join('|')}`), ['WCL:Sasti OC', 'NCL:Jayant OC']);
   assert.deepEqual(data.infoPulseRegions([]), []);
 });
 
@@ -311,7 +311,7 @@ test('large phone-friendly result sets render 24 rows first and expand without c
   const requests = Array.from({length: 30}, (_, index) => ({
     ref: `REQ-WINDOW-${index + 1}`,
     door: `WINDOW-${index + 1}`,
-    site: 'Sasti OB',
+    site: 'Sasti OC',
     equipmentGroup: 'DOZERS',
     status: 'Open',
     start: `2026-09-16 ${String(10 - Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
@@ -344,7 +344,7 @@ test('each row shows standing since, down for and the ETC as overdue, due in or 
 });
 
 test('missing start, unparseable ETC and missing complaint render explicit placeholders instead of crashing', () => {
-  const requests = [{ref: 'REQ-BLANK', site: 'Sasti OB', status: 'Open', expectedCompletionAt: 'soon'}];
+  const requests = [{ref: 'REQ-BLANK', site: 'Sasti OC', status: 'Open', expectedCompletionAt: 'soon'}];
   const {tree} = allDates({requests});
   const row = html(byLabel(tree, 'BD balance breakdowns, longest standing first'));
   assert.ok(row.includes('Breakdown reason Not recorded'));
@@ -482,7 +482,7 @@ test('Export beside Refresh offers PDF, Excel and Smart Print for every breakdow
   assert.equal(critical.props.title, 'Info Pulse Critical breakdowns · All regions · All dates');
   assert.deepEqual(critical.props.rows.map(row => row.request.door), ['D38']);
   // Every filtered breakdown is exported, not only the 24 rendered so far.
-  const requests = Array.from({length: 30}, (_, index) => ({ref: `REQ-EXPORT-${index + 1}`, door: `EXPORT-${index + 1}`, site: 'Sasti OB', status: 'Open', start: `2026-09-16 09:${String(index % 60).padStart(2, '0')}`, complaint: 'Export fixture'}));
+  const requests = Array.from({length: 30}, (_, index) => ({ref: `REQ-EXPORT-${index + 1}`, door: `EXPORT-${index + 1}`, site: 'Sasti OC', status: 'Open', start: `2026-09-16 09:${String(index % 60).padStart(2, '0')}`, complaint: 'Export fixture'}));
   const wide = render({ExportMenu, requests});
   assert.equal(exportOf(wide).props.rows.length, 30);
   assert.equal(descendants(byLabel(wide, 'BD balance breakdowns, longest standing first'), node => node.type === 'li').length, 24);

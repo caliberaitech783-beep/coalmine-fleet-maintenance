@@ -208,13 +208,13 @@ for(const config of configurations){
 }
 
 test('multi-site ticket form loads only assigned options and submits one chosen site',async()=>{
-  const app=harness(configurations[0],{fetch:async url=>url==='/api/me/profile'?response({location:'Sasti OB | Jayant OB'}):response()});
+  const app=harness(configurations[0],{fetch:async url=>url==='/api/me/profile'?response({location:'Sasti OC | Jayant OC'}):response()});
   app.render({session:{role:'normal',token:'multi-site'}});await tick();
   const tree=app.render();
   const select=all(tree,node=>node.type==='select'&&node.props.name==='site')[0];
-  assert.deepEqual(all(select,node=>node.type==='option').map(node=>node.props.value),['','Sasti OB','Jayant OB']);
-  await app.submit(tree,app.values({site:'Jayant OB'}));
-  assert.equal(JSON.parse(app.calls.find(([url])=>url==='/api/tickets')[1].body).site,'Jayant OB');
+  assert.deepEqual(all(select,node=>node.type==='option').map(node=>node.props.value),['','Sasti OC','Jayant OC']);
+  await app.submit(tree,app.values({site:'Jayant OC'}));
+  assert.equal(JSON.parse(app.calls.find(([url])=>url==='/api/tickets')[1].body).site,'Jayant OC');
 });
 
 test('assignment-load failure stays inline and cannot enable ticket submission',async()=>{

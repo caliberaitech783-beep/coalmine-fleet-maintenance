@@ -18,12 +18,12 @@ test('CRM report windows follow 8, 15 and 20 India time',()=>{
 test('CRM report splits open and closed tickets and sorts longest elapsed first',()=>{
   const end=new Date('2026-08-27T09:30:00Z');
   const rows=prepareTicketReportRows([
-    {reference:'TIC/NEW',site:'Sasti OB',user:'User Two',remarks:'New issue',status:'Open',openedAt:'2026-08-27T08:30:00Z'},
-    {reference:'TIC/OLD',site:'Sasti OB',user:'User One',remarks:'Old issue',status:'Open',openedAt:'2026-08-27T03:30:00Z'},
-    {reference:'TIC/DONE',site:'Majri OB',user:'User Three',remarks:'Resolved issue',status:'Resolved',openedAt:'2026-08-27T04:30:00Z',resolvedAt:'2026-08-27T06:00:00Z'},
+    {reference:'TIC/NEW',site:'Sasti OC',user:'User Two',remarks:'New issue',status:'Open',openedAt:'2026-08-27T08:30:00Z'},
+    {reference:'TIC/OLD',site:'Sasti OC',user:'User One',remarks:'Old issue',status:'Open',openedAt:'2026-08-27T03:30:00Z'},
+    {reference:'TIC/DONE',site:'Majri OC',user:'User Three',remarks:'Resolved issue',status:'Resolved',openedAt:'2026-08-27T04:30:00Z',resolvedAt:'2026-08-27T06:00:00Z'},
   ],end);
   assert.deepEqual(rows.map(({reference})=>reference),['TIC/OLD','TIC/DONE','TIC/NEW']);
-  assert.equal(rows[0].site,'Sasti OB');
+  assert.equal(rows[0].site,'Sasti OC');
   const data={scopeLabel:'WCL',start:new Date('2026-08-27T02:30:00Z'),end,openTickets:rows.filter(({status})=>status!=='Resolved'),closedTickets:rows.filter(({status})=>status==='Resolved')};
   const message=buildTicketWhatsAppReport({...data,pdfUrl:'https://example.com/r/pdf',xlsxUrl:'https://example.com/r/excel'});
   assert.match(message,/PDF:\* https:\/\/example.com\/r\/pdf/);

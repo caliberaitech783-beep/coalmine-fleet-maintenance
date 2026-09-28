@@ -17,22 +17,22 @@ test('scheduled report windows follow 6, 10, 14, 18 and 22 India time',()=>{
 
 test('manager report scope supports site, multiple regions and all regions',()=>{
   assert.deepEqual(managerRegionSelection('WCL | NCL'),['WCL','NCL']);
-  assert.deepEqual(managerReportScope({site:'Sasti OB'}).sites,['sasti ob']);
-  assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Majri OB'),true);
-  assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Jayant OB'),false);
+  assert.deepEqual(managerReportScope({site:'Sasti OC'}).sites,['sasti ob']);
+  assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Majri OC'),true);
+  assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Jayant OC'),false);
   assert.equal(managerReportScope({managerRegion:'All'}).sites,null);
-  assert.deepEqual(managerSiteSelection('Sasti OB | Majri OB'),['sasti ob','majri ob']);
+  assert.deepEqual(managerSiteSelection('Sasti OC | Majri OC'),['sasti ob','majri ob']);
   assert.ok(sitesForManagerRegions('WCL').includes('sasti ob'));
-  const selected=managerReportScope({managerRegion:'WCL',managerSites:'Sasti OB | Majri OB'});
-  assert.equal(reportScopeIncludesSite(selected,'Sasti OB'),true);
-  assert.equal(reportScopeIncludesSite(selected,'Lalpeth OB'),false);
+  const selected=managerReportScope({managerRegion:'WCL',managerSites:'Sasti OC | Majri OC'});
+  assert.equal(reportScopeIncludesSite(selected,'Sasti OC'),true);
+  assert.equal(reportScopeIncludesSite(selected,'Lalpeth OC'),false);
 });
 
 test('consolidated report uses Equipment Master OEM and sorts elapsed time high to low',()=>{
   const reportTime=new Date('2026-08-27T00:30:00Z');
   const requests=attachRequestOems([
-    {reference:'REQ-NEW',door:'D2',site:'Sasti OB',user:'User Two',status:'Open',startedAt:'2026-08-26T23:30:00Z'},
-    {reference:'REQ-OLD',door:'D1',site:'Sasti OB',user:'User One',status:'Open',startedAt:'2026-08-26T17:30:00Z'},
+    {reference:'REQ-NEW',door:'D2',site:'Sasti OC',user:'User Two',status:'Open',startedAt:'2026-08-26T23:30:00Z'},
+    {reference:'REQ-OLD',door:'D1',site:'Sasti OC',user:'User One',status:'Open',startedAt:'2026-08-26T17:30:00Z'},
   ],[
     {door:'D1',oem:'Komatsu'},
     {door:'D2',make:'Tata'},
@@ -40,7 +40,7 @@ test('consolidated report uses Equipment Master OEM and sorts elapsed time high 
   const rows=prepareConsolidatedRows(requests,reportTime);
   assert.deepEqual(rows.map(({reference})=>reference),['REQ-OLD','REQ-NEW']);
   assert.equal(rows[0].oem,'Komatsu');
-  assert.ok(rows.every(({site})=>site==='Sasti OB'));
+  assert.ok(rows.every(({site})=>site==='Sasti OC'));
   const message=buildConsolidatedWhatsAppReport({scopeLabel:'WCL',start:new Date('2026-08-26T16:30:00Z'),end:reportTime,openRequests:rows,closedRequests:[]});
   assert.match(message,/\*NERVE CENTER CONSOLIDATED REPORT\*/);
   assert.match(message,/🔴 \*OFF ROAD \/ OPEN \(2\)\*/);
@@ -58,15 +58,15 @@ test('Idle requests include their reason in consolidated reports',()=>{
     openRequests:prepareConsolidatedRows([{reference:'REQ-IDLE',site:'SASTI',door:'HP2',startedAt:'2026-08-26T22:30:00Z',status:'Idle',idleReason:'No driver'}],end),
     closedRequests:[],
   });
-  assert.match(message,/\*SCOPE:\* Sasti OB/);
-  assert.match(message,/📍 \*SASTI OB\*/);
+  assert.match(message,/\*SCOPE:\* Sasti OC/);
+  assert.match(message,/📍 \*SASTI OC\*/);
   assert.match(message,/Status: Idle \| Idle reason: No driver/);
 });
 
 test('accepted requests do not fall back to Open in consolidated reports',()=>{
   const end=new Date('2026-08-27T00:30:00Z');
-  const openRequests=prepareConsolidatedRows([{reference:'REQ-ACCEPTED',site:'Majri OB',door:'D-1',startedAt:'2026-08-26T22:30:00Z',status:'Open',acceptedAt:'2026-08-27 04:10:00'}],end);
-  const message=buildConsolidatedWhatsAppReport({scopeLabel:'Majri OB',start:new Date('2026-08-26T20:30:00Z'),end,openRequests,closedRequests:[]});
+  const openRequests=prepareConsolidatedRows([{reference:'REQ-ACCEPTED',site:'Majri OC',door:'D-1',startedAt:'2026-08-26T22:30:00Z',status:'Open',acceptedAt:'2026-08-27 04:10:00'}],end);
+  const message=buildConsolidatedWhatsAppReport({scopeLabel:'Majri OC',start:new Date('2026-08-26T20:30:00Z'),end,openRequests,closedRequests:[]});
   assert.match(message,/Status: Accepted/);
   assert.doesNotMatch(message,/Status: Open/);
 });

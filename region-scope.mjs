@@ -1,8 +1,8 @@
 import {canonicalSiteName} from './site-location.mjs';
 
 export const REGION_DATA=[
-  {name:'Western Coalfields Limited',code:'WCL',state:'MH / MP',sites:['Sasti OB','Majri OB','Dhoptala OB (2nd)','Gauri Pauni OB (2nd)','Lalpeth OB']},
-  {name:'Northern Coalfields Limited',code:'NCL',state:'MP / UP',sites:['Jayant OB','Dudhichua OB','Dudhichua East OB']},
+  {name:'Western Coalfields Limited',code:'WCL',state:'MH / MP',sites:['Sasti OC','Majri OC','Dhoptala OC (2nd)','Gauri Pauni OC (2nd)','Lalpeth OC']},
+  {name:'Northern Coalfields Limited',code:'NCL',state:'MP / UP',sites:['Jayant OC','Dudhichua OC','Dudhichua East OC']},
 ];
 
 export const MANAGER_REGION_OPTIONS=['All',...REGION_DATA.map(({code})=>code)];
@@ -18,13 +18,13 @@ export function managerSiteSelection(value){
 }
 
 // One display name per site, keyed by its canonical form, so "sasti ob",
-// "Sasti OB" and "SASTI II" all render and save as "Sasti OB".
+// "Sasti OB", "Sasti OC" and "SASTI II" all render and save as "Sasti OC".
 const SITE_DISPLAY_NAMES=new Map(REGION_DATA.flatMap(({sites})=>sites).map((site)=>[canonicalSiteName(site),site]));
 
 export function displaySiteName(value){
   const raw=String(value||'').trim();
   if(!raw)return '';
-  return SITE_DISPLAY_NAMES.get(canonicalSiteName(raw))||raw;
+  return SITE_DISPLAY_NAMES.get(canonicalSiteName(raw))||raw.replace(/\bOB\b/gi,'OC');
 }
 
 export function displaySiteSelection(value){
@@ -53,6 +53,13 @@ export function normalizeOperationalSiteFields(record={}){
   const next={...record};
   for(const key of ['site','location','currentLocation','source','destination']){
     if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
+  }
+  for(const key of ['sites','siteAccess','managerSites']){
+    if(Array.isArray(next[key]))next[key]=displaySiteSelection(next[key]);
+    else if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteSelection(next[key]).join(' | ');
+  }
+  for(const key of ['region','managerRegion']){
+    if(typeof next[key]==='string')next[key]=next[key].replace(/\bOB\b/gi,'OC');
   }
   return next;
 }

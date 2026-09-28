@@ -18,10 +18,10 @@ test('site publication stores a real combined PDF and workbook with direct links
   const publish=new Function(...Object.keys(dependencies),`${snippet};return publishDirectorReportFiles;`)(...Object.values(dependencies));
   const window={start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')};
   const sourceData={requests:[
-    {ref:'SASTI-CASE',site:'Sasti OB',start:'2026-09-14 21:00:00',status:'Closed',closedAt:'2026-09-15 03:00:00',complaint:'Brake check'},
-    {ref:'MAJRI-SECRET',site:'Majri OB',start:'2026-09-14 21:00:00',status:'Open'},
+    {ref:'SASTI-CASE',site:'Sasti OC',start:'2026-09-14 21:00:00',status:'Closed',closedAt:'2026-09-15 03:00:00',complaint:'Brake check'},
+    {ref:'MAJRI-SECRET',site:'Majri OC',start:'2026-09-14 21:00:00',status:'Open'},
   ],equipmentRecords:[],transferRecords:[]};
-  const result=await publish({baseUrl:'https://reports.example',slotKey:'morning',now:window.end,window,sourceData,siteAccess:'Sasti OB',reportTitles:DIRECTOR_REPORT_TITLES.slice(0,3)});
+  const result=await publish({baseUrl:'https://reports.example',slotKey:'morning',now:window.end,window,sourceData,siteAccess:'Sasti OC',reportTitles:DIRECTOR_REPORT_TITLES.slice(0,3)});
   assert.equal(writes.length,2);assert.match(writes[0].sql,/DELETE FROM published_reports WHERE expires_at<=NOW\(\)/);
   const stored=writes[1];assert.match(stored.sql,/INTERVAL '14 days'/);
   assert.equal(result.files.length,2);assert.equal(result.links.length,1);assert.equal(result.links[0].rowCount,1);
@@ -29,12 +29,12 @@ test('site publication stores a real combined PDF and workbook with direct links
   assert.equal(pdf.content.subarray(0,5).toString(),'%PDF-');
   assert.equal(xlsx.content.subarray(0,2).toString(),'PK');
   assert.match(xlsx.content.toString(),/SASTI-CASE/);assert.doesNotMatch(xlsx.content.toString(),/MAJRI-SECRET/);
-  assert.ok(result.message.startsWith('*SITE: Sasti OB*'));
+  assert.ok(result.message.startsWith('*SITE: Sasti OC*'));
   for(const [index,file] of [[0,pdf],[1,xlsx]]){
     const offset=index*4;
     assert.equal(stored.args[offset+2],file.filename);
     assert.equal(stored.args[offset+3],file.content);
     assert.ok(result.message.includes(`https://reports.example/r/${stored.args[offset+1]}`));
-    assert.match(file.filename,/Sasti-OB/);
+    assert.match(file.filename,/Sasti-OC/);
   }
 });

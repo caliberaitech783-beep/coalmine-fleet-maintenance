@@ -14,18 +14,18 @@ test('Director report window runs daily at 7 PM India time',()=>{
 test('Director bundle builds all department reports and real xlsx output',()=>{
   const tables=buildDirectorReportTables({
     requests:[
-      {ref:'REQ-1',equipment:'EX-1',door:'D1',site:'Sasti OB',status:'Open',owner:'Production User',start:'2026-09-01 08:00',expectedCompletionAt:'2026-09-01 18:00',equipmentGroup:'Excavator'},
-      {ref:'REQ-2',equipment:'TR-1',door:'D2',site:'Jayant OB',status:'Closed',owner:'Production User',closedBy:'Maintenance User',start:'2026-09-01 09:00',expectedCompletionAt:'2026-09-01 17:00',closedAt:'2026-09-01 12:00',verifiedBy:'MIS User',verifiedAt:'2026-09-01 13:00',firstTripDone:true,firstTripAt:'2026-09-01 14:00'},
-      {ref:'REQ-3',equipment:'ID-1',door:'D3',site:'Majri OB',status:'Idle',owner:'Production User',idleReason:'No driver',start:'2026-09-01 10:00',expectedCompletionAt:'2026-09-01 16:00',closedAt:'2026-09-01 11:00'},
+      {ref:'REQ-1',equipment:'EX-1',door:'D1',site:'Sasti OC',status:'Open',owner:'Production User',start:'2026-09-01 08:00',expectedCompletionAt:'2026-09-01 18:00',equipmentGroup:'Excavator'},
+      {ref:'REQ-2',equipment:'TR-1',door:'D2',site:'Jayant OC',status:'Closed',owner:'Production User',closedBy:'Maintenance User',start:'2026-09-01 09:00',expectedCompletionAt:'2026-09-01 17:00',closedAt:'2026-09-01 12:00',verifiedBy:'MIS User',verifiedAt:'2026-09-01 13:00',firstTripDone:true,firstTripAt:'2026-09-01 14:00'},
+      {ref:'REQ-3',equipment:'ID-1',door:'D3',site:'Majri OC',status:'Idle',owner:'Production User',idleReason:'No driver',start:'2026-09-01 10:00',expectedCompletionAt:'2026-09-01 16:00',closedAt:'2026-09-01 11:00'},
     ],
-    equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OB',make:'Komatsu'}],
-    transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01'}],
+    equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OC',make:'Komatsu'}],
+    transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OC',destination:'Jayant OC',transferDate:'2026-09-01'}],
   });
   assert.equal(tables.length,30);
   const summary=tables.find(table=>table.title==='Summary Report');
   assert.equal(summary.department,'General');
   assert.equal(summary.rows.length,1);
-  assert.match(summary.pdfTitle,/Jayant OB/);
+  assert.match(summary.pdfTitle,/Jayant OC/);
   assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='returnToWorkTat')],'2h 0s');
   assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='verificationLag')],'Not recorded');
   assert.equal(tables.find((table)=>table.title==='Vehicle Arrival Red Flag Report').department,'Maintenance');

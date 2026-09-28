@@ -1246,6 +1246,27 @@ async function migrate(){
         VALUES ('jayant_ob_sites_merged_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
+    // Rename only location fields. Stable references, credentials, free-text
+    // remarks and historical audit evidence remain untouched.
+    const {rows:ocSiteNames}=await client.query("SELECT value FROM app_metadata WHERE key='site_ob_to_oc_v1' FOR UPDATE");
+    if(!ocSiteNames.length){
+      const {rows:masterRows}=await client.query('SELECT id,master_name,record_data FROM master_records FOR UPDATE');
+      for(const row of masterRows){
+        const normalized=row.master_name==='Users & employees'
+          ?normalizeUserSiteFields(row.record_data):normalizeOperationalSiteFields(row.record_data);
+        if(['Region master','Site master'].includes(row.master_name)){
+          for(const key of ['name','siteName','regionName']){
+            if(typeof normalized[key]==='string')normalized[key]=normalized[key].replace(/\bOB\b/gi,'OC');
+          }
+        }
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      for(const table of ['maintenance_requests','crm_tickets','request_corrections','production_first_trip_acceptances']){
+        await client.query(`UPDATE ${table} SET site=regexp_replace(site,'\\mOB\\M','OC','gi') WHERE site ~* '\\mOB\\M'`);
+      }
+      await client.query("INSERT INTO app_metadata (key,value,updated_at) VALUES ('site_ob_to_oc_v1','true',NOW()) ON CONFLICT (key) DO NOTHING");
+    }
     // Repair the legacy ETC values that were saved before the future-only
     // selector and server guard existed. Exact AM/PM inversions retain the
     // intended clock time. Every other impossible value moves to the first
@@ -6321,7 +6342,7 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
-    const storedSite=canonicalSiteName(site)==='sasti ob'?'Sasti OB':String(site||'').trim()||'Not assigned';
+    const storedSite=displaySiteName(site)||'Not assigned';
     const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});

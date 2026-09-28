@@ -59,7 +59,10 @@ export function drilldownView(rows = [], regions = [], filters = {}, { rowsAreSc
   let parentChanged = Boolean(filters.region && filters.region !== selection.region);
   for (const [name, labelOf] of [["site", null], ["category", equipmentCategoryLabel], ["group", equipmentGroupLabel], ["machine", equipmentMachineLabel]]) {
     if (labelOf) options[name] = optionsFor(filteredRows, (entry) => labelOf(entry.record));
-    const requested = parentChanged ? "" : filters[name] || "";
+    const rawRequested = parentChanged ? "" : filters[name] || "";
+    const requested = name === "site" && rawRequested
+      ? options.site.find(({value}) => canonicalSiteName(value) === canonicalSiteName(rawRequested))?.value || rawRequested
+      : rawRequested;
     const valid = options[name].some(({ value }) => value === requested);
     selection[name] = valid ? requested : "";
     if (requested && !valid) parentChanged = true;

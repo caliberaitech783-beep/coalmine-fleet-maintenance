@@ -16,11 +16,11 @@ import {
 import {DIRECTOR_REPORT_TITLES,buildDirectorReportTables} from '../director-report-bundle.mjs';
 
 const requests=[
-  {ref:'REQ-1',equipment:'EX-1',site:'Sasti OB',status:'Open',start:'2026-09-01 08:00'},
-  {ref:'REQ-2',equipment:'TR-1',site:'Jayant OB',status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-02 12:00',verifiedAt:'2026-09-03 13:00'},
-  {ref:'REQ-3',equipment:'ID-1',site:'Majri OB',status:'Idle',idleReason:'No driver',start:'2026-09-01 10:00',closedAt:'2026-09-01 11:00'},
-  {ref:'REQ-4',equipment:'DZ-1',site:'Sasti OB',status:'Closed',start:'2026-09-02 06:00',closedAt:'2026-09-02 09:30',verifiedAt:'2026-09-02 10:00'},
-  {ref:'REQ-5',equipment:'GR-1',site:'Sasti OB',status:'Open',start:'2026-09-03 07:15'},
+  {ref:'REQ-1',equipment:'EX-1',site:'Sasti OC',status:'Open',start:'2026-09-01 08:00'},
+  {ref:'REQ-2',equipment:'TR-1',site:'Jayant OC',status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-02 12:00',verifiedAt:'2026-09-03 13:00'},
+  {ref:'REQ-3',equipment:'ID-1',site:'Majri OC',status:'Idle',idleReason:'No driver',start:'2026-09-01 10:00',closedAt:'2026-09-01 11:00'},
+  {ref:'REQ-4',equipment:'DZ-1',site:'Sasti OC',status:'Closed',start:'2026-09-02 06:00',closedAt:'2026-09-02 09:30',verifiedAt:'2026-09-02 10:00'},
+  {ref:'REQ-5',equipment:'GR-1',site:'Sasti OC',status:'Open',start:'2026-09-03 07:15'},
 ];
 
 test('India date helpers bucket workflow timestamps by IST calendar day',()=>{
@@ -47,7 +47,7 @@ test('In and Out rows count vehicles in, out, verified, idle and the balance lef
   assert.equal(first.pendingClose,2);
   assert.equal(first.pendingVerification,0);
   assert.equal(first.inVehicles,'EX-1, TR-1, ID-1');
-  assert.equal(first.inLocations,'Jayant OB (1), Majri OB (1), Sasti OB (1)');
+  assert.equal(first.inLocations,'Jayant OC (1), Majri OC (1), Sasti OC (1)');
   assert.equal(middle.opened,1);
   assert.equal(middle.closed,2);
   assert.equal(middle.verified,1);
@@ -55,7 +55,7 @@ test('In and Out rows count vehicles in, out, verified, idle and the balance lef
   assert.equal(middle.pendingClose,1);
   assert.equal(middle.pendingVerification,1);
   assert.equal(middle.outVehicles,'TR-1, DZ-1');
-  assert.equal(middle.outLocations,'Jayant OB (1), Sasti OB (1)');
+  assert.equal(middle.outLocations,'Jayant OC (1), Sasti OC (1)');
   assert.equal(middle.averageTat,'15h 15m');
   assert.equal(latest.opened,1);
   assert.equal(latest.closed,0);

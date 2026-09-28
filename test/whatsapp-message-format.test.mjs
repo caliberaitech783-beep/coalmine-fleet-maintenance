@@ -7,17 +7,17 @@ import {sendMetaWhatsAppTemplate,setWhatsAppDeliveryPolicyReader} from '../meta-
 import {defaultWhatsAppReportSettings} from '../whatsapp-report-settings.mjs';
 import {reportTemplateFallback,candidateReportTemplate} from '../whatsapp-template-runtime.mjs';
 
-const request={site:'Sasti OB',ref:'REQ_42',equipmentGroup:'TIPPERS',door:'V_12',reg:'MH12 AB1234',chassis:'CH_987',
+const request={site:'Sasti OC',ref:'REQ_42',equipmentGroup:'TIPPERS',door:'V_12',reg:'MH12 AB1234',chassis:'CH_987',
   category:'Aggregate Repair',complaint:'Hydraulic pump leaking',maintenanceWork:'Pump replaced and tested',delayedReason:'Awaiting spare pump',
   idealRequestedBy:'Maintenance Operator',firstTripDone:true,firstTripAt:'2026-09-15 06:50:00',closingMeterReadings:{HMR:'1532',KMR:'30555'},expectedCompletionAt:'2026-09-15 07:00:00'};
-const user=role=>({userType:'Mobile User',assignedRole:role,site:'Sasti OB'});
+const user=role=>({userType:'Mobile User',assignedRole:role,site:'Sasti OC'});
 const env={META_WHATSAPP_ACCESS_TOKEN:'test-token',META_WHATSAPP_PHONE_NUMBER_ID:'123'};
 const render=(purpose,context,parameters=LEGACY_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)].example)=>renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES[purpose],whatsAppMessageParameters(purpose,parameters,context));
 
 test('each event renders the saved site, breakdown and relevant reason/work on separate labelled lines',()=>{
   for(const purpose of ['requestOpened','requestClosed','requestVerified','requestIdle','offRoadEscalation','idleReminder']){
     const message=render(purpose,{request,recipient:user('Maintenance User')});
-    assert.ok(message.startsWith('*SITE: Sasti OB*\n'),purpose);
+    assert.ok(message.startsWith('*SITE: Sasti OC*\n'),purpose);
     assert.match(message,/\*Breakdown type:\* Aggregate Repair\n/);
     assert.match(message,/\*Complaint \/ reason:\* Hydraulic pump leaking\n/);
     assert.match(message,/Door: V_12/);assert.match(message,/Chassis: CH_987/);
@@ -40,10 +40,10 @@ test('all operational roles receive the same facts without a Next step',()=>{
 });
 
 test('CRM creation and resolution include the actual site, category, priority, issue and resolution',()=>{
-  const ticket={site:'Majri OB',category:'Production',priority:'High',message:'No operator available',resolutionMessage:'Operator assigned',createdAt:'2026-09-15 06:00',resolvedAt:'2026-09-15 07:10'};
+  const ticket={site:'Majri OC',category:'Production',priority:'High',message:'No operator available',resolutionMessage:'Operator assigned',createdAt:'2026-09-15 06:00',resolvedAt:'2026-09-15 07:10'};
   for(const purpose of ['ticketCreated','ticketResolved']){
     const message=render(purpose,{ticket,url:'https://bdms.cmll.in/',recipient:user('Production User')});
-    assert.ok(message.startsWith('*SITE: Majri OB*\n'));
+    assert.ok(message.startsWith('*SITE: Majri OC*\n'));
     assert.match(message,/\*Category:\* Production/);assert.match(message,/\*Priority:\* High/);
     assert.match(message,/\*Issue \/ reason:\* No operator available/);
     if(purpose==='ticketResolved'){
@@ -55,7 +55,7 @@ test('CRM creation and resolution include the actual site, category, priority, i
 
 test('maintenance updates contain progress, delay, equipment, ETC and a real timestamp',()=>{
   const message=render('dailyUpdate',{request,remark:'Pump fitting in progress',delayReason:'Crane unavailable',updatedAt:new Date('2026-09-15T01:30:00Z'),url:'https://bdms.cmll.in/?request=REQ_42'});
-  for(const text of ['*SITE: Sasti OB*','*Maintenance update:* Pump fitting in progress','*Delay reason:* Crane unavailable','*Expected completion (IST):* 15-09-2026 07:00:00 AM','*Updated at (IST):* 15-09-2026 07:00:00 AM','?request=REQ_42'])assert.ok(message.includes(text),text);
+  for(const text of ['*SITE: Sasti OC*','*Maintenance update:* Pump fitting in progress','*Delay reason:* Crane unavailable','*Expected completion (IST):* 15-09-2026 07:00:00 AM','*Updated at (IST):* 15-09-2026 07:00:00 AM','?request=REQ_42'])assert.ok(message.includes(text),text);
 });
 
 test('audio-only complaints and missing values are explicit and long free text retains the request link',()=>{
@@ -67,14 +67,14 @@ test('audio-only complaints and missing values are explicit and long free text r
 });
 
 test('provider payload keeps site first, structured lines static, full site PDF/Excel links and overnight period',async()=>{
-  const report=siteReportMessageContext({site:'Sasti OB',window:{start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')},count:7,pdfUrl:'https://example.com/site_pdf?a=b_c',xlsxUrl:'https://example.com/site_xlsx'});
+  const report=siteReportMessageContext({site:'Sasti OC',window:{start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')},count:7,pdfUrl:'https://example.com/site_pdf?a=b_c',xlsxUrl:'https://example.com/site_xlsx'});
   let payload;
   await sendMetaWhatsAppTemplate({to:'9000000000',templateKey:'consolidatedRequestReport',parameters:['old summary'],context:{report}},{env,fetchImpl:async(_url,options)=>{payload=JSON.parse(options.body);return {ok:true,json:async()=>({messages:[{id:'test'}]})};}});
   const parameters=payload.template.components[0].parameters.map(p=>p.text);
-  assert.equal(parameters[0],'Sasti OB');assert.equal(parameters[4],report.pdfUrl);assert.equal(parameters[5],report.xlsxUrl);
+  assert.equal(parameters[0],'Sasti OC');assert.equal(parameters[4],report.pdfUrl);assert.equal(parameters[5],report.xlsxUrl);
   assert.ok(parameters.every(value=>!/[\r\n\t]/.test(value)));
   const message=renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES.consolidatedRequestReport,parameters);
-  assert.match(message,/^\*LOCATIONS: Sasti OB\*\n/);assert.match(message,/14-09-2026 07:00:00 PM to 15-09-2026 07:00:00 AM/);
+  assert.match(message,/^\*LOCATIONS: Sasti OC\*\n/);assert.match(message,/14-09-2026 07:00:00 PM to 15-09-2026 07:00:00 AM/);
   assert.match(message,/\n\*PDF \/ files:\* https:/);assert.match(message,/\n\*Excel \/ other files:\* https:/);
   assert.doesNotMatch(message,/old summary|Majri/);
 });
@@ -102,7 +102,7 @@ test('text fallback retains the saved request details without a next step',()=>{
 
 test('all eight selected locations survive consolidation with every file link and no notes',async()=>{
   const window={start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')};
-  const sites=['Sasti OB','Majri OB','Dhoptala OB (2nd)','Gauri Pauni OB (2nd)','Lalpeth OB','Jayant OB','Dudhichua OB','Dudhichua East OB'];
+  const sites=['Sasti OC','Majri OC','Dhoptala OC (2nd)','Gauri Pauni OC (2nd)','Lalpeth OC','Jayant OC','Dudhichua OC','Dudhichua East OC'];
   const reports=sites.map((site,index)=>siteReportMessageContext({site,window,count:index,pdfUrl:`https://reports.example/r/pdf_${index}`,xlsxUrl:`https://reports.example/r/xlsx_${index}`}));
   const delivery=recipientReportMessage({window,reports});
   const payloads=[];
@@ -130,7 +130,7 @@ test('old structured layouts discard only the removed fields and legacy opened c
     assert.doesNotMatch(renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES[key],converted),/\*Notes:\*|\*Next step:\*/);
   }
   const legacy=whatsAppMessageParameters('requestOpened',LEGACY_WORKFLOW_TEMPLATES.requestOpened.example,{request});
-  assert.equal(legacy[0],'Sasti OB');assert.equal(legacy[1],LEGACY_WORKFLOW_TEMPLATES.requestOpened.example[0]);
+  assert.equal(legacy[0],'Sasti OC');assert.equal(legacy[1],LEGACY_WORKFLOW_TEMPLATES.requestOpened.example[0]);
   assert.equal(legacy[4],request.complaint);assert.equal(legacy.at(-1),LEGACY_WORKFLOW_TEMPLATES.requestOpened.example.at(-1));
   const current=META_WORKFLOW_TEMPLATES.requestOpened.example;
   assert.deepEqual(whatsAppMessageParameters('requestOpened',current,{parameterLayout:'current'}),current);
@@ -138,7 +138,7 @@ test('old structured layouts discard only the removed fields and legacy opened c
 
 test('new templates use their new schema; explicit unavailable response alone allows a legacy delivery',async()=>{
   const calls=[],parameters=['TIC/1','Admin'];
-  const result=await sendMetaWhatsAppTemplate({to:'9000000000',templateKey:'ticketResolved',parameters,context:{ticket:{site:'Sasti OB'}}},{env,fetchImpl:async(_url,options)=>{
+  const result=await sendMetaWhatsAppTemplate({to:'9000000000',templateKey:'ticketResolved',parameters,context:{ticket:{site:'Sasti OC'}}},{env,fetchImpl:async(_url,options)=>{
     calls.push(JSON.parse(options.body));return calls.length===1?{ok:false,status:400,json:async()=>({error:{code:132001,message:'Template unavailable'}})}:{ok:true,json:async()=>({messages:[{id:'legacy-sent'}]})};
   }});
   assert.equal(calls.length,2);assert.equal(result.layoutPending,true);

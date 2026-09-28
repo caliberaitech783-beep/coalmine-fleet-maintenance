@@ -163,15 +163,15 @@ test("the full feed is counted even when more than sixty alerts exist", () => {
 
 test("Info Pulse request scope follows operational, manager, admin, and Director access", () => {
   const requests = [
-    {ref:"REQ-S",site:"Sasti OB"},
-    {ref:"REQ-M",site:"Majri OB"},
-    {ref:"REQ-J",site:"Jayant OB"},
+    {ref:"REQ-S",site:"Sasti OC"},
+    {ref:"REQ-M",site:"Majri OC"},
+    {ref:"REQ-J",site:"Jayant OC"},
   ];
-  const operationalScope=infoPulseRequestScope({role:"normal",assignedRole:"Maintenance User"},{site:"Majri OB"});
-  assert.equal(operationalScope.label,"Majri OB");
+  const operationalScope=infoPulseRequestScope({role:"normal",assignedRole:"Maintenance User"},{site:"Majri OC"});
+  assert.equal(operationalScope.label,"Majri OC");
   assert.deepEqual(scopeInfoPulseRequests(requests,operationalScope).map(({ref})=>ref),["REQ-M"]);
 
-  const managerScope=infoPulseRequestScope({role:"super",permissions:{adminLevel:"Manager"}},{managerSites:"Sasti OB | Majri OB"});
+  const managerScope=infoPulseRequestScope({role:"super",permissions:{adminLevel:"Manager"}},{managerSites:"Sasti OC | Majri OC"});
   assert.equal(managerScope.label,"2 assigned locations");
   assert.deepEqual(scopeInfoPulseRequests(requests,managerScope).map(({ref})=>ref),["REQ-S","REQ-M"]);
 
@@ -181,13 +181,13 @@ test("Info Pulse request scope follows operational, manager, admin, and Director
 
   const directorSession={role:"super",name:"Mohit Chadda",permissions:{adminLevel:"Manager"}};
   assert.equal(isInfoPulseDirector(directorSession,{}),true);
-  assert.equal(infoPulseRequestScope(directorSession,{managerSites:"Sasti OB"}).label,"All regions");
+  assert.equal(infoPulseRequestScope(directorSession,{managerSites:"Sasti OC"}).label,"All regions");
 });
 
 test("Info Pulse fails closed when an operational user has no assigned location", () => {
   const scope=infoPulseRequestScope({role:"normal",assignedRole:"Production User"},{});
   assert.equal(scope.label,"No location assigned");
-  assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OB"}],scope),[]);
+  assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OC"}],scope),[]);
 });
 
 test("Info Pulse auto-opens after login and unlocks manual dismissal after its countdown", () => {

@@ -5,11 +5,11 @@ import {applyLatestTransfer,isAllowedOracleEquipment,latestTransferByEquipment,o
 test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
   assert.deepEqual(transferMasterRecord({
     oracleTno: "10", transferNo: "ETR-1", transferDate: "2026-08-22",
-    source: "SASTI OB", destination: "MAJRI OB", equipmentTno: "20",
+    source: "SASTI OC", destination: "MAJRI OC", equipmentTno: "20",
     equipmentId: "D37-7585", modelNo: "D37", manufacturerSerialNo: "SER-1",
     chassisNo: "CH-1", dieselQty: "5", kmr: "10", hmr: "20", driver: "Santosh",
   }), {
-    transferNo: "ETR-1", transferDate: "2026-08-22", source: "Sasti OB", destination: "Majri OB",
+    transferNo: "ETR-1", transferDate: "2026-08-22", source: "Sasti OC", destination: "Majri OC",
     equipment: "D37-7585", modelNo: "D37", manufacturerSerialNo: "SER-1", lastMaintenanceDate: "",
     driver: "Santosh", chassisNo: "CH-1", dieselQty: "5", kmr: "10", hmr: "20",
     status: "Completed", submittedBy: "Oracle import", sourceApprovedBy: "Oracle import",
@@ -20,14 +20,14 @@ test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
 
 test("latest transfer updates matching Equipment Master current location", () => {
   const transfers = [
-    {equipmentTno: "20", equipmentId: "D37-7585", destination: "SASTI OB", transferNo: "ETR-1", transferDate: "2026-08-21"},
-    {equipmentTno: "20", equipmentId: "D37-7585", destination: "MAJRI OB", transferNo: "ETR-2", transferDate: "2026-08-22"},
+    {equipmentTno: "20", equipmentId: "D37-7585", destination: "SASTI OC", transferNo: "ETR-1", transferDate: "2026-08-21"},
+    {equipmentTno: "20", equipmentId: "D37-7585", destination: "MAJRI OC", transferNo: "ETR-2", transferDate: "2026-08-22"},
   ];
   const updated = applyLatestTransfer(
     {equipmentName: "D37 - 7585", manufacturerSerialNo: "SER-1", status: "Operational"},
     latestTransferByEquipment(transfers),
   );
-  assert.equal(updated.currentLocation, "Majri OB");
+  assert.equal(updated.currentLocation, "Majri OC");
   assert.equal(updated.lastTransferNo, "ETR-2");
   assert.equal(updated.status, "Operational");
 });
@@ -35,15 +35,15 @@ test("latest transfer updates matching Equipment Master current location", () =>
 test("maps Oracle fleet assets without removing app-maintained status or latest transfer", () => {
   const mapped = oracleEquipmentMasterRecord({
     oracleEquipmentTno: "20", oracleEquipmentNo: "CMPL/M/1", equipmentId: "V1-100",
-    equipmentName: "V1-100", currentLocation: "SASTI OB", category: "Vehicle",
+    equipmentName: "V1-100", currentLocation: "SASTI OC", category: "Vehicle",
     group: "Volvo Tipper", itemName: "Tipper", chassisNo: "CH-1",
   }, {
-    status: "Off road", currentLocation: "MAJRI OB", lastTransferDate: "2026-08-22",
+    status: "Off road", currentLocation: "MAJRI OC", lastTransferDate: "2026-08-22",
   });
   assert.equal(mapped.door, "V1-100");
   assert.equal(mapped.group, "Volvo Tipper");
   assert.equal(mapped.status, "Off road");
-  assert.equal(mapped.currentLocation, "Majri OB");
+  assert.equal(mapped.currentLocation, "Majri OC");
   assert.equal(mapped.oracleSource, "EQUIPMENT");
 });
 

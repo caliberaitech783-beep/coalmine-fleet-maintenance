@@ -30,7 +30,7 @@ test('ten day filter is strictly older than production submission, not acceptanc
 test('availability and PDF titles retain precise values and unique site names',()=>{
   assert.equal(availabilityPercentage(100),'100%');
   assert.equal(availabilityPercentage(98.994),'98.99%');
-  assert.equal(reportPdfHeading('Report',[{site:'Sasti OB'},{site:'Majri OB'},{site:'Sasti OB'}]),'Report - Sasti OB, Majri OB');
+  assert.equal(reportPdfHeading('Report',[{site:'Sasti OC'},{site:'Majri OC'},{site:'Sasti OC'}]),'Report - Sasti OC, Majri OC');
   const [row]=availabilityRows([{door:'A'}],[],'2026-09-08T00:00','2026-09-08T12:00',now);
   assert.equal(row.productive,12);
 });
@@ -54,9 +54,9 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
   assert.equal(recentBreakdownStatus({status:'Open',start:opened,acceptedAt:'2026-09-07 12:00:00'},now),'Accepted','accepted requests are never Pending or shown as Open');
   assert.equal(recentBreakdownStatus({status:'Closed',start:opened,closedAt:'2026-09-07 15:00:00'},now),'Closed');
   const tables=buildDirectorReportTables({
-    requests:[{ref:'REQ-P',door:'D7',site:'Sasti OB',status:'Open',start:opened,model:'PC-210'},{ref:'REQ-C',door:'D8',site:'Jayant OB',status:'Closed',start:opened,closedAt:'2026-09-07 15:30:00',closedBy:'Maintenance User'}],
-    equipmentRecords:[{equipmentName:'EX-9',door:'D9',chassisNo:'CH-9',category:'Equipment',currentLocation:'Sasti OB'}],
-    transferRecords:[{transferNo:'VT-9',chassisNo:'CH-9',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01',driver:'Driver A'}],
+    requests:[{ref:'REQ-P',door:'D7',site:'Sasti OC',status:'Open',start:opened,model:'PC-210'},{ref:'REQ-C',door:'D8',site:'Jayant OC',status:'Closed',start:opened,closedAt:'2026-09-07 15:30:00',closedBy:'Maintenance User'}],
+    equipmentRecords:[{equipmentName:'EX-9',door:'D9',chassisNo:'CH-9',category:'Equipment',currentLocation:'Sasti OC'}],
+    transferRecords:[{transferNo:'VT-9',chassisNo:'CH-9',source:'Sasti OC',destination:'Jayant OC',transferDate:'2026-09-01',driver:'Driver A'}],
     now,
   });
   const recent=tables.find(table=>table.title==='Recent Breakdown Cases');
@@ -78,13 +78,13 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
 });
 
 test('maintenance reports lead with Location and Door no., close with chassis, and wrap the red flag reason',()=>{
-  const reports=buildDepartmentReports({requests:[],equipmentRecords:[{door:'D1',chassisNo:'CH-1',currentLocation:'Sasti OB',model:'M1'}],now,from:'2026-09-01',to:'2026-09-07'});
+  const reports=buildDepartmentReports({requests:[],equipmentRecords:[{door:'D1',chassisNo:'CH-1',currentLocation:'Sasti OC',model:'M1'}],now,from:'2026-09-01',to:'2026-09-07'});
   const keys=title=>reports.find(r=>r.title===title).columns.map(c=>c.key);
   assert.deepEqual(keys('Turn Around Time for Repair'),['site','door','equipmentGroup','model','category','acceptedAt','closedAt','closingHmr','closingKmr','tat','complaint','openingHmr','openingKmr','ref','chassis']);
   assert.deepEqual(keys('Open Off road Cases'),['site','door','equipmentGroup','model','category','start','days','complaint','openingHmr','openingKmr','ref','chassis']);
   assert.deepEqual(keys('Availability Report'),['site','door','equipmentGroup','model','productive','breakdown','available','percentage','chassis']);
   const availability=reports.find(r=>r.title==='Availability Report');
-  assert.equal(availability.columns[0].value(availability.rows[0]),'Sasti OB','availability location comes from the equipment master');
+  assert.equal(availability.columns[0].value(availability.rows[0]),'Sasti OC','availability location comes from the equipment master');
   const redFlag=reports.find(r=>r.title==='Vehicle Arrival Red Flag Report');
   assert.deepEqual(redFlag.columns.map(c=>c.key),['status','site','door','equipmentGroup','model','openingHmr','openingKmr','closingHmr','closingKmr','category','start','arrivalFlaggedAt','arrivalFlagRemark','flagWaitingTime','chassis','arrivalFlaggedBy','ref']);
   assert.equal(redFlag.columns.find(c=>c.key==='arrivalFlagRemark').wrap,true);

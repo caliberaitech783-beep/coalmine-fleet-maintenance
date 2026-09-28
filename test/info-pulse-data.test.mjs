@@ -5,7 +5,7 @@ import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPe
 import {infoPulseRequestScope, scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 
 const NOW = Date.parse('2026-09-10T12:00:00+05:30');
-const base = {status: 'Open', site: 'Sasti OB', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-08 12:00'};
+const base = {status: 'Open', site: 'Sasti OC', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-08 12:00'};
 const build = rows => buildInfoPulseCases(rows, {role: 'Admin', now: NOW});
 
 test('critical cases put the longest ETC overdue first using exact timestamps across multiple issues', () => {
@@ -43,10 +43,10 @@ test('equal overdue times use longest standing then a stable case key, with unkn
 });
 
 test('overdue ordering survives site/date/issue filters, refreshes and page boundaries', () => {
-  const records = Array.from({length: 60}, (_, i) => ({...base, ref: `R-${i}`, site: i % 2 ? 'Sasti OB' : 'Majri OB',
+  const records = Array.from({length: 60}, (_, i) => ({...base, ref: `R-${i}`, site: i % 2 ? 'Sasti OC' : 'Majri OC',
     expectedCompletionAt: new Date(NOW - (i + 1) * 60_000).toISOString()}));
   const cases = build(records);
-  const rows = infoPulseView(cases, {site: 'Sasti OB', from: '2026-09-01', to: '2026-09-01', type: 'etc-overdue'}).rows;
+  const rows = infoPulseView(cases, {site: 'Sasti OC', from: '2026-09-01', to: '2026-09-01', type: 'etc-overdue'}).rows;
   const expected = Array.from({length: 30}, (_, i) => `R-${59 - i * 2}`);
   assert.deepEqual(rows.slice(0, 25).map(row => row.key), expected.slice(0, 25));
   assert.deepEqual(rows.slice(25).map(row => row.key), expected.slice(25));
@@ -55,7 +55,7 @@ test('overdue ordering survives site/date/issue filters, refreshes and page boun
 });
 
 test('site totals reconcile to unique requests and every issue drill-down beyond sixty', () => {
-  const records = Array.from({length: 147}, (_, i) => ({...base, ref: `R-${i}`, door: `D-${i}`, site: i % 3 === 0 ? 'MAJRI II' : i % 2 ? 'SASTI II' : 'Sasti OB'}));
+  const records = Array.from({length: 147}, (_, i) => ({...base, ref: `R-${i}`, door: `D-${i}`, site: i % 3 === 0 ? 'MAJRI II' : i % 2 ? 'SASTI II' : 'Sasti OC'}));
   const cases = build([...records, records[10]]);
   const view = infoPulseView(cases);
   assert.equal(cases.length, 147);
@@ -105,7 +105,7 @@ test('total breakdowns count every open non-idle request once, longest standing 
     {...base, ref: 'verified', verifiedAt: '2026-09-09 12:00'},
     {...base, ref: 'idle', status: 'Idle'},
     {...base, ref: 'ideal', status: 'Ideal'},
-    {...base, ref: 'majri', site: 'Majri OB', start: ''},
+    {...base, ref: 'majri', site: 'Majri OC', start: ''},
   ];
   const cases = build(records);
   assert.equal(cases.some(row => row.key === 'quiet'), false, 'the quiet breakdown raises no alert');
@@ -116,7 +116,7 @@ test('total breakdowns count every open non-idle request once, longest standing 
   assert.deepEqual(rows.find(row => row.key === 'old').issues.map(issue => issue.type), cases.find(row => row.key === 'old').issues.map(issue => issue.type));
   const view = infoPulseView(rows);
   assert.equal(view.totals.total, 4);
-  assert.deepEqual(view.sites.map(site => [site.label, site.total]), [['Sasti OB', 3], ['Majri OB', 1]]);
+  assert.deepEqual(view.sites.map(site => [site.label, site.total]), [['Sasti OC', 3], ['Majri OC', 1]]);
   assert.equal(infoPulseView(rows, {from: '2026-09-10'}).totals.total, 1);
   assert.deepEqual(records.filter(isActiveBreakdown).map(row => row.ref), ['quiet', 'old', 'new', 'new', 'majri']);
 });
@@ -170,7 +170,7 @@ test('newest duplicate projection wins and separate requests for one door stay s
 
 test('site aliases, zero-case assigned sites and missing site are preserved', () => {
   const records = [{...base, ref: 'A'}, {...base, ref: 'B', site: 'SASTI II'}, {...base, ref: 'C', site: ''}];
-  const sites = infoPulseSiteOptions(records, ['Majri OB']);
+  const sites = infoPulseSiteOptions(records, ['Majri OC']);
   assert.equal(sites.length, 3);
   const view = infoPulseView(build(records), {sites});
   assert.equal(view.sites.find(site => site.key === 'majri ob').total, 0);
@@ -179,11 +179,11 @@ test('site aliases, zero-case assigned sites and missing site are preserved', ()
 });
 
 test('server-permitted scope is preserved in every count and drill-down', () => {
-  const scope = infoPulseRequestScope({role: 'normal'}, {site: 'Sasti OB'});
-  const permitted = scopeInfoPulseRequests([{...base, ref: 'allowed'}, {...base, ref: 'denied', site: 'Majri OB'}], scope);
+  const scope = infoPulseRequestScope({role: 'normal'}, {site: 'Sasti OC'});
+  const permitted = scopeInfoPulseRequests([{...base, ref: 'allowed'}, {...base, ref: 'denied', site: 'Majri OC'}], scope);
   const cases = buildInfoPulseCases(permitted, {role: 'MIS User', now: NOW});
   assert.deepEqual(cases.map(row => row.key), ['allowed']);
-  assert.equal(infoPulseView(cases, {site: 'Majri OB'}).totals.total, 0);
+  assert.equal(infoPulseView(cases, {site: 'Majri OC'}).totals.total, 0);
   assert.ok(infoPulseColumns('MIS User').every(column => column.key !== 'stale-update'));
 });
 
