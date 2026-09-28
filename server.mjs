@@ -27,6 +27,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
@@ -1266,6 +1267,20 @@ async function migrate(){
         await client.query(`UPDATE ${table} SET site=regexp_replace(site,'\\mOB\\M','OC','gi') WHERE site ~* '\\mOB\\M'`);
       }
       await client.query("INSERT INTO app_metadata (key,value,updated_at) VALUES ('site_ob_to_oc_v1','true',NOW()) ON CONFLICT (key) DO NOTHING");
+    }
+    // Keep a recoverable copy of the original closure fields. Idle entry is
+    // the recorded maintenance-completion event; never substitute migration time.
+    await client.query('ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS vehicle_idle BOOLEAN NOT NULL DEFAULT FALSE');
+    const {rows:idleClosureMigration}=await client.query("SELECT value FROM app_metadata WHERE key='idle_maintenance_closed_v1' FOR UPDATE");
+    if(!idleClosureMigration.length){
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        SELECT 'idle_maintenance_closed_v1_backup',COALESCE(json_agg(json_build_object('reference',reference,'status',status,'closed_at',closed_at,'closed_by',closed_by,'ideal_requested_at',ideal_requested_at,'ideal_approved_at',ideal_approved_at))::text,'[]'),NOW()
+        FROM maintenance_requests WHERE status IN ('Idle','Ideal') ON CONFLICT (key) DO NOTHING`);
+      await client.query(`UPDATE maintenance_requests SET status='Closed',vehicle_idle=TRUE,
+        closed_at=CASE WHEN ideal_requested_at>=GREATEST(started_at,accepted_at) AND ideal_requested_at<=NOW() THEN ideal_requested_at ELSE closed_at END,
+        closed_by=CASE WHEN ideal_requested_by<>'' THEN ideal_requested_by ELSE closed_by END
+        WHERE status IN ('Idle','Ideal')`);
+      await client.query("INSERT INTO app_metadata (key,value,updated_at) VALUES ('idle_maintenance_closed_v1','true',NOW()) ON CONFLICT (key) DO NOTHING");
     }
     // Repair the legacy ETC values that were saved before the future-only
     // selector and server guard existed. Exact AM/PM inversions retain the
@@ -5507,7 +5522,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
   (complaint_media <> '[]'::jsonb) AS "complaintMediaAvailable",
-  to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
+  vehicle_idle AS "vehicleIdle",to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
@@ -5620,10 +5635,10 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       expected_completion_at AS "expectedCompletionAtRaw",ideal_requested_at AS "idleAtRaw"
       FROM maintenance_requests WHERE verified_at IS NULL AND (
         (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-($2::int*INTERVAL '1 hour')) OR
-        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-($3::int*INTERVAL '1 hour'))
+        ((status IN ('Idle','Ideal') OR vehicle_idle=TRUE) AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-($3::int*INTERVAL '1 hour'))
       )`,[now,reportSettings.reminders.offRoad.hours,reportSettings.reminders.idle.hours]);
     for(const request of rows){
-      const idle=['Idle','Ideal'].includes(request.status);
+      const idle=['Idle','Ideal','Closed'].includes(request.status);
       const eventType=idle?'idle':'opened';
       const eventTime=new Date(idle?request.idleAtRaw:request.startedAtRaw);
       const purpose=idle?'idleReminder':'offRoadEscalation';
@@ -5742,7 +5757,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+const requestTimelineProjection=`vehicle_idle AS "vehicleIdle",id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
 
 const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
   original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
@@ -6475,15 +6490,15 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       const assignedScope=userSiteScope(user);
       if(!reportScopeIncludesSite(assignedScope,existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
-    if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
+    if((ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
-    if(!ideal&&status==='Closed'){
+    if(ideal||status==='Closed'){
       validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
       buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
     }
     const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at,delayed_reason FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
-    const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
+    const delayedClosure=(ideal||status==='Closed')&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
     // Closing is never blocked for a missing delayed reason; the reason recorded from the Delayed reason column is kept as is.
     const effectiveDelayedReason=delayedReason||String(meterRows[0].delayed_reason||'').trim();
     if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
@@ -6509,10 +6524,10 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
           closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
     const {rows}=ideal
-      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Idle',idle_reason=$3,
-          ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
+      ? await client.query(`UPDATE maintenance_requests SET closed_at=$7,closed_by=$4,maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Closed',idle_reason=$3,delayed_reason=$8,
+          ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by='',vehicle_idle=TRUE
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
-          [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference,maintenanceWorkLanguage])
+          [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference,maintenanceWorkLanguage,closedAt,effectiveDelayedReason])
       : status==='Closed'
         ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,maintenance_work_language=$7,delayed_reason=$5,status='Closed'
             WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
@@ -6523,8 +6538,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
-    const timelineEvents=ideal?['idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
-    return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:!ideal&&status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:!ideal&&status==='Closed'?['closedAt']:[]};
+    const timelineEvents=ideal?['closedAt','idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
+    return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:ideal||status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:ideal||status==='Closed'?['closedAt']:[]};
     });
     if(ideal){
       try{
@@ -6565,13 +6580,13 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     const canApproveIdle=req.session.role==='super'&&(designation?.key==='projectManager'||req.session.permissions?.adminLevel==='Manager');
     if(!canApproveIdle)return res.status(403).json({error:'Only an assigned manager can approve an Idle request.'});
     const reference=String(req.params.reference||'').trim();
-    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND (status IN ('Idle','Ideal') OR (status='Closed' AND vehicle_idle=TRUE))`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
-    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
-    validateRequestTimelineChange(before,{closedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt});
-    const result=await client.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
-      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+    if(!isIdleVehicleRequest(before)||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
+    validateRequestTimelineChange(before,{closedAt:before.closedAt||before.timelineRecordedAt},{now:before.timelineRecordedAt});
+    const result=await client.query(`UPDATE maintenance_requests SET status='Closed',closed_at=CASE WHEN status='Closed' THEN closed_at ELSE COALESCE(ideal_requested_at,NOW()) END,closed_by=CASE WHEN status='Closed' OR closed_by<>'' THEN closed_by ELSE $1 END,
+      vehicle_idle=FALSE,ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND (status IN ('Idle','Ideal') OR (status='Closed' AND vehicle_idle=TRUE)) AND site=$3
       RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference,eligible.rows[0].site]);
     if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
     return {...result,timelineEvents:['closedAt','idealApprovedAt'],timelineSources:{closedAt:'system',idealApprovedAt:'system'}};
@@ -6600,14 +6615,14 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
       return res.status(403).json({error:'Only the assigned Maintenance Manager can cancel an Idle request.'});
     const manager=await currentUserRecord(req.session);
     const reference=String(req.params.reference||'').trim();
-    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND (status IN ('Idle','Ideal') OR (status='Closed' AND vehicle_idle=TRUE)) AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your decision or is outside your assigned sites.'});
     const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
-    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
+    if(!isIdleVehicleRequest(before)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
     const result=await client.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
-      ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
+      vehicle_idle=FALSE,ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
       in_progress_at=COALESCE(in_progress_at,NOW()),in_progress_by=CASE WHEN in_progress_at IS NULL THEN $2 ELSE in_progress_by END
-      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+      WHERE reference=$1 AND (status IN ('Idle','Ideal') OR (status='Closed' AND vehicle_idle=TRUE)) AND verified_at IS NULL AND site=$3
       RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager',eligible.rows[0].site]);
     if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
     return {...result,timelineEvents:['closedAt','idealRequestedAt','idealApprovedAt','inProgressAt'],timelineSources:{closedAt:'system',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:'Idle status cancelled by Maintenance Manager.'};
@@ -6725,12 +6740,12 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const scope=req.session.role==='normal'?userSiteScope(user):managerReportScope(user);
     if(!scope.sites?.length)return res.status(403).json({error:'A location must be assigned before recording the production first trip.'});
     await client.query('BEGIN');
-    const {rows:requestRows}=await client.query(`SELECT reference,site,status,started_at AS start,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
+    const {rows:requestRows}=await client.query(`SELECT reference,site,status,vehicle_idle,started_at AS start,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
       FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
     const request=requestRows[0];
     if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
     if(!reportScopeIncludesSite(scope,request.site))throw Object.assign(new Error('This request belongs to a different production location.'),{status:403});
-    if(String(request.status||'').trim()!=='Closed'||!request.closed_at)throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
+    if(String(request.status||'').trim()!=='Closed'||!request.closed_at||request.vehicle_idle)throw Object.assign(new Error('Production first trip can be recorded only after the vehicle is released on road and is no longer Idle.'),{status:409});
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
@@ -6787,6 +6802,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const existing=existingRows[0];
     if(!reportScopeIncludesSite(misScope,existing.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(existing.status!=='Closed')return res.status(409).json({error:'Only closed requests can be verified.'});
+    if(isIdleVehicleRequest(existing))return res.status(409).json({error:'Maintenance is closed, but the vehicle is still Idle. Release it on road before recording its first trip.'});
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
@@ -6794,6 +6810,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
     if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
+    if(isIdleVehicleRequest(before))throw Object.assign(new Error('Release the Idle vehicle on road before verifying its first trip.'),{status:409});
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
@@ -6908,17 +6925,17 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
     // account's full site assignment is applied to both snapshots below.
     const countDay=indiaCountDayWindow();
     const {rows:fleetRequests}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
-      door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, owner_name AS owner,
+      door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, vehicle_idle AS "vehicleIdle",owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
-      lower(trim(status)) <> 'closed' AS "currentlyActive",
-      started_at < $1 AND (closed_at IS NULL OR closed_at >= $1) AS "openAtMidnight",
+      (lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE) AS "currentlyActive",
+      started_at < $1 AND ((closed_at IS NULL OR closed_at >= $1) OR (ideal_requested_at < $1 AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1))) AS "openAtMidnight",
       CASE WHEN ideal_requested_at IS NOT NULL AND ideal_requested_at < $1
         AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1) THEN 'Idle'
         WHEN ideal_requested_at IS NULL AND lower(trim(status)) IN ('idle','ideal') THEN 'Idle'
         ELSE 'In progress' END AS "midnightStatus"
       FROM maintenance_requests
-      WHERE lower(trim(status)) <> 'closed'
-        OR (started_at < $1 AND (closed_at IS NULL OR closed_at >= $1))`,[countDay.openingAt]);
+      WHERE lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE
+        OR (started_at < $1 AND ((closed_at IS NULL OR closed_at >= $1) OR (ideal_requested_at < $1 AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1))))`,[countDay.openingAt]);
     const {rows:shiftRows}=await pool.query(`SELECT id,record_data FROM master_records
       WHERE master_name='Shift Master' ORDER BY created_at ASC`);
     const shiftRecords=shiftRows.map(({id,record_data})=>({

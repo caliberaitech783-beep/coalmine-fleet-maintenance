@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -45,7 +46,7 @@ function harness(name = 'MobileWorkflowTable') {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = {
+  const scope = { isIdleVehicleRequest,
     isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes, dailyUpdatesExportText,
     requestMeterReadings, requestMeterReadingLabel, breakdownMeterValue,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),

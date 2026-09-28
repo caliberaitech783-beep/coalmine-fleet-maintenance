@@ -1,6 +1,7 @@
 import {requestStatusLabel} from '../src/request-status.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
@@ -69,7 +70,7 @@ function harness(name, extra = {}) {
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
-  const scope = {requestStatusLabel,
+  const scope = { isIdleVehicleRequest,requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,
@@ -320,7 +321,12 @@ test("initial ETC has no correction reason and pending acceptance is not invente
 for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name} retains the form and shows API rejection inline without native alerts`, async () => {
   const app = harness(name);
   const props = {...editProps(), onSave: async () => {throw new Error("Timeline ordering is invalid.");}};
-  const tree = app.render(props);
+  let tree = app.render(props);
+  if(name==='CloseRequestForm') {
+    await submit(tree,{});
+    tree=app.render();
+    button(tree,'Close request — On road').props.onClick();
+  }
   await submit(tree, submitValues({closingDate: "2026-09-08", closingTime: "12:00:00", maintenanceWork: "Test maintenance"}));
   assert.match(alerts(app.render()), /Timeline ordering is invalid/);
   assert.equal(button(app.render(), "Cancel").props.disabled, false);

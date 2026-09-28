@@ -1,4 +1,5 @@
 import { siteReportHtml } from "./site-report.mjs";
+import { isIdleVehicleRequest } from "../request-idle.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter, setSmartPrintPrinterSource } from "./smart-print.mjs";
 import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect, rememberedPrinter } from "./direct-print.mjs";
@@ -1399,7 +1400,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const managerData=useMemo(()=>{
     const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
     const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
-    const maintenanceActiveRequests = openRequests.filter((request) => !["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase()));
+    const maintenanceActiveRequests = openRequests.filter((request) => !isIdleVehicleRequest(request));
     const roadStatuses = liveEquipmentRoadStatuses(siteEquipment, requestRows);
     const fleet = liveEquipmentMetrics(siteEquipment, requestRows, roadStatuses);
     const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
@@ -1449,7 +1450,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   };
   // An overdue arrival needs its red-flag reason first, as in the Maintenance workspace.
   const openRequestUpdate=(row,kind)=>setRequestUpdate(arrivalRedFlagRequired(row)?{kind:"arrival",request:row,next:kind}:{kind,request:row});
-  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").trim().toLowerCase())):[];
+  const idealRows=canApproveIdle?requestRows.filter((request)=>isIdleVehicleRequest(request)):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?maintenanceActiveRequests:activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
@@ -1966,7 +1967,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     opened: locationBreakdowns.filter((record) => !["closed", "idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "opened")) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
     closed: locationBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === "closed" && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "closed")) && requestEventDate(record, "closed") >= safeTrendStartKey && requestEventDate(record, "closed") <= requestTrendEndKey),
     verified: locationBreakdowns.filter((record) => (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "verified")) && requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
-    idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "idle")) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
+    idle: locationBreakdowns.filter((record) => isIdleVehicleRequest(record) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "idle")) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
   if (requestLifecycleRegion || requestLifecycleSite) {
     for (const metric of Object.keys(requestLifecycleRows)) {
@@ -2612,7 +2613,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   const showActionColumn = showReadOnlyAction || Boolean(onEdit || onRemark);
   // Edits and daily updates apply only to active, unverified requests, matching the server's rule.
   const rowUpdatable = (row) => !["closed", "idle", "ideal"].includes(String(row.status || "").trim().toLowerCase()) && !row.verifiedAt;
-  const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !["idle", "ideal"].includes(String(row.status || "").toLowerCase()));
+  const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !isIdleVehicleRequest(row));
   const [selectedRefs, setSelectedRefs] = useState(() => new Set());
   const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
   useEffect(() => { setSelectedRefs((current) => { const present = new Set(rows.map((row) => row.ref)); const next = new Set([...current].filter((ref) => present.has(ref))); return next.size === current.size ? current : next; }); }, [rows]);
@@ -9443,7 +9444,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Deletion: the caller decides which rows qualify (Admins may remove Idle rows too); Verified rows never qualify.
-  const lockedIdealRow = (row) => ["idle", "ideal"].includes(String(row.status || "").toLowerCase());
+  const lockedIdealRow = (row) => isIdleVehicleRequest(row);
   const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !lockedIdealRow(row));
   const [selectedRefs, setSelectedRefs] = useState(() => new Set());
   const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
@@ -9471,7 +9472,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
   const idleDateFilter = /idle vehicles/i.test(exportTitle);
   const [idleDateRange, setIdleDateRange] = useState("");
-  const showIdleDate = rows.some(row => ["idle", "ideal"].includes(String(row.status || "").toLowerCase())) || idleDateFilter;
+  const showIdleDate = rows.some(row => isIdleVehicleRequest(row)) || idleDateFilter;
   const idleDateColumn = {key: "idleDate", label: "Idle Vehicle Date", value: row => (row.idealRequestedAt || row.idleRequestedAt) ? formatTwelveHourDateTime(row.idealRequestedAt || row.idleRequestedAt, true) : "Not recorded"};
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
   const etcColumn = {key: "etc", label: "ETC", value: (row) => row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "—"};
@@ -9594,7 +9595,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           {sortedRows.length ? visibleWorkflowRows.map((row) => {
             const days = calculateBreakdownDaysUntilClose(row.start, row.closedAt, now);
             const etcLabel = row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
-            const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
+            const lockedIdeal = isIdleVehicleRequest(row);
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
@@ -9757,7 +9758,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
   const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
-    [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
+    [ideal,setIdeal]=useState(() => isIdleVehicleRequest(request)),
     [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim());
   const status = "Closed";
   const [tripCardFile, setTripCardFile] = useState(null);
@@ -9769,10 +9770,20 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
   const storedDelayedReason=String(request.delayedReason||"").trim();
+  const [idlePrompt,setIdlePrompt] = useState(false);
+  const idleDecision = useRef(false);
+  const closeForm = useRef(null);
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
-    <form className="form" onSubmit={async (event) => {
+    <form ref={closeForm} className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
+      if (!idleDecision.current) {
+        const onRoadTime = requestStartParts("");
+        setClosingDate(onRoadTime.date);
+        setTime(onRoadTime.time);
+        setIdlePrompt(true);
+        return;
+      }
       if (ideal && !["No driver", "No work"].includes(idleReason)) {
         setFormError("Choose an Idle reason: No driver or No work.");
         return;
@@ -9785,7 +9796,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -9810,8 +9821,20 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (12-hour with seconds) *<input name="closingTime" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {displayDateTime(request.closedAt)}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled value={ideal?"Idle":status}>{ideal ? <option value="Idle">Idle</option> : <option value="Closed">Closed</option>}</select></label>
-        <fieldset className="ideal-choice full">
+        <label>Status *<select name="status" disabled value={status}><option value="Closed">On road — maintenance completed</option></select></label>
+        <EnhancedSpeechComplaint
+          label="Things done in maintenance *"
+          name="maintenanceWork"
+          audioName="maintenanceAudio"
+          buttonLabel="Speak maintenance update"
+          placeholder="Describe the work completed, or select Hindi / English and speak in that language."
+        />
+      </div>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "On road"} <ChevronRight /></button></footer>
+  {idlePrompt && <Modal title="On road — move vehicle to Idle?" close={() => { if (!submitting) { setIdlePrompt(false); idleDecision.current=false; } }}>
+      <p>The maintenance request will be Closed. Choose whether the vehicle should now be Idle.</p>
+      <fieldset className="ideal-choice full" disabled={submitting}>
           <legend>Idle? <small>Optional</small></legend>
           <div className="idle-options">
             <label className={`idle-option${ideal ? " selected" : ""}`}>
@@ -9831,20 +9854,13 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
             </label>
             <div id="maintenance-idle-summary" className="idle-summary" role="status">
               {idleReason && <strong>Selected idle reason: {idleReason}</strong>}
-              <span>The request will remain Idle until an assigned manager approves Make on road.</span>
+              <span>Maintenance is complete. The vehicle will remain Idle until an assigned manager approves Make on road. Idle waiting will not extend maintenance TAT.</span>
             </div>
           </>}
         </fieldset>
-        <EnhancedSpeechComplaint
-          label="Things done in maintenance *"
-          name="maintenanceWork"
-          audioName="maintenanceAudio"
-          buttonLabel="Speak maintenance update"
-          placeholder="Describe the work completed, or select Hindi / English and speak in that language."
-        />
-      </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
+      <footer><button type="button" disabled={submitting} onClick={() => { setIdlePrompt(false); idleDecision.current=false; }}>Back</button><button type="button" className="primary" disabled={submitting} onClick={() => { idleDecision.current=true; closeForm.current?.requestSubmit(); }}>{submitting ? "Saving…" : ideal ? "Close request and mark vehicle Idle" : "Close request — On road"}</button></footer>
+  </Modal>}
     </form>
   </Modal>;
 }
@@ -10925,7 +10941,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const closedRequests=useMemo(()=>requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"),[requestRows]);
   const visibleRows=useMemo(()=>isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests,[isMis,closedRequests,activeRequests]);
   const historyRows=useMemo(()=>isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests,[isMis,isProduction,isMaintenance,closedRequests]);
-  const idleRows=useMemo(()=>requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase())),[requestRows]);
+  const idleRows=useMemo(()=>requestRows.filter((row)=>isIdleVehicleRequest(row)),[requestRows]);
   // First-trip work belongs to the site team, not only the request creator.
   // The dedicated feed is authorized by the API for the user's assigned sites.
   const productionFirstTripSourceRows=useMemo(()=>needsDedicatedDashboardFeed
@@ -10963,7 +10979,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
       {isProductionWorker && tab === "productionFirstTrip" && <><h3 className="sectiontitle">{workspaceReportTitles.productionFirstTrip}</h3><section className="panel"><MobileWorkflowTable rows={productionFirstTripRows} exportTitle={workspaceReportTitles.productionFirstTrip} showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /></section><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><section className="panel"><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></section></>}
       {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} canDeleteRow={canDeleteRow} onDeleteSelected={deleteSelectedRequests} showUserRole onVehicleHistory={setVehicleHistoryTarget} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !isIdleVehicleRequest(row))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMisPeople showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} showUserRole {...adminDeleteProps} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMisPeople showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
       {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays showClosedAt />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} showStatusFilter={false} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} closedTimeAfterStarted {...adminDeleteProps} />}</section></>}

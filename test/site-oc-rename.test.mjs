@@ -34,7 +34,7 @@ test('location-only rename preserves unrelated values and supports lists and cus
 test('one-time rename migrates location fields without rewriting IDs, remarks or credentials',async()=>{
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const start=source.indexOf('    const {rows:ocSiteNames}');
-  const code=source.slice(start,source.indexOf('    // Repair the legacy ETC',start));
+  const code=source.slice(start,source.indexOf('    // Keep a recoverable copy',start));
   const user={login:'operator',site:'Majri OB',passwordHash:'unchanged',remarks:'OB note'};
   const writes=[];
   const client={async query(sql,args){

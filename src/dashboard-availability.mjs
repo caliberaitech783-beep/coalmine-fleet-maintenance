@@ -14,6 +14,11 @@ export function availabilityRequestsForDate(requests = [], date = "") {
     if (!Number.isFinite(startedAt) || startedAt > cutoff) return [];
     const status = String(request.status || "").trim().toLowerCase();
     const closedAt = indiaDateTimeEpoch(request.closedAt || request.idealApprovedAt);
+    const enteredIdle = indiaDateTimeEpoch(request.idealRequestedAt);
+    const leftIdle = indiaDateTimeEpoch(request.idealApprovedAt);
+    if (Number.isFinite(enteredIdle) && enteredIdle <= cutoff && (!Number.isFinite(leftIdle) || leftIdle > cutoff)) {
+      return [{ ...request, status: "Idle" }];
+    }
     if (status === "closed" && Number.isFinite(closedAt) && closedAt <= cutoff) return [];
     // A legacy closed record with no closure time cannot establish a past
     // active interval. Do not invent one from its submission date alone.

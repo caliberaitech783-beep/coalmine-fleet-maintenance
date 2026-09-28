@@ -1,3 +1,4 @@
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 const text = (value) => String(value ?? "").trim();
 const status = (request) => text(request?.status).toLowerCase();
 
@@ -16,8 +17,8 @@ export function requestWriteOutcomeConfirmed(before = {}, after = {}, action = "
   if (action === "production-first-trip") return Boolean(text(after.productionFirstTripAt));
   if (action === "arrival-flag") return Boolean(text(after.arrivalFlaggedAt));
   if (action === "mis-flag") return Boolean(text(after.misFlaggedAt));
-  if (action === "ideal-onroad") return Boolean(text(after.idealApprovedAt) || text(after.closedAt));
-  if (action === "idle-cancel") return !["idle", "ideal"].includes(status(after));
+  if (action === "ideal-onroad") return !isIdleVehicleRequest(after) && Boolean(text(after.idealApprovedAt) || text(after.closedAt));
+  if (action === "idle-cancel") return !isIdleVehicleRequest(after);
   if (action === "delayed-reason") return text(after.delayedReason) === text(payload.delayedReason);
   return false;
 }

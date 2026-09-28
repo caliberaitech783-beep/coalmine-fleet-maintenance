@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -40,9 +41,9 @@ const pending=Object.freeze({
 function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure='',beforeUpdate}={}){
   let saved=structuredClone(row),snapshot,chain,mutations=0;
   const queries=[],logs=[],notifications=[];
-  const eligible=value=>value&&!value.verifiedAt&&(kind==='verify'?value.status==='Closed':['Idle','Ideal'].includes(value.status));
+  const eligible=value=>value&&!value.verifiedAt&&(kind==='verify'?value.status==='Closed':isIdleVehicleRequest(value));
   const context={
-    ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
+    isIdleVehicleRequest,...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
     ...siteAccess,currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
@@ -61,7 +62,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
       assert.ok(sitePosition,'workflow mutation repeats the original assigned-site check');
       if(!eligible(saved)||saved.site!==values[sitePosition-1])return {rows:[],rowCount:0};
       mutations++;
-      if(kind==='approve')Object.assign(saved,{status:'Closed',closedAt:now,closedBy:values[0],idealApprovedAt:now,idealApprovedBy:values[0]});
+      if(kind==='approve')Object.assign(saved,{status:'Closed',vehicleIdle:false,closedAt:saved.closedAt||saved.idealRequestedAt||now,closedBy:saved.closedBy||values[0],idealApprovedAt:now,idealApprovedBy:values[0]});
       else if(kind==='cancel')Object.assign(saved,{
         status:'In progress',idleReason:'',closedAt:null,closedBy:'',idealRequestedAt:null,idealRequestedBy:'',idealApprovedAt:null,idealApprovedBy:'',
         inProgressAt:saved.inProgressAt||now,inProgressBy:saved.inProgressAt?saved.inProgressBy:values[1],
@@ -96,14 +97,14 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
 
 test('MIS verification saves optional trip-card remarks and rejects oversized remarks',async()=>{
   for(const remark of [undefined,'','  Trip card was received late.  ']){
-    const app=harness('verify',{row:{...pending,status:'Closed',closedAt:'2026-09-08T10:30:00.000Z'}});
+    const app=harness('verify',{row:{...pending,status:'Closed',vehicleIdle:false,closedAt:'2026-09-08T10:30:00.000Z'}});
     const result=await app.call({body:{firstTripRemark:remark}});
     assert.equal(result.status,200);
     const update=app.queries.find(({sql})=>sql.startsWith('UPDATE maintenance_requests'));
     assert.match(update.sql,/first_trip_remark=\$10/);
     assert.equal(update.values[9],String(remark||'').trim());
   }
-  const app=harness('verify',{row:{...pending,status:'Closed',closedAt:'2026-09-08T10:30:00.000Z'}});
+  const app=harness('verify',{row:{...pending,status:'Closed',vehicleIdle:false,closedAt:'2026-09-08T10:30:00.000Z'}});
   assert.equal((await app.call({body:{firstTripRemark:'x'.repeat(2001)}})).status,400);
   assert.equal(app.mutations,0);
 });
@@ -127,13 +128,33 @@ test('manager on-road approval closes Idle and legacy Ideal requests for MIS wit
     assert.equal(result.body.status,'Closed');
     assert.equal(result.body.closedBy,maintenanceManager.name);
     assert.equal(result.body.idealApprovedBy,maintenanceManager.name);
-    assert.equal(result.body.closedAt,result.body.idealApprovedAt);
+    assert.equal(result.body.closedAt,pending.idealRequestedAt);
     assert.equal(requestMayBeVerified(result.body),true);
     assert.equal(requestMayBeChanged(result.body),false);
     for(const key of ['ref','site','owner','requesterLogin','start','acceptedAt','acceptedBy','arrivalFlaggedAt','arrivalFlaggedBy','arrivalFlagRemark','idleReason','idealRequestedAt','idealRequestedBy','maintenanceWork','dailyRemarks'])assert.deepEqual(result.body[key],pending[key],key);
     assert.equal(app.mutations,1);
     assert.match(app.notifications[0][3],/awaiting MIS verification/);
   }
+});
+
+test('releasing a Closed Idle vehicle preserves the maintenance completion time and actor',async()=>{
+  const completed={...pending,status:'Closed',vehicleIdle:true,closedAt:pending.idealRequestedAt,closedBy:'Maintenance mechanic'};
+  const app=harness('approve',{row:completed});
+  const result=await app.call();
+  assert.equal(result.status,200);
+  assert.equal(result.body.closedAt,completed.closedAt);
+  assert.equal(result.body.closedBy,completed.closedBy);
+  assert.equal(result.body.vehicleIdle,false);
+  assert.equal(result.body.idealApprovedAt,now);
+  const update=app.queries.find(({sql})=>sql.startsWith('UPDATE maintenance_requests'));
+  assert.match(update.sql,/closed_at=CASE WHEN status='Closed' THEN closed_at ELSE COALESCE\(ideal_requested_at,NOW\(\)\) END/);
+  assert.match(update.sql,/vehicle_idle=FALSE/);
+});
+
+test('MIS cannot record a first trip while a completed vehicle is still Idle',async()=>{
+  const app=harness('verify',{row:{...pending,status:'Closed',vehicleIdle:true,closedAt:pending.idealRequestedAt}});
+  assert.equal((await app.call()).status,409);
+  assert.equal(app.mutations,0);
 });
 
 test('cancel or reject Idle returns to active maintenance without marking it closed or verified',async()=>{
@@ -172,7 +193,7 @@ test('duplicate manager decisions and concurrent status changes return 409 witho
     assert.equal((await app.call()).status,200);
     assert.equal((await app.call()).status,409);
     assert.equal(app.mutations,1);
-    for(const change of [{status:'Closed'},{status:'In progress'},{verifiedAt:now}]){
+    for(const change of [{status:'Closed',vehicleIdle:false},{status:'In progress'},{verifiedAt:now}]){
       const raced=harness(kind,{beforeUpdate:row=>Object.assign(row,change)});
       assert.equal((await raced.call()).status,409);
       assert.equal(raced.mutations,0);
@@ -228,7 +249,7 @@ test('MIS cannot verify pending Idle, another site, or a request moved to anothe
   const pendingApp=harness('verify');
   assert.equal((await pendingApp.call()).status,409);
   assert.equal(pendingApp.mutations,0);
-  const closed={...pending,status:'Closed',closedAt:now,closedBy:maintenanceManager.name};
+  const closed={...pending,status:'Closed',vehicleIdle:false,closedAt:now,closedBy:maintenanceManager.name};
   const wrongSite=harness('verify',{row:closed,user:{site:'Majri OB'}});
   assert.equal((await wrongSite.call()).status,403);
   assert.equal(wrongSite.mutations,0);

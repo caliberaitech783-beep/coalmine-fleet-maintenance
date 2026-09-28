@@ -12,6 +12,7 @@ import * as equipment from '../request-equipment.mjs';
 import {defaultDurationSort} from '../src/duration-sort.mjs';
 import {ETC_SOON_MS, etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue, formatEtcDuration} from '../src/etc-countdown.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {dateColumnsFirst, requestColumnsInWorkflowOrder} from '../src/table-actions-model.mjs';
 import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
 
@@ -155,7 +156,7 @@ function renderTable(props) {
   const FilterableHeader = ({label}) => React.createElement('th', {}, label);
   const scope = {
     React: {...React, useId: () => 'etc-controls'}, useState, useEffect: () => {}, Date: class extends Date { static now() { return now; } },
-    ...equipment, ...requestAcceptance, normalizeEquipmentGroup, requestStatusLabel, defaultDurationSort,
+    ...equipment, ...requestAcceptance, normalizeEquipmentGroup, requestStatusLabel, defaultDurationSort, isIdleVehicleRequest,
     TranslatedText: ({text: value}) => React.createElement('span', {}, String(value ?? '')),
     Modal: Null, ActionsTable: ({children: rows}) => React.createElement('table', {}, rows),
     FilterableHeader, Status: ({children: label}) => React.createElement('span', {}, label),

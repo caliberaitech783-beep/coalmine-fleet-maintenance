@@ -1,4 +1,5 @@
 import {requestDateKey} from './dashboard-request-data.mjs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {parseRequestTimelineTimestamp} from '../request-timeline.mjs';
 import {recordedBreakdownRangeLength} from './dashboard-breakdown-forecast.mjs';
 
@@ -47,6 +48,13 @@ export function bdBalanceChange(opening, closing) {
 
 export function dailyBdRecordsForMetric(records, from, to, metric, options = {}) {
   const matchesShift = typeof options.matchesShift === 'function' ? options.matchesShift : () => true;
+  if (metric === 'idle') {
+    const legacy = dailyBdRecordsForMetric(records, from, to, 'balance', options).filter(record => ['idle','ideal'].includes(String(record.status || '').toLowerCase()));
+    return [...legacy, ...records.filter(record => {
+      const entered = requestDateKey(record.idealRequestedAt || record.idleRequestedAt);
+      return String(record.status || '').toLowerCase() === 'closed' && isIdleVehicleRequest(record) && entered && entered >= from && entered <= to && matchesShift(record, 'idle');
+    })];
+  }
   if (metric === 'active-balance' || metric === 'idle') {
     return dailyBdRecordsForMetric(records, from, to, 'balance', options).filter(record => {
       const idle = ['idle', 'ideal'].includes(String(record.status || '').trim().toLowerCase());
@@ -92,7 +100,7 @@ export function buildDailyBdBalance(records, from, to, splitIdle = false, option
   if (!splitIdle) return result;
   const separate = (row, start, end) => {
     const idle = dailyBdRecordsForMetric(records, start, end, 'idle', options).length;
-    const balance = row.balance - idle;
+    const balance = dailyBdRecordsForMetric(records, start, end, 'active-balance', options).length;
     return {...row, balance, idle, ...bdBalanceChange(row.open, balance)};
   };
   return {...result, days: days.map(day => separate(day, day.date, day.date)), totals: separate(result.totals, from, to)};

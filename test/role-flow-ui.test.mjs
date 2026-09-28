@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
@@ -53,7 +54,7 @@ function harness(name, extra = {}) {
     if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
     return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }];
   };
-  const scope = {
+  const scope = { isIdleVehicleRequest,
     ...requestEquipment,
     React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
@@ -345,10 +346,17 @@ test("every unaccepted request offers Accept vehicle, including legacy records w
 
 for (const status of ['Open', 'In progress', 'Awaiting parts', 'Closed']) test(`onroad form closes ${status} requests without offering progress statuses`, async () => {
   const saved = [];
-  const tree = harness("CloseRequestForm").render({request: {...accepted, status}, close() {}, onSave: payload => saved.push(payload)});
+  const app=harness("CloseRequestForm");
+  const props={request: {...accepted, status}, close() {}, onSave: payload => saved.push(payload)};
+  let tree = app.render(props);
   assert.equal(field(tree, "status").props.value, "Closed");
   assert.deepEqual(all(field(tree, "status"), node => node.type === "option").map(node => node.props.value), ['Closed']);
-  await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {maintenanceWork: "Repair completed", closingDate: "2026-09-08", closingTime: "14:00:00"}});
+  const event={preventDefault() {}, currentTarget: {maintenanceWork: "Repair completed", closingDate: "2026-09-08", closingTime: "14:00:00"}};
+  await form(tree).props.onSubmit(event);
+  assert.equal(saved.length,0);
+  tree=app.render(props);
+  button(tree,'Close request — On road').props.onClick();
+  await form(tree).props.onSubmit(event);
   assert.equal(saved[0].status, "Closed");
 });
 
@@ -357,9 +365,12 @@ test('onroad form still validates Idle reasons and returns to Closed when Idle i
   const app = harness('CloseRequestForm');
   const props = {request: accepted, close() {}, onSave: payload => saved.push(payload)};
   let tree = app.render(props);
+  await form(tree).props.onSubmit({preventDefault(){}});
+  tree=app.render(props);
+  button(tree,'Close request — On road').props.onClick();
   all(tree, node => node.props.name === 'idealChoice' && node.props.value === 'yes')[0].props.onChange();
   tree = app.render(props);
-  assert.equal(field(tree, 'status').props.value, 'Idle');
+  assert.equal(field(tree, 'status').props.value, 'Closed');
   const event = {preventDefault() {}, currentTarget: {maintenanceWork: 'Repair completed'}};
   await form(tree).props.onSubmit(event);
   assert.equal(saved.length, 0);
@@ -367,7 +378,8 @@ test('onroad form still validates Idle reasons and returns to Closed when Idle i
   field(tree, 'idleReason').props.onChange({target: {value: 'No work'}});
   tree = app.render(props);
   await form(tree).props.onSubmit(event);
-  assert.equal(saved[0].status, 'Idle');
+  assert.equal(saved[0].status, 'Closed');
+  assert.equal(saved[0].ideal,true);
   assert.equal(saved[0].idleReason, 'No work');
   all(tree, node => node.props.name === 'idealChoice' && node.props.value === 'no')[0].props.onChange();
   tree = app.render(props);
@@ -385,6 +397,11 @@ for (const name of ["RequestEditForm", "CloseRequestForm", "VerifyRequestForm"])
   if (name === "VerifyRequestForm") {
     field(tree, "firstTripCardImage").props.onChange({target: {files: [{type: "image/png", size: 4}]}});
     tree = app.render(props);
+  }
+  if (name === "CloseRequestForm") {
+    await form(tree).props.onSubmit({preventDefault(){}});
+    tree=app.render(props);
+    button(tree,'Close request — On road').props.onClick();
   }
   const submit = form(tree).props.onSubmit;
   const event = {preventDefault() {}, currentTarget: {maintenanceWork: "Repair completed", category: "Breakdown", complaint: "Engine", closingDate: "2026-09-08", closingTime: "14:00:00", closingMeterReading: "0"}};

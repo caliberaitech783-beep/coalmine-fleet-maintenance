@@ -70,7 +70,8 @@ test("the dashboard endpoint gives the same result on both devices for the same 
   user={site:"Majri OB"};
   const other = await read();
   assert.deepEqual({open:other.breakdownCountChange.open,current:other.breakdownCountChange.current,delta:other.breakdownCountChange.delta},{open:0,current:1,delta:1});
-  assert.match(queries[1], /started_at < \$1 AND \(closed_at IS NULL OR closed_at >= \$1\)/);
+  assert.match(queries[1], /started_at < \$1 AND \(\(closed_at IS NULL OR closed_at >= \$1\)/);
+  assert.match(queries[1], /OR vehicle_idle=TRUE/);
   assert.match(queries[1], /ideal_requested_at < \$1/);
 });
 

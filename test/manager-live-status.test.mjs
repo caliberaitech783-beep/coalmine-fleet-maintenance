@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
@@ -57,7 +58,7 @@ function managerHarness(equipment, equipmentState = {}) {
     if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
-  const scope = {
+  const scope = { isIdleVehicleRequest,
     React, useState, useMemo: (calculate) => calculate(), fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses, requestWithEquipmentMasterDetails,
     recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory, isProductionFirstTripPending,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",

@@ -1,3 +1,4 @@
+import { isIdleVehicleRequest } from './request-idle.mjs';
 const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
 
 export const BREAKDOWN_TYPE_LABELS = ["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"];
@@ -33,7 +34,11 @@ export function breakdownClosedDate(record = {}) {
 // every metric opens exactly the requests it counts, including legacy history.
 export function matchesBreakdownMovement(record, start = "", end = "", metric = "all") {
   if (["balance", "active-balance", "idle"].includes(metric)) {
-    const idle = ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase());
+    const idle = isIdleVehicleRequest(record);
+    if (metric === "idle" && String(record.status || "").toLowerCase() === "closed") {
+      const entered = dateKey(record.idealRequestedAt || record.idleRequestedAt);
+      return idle && (!start || entered >= start) && (!end || entered <= end);
+    }
     return matchesInclusiveMovement(record, start, end, "balance") && (metric === "idle" ? idle : !idle);
   }
   return matchesInclusiveMovement(record, start, end, metric);

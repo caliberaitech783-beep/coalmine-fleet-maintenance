@@ -168,7 +168,10 @@ test('marking a vehicle Idle cannot bypass the mandatory delayed-arrival reason'
   const app=harness('close',{row:{...acceptedLate,arrivalFlaggedAt:'2026-09-08T12:30:00Z',arrivalFlagRemark:'Vehicle recovery delayed'}});
   const result=await app.call({body:{ideal:true,status:'Idle',idleReason:'No work'}});
   assert.equal(result.status,200);
-  assert.equal(result.body.status,'Idle');
+  assert.equal(result.body.status,'Closed');
+  const closure=app.queries.find(({sql})=>sql.includes('closed_at=$7'));
+  assert.equal(closure.values[6].toISOString(),'2026-09-08T13:00:00.000Z');
+  assert.match(closure.sql,/vehicle_idle=TRUE/);
   assert.ok(app.committed);
 });
 
@@ -181,6 +184,6 @@ test('saved daily updates and Idle decisions survive notification recipient, set
     assert.ok(app.released);
     assert.ok(app.logs.length,'notification failure is recorded without undoing saved work');
     assert.equal(app.queries.filter(({sql})=>sql==='ROLLBACK').length,0);
-    if(kind==='close')assert.equal(response.body.status,'Idle');
+    if(kind==='close')assert.equal(response.body.status,'Closed');
   }
 });

@@ -21,6 +21,7 @@ import {fleetBarHeightPercent} from "../src/fleet-bar-scale.mjs";
 import {activeOpenCases} from "../dashboard-open-cases.mjs";
 import {recordBelongsToSite} from "../site-location.mjs";
 import {requestStatusLabel} from "../src/request-status.mjs";
+import {isIdleVehicleRequest} from "../request-idle.mjs";
 import {availabilityRequestsForDate} from "../src/dashboard-availability.mjs";
 import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
@@ -214,7 +215,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
-    equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel,
+    equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel, isIdleVehicleRequest,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
     useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope, allowedSites, allowedRegions: regions.map(({code}) => code)}, ...equipmentState}),
@@ -516,6 +517,22 @@ const activate = (node) => {
   if (node.props["data-dashboard-list"]) node.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
   else node.props.onClick();
 };
+
+test("a maintenance-closed Idle request appears in Closed and Idle, not Open in Maint", () => {
+  const rows=[{ref:'CLOSED-IDLE',status:'Closed',vehicleIdle:true,site:'Sasti OB',start:`${todayKey} 08:00:00`,closedAt:`${todayKey} 09:00:00`,idealRequestedAt:`${todayKey} 09:01:00`,category:'Breakdown'}];
+  const view=harness();
+  const tree=view.render(rows);
+  const card=key=>byClass(byClass(tree,'mine-request-lifecycle-summary'),key);
+  const count=key=>text(findAll(card(key),child=>child.type==='strong')[0]);
+  assert.equal(count('closed'),'1');
+  assert.equal(count('idle'),'1');
+  assert.equal(count('maintenance'),'0');
+  assert.ok(byLabel(tree,`${todayLabel}: 1 Closed requests`));
+  activate(card('closed'));
+  assert.deepEqual(detailView(view.render(rows)).rows.map(row=>row.requestReference),['CLOSED-IDLE']);
+  activate(card('idle'));
+  assert.deepEqual(detailView(view.render(rows)).rows.map(row=>row.requestReference),['CLOSED-IDLE']);
+});
 
 test("Closed card, graph and linked list include verified closures while Open in MIS stays pending only", () => {
   const rows = [

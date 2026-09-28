@@ -1,4 +1,5 @@
 import { createFleetAssetResolver } from "./dashboard-equipment-metrics.mjs";
+import { isIdleVehicleRequest } from './request-idle.mjs';
 import { requestsVisibleGlobally } from "./mis-request-visibility.mjs";
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
@@ -13,14 +14,14 @@ export function dashboardFleetSnapshot(allEquipment = [], allRequests = []) {
   const uncertain = new Set();
   for (const request of requestsVisibleGlobally(allRequests)) {
     const status = normalize(request.status);
-    if (status === "closed") continue;
+    if (status === "closed" && !isIdleVehicleRequest(request)) continue;
     const resolution = resolve(request, { allowTransferred: true });
     if (resolution.assetIndex === null) {
       resolution.candidateIndexes.forEach((index) => uncertain.add(index));
       continue;
     }
     const index = resolution.assetIndex;
-    const roadStatus = ["idle", "ideal"].includes(status) ? "idle" : "offroad";
+    const roadStatus = isIdleVehicleRequest(request) ? "idle" : "offroad";
     if (definite[index] !== "offroad") definite[index] = roadStatus;
   }
   return allEquipment.map((record, index) => {

@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
@@ -13,10 +14,11 @@ import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from 
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
-const evaluate = (code, dependencies) => new Function("DateInput", ...Object.keys(dependencies), code)(DateInput, ...Object.values(dependencies));
+const evaluate = (code, dependencies) => new Function("DateInput", "isIdleVehicleRequest", ...Object.keys(dependencies), code)(DateInput, isIdleVehicleRequest, ...Object.values(dependencies));
 const tipper = {ref: "REQ-T1", equipmentGroup: "TIPPERS", meterType: "KMR", door: "T1", chassis: "CH1", site: "Sasti OB", status: "In progress", openingMeterReading: "1000", openingMeterFileUploaded: true};
 const snippet = source.slice(source.indexOf("function MeterReadingFields"), source.indexOf("function VerifyRequestForm"));
-const transformed = await transformWithOxc(snippet, "request-forms.jsx", {jsx: {runtime: "classic"}});
+// Meter payload tests begin after the separately tested On road/Idle decision.
+const transformed = await transformWithOxc(snippet.replace('const idleDecision = useRef(false);','const idleDecision = useRef(true);'), "request-forms.jsx", {jsx: {runtime: "classic"}});
 const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseRequestForm};", {
   React, ...equipment,
   useState: value => [typeof value === "function" ? value() : value, () => {}],

@@ -1,4 +1,5 @@
 import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
+import {isIdleVehicleRequest} from './request-idle.mjs';
 import {requestMeterReadings} from './request-equipment.mjs';
 import {equipmentDoorNumber} from './equipment-door.mjs';
 import {requestStatusLabel} from './src/request-status.mjs';
@@ -164,9 +165,9 @@ export function findFleetAssetForRequest(records = [], request = {}) {
 function matchingRoadStatus(record, requests, matches) {
   if (["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus)) return record.dashboardRoadStatus;
   const matchingRequests = requests.filter((request) =>
-    normalize(request.status) !== "closed" && matches(request, record));
-  if (matchingRequests.some((request) => !["ideal", "idle"].includes(normalize(request.status)))) return "offroad";
-  if (matchingRequests.some((request) => ["ideal", "idle"].includes(normalize(request.status)))) return "idle";
+    (normalize(request.status) !== "closed" || isIdleVehicleRequest(request)) && matches(request, record));
+  if (matchingRequests.some((request) => !isIdleVehicleRequest(request))) return "offroad";
+  if (matchingRequests.some(isIdleVehicleRequest)) return "idle";
   // Live BDMS availability follows the request lifecycle, not a stale master
   // snapshot. Keep equipmentRoadStatus/equipmentMetrics for snapshot consumers.
   return "onroad";
@@ -186,10 +187,10 @@ export function liveEquipmentRoadStatuses(records = [], requests = []) {
   const resolve = createFleetAssetResolver(records);
   for (const request of requests) {
     const requestStatus = normalize(request.status);
-    if (requestStatus === "closed") continue;
+    if (requestStatus === "closed" && !isIdleVehicleRequest(request)) continue;
     const match = resolve(request);
     if (!['matched', 'ambiguous'].includes(match.reason)) continue;
-    const status = ["ideal", "idle"].includes(requestStatus) ? "idle" : "offroad";
+    const status = isIdleVehicleRequest(request) ? "idle" : "offroad";
     for (const index of match.candidateIndexes) {
       if (fixed[index] || statuses[index] === "offroad") continue;
       statuses[index] = status;
@@ -240,13 +241,13 @@ export function fleetBreakdownCaseCounts(records = [], requests = []) {
 const ROAD_STATUS_LABELS = { onroad: "On road", offroad: "Off road", idle: "Idle", unknown: "Status not set" };
 export function fleetAssetRequestDetails(records = [], requests = []) {
   const matches = fleetAssetMatcher();
-  const active = requests.filter((request) => normalize(request.status) !== "closed");
+  const active = requests.filter((request) => normalize(request.status) !== "closed" || isIdleVehicleRequest(request));
   return records.map((record) => {
     const current = active.filter((request) => matches(request, record))
       .sort((left, right) => String(left.start || "").localeCompare(String(right.start || "")))[0];
     const openingReadings = current ? requestMeterReadings(current, "opening", [record]) : {};
     const requestStatus = current
-      ? requestStatusLabel(current)
+      ? isIdleVehicleRequest(current) ? "Idle" : requestStatusLabel(current)
       : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
     return {
       ...record,

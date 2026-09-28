@@ -6,6 +6,7 @@
 //     or Super Admin; Maintenance users keep their existing delete right for the
 //     other unverified stages (open, awaiting acceptance, in progress, closed
 //     and awaiting MIS verification).
+import {isIdleVehicleRequest} from './request-idle.mjs';
 const IDLE_STATUSES = new Set(["idle", "ideal"]);
 export const REQUEST_BULK_DELETE_LIMIT = 200;
 
@@ -14,7 +15,7 @@ const text = (value) => String(value ?? "").trim();
 export function requestDeletionBlocker(request, { administrator = false } = {}) {
   if (!request || !text(request.ref || request.reference)) return "The request no longer exists.";
   if (text(request.verifiedAt)) return "Verified requests cannot be deleted.";
-  if (IDLE_STATUSES.has(text(request.status).toLowerCase()) && !administrator) return "Idle requests can only be deleted by an Admin.";
+  if (isIdleVehicleRequest(request) && !administrator) return "Idle requests can only be deleted by an Admin.";
   return null;
 }
 

@@ -1,6 +1,7 @@
 import * as siteAccess from '../region-scope.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { readFileSync } from 'node:fs';
 import React from 'react';
 import { transformWithOxc } from 'vite';
@@ -39,7 +40,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }
@@ -272,7 +273,10 @@ function closeHarness(request = {}) {
   return {
     saved, alerts,
     render() { return app.render({ request: { ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value) }); },
-    async submit(tree) { await byType(tree, 'form').props.onSubmit({ preventDefault() {}, currentTarget: { maintenanceWork: 'Repair completed', closingDate: '2026-09-08', closingTime: '18:00:00' } }); },
+    async submit(tree) {
+      all(tree, node => node.type === 'button' && /^Close request/.test(textContent(node)))[0]?.props.onClick();
+      await byType(tree, 'form').props.onSubmit({ preventDefault() {}, currentTarget: { maintenanceWork: 'Repair completed', closingDate: '2026-09-08', closingTime: '18:00:00' } });
+    },
   };
 }
 const field = (tree, name) => all(tree, node => node.props.name === name)[0];
@@ -281,6 +285,10 @@ const idleRadio = (tree, value) => all(tree, node => node.props.name === 'idealC
 for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays visible through toggles and is submitted only for Idle`, async () => {
   const app = closeHarness();
   let tree = app.render();
+  assert.equal(idleRadio(tree, 'no'),undefined,'Idle is offered only after On road');
+  await app.submit(tree);
+  assert.equal(app.saved.length,0);
+  tree=app.render();
   assert.equal(idleRadio(tree, 'no').props.checked, true);
   idleRadio(tree, 'yes').props.onChange();
   tree = app.render();
@@ -293,9 +301,10 @@ for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays
   tree = app.render();
   assert.equal(field(tree, 'idleReason').props.value, reason);
   assert.ok(textContent(tree).includes(`Selected idle reason: ${reason}`));
-  assert.equal(field(tree, 'status').props.value, 'Idle');
+  assert.equal(field(tree, 'status').props.value, 'Closed');
   await app.submit(tree);
-  assert.equal(app.saved[0].status, 'Idle');
+  assert.equal(app.saved[0].status, 'Closed');
+  assert.equal(app.saved[0].ideal,true);
   assert.equal(app.saved[0].idleReason, reason);
   idleRadio(tree, 'no').props.onChange();
   tree = app.render();
@@ -311,8 +320,10 @@ for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays
   assert.ok(textContent(tree).includes(`Selected idle reason: ${reason}`));
 });
 
-test('an existing Idle record initializes both its radio choice and saved reason', () => {
-  const tree = closeHarness({ status: 'Idle', idleReason: 'No work' }).render();
+test('an existing Idle record initializes both its radio choice and saved reason', async () => {
+  const app = closeHarness({ status: 'Idle', idleReason: 'No work' });
+  await app.submit(app.render());
+  const tree=app.render();
   assert.equal(idleRadio(tree, 'yes').props.checked, true);
   assert.equal(field(tree, 'idleReason').props.value, 'No work');
   assert.ok(textContent(tree).includes('Selected idle reason: No work'));
