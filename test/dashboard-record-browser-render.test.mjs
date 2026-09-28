@@ -54,6 +54,9 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
       Status: ({children}) => children, formatDate: formatDisplayDateTime,
       ActionsTable: received => {table = received; return React.createElement("table", null, received.children);}};
     const html = renderToStaticMarkup(React.createElement(Browser, props));
+    // Idle-card rows show vehicle state without changing maintenance closure elsewhere.
+    assert.ok(html.includes(`>${event === "idle" ? "Idle" : "Closed"}</td>`));
+    assert.equal(row.requestStatus, "Closed");
     const columns = dateColumnsFirst(tableModel(table.children).columns);
     assert.deepEqual(columns.filter(column => timingColumns.includes(column.label)).map(column => column.label), expected, title);
     assert.deepEqual(columns.slice(0, 3 + expected.length).map(column => column.label), ["Status", "Started", "ETC", ...expected], title);
