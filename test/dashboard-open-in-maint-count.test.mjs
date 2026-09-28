@@ -22,5 +22,5 @@ test("Open in Maint rows exclude both idle spellings while preserving active sta
   }
   assert.equal(predicate({ status: "Open", date: "2026-09-15" }), false);
   assert.equal(predicate({ status: "Open", date: "2026-09-17" }), false);
-  assert.match(source, /const rows = event === "closed" && !date \? maintenanceClosedRows : requestLifecycleRows\[event\] \|\| \[\]/);
+  assert.match(source, /const rows = requestLifecycleRows\[event\] \|\| \[\]/);
 });
