@@ -1635,8 +1635,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
   useEffect(() => {
+    // Dashboard navigation always exits detail views and restores the full breakdown chart.
     const showBreakdownDashboard = () => {
-      // Dashboard navigation always exits detail views and restores the full breakdown chart.
       setFleetChartMode("breakdown");
       setAssetDrilldown("");
       setOemDrilldownKind(null);
