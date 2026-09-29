@@ -6892,6 +6892,8 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
   const historyRows = vehicleBreakdownHistoryRows(rows, vehicle);
   const latestRepair = latestCompletedVehicleRepair(rows, vehicle);
   const vehicleDetails = { ...(historyRows.at(-1) || {}), ...(typeof vehicle === "object" && vehicle ? vehicle : {}) };
+  // Fleet master status must not override the newest maintenance lifecycle.
+  const latestStatus = requestStatusLabel(historyRows.at(-1) || vehicleDetails);
   const door = vehicleDetails.reportDoor || vehicleDetails.door || "Vehicle";
   const equipment = normalizeEquipmentGroup(vehicleDetails.equipmentGroup) || vehicleDetails.reportEquipment || vehicleDetails.equipment || "Equipment details not available";
   const model = vehicleDetails.reportModel || vehicleDetails.model || "";
@@ -6906,7 +6908,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
   const identity = [
     ["Make", vehicleDetails.reportMake || vehicleDetails.make], ["Model", model], ["Driver", vehicleDetails.driverName || vehicleDetails.driver],
     ["Current location", vehicleDetails.reportSite || vehicleDetails.site || vehicleDetails.currentLocation], ["Registration", vehicleDetails.reg || vehicleDetails.registrationNumber],
-    ["Chassis / serial no.", vehicleDetails.chassis || vehicleDetails.chassisNo || vehicleDetails.manufacturerSerialNo], ["Equipment group", equipment], ["Latest status", requestStatusLabel(vehicleDetails)],
+    ["Chassis / serial no.", vehicleDetails.chassis || vehicleDetails.chassisNo || vehicleDetails.manufacturerSerialNo], ["Equipment group", equipment], ["Latest status", latestStatus],
   ];
   return <section className="vehicle-history-page" aria-labelledby="vehicle-history-title">
     <header className="vehicle-history-header">

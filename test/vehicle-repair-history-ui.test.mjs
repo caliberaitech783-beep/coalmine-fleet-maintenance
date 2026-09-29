@@ -6,6 +6,21 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 const dashboardSource = fs.readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
 const hourlySource = fs.readFileSync(new URL("../src/hourly-breakdown-view.jsx", import.meta.url), "utf8");
 
+test("vehicle and equipment history headers prefer the newest request over fleet status", async () => {
+  const {requestStatusLabel} = await import('../src/request-status.mjs');
+  const expression = source.match(/const latestStatus = (requestStatusLabel\(historyRows\.at\(-1\) \|\| vehicleDetails\));/);
+  assert.ok(expression);
+  const status = new Function('historyRows', 'vehicleDetails', 'requestStatusLabel', `return ${expression[1]}`);
+  for (const equipmentGroup of ['TIPPERS', 'DRILL MACHINE']) {
+    const vehicle = {status: 'Operational', equipmentGroup};
+    for (const request of [{status: 'Open', acceptedAt: '2026-09-29 10:00:00'}, {status: 'In progress'}, {status: 'Closed'}, {status: 'Verified'}]) {
+      assert.equal(status([{status: 'Verified'}, request], vehicle, requestStatusLabel), requestStatusLabel(request));
+    }
+    assert.equal(status([], vehicle, requestStatusLabel), 'Operational');
+  }
+  assert.ok(source.includes('["Latest status", latestStatus]'));
+});
+
 test("door numbers open a vehicle-specific repair history page", () => {
   assert.match(source, /className="vehicle-history-link"/);
   assert.match(source, /onVehicleHistory=\{setVehicleHistoryTarget\}/);
