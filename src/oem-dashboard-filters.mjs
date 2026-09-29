@@ -1,4 +1,12 @@
 import { canonicalSiteName, recordBelongsToSite } from "../site-location.mjs";
+import { equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
+
+export function oemEquipmentLabel(record) {
+  const make = String(record.make || '').trim() || 'OEM not specified';
+  const group = equipmentGroupLabel(record);
+  if (!group || group === 'Unclassified') return make;
+  return group.toUpperCase().includes(make.toUpperCase()) ? group : `${make} ${group}`;
+}
 
 const siteName = site => typeof site === "string" ? site : site.name;
 
@@ -39,6 +47,6 @@ export function groupOemRecordsBySite(records, regions) {
 export function oemDetailReportRows(siteGroups, oemWise = false) {
   return siteGroups.flatMap(site => site.records.map(record => ({
     ...record,
-    reportSite: `${site.region} · ${site.site}${oemWise ? ` — ${String(record.make || '').trim() || 'OEM not specified'}` : ''}`,
+    reportSite: `${site.region} · ${site.site}${oemWise ? ` — ${oemEquipmentLabel(record)}` : ''}`,
   })));
 }

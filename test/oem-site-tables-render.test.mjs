@@ -12,7 +12,7 @@ import * as drilldown from "../src/dashboard-drilldown-model.mjs";
 import * as tableModel from "../src/table-actions-model.mjs";
 import * as recordDates from "../src/record-date-range.mjs";
 import * as dateRanges from "../src/date-range-filter.mjs";
-import { groupOemRecordsBySite, oemDetailReportRows } from "../src/oem-dashboard-filters.mjs";
+import { groupOemRecordsBySite, oemDetailReportRows, oemEquipmentLabel } from "../src/oem-dashboard-filters.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "../src/request-status.mjs";
@@ -40,7 +40,7 @@ const load = (file, extra = {}) => {
 const RecordDateRange = load("record-date-range");
 const SharedActionsTable = load("shared-actions-table", { RecordDateRange, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: () => null });
 const DashboardRecordBrowser = load("dashboard-record-browser");
-const Details = load("oem-breakdown-details", { DashboardRecordBrowser, oemDetailReportRows });
+const Details = load("oem-breakdown-details", { DashboardRecordBrowser, oemDetailReportRows, oemEquipmentLabel });
 const h = React.createElement, Empty = () => null;
 const regions = [{ code: "WCL", sites: ["Sasti OB", "Majri OB"] }, { code: "NCL", sites: ["Jayant OB"] }];
 const request = (id, site, door, assetId = id) => ({
@@ -61,7 +61,7 @@ const selectionFor = (records, extra = {}) => ({ label: "All OEMs", periodLabel:
 // rendering and the export/print models remain on the production path.
 function renderDetails(selection, selectedSite = "", oemWise = false) {
   let stateIndex = 0;
-  const ReportDetails = oemWise ? load("oem-breakdown-details", {DashboardRecordBrowser, oemDetailReportRows, useState: initial => React.useState(stateIndex++ === 1 ? true : initial)}) : Details;
+  const ReportDetails = oemWise ? load("oem-breakdown-details", {DashboardRecordBrowser, oemDetailReportRows, oemEquipmentLabel, useState: initial => React.useState(stateIndex++ === 1 ? true : initial)}) : Details;
   const SelectedTable = load("shared-actions-table", { RecordDateRange, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: () => null, useState: initial => React.useState(initial && typeof initial === "object" && "selectedSite" in initial ? { selectedSite } : initial) });
   const exports = [];
   const CaptureExport = props => { exports.push(props); return null; };
@@ -76,7 +76,7 @@ function renderDetails(selection, selectedSite = "", oemWise = false) {
 test("OEM-wise view splits site sections and preserves the same grouping in print and export", () => {
   const result=renderDetails(selectionFor([...requests,{...request('V1','Sasti OB','V-1'),make:'Volvo'}]),'',true);
   assert.match(result.html,/OEM-wise report/);
-  assert.match(result.html,/Sasti OB — Scania/);
+  assert.match(result.html,/Sasti OB — SCANIA TIPPERS/);
   assert.match(result.html,/Sasti OB — Volvo/);
   assert.equal((result.html.match(/class="site-report-heading"/g)||[]).length,4);
   for(const model of result.exports){

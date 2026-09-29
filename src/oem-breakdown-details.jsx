@@ -3,7 +3,7 @@ import { Search, ListFilter, Eye, EyeOff } from "lucide-react";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
-import { groupOemRecordsBySite, oemDetailReportRows } from "./oem-dashboard-filters.mjs";
+import { groupOemRecordsBySite, oemDetailReportRows, oemEquipmentLabel } from "./oem-dashboard-filters.mjs";
 import {ProtectedAudio} from "./protected-media.jsx";
 import { dailyUpdatesExportText } from "./daily-updates-order.mjs";
 import { breakdownMeterColumns } from "../breakdown-meter-columns.mjs";
@@ -31,7 +31,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   // The site-wise summary shares the selection row, so the table starts higher.
   const [summaryTarget, setSummaryTarget] = useState(null);
   const categoryRows = selection.records.filter(record => !category || equipmentCategoryLabel(record) === category);
-  const rows = categoryRows.filter(record => (!status || record.requestStatus === status) && (!group || equipmentGroupLabel(record) === group) && matchesSmartSearch(query,
+  const rows = categoryRows.filter(record => (!status || record.requestStatus === status) && (!group || oemEquipmentLabel(record) === group) && matchesSmartSearch(query,
     record.requestReference, record.door, record.requestSite, record.make, record.model, record.group, record.requestStatus,
     record.requestDetails?.complaint, record.requestDetails?.owner, record.manufacturerSerialNo));
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
@@ -46,7 +46,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
     <div className="table-search-toolbar mine-oem-detail-search">
       <label><ListFilter /><select aria-label="OEM breakdown status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(selection.records.map(record => record.requestStatus))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
       <label className="mine-oem-local-filter"><select aria-label="Equipment category" value={category} onChange={event => { setCategory(event.target.value); setGroup(""); }}><option value="">All equipment &amp; vehicles</option>{[...new Set(selection.records.map(equipmentCategoryLabel))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
-      <label className="mine-oem-local-filter"><select aria-label="Equipment group" value={group} onChange={event => setGroup(event.target.value)}><option value="">All equipment groups</option>{[...new Set(categoryRows.map(equipmentGroupLabel))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="mine-oem-local-filter"><select aria-label="OEM equipment type" value={group} onChange={event => setGroup(event.target.value)}><option value="">All OEM equipment types</option>{[...new Set(categoryRows.map(oemEquipmentLabel))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
       <label className="mine-oem-inline-search"><Search /><input type="search" aria-label="Search OEM breakdown records" placeholder="Search door number, chassis, site, model or status" value={query} onChange={event => setQuery(event.target.value)} /></label>
     </div>
     <div className="mine-oem-site-tables" role="region" tabIndex={0} aria-label="Site-wise fleet records">

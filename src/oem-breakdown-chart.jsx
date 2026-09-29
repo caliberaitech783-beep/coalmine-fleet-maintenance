@@ -96,18 +96,10 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
   const siteScope = chart.sites.length === 1 ? chart.sites[0].name : "Sites matching current filters";
   const siteWidth = site => Math.max(132, site.bars.length * 44 + 20);
   const chartWidth = chart.sites.reduce((total, site) => total + siteWidth(site), 0);
-  const filterOem = (event, oemKey) => {
-    event.stopPropagation();
-    onFilterOem?.(chart.selectedOem === oemKey ? "all" : oemKey);
-  };
   return <OemChartSurface chart={chart} plotHeight={plotHeight}>
     <div className="mine-oem-summary">
       <h3>Site-wise OEM and equipment-category breakdown</h3>
       <div className="mine-oem-actions"><button type="button" className="secondary" onClick={event => { event.stopPropagation(); onReset?.(); }}>Reset filters</button><button type="button" className="secondary" title="View all breakdown assets matching the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-full-list", totalOem, chart.rows.length, siteScope)} onClick={event => inspect(event, {})}>View full list <b>{chart.rows.length.toLocaleString()}</b></button></div>
-      {!error && <div className="mine-oem-legend" aria-label="Filter chart by OEM">
-        {visibleOems.map((oem, index) => <button type="button" key={oem.key} aria-pressed={chart.selectedOem === oem.key} {...tooltipAttributes(`oem-breakdown-tooltip-legend-${index}`, oem, oemTotals.get(oem.key), siteScope)} onClick={event => filterOem(event, oem.key)} aria-label={`Filter chart by ${oem.label}: ${oemTotals.get(oem.key)} breakdown assets`}><i aria-hidden="true" style={{ background: oem.color }} /><span>{oem.label}</span><b>{oemTotals.get(oem.key).toLocaleString()}</b></button>)}
-        <button type="button" className="mine-oem-all" title="Open the full list with the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-all", totalOem, chart.rows.length, siteScope)} aria-label={`All total breakdown: ${chart.rows.length} breakdown assets, view full list with current filters`} onClick={event => inspect(event, {})}><span>All total breakdown</span><b>{chart.rows.length.toLocaleString()}</b></button>
-      </div>}
     </div>
     {error ? <p className="mine-oem-error" role="alert">{error}</p> : <>
       {!!visibleCategories.length && <div className="mine-oem-category-legend" aria-label="OEM equipment-category breakdown totals">

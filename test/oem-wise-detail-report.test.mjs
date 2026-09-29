@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {oemDetailReportRows} from '../src/oem-dashboard-filters.mjs';
+import {oemDetailReportRows, oemEquipmentLabel} from '../src/oem-dashboard-filters.mjs';
 import {groupReportRows} from '../src/site-report.mjs';
+
+test('OEM equipment labels separate tippers and machines without repeating the make',()=>{
+  assert.equal(oemEquipmentLabel({make:'VOLVO',group:'VOLVO TIPPERS'}),'VOLVO TIPPERS');
+  assert.equal(oemEquipmentLabel({make:'VOLVO',group:'PAY LOADER'}),'VOLVO PAY LOADER');
+  const rows=oemDetailReportRows([{region:'WCL',site:'Sasti',records:[{make:'VOLVO',group:'VOLVO TIPPERS'},{make:'VOLVO',group:'PAY LOADER'}]}],true);
+  assert.equal(new Set(rows.map(row=>row.reportSite)).size,2);
+});
 test('OEM detail groups retain site boundaries, records and distinct asset totals',()=>{
   const sites=[{region:'WCL',site:'Sasti',records:[{id:1,assetId:'A',make:'VOLVO'},{id:2,assetId:'B',make:'SCANIA'},{id:3,assetId:'A',make:'VOLVO'}]},{region:'NCL',site:'Jayant',records:[{id:4,assetId:'C',make:'VOLVO'},{id:5,assetId:'D'}]}];
   const rows=oemDetailReportRows(sites,true);

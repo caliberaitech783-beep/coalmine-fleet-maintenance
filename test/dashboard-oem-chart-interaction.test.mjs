@@ -62,14 +62,8 @@ test("one bar per OEM drills into its exact rows while OEM dots only filter", ()
       assert.ok(selected.rows.every(row => row.oemKey === bar.key && row.equipmentGroupKey === segment.equipmentGroupKey && row.site === site.name));
     }
   }
-  for (const oem of chart.oems.filter(item => item.count)) {
-    selected = undefined;
-    const control = controls.find(button => button.props["aria-label"] === `Filter chart by ${oem.label}: ${oem.count} breakdown assets`);
-    assertTooltip(control, oem, oem.count, "Sites matching current filters");
-    click(control);
-    assert.equal(filtered, oem.key);
-    assert.equal(selected, undefined, "an OEM dot filters without opening the list");
-  }
+  assert.equal(controls.some(button => button.props.className === "mine-oem-all"), false);
+  assert.equal(descendants(tree, node => node.props?.className === "mine-oem-legend").length, 0);
   for (const category of chart.categories.filter(item => item.count)) {
     const control = controls.find(button => button.props["aria-label"] === `${category.label}: ${category.count} breakdown assets, view details`);
     assertTooltip(control, category, category.count, "Sites matching current filters");
@@ -77,11 +71,6 @@ test("one bar per OEM drills into its exact rows while OEM dots only filter", ()
     assert.equal(selected.rows.length, category.count);
     assert.ok(selected.rows.every(row => row.oemKey === category.oemKey && row.equipmentGroupKey === category.equipmentGroupKey));
   }
-  const filteredChart = makeChart({oem: chart.oems[0].key});
-  const filteredTree = Chart({chart: filteredChart, onSelect() {}, onFilterOem: value => { filtered = value; }});
-  const active = descendants(filteredTree, node => node.props["aria-pressed"] === true)[0];
-  click(active);
-  assert.equal(filtered, "all", "selecting the active OEM dot clears the OEM filter");
 });
 
 test("All total breakdown and View full list preserve the current OEM and site filters", () => {
@@ -90,7 +79,7 @@ test("All total breakdown and View full list preserve the current OEM and site f
     let payload, selected;
     const tree = Chart({chart, onSelect: selection => { payload = selection; selected = createOemBreakdownSelection(chart, selection); }});
     const fullList = descendants(tree, node => node.type === "button" && (node.props.className === "mine-oem-all" || textOf(node).startsWith("View full list")));
-    assert.equal(fullList.length, 2);
+    assert.equal(fullList.length, 1);
     for (const control of fullList) {
       click(control);
       assert.deepEqual(payload, {});
