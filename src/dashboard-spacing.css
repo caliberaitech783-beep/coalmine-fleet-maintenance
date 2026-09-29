@@ -1,4 +1,24 @@
 /* Dashboard-only density: retain readable text and all existing data/actions. */
+@media screen and (min-width: 1181px) and (hover: hover) and (pointer: fine) {
+  .mine-dashboard.mine-oem-view > .dashboard-filter-bar:not([data-collapsed="true"]) {
+    display: grid;
+    grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+    align-items: center;
+  }
+  .mine-dashboard.mine-oem-view > .dashboard-filter-bar .mine-head-actions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) auto auto;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    margin-top: 0;
+  }
+  .mine-dashboard.mine-oem-view > .dashboard-filter-bar .mine-head-actions :is(input, select) {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+}
 .mine-dashboard .bd-balance-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .mine-dashboard .mine-breakdown-movement-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .mine-dashboard .bd-balance-summary .idle { --bd-color: #d18c22; }
