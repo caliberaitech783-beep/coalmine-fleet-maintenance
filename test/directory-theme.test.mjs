@@ -19,6 +19,7 @@ test('directory dark palette is screen-only and uses the existing host preferenc
   const html=readFileSync(new URL('../public/cd/caliber-directory.html',import.meta.url),'utf8');
   assert.match(css,/@media screen/);
   assert.match(css,/--surface:/);
+  assert.match(css,/\[data-theme="dark"\] table\.roster tbody tr:is\(:hover, :focus-within\) td \{ background: var\(--panel\); \}/);
   assert.match(html,/directory-theme.js/);
   assert.match(html,/background:var\(--surface, #fff\)/);
 });

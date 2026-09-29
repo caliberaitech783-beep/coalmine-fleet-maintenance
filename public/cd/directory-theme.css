@@ -12,6 +12,8 @@
     --good: #7bddb0;
   }
   [data-theme="dark"] :is(input, select, textarea) { color: var(--ink); }
+  /* Roster hover paints each cell, not just the row behind it. */
+  [data-theme="dark"] table.roster tbody tr:is(:hover, :focus-within) td { background: var(--panel); }
   [data-theme="dark"] :is(.sr-item:hover, .sr-item.kb, table.roster tbody tr:hover, table.matrix td.cell:hover, table.matrix td.cat-label, tr.total-row td, .badge-cat) { background: var(--panel); }
   [data-theme="dark"] :is(.edits-note, .exp-tag) { background: #193b2c !important; color: #9ce6c0; border-color: #35664e; }
   [data-theme="dark"] :is(.alert-detail, .alert-banner, .chart-summary .cs-vacant) { background: #3b2e20; color: #f4d499; border-color: #79613b; }
