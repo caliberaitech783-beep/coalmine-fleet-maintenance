@@ -31,8 +31,8 @@
 
 /* One fixed report toolbar and summary, with the grouped records scrolling below. */
 .mine-oem-site-tables { display: flex; overflow: hidden; padding: 0; }
-.mine-oem-site-tables > .dashboard-record-browser { flex: 1; min-height: 0; min-width: 0; }
-.mine-oem-site-tables .dashboard-record-results { display: flex; flex-direction: column; min-height: 0; }
+.mine-oem-site-tables > .dashboard-record-browser { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.mine-oem-site-tables .dashboard-record-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .mine-oem-site-tables .dashboard-record-toolbar { flex: 0 0 auto; }
 .mine-oem-site-tables .dashboard-asset-list { flex: 1; min-height: 0; overflow: auto; }
 .site-report-summary { padding: 10px 16px 12px; border-bottom: 1px solid var(--line, #dde6f2); background: var(--panel, #fff); }
