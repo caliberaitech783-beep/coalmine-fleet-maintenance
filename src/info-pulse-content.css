@@ -20,8 +20,7 @@
 .pulse-updates-history[hidden] { display: none; }
 .pulse-updates-history h4 { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; color: #56318f; }
 .pulse-updates-history h4 span { color: #637089; font-size: 12px; font-weight: 400; }
-/* The shared daily-updates panel (daily-updates.css) in Info Pulse colours. Info Pulse stays light in
-   Night mode, so these rules outrank the panel's dark-theme colours. */
+/* Shared daily-updates panel in Info Pulse colours; dark overrides follow below. */
 .pulse-panel .pulse-updates-history .daily-remarks-panel { margin-top: 0; border-color: #e5def0; background: #faf7fe; color: #1e293b; }
 .pulse-panel .pulse-updates-history .daily-remarks-order { border-color: #e5def0; color: #637089; }
 .pulse-panel .pulse-updates-history .daily-remarks-order button { background: #fff; border-color: #d6c7ec; color: #56318f; }
@@ -163,6 +162,36 @@
 .pulse-date b { font-size: 14px; font-variant-numeric: tabular-nums; }
 .pulse-date span { font-size: 12px; color: #536179; }
 .pulse-missing { font-style: italic; color: #8b95a8; }
+
+/* Keep every Info Pulse surface and its text readable in the selected dark theme. */
+:root[data-theme="dark"] .pulse-panel { color-scheme: dark; background: #171219; color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel .pulse-content { background: #171219; color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-filter-panel, .pulse-kpi, .pulse-breakdown-row, .pulse-empty) { background: #261f2d; border-color: #594963; color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-kpi, .pulse-breakdown-row) { --kpi: #c4a4ff; --kpi-soft: #38274d; --tier-text: #c4a4ff; --tier-soft: #38274d; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-kpi, .pulse-breakdown-row).critical { --kpi: #ff91a5; --kpi-soft: #492432; --tier-text: #ff91a5; --tier-soft: #492432; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-kpi, .pulse-breakdown-row).warning { --kpi: #ffd17c; --kpi-soft: #43331e; --tier-text: #ffd17c; --tier-soft: #43331e; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-kpi, .pulse-breakdown-row).firstTripPending { --kpi: #7fe0ca; --kpi-soft: #183e38; --tier-text: #7fe0ca; --tier-soft: #183e38; }
+:root[data-theme="dark"] .pulse-panel .pulse-kpi.selected { background: var(--kpi-soft); border-color: var(--kpi); }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-vehicle, .pulse-row-reason p, .pulse-date b, .pulse-filter-summary b) { color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-lede, .pulse-updated, .pulse-kpi-hint, .pulse-results-line > span, .pulse-results-line h3 span, .pulse-row-equipment small, .pulse-date span, .pulse-row-timing dt, .pulse-message, .pulse-filter-summary > span:first-of-type, .pulse-filter-level-label, .pulse-filter-dates-label, .pulse-filter-dates label, .pulse-filter-caption) { color: #c0b5ce; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-site, .pulse-row-vehicle svg, .pulse-lede b, .pulse-results-line h3, .pulse-updates-history h4) { color: #c4a4ff; }
+:root[data-theme="dark"] .pulse-panel .pulse-filter-panel { --record-purple: #a77bea; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-region-tabs button, .pulse-filter-chips > button, .pulse-period button) { color: #e6d9f7; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-refresh, .pulse-updates-button, .pulse-filter-dates input) { background: #382b43; color: #e6d9f7; border-color: #695277; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-updates-button:hover, .pulse-updates-button[aria-expanded="true"], .pulse-refresh:hover:not(:disabled)) { background: #4b365e; }
+:root[data-theme="dark"] .pulse-panel .pulse-row-timing > div { background: #332a3d; color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-timing .standing, .pulse-row-status i.pulse-tier-tag) { background: var(--tier-soft); color: var(--tier-text); }
+:root[data-theme="dark"] .pulse-panel .pulse-row-status i { background: #3c3347; color: #e8dff2; }
+:root[data-theme="dark"] .pulse-panel .pulse-row-timing .overdue { background: #492432; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-timing .overdue dt, .pulse-row-timing .overdue em) { color: #ff91a5; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-delay, .pulse-row-timing .due) { background: #43331e; }
+:root[data-theme="dark"] .pulse-panel :is(.pulse-row-delay span, .pulse-row-delay p, .pulse-row-delay time, .pulse-row-timing .due dt, .pulse-row-timing em) { color: #ffd993; }
+:root[data-theme="dark"] .pulse-panel .pulse-standing-bar { background: #615269; }
+:root[data-theme="dark"] .pulse-panel .pulse-updates-history :is(.daily-remarks-panel, .daily-remarks-panel .daily-remarks-list article, .daily-remarks-order button) { background: #2e2537; color: #f2edf7; border-color: #594963; }
+:root[data-theme="dark"] .pulse-panel .pulse-updates-history .daily-remarks-panel .daily-remarks-list article :is(b, p) { color: #f2edf7; }
+:root[data-theme="dark"] .pulse-panel .pulse-updates-history :is(.daily-remarks-order, .daily-remarks-more, h4 span, .daily-remarks-panel .daily-remarks-list article small, .daily-remarks-panel .daily-remarks-list article header span) { color: #c0b5ce; border-color: #594963; }
+:root[data-theme="dark"] .pulse-panel .pulse-updates-history .daily-remarks-panel .daily-remarks-list article header i { background: #38274d; color: #c4a4ff; }
+:root[data-theme="dark"] .pulse-panel .pulse-message.pulse-error { background: #492432; color: #ffb1c0; border-color: #885064; }
 .pulse-load-more { display: block; min-height: 42px; margin: 4px auto 0; padding: 9px 18px; border: 1px solid #cfc5df; border-radius: 9px; background: #fff; color: var(--record-purple); font: 700 12px Manrope, sans-serif; }
 
 @media (min-width: 651px) and (max-height: 800px) {
