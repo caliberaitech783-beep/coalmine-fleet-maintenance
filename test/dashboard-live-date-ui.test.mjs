@@ -398,7 +398,6 @@ test("OEM full-list and numeric count actions preserve shared filters and open t
     [tree => button(renderOemChart(tree), "View full list 2"), false, true],
     [tree => byClass(renderOemChart(tree), "mine-oem-all"), false, true],
     [tree => fleetCount(tree, "OEM BD"), false, false],
-    [tree => fleetCount(tree, "Breakdown"), false, false],
     [tree => fleetCount(tree, "Total"), true, false],
     [tree => byLabel(renderOemChart(tree), "Sasti OB: 2 breakdown assets, view details"), false, true],
   ];
