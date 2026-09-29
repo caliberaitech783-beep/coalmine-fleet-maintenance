@@ -48,6 +48,7 @@
    Info Pulse overlay (z-index 10000 in ai-feeder.css). */
 .pulse-export svg:first-child { width: 16px; height: 16px; }
 .export-menu-popover.pulse-export-layer, .caliber-activity-overlay.pulse-export-layer { z-index: 10001; }
+.overlay.pulse-timeline-overlay { z-index: 10002; }
 .pulse-content button:disabled { cursor: default; opacity: .65; }
 .pulse-message { margin: 0; padding: 28px 16px; text-align: center; color: #536179; }
 .pulse-message.pulse-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; border: 1px solid #f3c1cb; border-radius: 10px; background: #fff1f3; color: #8e1d33; }

@@ -9255,6 +9255,11 @@ Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } 
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
+function InfoPulseTimelineModal({ overlayClassName = "", ...props }) {
+  // Escape animated pulse rows so the lifecycle is neither clipped nor covered by sibling cards.
+  return createPortal(<Modal {...props} overlayClassName={`${overlayClassName} pulse-timeline-overlay`} />, document.body);
+}
+
 function Modal({ title, close, children, className = "", overlayClassName = "", topBar = null, headerActions = null }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(close);
@@ -10284,7 +10289,7 @@ function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null,
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} renderRequestReference={(reference) => <RequestTimelineButton reference={reference} token={session?.token} Dialog={Modal} />} />
+      <InfoPulseContent breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} renderRequestReference={(reference) => <RequestTimelineButton reference={reference} token={session?.token} Dialog={InfoPulseTimelineModal} />} />
     </div>
   </div>, document.body);
 }
