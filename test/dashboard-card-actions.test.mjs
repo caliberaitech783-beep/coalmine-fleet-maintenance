@@ -35,13 +35,25 @@ test("keyboard activation stays on the focused card and loading cards do not ope
   assert.deepEqual(opened, ["all", "all"]);
 });
 
-test("chart column whitespace opens the full list while its bar opens the chosen day", () => {
+test("chart column whitespace is inert while its bar opens the chosen day", () => {
   const opened = [], surface = { contains: () => true };
   const action = dashboardListTrigger((key) => opened.push(key), "trend:actual:2026-09-04", "Selected day", true, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
   const event = (onBar) => ({ currentTarget: surface, target: { closest: (selector) => selector === "i, b, small" ? (onBar ? {} : null) : surface }, stopPropagation() {} });
   action.onClick(event(false));
   action.onClick(event(true));
-  assert.deepEqual(opened, ["trend:all", "trend:actual:2026-09-04"]);
+  assert.deepEqual(opened, ["trend:actual:2026-09-04"]);
+});
+
+test("section and empty grid space are inert but headings retain full-list access", () => {
+  const opened = [], surface = { contains: () => true }, heading = {};
+  const action = dashboardListTrigger(key => opened.push(key), "all", "Full list", true, "group");
+  const event = onHeading => ({ currentTarget: surface, target: { closest: selector => selector === "[data-dashboard-list]" ? surface : selector === "h2, h3, header b, [role='heading']" && onHeading ? heading : null }, stopPropagation() {} });
+  action.onClick(event(false));
+  assert.deepEqual(opened, []);
+  action.onClick(event(true));
+  assert.deepEqual(opened, ["all"]);
+  action.onKeyDown({ key: "Enter", target: surface, currentTarget: surface, preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(opened, ["all", "all"]);
 });
 
 const records = [

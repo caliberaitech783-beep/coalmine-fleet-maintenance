@@ -1082,6 +1082,10 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-panel { border-radius: 6px; }
 .mine-dashboard [data-dashboard-list][tabindex="0"],
 .dashboard-breakdown-movement-modal [data-dashboard-list][tabindex="0"] { cursor: pointer; }
+.mine-dashboard [data-dashboard-list][role="group"],
+.dashboard-breakdown-movement-modal [data-dashboard-list][role="group"] { cursor: default; }
+.mine-dashboard [data-dashboard-list][role="group"][tabindex="0"] :is(h2, h3, header b, [role="heading"]),
+.dashboard-breakdown-movement-modal [data-dashboard-list][role="group"][tabindex="0"] :is(h2, h3, header b, [role="heading"]) { cursor: pointer; }
 .mine-dashboard [data-dashboard-list]:focus-visible,
 .dashboard-breakdown-movement-modal [data-dashboard-list]:focus-visible { outline: 2px solid var(--brand-purple, #522e90); outline-offset: -3px; }
 .mine-panel > header {

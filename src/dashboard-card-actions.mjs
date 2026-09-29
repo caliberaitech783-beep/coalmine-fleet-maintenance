@@ -2,8 +2,8 @@ import { matchesBreakdownMovement, normalizedBreakdownType } from "../dashboard-
 
 const controls = 'button, a, input, select, textarea, label, summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [contenteditable="true"]';
 
-// A card's background opens its full list; its controls and nested selections
-// keep their own action, including when SVG/text inside a control is clicked.
+// Section headings open full lists; blank panel/grid space is not an action.
+// Individual cards and nested controls retain their own pointer/keyboard actions.
 export function dashboardListTrigger(open, key, label, enabled = true, role = "button", hit = null) {
   const activate = (event) => {
     if (!enabled || event.defaultPrevented) return;
@@ -12,8 +12,13 @@ export function dashboardListTrigger(open, key, label, enabled = true, role = "b
     if (target.closest("[data-dashboard-list]") !== surface) return;
     const control = target.closest(controls);
     if (control && control !== surface && surface.contains(control)) return;
+    if (role === "group") {
+      const heading = target.closest("h2, h3, header b, [role='heading']");
+      if (!heading || !surface.contains(heading)) return;
+    }
+    if (hit && !target.closest(hit.selector)) return;
     event.stopPropagation();
-    open(hit && !target.closest(hit.selector) ? hit.backgroundKey : key);
+    open(key);
   };
   return {
     "data-dashboard-list": key,
