@@ -1633,6 +1633,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
+  const [oemView, setOemView] = useState("chart");
   const [oemDrilldownCategory, setOemDrilldownCategory] = useState({});
   const [oemToolbarTarget, setOemToolbarTarget] = useState(null);
   const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
@@ -1928,6 +1929,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownCategory({}); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
   // Derive the open list from the current filters and data on every render.
   const oemSelection = createOemBreakdownSelection(oemChart, oemDrilldownCategory);
+  const oemSiteDetailSelection = {
+    ...createOemBreakdownSelection(oemChart),
+    site: dashboardSite !== "all" ? dashboardSite : "",
+    periodLabel: oemLive ? "Current breakdowns" : filteredDateLabel,
+  };
   const oemDrilldown = oemDrilldownKind ? {
     ...oemSelection,
     site: dashboardSite !== "all" ? dashboardSite : "",
@@ -2334,7 +2340,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
             <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}{equipmentLoaded && <ExportMenu {...fleetSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
-          {equipmentLoaded ? (showOemBreakdowns ? <OemBreakdownChart chart={oemChart} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onFilterOem={filterOemChart} onReset={resetOemFilters} /> : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
+          {showOemBreakdowns && <div className="mine-oem-view-tabs" role="group" aria-label="OEM BD report view">{[["chart", "Chart"], ["details", "Site-wise detailing"]].map(([view, label]) => <button type="button" key={view} aria-pressed={oemView === view} onClick={() => setOemView(view)}>{label}</button>)}</div>}
+          {equipmentLoaded ? (showOemBreakdowns ? (oemView === "details" ? <section className="mine-oem-inline-details" aria-label="Site-wise OEM breakdown detailing"><OemBreakdownDetails key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, dashboardShift].join("|")} selection={oemSiteDetailSelection} title={`OEM BD · Site-wise detailing · ${oemSiteDetailSelection.label}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} /></section> : <OemBreakdownChart chart={oemChart} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onFilterOem={filterOemChart} onReset={resetOemFilters} />) : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${fleetBarHeightPercent(tick, fleetChartAxisMax)}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
                 <div className="mine-fleet-chart-sites">{region.sites.map((site) => <div className="mine-fleet-site-entry" key={site.name}>

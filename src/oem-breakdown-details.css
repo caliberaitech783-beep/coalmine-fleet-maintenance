@@ -1,3 +1,10 @@
+.mine-oem-view-tabs { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.mine-oem-view-tabs button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-weight: 700; }
+.mine-oem-view-tabs button[aria-pressed="true"] { background: var(--brand-purple, #522e90); color: #fff; }
+.mine-oem-inline-details { height: min(760px, 75vh); min-height: 420px; display: flex; flex-direction: column; overflow: hidden; }
+.mine-oem-inline-details > .mine-oem-details { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mine-oem-inline-details .mine-oem-detail-search { flex-wrap: wrap; }
+.mine-oem-inline-details .mine-oem-inline-search { flex: 1 1 260px; min-width: 0; }
 .mine-oem-site-tables { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 12px; background: var(--bg, #f7f8fc); }
 .mine-oem-site-section { margin-bottom: 18px; border: 1px solid var(--line, #dde6f2); border-radius: 10px; background: var(--panel, #fff); overflow: hidden; }
 .mine-oem-site-section:last-child { margin-bottom: 0; }
