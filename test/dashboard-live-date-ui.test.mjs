@@ -334,16 +334,16 @@ test("OEM equipment-category sections and site totals open the matching breakdow
   }
 });
 
-test("OEM dots filter the chart without opening the detail list", () => {
+test("OEM header filters the chart without opening the detail list", () => {
   const view = harness(oemHarnessOptions);
   let tree = view.render(oemRequests);
-  clickOem(byLabel(renderOemChart(tree), "Filter chart by Volvo: 3 breakdown assets"));
+  byLabel(tree, "OEM").props.onChange({target: {value: "volvo"}});
   tree = view.render(oemRequests);
   assertOemFilters(tree, {region: "all", site: "all", oem: "volvo"});
   assert.equal(oemDetails(tree), undefined);
   assert.equal(oemChart(tree).props.chart.rows.length, 3);
   assert.equal(text(fleetCount(tree, "OEM BD")), "3");
-  clickOem(byLabel(renderOemChart(tree), "Filter chart by Volvo: 3 breakdown assets"));
+  byLabel(tree, "OEM").props.onChange({target: {value: "all"}});
   tree = view.render(oemRequests);
   assertOemFilters(tree, {region: "all", site: "all", oem: "all"});
   assert.equal(oemDetails(tree), undefined);
@@ -396,7 +396,6 @@ test("an open OEM list follows refreshed requests and shared OEM, site, region a
 test("OEM full-list and numeric count actions preserve shared filters and open the displayed assets", () => {
   const controls = [
     [tree => button(renderOemChart(tree), "View full list 2"), false, true],
-    [tree => byClass(renderOemChart(tree), "mine-oem-all"), false, true],
     [tree => fleetCount(tree, "OEM BD"), false, false],
     [tree => fleetCount(tree, "Total"), true, false],
     [tree => byLabel(renderOemChart(tree), "Sasti OB: 2 breakdown assets, view details"), false, true],
