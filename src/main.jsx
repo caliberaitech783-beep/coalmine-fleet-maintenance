@@ -2319,7 +2319,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Total Fleet"}</h2>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <div key={mode} className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
+                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Breakdown minus OEM BD"><span>BD Balance</span><strong className="mine-fleet-toggle-count">{equipmentLoaded ? ((showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount) - oemChart.rows.length).toLocaleString() : "—"}</strong></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
                   <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => setFleetChartMode(mode)}>{label}</button>
                   <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount)} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); openOemDrilldown(); }
@@ -2328,7 +2328,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                     else openBreakdownList();
                   }}>{equipmentLoaded ? (mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount)).toLocaleString() : "—"}</button>
                   {mode === "breakdown" && !showOemBreakdowns && breakdownCountReady && <i key={`${breakdownCountChange.day}:${breakdownCountChange.delta}`} className={`mine-fleet-count-trend ${breakdownCountChange.direction}`} title={`Change since ${breakdownCountChange.day} 12:00 AM IST across all assigned sites (opening count ${breakdownCountChange.open.toLocaleString()})`}>{breakdownCountChange.direction === "up" ? <ArrowUp aria-hidden="true" /> : breakdownCountChange.direction === "down" ? <ArrowDown aria-hidden="true" /> : null}<span>{formatCountDelta(breakdownCountChange.delta)}</span></i>}
-                </div>)}
+                </div></React.Fragment>)}
 
               </div>
             </div>

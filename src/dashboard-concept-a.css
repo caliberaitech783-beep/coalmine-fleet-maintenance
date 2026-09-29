@@ -1240,6 +1240,9 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard-core > .mine-fleet-command { grid-column: auto; align-self: stretch; display: flex; flex-direction: column; }
 .mine-dashboard-core > .mine-fleet-command > .mine-fleet-command-body { flex: 1; }
 .mine-fleet-command-actions { display: flex; align-items: center; gap: 8px; }
+.mine-fleet-chart-toggle .mine-bd-balance { display: inline-flex; align-items: center; gap: 6px; padding: 6px; }
+.mine-fleet-chart-toggle .mine-bd-balance > span { font-weight: 800; white-space: nowrap; }
+.mine-fleet-chart-toggle .mine-bd-balance > strong { padding: 6px 9px; border-radius: 6px; background: #522e9014; font-variant-numeric: tabular-nums; }
 .mine-fleet-command-head .mine-view-full-fleet {
   min-height: 30px;
   padding: 6px 9px !important;
