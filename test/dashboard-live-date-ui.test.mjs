@@ -14,6 +14,7 @@ import { encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
 import * as oemBreakdown from "../src/oem-breakdown-model.mjs";
+import {filterOemDelayedRows} from "../src/oem-delay-filter.mjs";
 import * as oemFilters from "../src/oem-dashboard-filters.mjs";
 import {equipmentGroupValue, normalizeEquipmentGroup} from "../equipment-group.mjs";
 import {dashboardCountScale} from "../src/dashboard-count-scale.mjs";
@@ -211,7 +212,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
-    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport,
+    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
     availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
@@ -275,9 +276,9 @@ const oemEquipment = [
   ["Jayant OB", "Tata"], ["Jayant OB", "Volvo"], ["Sasti OB", "Tata"], ["Sasti OB", "Tata"],
 ].map(([currentLocation, make], index) => Object.freeze({...assets[0], id: index + 1, door: `V${index + 1}`, chassisNo: `C${index + 1}`, currentLocation, make}));
 const oemRequests = [...oemEquipment.slice(0, 5).map(asset => Object.freeze({
-  ref: `BD-${asset.id}`, door: asset.door, chassis: asset.chassisNo, site: asset.currentLocation,
+  ref: `BD-${asset.id}`, door: asset.door, chassis: asset.chassisNo, site: asset.currentLocation, delayedReason: "Parts OEM",
   category: "Breakdown", status: "Open", start: "2026-09-01 09:00:00",
-})), Object.freeze({ref: "HISTORICAL", door: "V7", chassis: "C7", site: "Sasti OB", category: "Breakdown", status: "Closed", start: "2026-09-08 09:00:00", closedAt: "2026-09-09 12:00:00"})];
+})), Object.freeze({ref: "HISTORICAL", delayedReason: "Parts OEM", door: "V7", chassis: "C7", site: "Sasti OB", category: "Breakdown", status: "Closed", start: "2026-09-08 09:00:00", closedAt: "2026-09-09 12:00:00"})];
 const oemHarnessOptions = {equipment: oemEquipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false, initialMode: "oem"};
 
 test("dashboard opens in Breakdown by default", () => {

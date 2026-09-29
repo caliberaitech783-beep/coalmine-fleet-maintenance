@@ -51,6 +51,7 @@ import OemBreakdownDetails from "./oem-breakdown-details.jsx";
 import DashboardFilterBar from "./dashboard-filter-bar.jsx";
 import { oemFiltersForSelection, oemRowsForLocation } from "./oem-dashboard-filters.mjs";
 import { buildOemBreakdownRows, buildOemBreakdownChart, createOemBreakdownSelection, oemLabel } from "./oem-breakdown-model.mjs";
+import { filterOemDelayedRows } from "./oem-delay-filter.mjs";
 import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
@@ -1903,7 +1904,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const oemLive = !dashboardRangeActive || (dashboardFrom === todayKey && dashboardTo === todayKey);
   const oemFrom = oemLive ? "" : dashboardFrom;
   const oemTo = oemLive ? "" : dashboardTo;
-  const oemBreakdownRows = buildOemBreakdownRows({ equipment: scopedEquipment, requests: scopedBreakdowns, from: oemFrom, to: oemTo });
+  const oemBreakdownRows = filterOemDelayedRows(buildOemBreakdownRows({ equipment: scopedEquipment, requests: scopedBreakdowns, from: oemFrom, to: oemTo }), Boolean(oemFrom || oemTo));
   const oemLocationRows = oemRowsForLocation(oemBreakdownRows, dashboardRegion, dashboardSite, availableRegions);
   const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: scopedEquipment, regions: fleetRegionInsights, oem: dashboardOem });
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
@@ -2122,10 +2123,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         && categories.includes(String(record.category || "").trim().toLowerCase()));
     }
     if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
-      const accountWide = key === "fleet-breakdown:account";
+      const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance";
       const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
       const [offroadSite, offroadCategory = ""] = key.startsWith("offroad-site:") ? key.slice(13).split("|") : ["", ""];
       return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
+        && (key !== "fleet-breakdown:balance" || !oemChart.rows.some(row => row.record === record))
         && (!offroadSite || recordBelongsToSite(record, offroadSite))
         && (!key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
@@ -2191,7 +2193,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
   const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
-  const fleetDrilldownRequests = (key = "") => key === "fleet-breakdown:account" ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
+  const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
   const assetDrilldownRegions = availableRegions.map((region) => ({
@@ -2325,7 +2327,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Total Fleet"}</h2>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Breakdown minus OEM BD"><span>BD Balance</span><strong className="mine-fleet-toggle-count">{equipmentLoaded ? ((showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount) - oemChart.rows.length).toLocaleString() : "—"}</strong></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
+                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Breakdown minus OEM BD"><button type="button" disabled={!equipmentLoaded} onClick={() => openAssetDrilldown("fleet-breakdown:balance")}>BD Balance</button><button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label="View BD Balance list" onClick={() => openAssetDrilldown("fleet-breakdown:balance")}>{equipmentLoaded ? (accountBreakdownCount - oemChart.rows.length).toLocaleString() : "—"}</button></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
                   <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => setFleetChartMode(mode)}>{label}</button>
                   <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount)} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); openOemDrilldown(); }
