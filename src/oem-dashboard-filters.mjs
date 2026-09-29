@@ -35,3 +35,10 @@ export function groupOemRecordsBySite(records, regions) {
   }
   return groups.filter(group => group.records.length);
 }
+// Composite labels reuse the same grouping for screen, print and export.
+export function oemDetailReportRows(siteGroups, oemWise = false) {
+  return siteGroups.flatMap(site => site.records.map(record => ({
+    ...record,
+    reportSite: `${site.region} · ${site.site}${oemWise ? ` — ${String(record.make || '').trim() || 'OEM not specified'}` : ''}`,
+  })));
+}
