@@ -1811,6 +1811,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       ...(dashboardShift === "all"
         ? breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)
         : breakdownMovementForRangeForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)),
+      idle: movementRequestRowsForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length,
     };
   });
   // Match the linked request list, including authorized historical/unassigned sites.
@@ -2384,7 +2385,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                   const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
                   const roadAvailability = availabilityPercentFromCounts(road);
                   return <button type="button" role="row" key={site.site} className="mine-breakdown-site-row" onClick={() => { setBreakdownDetailSite(site.site); setBreakdownDetailDays(5); setBreakdownDetailFrom(breakdownSummaryStartKey || throughputRequests.filter((record) => recordBelongsToSite(record, site.site)).map(breakdownOpenedDate).filter(Boolean).reduce((earliest, date) => date < earliest ? date : earliest, todayKey)); setBreakdownDetailTo(breakdownSummaryEndKey || todayKey); }} aria-label={`${site.site}: ${site.open} open, ${site.incoming} in, ${site.outgoing} out, ${site.balance} balance; ${roadAvailability}% availability count with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle. Open linked day-wise details.`}>
-                    <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric open"><b>{site.open}</b></span><span className="metric incoming"><b>+{site.incoming}</b></span><span className="metric outgoing"><b>-{site.outgoing}</b></span><span className="metric balance"><b>{site.balance}</b></span><span className="metric idle"><b>{road.idle}</b></span>
+                    <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric open"><b>{site.open}</b></span><span className="metric incoming"><b>+{site.incoming}</b></span><span className="metric outgoing"><b>-{site.outgoing}</b></span><span className="metric balance"><b>{site.balance}</b></span><span className="metric idle"><b>{site.idle}</b></span>
                     <span className="mine-breakdown-road-impact"><span><b>{roadAvailability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span><em>Availability count <ChevronRight /></em></span><ChevronRight />
                   </button>;
                 }) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}
@@ -2393,14 +2394,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 // Column sums of the site rows above, so the total always matches what is shown.
                 const total = breakdownSiteSummary.reduce((sum, site) => {
                   const road = roadAvailabilityBySiteName.get(site.site);
-                  sum.open += site.open; sum.incoming += site.incoming; sum.outgoing += site.outgoing; sum.balance += site.balance;
+                  sum.open += site.open; sum.incoming += site.incoming; sum.outgoing += site.outgoing; sum.balance += site.balance; sum.idle += site.idle;
                   if (road) { sum.road.total += road.total; sum.road.onRoad += road.onRoad; sum.road.offRoad += road.offRoad; sum.road.idle += road.idle; }
                   return sum;
-                }, { open: 0, incoming: 0, outgoing: 0, balance: 0, road: { total: 0, onRoad: 0, offRoad: 0, idle: 0 } });
+                }, { open: 0, incoming: 0, outgoing: 0, balance: 0, idle: 0, road: { total: 0, onRoad: 0, offRoad: 0, idle: 0 } });
                 const road = total.road;
                 const roadAvailability = availabilityPercentFromCounts(road);
                 return <div role="row" className="mine-breakdown-site-row mine-breakdown-site-total" aria-label={`Total: ${total.open} open, ${total.incoming} in, ${total.outgoing} out, ${total.balance} balance; ${roadAvailability}% availability count with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle.`}>
-                  <span className="site"><b>Total :</b></span><span className="metric open"><b>{total.open.toLocaleString()}</b></span><span className="metric incoming"><b>+{total.incoming.toLocaleString()}</b></span><span className="metric outgoing"><b>-{total.outgoing.toLocaleString()}</b></span><span className="metric balance"><b>{total.balance.toLocaleString()}</b></span><span className="metric idle"><b>{road.idle.toLocaleString()}</b></span>
+                  <span className="site"><b>Total :</b></span><span className="metric open"><b>{total.open.toLocaleString()}</b></span><span className="metric incoming"><b>+{total.incoming.toLocaleString()}</b></span><span className="metric outgoing"><b>-{total.outgoing.toLocaleString()}</b></span><span className="metric balance"><b>{total.balance.toLocaleString()}</b></span><span className="metric idle"><b>{total.idle.toLocaleString()}</b></span>
                   <span className="mine-breakdown-road-impact"><span><b>{roadAvailability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span></span><span aria-hidden="true" />
                 </div>;
               })()}

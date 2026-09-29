@@ -100,7 +100,7 @@ test('Daily BD balance exports each day and, over several days, the selected-per
 test('Tracking Vehicle Throughput exports the open tab: site movement with availability, totals, summary cards and BD type mix, or the availability count', () => {
   const common = {place: 'WCL', period: '19-09-2026 to 19-09-2026', availabilityLabel: 'Availability: live · 19-09-2026', availabilityTotals: {total: 12, onRoad: 9, offRoad: 2, idle: 1, availability: 75}};
   const movement = throughputSectionExport({...common, tab: 'breakdown',
-    sites: [{site: 'Sasti OB', open: 2, incoming: 1, outgoing: 1, balance: 2}, {site: 'Majri OB', open: 0, incoming: 0, outgoing: 0, balance: 0}],
+    sites: [{site: 'Sasti OB', open: 2, incoming: 1, outgoing: 1, balance: 2, idle: 1}, {site: 'Majri OB', open: 0, incoming: 0, outgoing: 0, balance: 0, idle: 0}],
     roadBySite: new Map([['Sasti OB', {total: 10, onRoad: 7, offRoad: 2, idle: 1, availability: 70}]]),
     movementTotals: {open: 2, incoming: 1, outgoing: 1, balance: 2}, openBalance: 1, idleRequests: 1,
     typeMix: [{label: 'Mechanical', count: 1, percentage: 50}, {label: 'Electrical', count: 1, percentage: 50}]});
