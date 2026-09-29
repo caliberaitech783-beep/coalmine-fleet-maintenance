@@ -1811,6 +1811,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       ...(dashboardShift === "all"
         ? breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)
         : breakdownMovementForRangeForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey)),
+      // Movement idle counts follow the selected idle dates, independently of live availability.
       idle: movementRequestRowsForShift(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length,
     };
   });
