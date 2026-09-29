@@ -54,5 +54,8 @@ export function requestsVisibleToSession(rows = [], session = {}) {
 
 export function requestsVisibleToMisWorkspace(rows = [], isMisWorkspace = false) {
   if (!isMisWorkspace) return rows;
-  return rows.filter((row) => !MIS_HIDDEN_REQUEST_REFERENCES.has(String(row?.ref || row?.reference || "").trim().toUpperCase()));
+  // Pending work must not disappear because its reference was historically hidden.
+  // Session permissions, site scope and global retirement still apply upstream.
+  return rows.filter((row) => (String(row?.status || '').trim().toLowerCase() === 'closed' && !String(row?.verifiedAt || '').trim())
+    || !MIS_HIDDEN_REQUEST_REFERENCES.has(String(row?.ref || row?.reference || "").trim().toUpperCase()));
 }

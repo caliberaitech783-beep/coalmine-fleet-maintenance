@@ -26,7 +26,7 @@ import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validateClosingMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
@@ -5757,7 +5757,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestTimelineProjection=`vehicle_idle AS "vehicleIdle",id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+const requestTimelineProjection=`meter_type AS "meterType",opening_meter_reading AS "openingMeterReading",closing_meter_reading AS "closingMeterReading",opening_meter_readings AS "openingMeterReadings",closing_meter_readings AS "closingMeterReadings",vehicle_idle AS "vehicleIdle",id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
 
 const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
   original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
@@ -6505,6 +6505,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
     if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
     if(closingMeterReading&&!validMeterReading(closingMeterReading))throw Object.assign(new Error('Enter a valid closing HMR/KMR reading.'),{status:400});
+    validateClosingMeterReadings(before,{meterType,openingMeterReadings,openingMeterReading,closingMeterReadings,closingMeterReading});
     if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.'),{status:400});
     if(openingMeterReading||openingMeterFile||closingMeterReading||closingMeterFile||Object.keys(openingMeterReadings).length||Object.keys(closingMeterReadings).length){
       const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
@@ -6814,6 +6815,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
+    validateClosingMeterReadings(before,{meterType:primaryMeterType,closingMeterReadings,closingMeterReading});
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
       RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading}),firstTripRemark]);

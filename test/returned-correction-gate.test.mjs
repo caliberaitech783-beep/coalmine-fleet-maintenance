@@ -41,7 +41,7 @@ test('gate is mounted for both workspaces and fetches owner-only durable records
 test('Admin sees Revert only for an application error and Reject only while approved',async()=>{
   const source=readFileSync(new URL('../src/request-corrections.jsx',import.meta.url),'utf8');
   const {code}=await transformWithOxc(source.replace(/^import .*;\r?\n/gm,'').replaceAll('export default function','function').replaceAll('export function','function'),'corrections.jsx',{jsx:{runtime:'classic'}});
-  const bindings={React,useState:React.useState,...policy,...Object.fromEntries(Object.entries(icons).filter(([key])=>key!=='default')),RequestTimelineButton:()=>null};
+  const bindings={React,useState:React.useState,...policy,...Object.fromEntries(Object.entries(icons).filter(([key])=>key!=='default' && /^[A-Za-z_$][\w$]*$/.test(key))),RequestTimelineButton:()=>null};
   const Card=new Function(...Object.keys(bindings),code+';return CorrectionCard;')(...Object.values(bindings));
   const record={id:7,status:policy.REQUEST_CORRECTION_STATUS.APPROVED,correctionType:'maintenance',originalValues:{},proposedChanges:{},requestedByName:'Original Requester'};
   const render=(changes={},capabilities={canApply:true})=>renderToStaticMarkup(React.createElement(Card,{record:{...record,...changes},capabilities,token:'fixture',onChanged:async()=>{}}));

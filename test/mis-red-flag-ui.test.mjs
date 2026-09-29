@@ -320,7 +320,7 @@ test('a server arrival-reason gate keeps the existing edit form mounted beneath 
 test('crossing one hour while editing blocks acceptance and retains draft fields and evidence for retry',async(t)=>{
   let now=new Date('2026-09-08T10:59:00+05:30').getTime();
   t.mock.method(Date,'now',()=>now);
-  const row={...request,status:'Open',acceptanceRequired:true};
+  const row={...request,status:'Open',acceptanceRequired:true,category:'Breakdown'};
   const app=harness(),saves=[],flags=[];
   const props={request:row,close:()=>{},onSave:payload=>saves.push(payload),onRequireArrivalFlag:value=>flags.push(value)};
   assert.equal(requestAcceptance.arrivalRedFlagRequired(row),false);

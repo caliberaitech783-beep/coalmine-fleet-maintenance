@@ -29,6 +29,34 @@ export function validMeterReadings(value = {}) {
       && typeof reading === "string" && (reading === "" || validMeterReading(reading)));
 }
 
+// Compare like-for-like counters. Never guess a swap or rewrite historical data.
+export function validateClosingMeterReadings(before = {}, update = {}) {
+  const primary = String(before.meterType || update.meterType || '').trim().toUpperCase();
+  const readings = (stage) => {
+    const result = {...before[`${stage}MeterReadings`]};
+    const legacy = before[`${stage}MeterReading`];
+    if (['HMR', 'KMR'].includes(primary) && result[primary] == null && String(legacy ?? '').trim()) result[primary] = String(legacy);
+    for (const [type, value] of Object.entries(update[`${stage}MeterReadings`] || {})) {
+      if (String(value ?? '').trim()) result[type] = value;
+    }
+    const scalar = String(update[`${stage}MeterReading`] ?? '').trim();
+    if (scalar && ['HMR', 'KMR'].includes(primary)) {
+      const explicit = update[`${stage}MeterReadings`]?.[primary];
+      if (String(explicit ?? '').trim() && Number(explicit) !== Number(scalar)) {
+        throw Object.assign(new Error(`Conflicting ${stage} ${primary} readings. Check the HMR and KMR fields.`), {status: 400});
+      }
+      result[primary] = scalar;
+    }
+    return result;
+  };
+  const opening = readings('opening'), closing = readings('closing');
+  for (const type of ['HMR', 'KMR']) {
+    if (validMeterReading(opening[type]) && validMeterReading(closing[type]) && Number(closing[type]) < Number(opening[type])) {
+      throw Object.assign(new Error(`Closing ${type} cannot be lower than opening ${type} (${opening[type]}). Check the readings; for a replaced or reset meter, contact your administrator.`), {status: 400});
+    }
+  }
+}
+
 export function validRequestAudioDataUrl(value = "") {
   if (!value) return true;
   const match = String(value).match(/^data:audio\/(?:webm|ogg|mp4|mpeg|wav);base64,([A-Za-z0-9+/]+={0,2})$/);

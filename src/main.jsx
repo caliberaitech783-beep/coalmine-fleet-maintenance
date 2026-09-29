@@ -7654,7 +7654,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             <button type="button" onClick={() => { setBreakdownMonth(indiaDateTimeInputValue(new Date()).slice(0, 7)); setBreakdownRegion("all"); setBreakdownSite(""); setBreakdownOccurrencesTarget(null); }}><RotateCcw /> Reset</button>
             <p><b>{maximumVehicleBreakdownRows.length}</b> vehicle{maximumVehicleBreakdownRows.length === 1 ? "" : "s"} with breakdowns in this selection</p>
           </div> : null}
-          rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
+          rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.id || row.chassis || row.chassisNo || row.manufacturerSerialNo || row.door || "row"}-${index}`)}
           rowClassName={selectedReport.rowClassName}
         />
       )}

@@ -37,7 +37,7 @@ test("persisted historical references follow the explicit MIS exclusions", () =>
     assert.ok(historyVisible.every(visible => visible(row)));
     assert.equal(visibleInMisRequests(row), true);
   }
-  assert.deepEqual(requestsVisibleToMisWorkspace([{ref:"REQ-1787759984730",status:"Closed"}],true),[]);
+  assert.deepEqual(requestsVisibleToMisWorkspace([{ref:"REQ-1787759984730",status:"Closed"}],true),[{ref:"REQ-1787759984730",status:"Closed"}]);
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /const requestRows=useMemo\(\(\)=>siteRequests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\),\[siteRequests,equipmentRecords\]\);/);
   assert.doesNotMatch(source, /visibleInOperationalUserRequests/);

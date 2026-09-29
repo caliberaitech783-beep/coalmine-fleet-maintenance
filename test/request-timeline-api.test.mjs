@@ -6,7 +6,7 @@ import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import * as timeline from '../request-timeline.mjs';
-import {validMeterReadings} from '../request-workflow.mjs';
+import {validMeterReadings,validateClosingMeterReadings} from '../request-workflow.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
 import {approvedDelayedReason} from '../delayed-reason.mjs';
@@ -77,7 +77,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
-    validMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
+    validMeterReadings,validateClosingMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,approvedDelayedReason,
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
     requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',workflowRequestLink:()=>'',publicBaseUrl:()=>'',console:{error(){}},
@@ -157,6 +157,19 @@ test('closing before acceptance, future close and impossible calendar date rejec
     const app=harness('close');const result=await app.call({...body,openingMeterReading:'999'});
     assert.equal(result.status,400);assert.equal(app.queries.some(row=>row.sql.startsWith('UPDATE')),false);assert.deepEqual(app.saved,active);assert.equal(app.audits.length,0);
   }
+});
+
+test('MIS writes KMR to KMR without overwriting HMR and rejects swapped readings before writing',async()=>{
+  const row={...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),meterType:'KMR',openingMeterReadings:{HMR:'14834',KMR:'243679'}};
+  const verify=harness('verify',{row});
+  assert.equal((await verify.call({closingMeterReading:'243679',closingMeterReadings:{HMR:'14835',KMR:'243679'}})).status,200);
+  const update=verify.queries.find(q=>q.sql.startsWith('UPDATE maintenance_requests SET verification_status'));
+  assert.deepEqual(JSON.parse(update.args[8]),{HMR:'14835',KMR:'243679'});
+  const invalid=harness('verify',{row});
+  const result=await invalid.call({closingMeterReading:'14835',closingMeterReadings:{HMR:'243679',KMR:'14835'}});
+  assert.equal(result.status,400);
+  assert.match(result.body.error,/Closing KMR/);
+  assert.equal(invalid.queries.some(q=>q.sql.startsWith('UPDATE')),false);
 });
 
 test('valid close and MIS first-trip capture keep actual event time separate from server recorded time',async()=>{
