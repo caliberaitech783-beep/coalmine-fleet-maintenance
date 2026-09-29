@@ -5,7 +5,7 @@ import test from 'node:test';
 
 const html = fs.readFileSync(new URL('../public/cd/caliber-directory.html', import.meta.url), 'utf8');
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
-  .filter(match => !match[0].includes('type="application/json"')).map(match => match[1]);
+  .filter(match => !match[0].includes('type="application/json"') && !/^<script\s[^>]*\bsrc=/.test(match[0])).map(match => match[1]);
 const source = scripts[0];
 const functions = new Map();
 // Run the page's actual named helpers against synthetic data, without a browser or staff records.

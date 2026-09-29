@@ -1,0 +1,22 @@
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #17131d;
+    --panel: #292332;
+    --surface: #211c28;
+    --ink: #f2edf7;
+    --ink-soft: #bfb3cd;
+    --line: #4b4059;
+    --accent3: #c5a4f2;
+    --vacant: #ffbc86;
+    --good: #7bddb0;
+  }
+  [data-theme="dark"] :is(input, select, textarea) { color: var(--ink); }
+  [data-theme="dark"] :is(.sr-item:hover, .sr-item.kb, table.roster tbody tr:hover, table.matrix td.cell:hover, table.matrix td.cat-label, tr.total-row td, .badge-cat) { background: var(--panel); }
+  [data-theme="dark"] :is(.edits-note, .exp-tag) { background: #193b2c !important; color: #9ce6c0; border-color: #35664e; }
+  [data-theme="dark"] :is(.alert-detail, .alert-banner, .chart-summary .cs-vacant) { background: #3b2e20; color: #f4d499; border-color: #79613b; }
+  [data-theme="dark"] :is(.bday-banner, .status-resigned) { background: #3c2234; color: #ffc0d9; border-color: #79435e; }
+  [data-theme="dark"] :is(.bday-name, .bday-banner .bn-close) { color: #ffc0d9; }
+  [data-theme="dark"] :is(.tb-toolbar .tbtn-add, .sidebar .tbtn-add, .sidebar-pin.pinned, .redact-on .tb-toolbar #btnRedact) { color: var(--ink); border-color: var(--line); }
+  [data-theme="dark"] .sr-item mark { background: #70591f; color: #fff1be; }
+}
