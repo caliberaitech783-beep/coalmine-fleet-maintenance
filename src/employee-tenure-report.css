@@ -1,0 +1,24 @@
+/* Keep the larger typography and compact spacing local to employee tenure. */
+.body:has(> .employee-tenure-report) { padding-top: 0; }
+.employee-tenure-report { font-size: 18px; }
+.employee-tenure-report > h1 { margin: 0 0 16px; font-size: 34px; }
+.employee-tenure-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 16px; }
+.employee-tenure-filters input,
+.employee-tenure-filters select,
+.employee-tenure-filters button { font-size: 18px; max-width: 100%; }
+.employee-tenure-filters > label { max-width: 100%; }
+.employee-tenure-search-actions { display: flex; align-items: center; gap: 20px; max-width: 100%; }
+.employee-tenure-search { width: min(420px, 100%); min-width: 0; }
+.employee-tenure-search input { width: 100%; min-height: 38px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel, #fff); color: var(--ink); font-size: 13px; }
+.employee-tenure-report .generated-report-section .reports-section-heading h2 { font-size: 19px; }
+.employee-tenure-report .generated-report-section .reports-section-heading p { font-size: 12px; }
+.employee-tenure-report .report-filter-table { font-size: 13px; }
+.employee-tenure-report .report-filter-table thead th { font-size: 11px; }
+.employee-tenure-report .report-row-limit > span,
+.employee-tenure-report .report-row-limit select,
+.employee-tenure-report .report-actions-trigger { font-size: 14px; }
+.employee-tenure-report .export-menu-trigger { font-size: 13px; }
+@media (max-width: 600px) {
+  .employee-tenure-search-actions { width: 100%; }
+  .employee-tenure-search { flex: 1; }
+}

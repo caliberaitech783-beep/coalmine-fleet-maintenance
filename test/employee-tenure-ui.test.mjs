@@ -40,3 +40,22 @@ test('employee report passes exact tenure and six requested columns to the expor
   slots[3]={token:'fixture',loading:false,error:'Cannot load roster',directory:null};
   assert.match(render('fixture'),/role="alert"/);
 });
+
+test('tenure header puts the controlled search before Refresh and removes explanatory paragraph', async () => {
+  const component=readFileSync(new URL('../src/employee-tenure-report.jsx',import.meta.url),'utf8');
+  assert.doesNotMatch(component, /<p>Currently working employees only/);
+  assert.match(component,/type="search"[\s\S]*?>Refresh<\/button>/);
+  assert.match(component,/query=\{search\} showSearch=\{false\}/);
+  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const section=main.slice(main.indexOf('function ReportSection('), main.indexOf('\nfunction ',main.indexOf('function ReportSection(')+1));
+  const {code: sectionCode}=await transformWithOxc(section,'report-section.jsx',{jsx:{runtime:'classic'}});
+  let tableProps;
+  const Null=()=>null;
+  const scope={React,useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],FileBarChart:Null,ExportMenu:Null,Search:Null,ReportTable:props=>{tableProps=props;return null;}};
+  const Section=new Function(...Object.keys(scope),sectionCode+'; return ReportSection;')(...Object.values(scope));
+  const html=renderToStaticMarkup(React.createElement(Section,{title:'Employee tenure',query:'Example',showSearch:false}));
+  assert.equal(tableProps.query,'Example');
+  assert.doesNotMatch(html,/Search this report/);
+  const defaultHtml=renderToStaticMarkup(React.createElement(Section,{title:'Other report'}));
+  assert.match(defaultHtml,/Search this report/);
+});

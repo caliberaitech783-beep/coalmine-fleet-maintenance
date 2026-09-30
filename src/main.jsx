@@ -6991,7 +6991,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
     </div>
   </section>;
 }
-function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [searchQuery, setSearchQuery] = useState(query);
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
@@ -7013,12 +7013,12 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         </div>
       </div>
       {controls}
-      {!children && <div className="generated-report-search"><label><Search /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search this report" aria-label={`Search ${title}`} /></label><span>{rows.length.toLocaleString("en-IN")} record{rows.length === 1 ? "" : "s"}</span></div>}
+      {!children && showSearch && <div className="generated-report-search"><label><Search /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search this report" aria-label={`Search ${title}`} /></label><span>{rows.length.toLocaleString("en-IN")} record{rows.length === 1 ? "" : "s"}</span></div>}
       {children || (
         <div className="reports-detail-table emptytable">
           <ReportTable
             layoutKey={title}
-            query={searchQuery}
+            query={showSearch ? searchQuery : query}
             rows={rows}
             rowKey={rowKey}
             rowClassName={rowClassName}
