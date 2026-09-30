@@ -2,12 +2,12 @@
 .shared-table-record-count { display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 7px; background: var(--brand-purple, #522e90); color: #fff; font-weight: 700; white-space: nowrap; }
 .record-date-range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 100%; min-width: 0; }
 .record-date-range-basis { font-size: 0.85rem; font-weight: 600; color: var(--mine-muted, #61738b); }
-.record-date-range > label { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #dce4ef; border-radius: 8px; background: var(--mine-panel, #fff); color: var(--mine-text, #21354c); margin: 0; }
+.record-date-range > label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #dce4ef; border-radius: 8px; background: var(--mine-panel, #fff); color: var(--mine-text, #21354c); margin: 0; }
 .record-date-range input[type="date"] { width: 146px; max-width: 100%; min-width: 0; border: 0; background: transparent; color: inherit; padding: 0; font: inherit; }
 .record-date-range-clear { min-height: 36px; padding: 6px 10px; white-space: nowrap; }
 .record-date-range-hint { flex-basis: 100%; font-size: 0.8rem; color: var(--mine-muted, #61738b); }
 .record-date-range-hint[role="alert"] { color: #b42332; }
-.shared-table-actions-toolbar .record-date-range[role="group"] > label { min-width: 0; width: auto; flex: 0 1 auto; }
+.shared-table-actions-toolbar .record-date-range[role="group"] > label { min-width: 0; width: auto; flex: 0 0 auto; }
 .table-search-toolbar:has(.record-date-range), .ticket-toolbar-controls:has(.record-date-range) { flex-wrap: wrap; }
 .workflow-actions-slot:has(.record-date-range), .master-actions-slot:has(.record-date-range) { flex: 0 1 auto; max-width: 100%; min-width: 0; }
 .shared-table-actions-toolbar > .table-parameter-filter { display: none; }
