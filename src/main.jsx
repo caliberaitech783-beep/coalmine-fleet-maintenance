@@ -280,6 +280,7 @@ import "./vehicle-history-density.css";
 import "./ticket-status-tabs.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
+import EmployeeTenureReport from "./employee-tenure-report.jsx";
 import { breakdownTrendExport, fleetSectionExport, requestLifecycleExport, throughputSectionExport } from "./dashboard-section-export.mjs";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
@@ -6176,6 +6177,7 @@ const reportCategoryTabs = [
   {id: "maintenance", label: "Maintenance report", description: "Repair turnaround, open off-road cases, and availability. Oracle utilization pending.", icon: Wrench},
   {id: "mis", label: "MIS Report", description: "Verification, first-trip mismatch, transfers, fleet, and daily in/out reports.", icon: ShieldCheck},
   {id: "vehicle-history", label: "Vehicle History Report", description: "Fleet history, repeat breakdown analysis, and common maintenance remarks.", icon: History},
+  {id: "employee-tenure", label: "Employee Tenure Report", description: "Currently working employees with at least three months of service.", icon: Users},
 ];
 const VEHICLE_HISTORY_REPORT = "Vehicle History";
 const MAXIMUM_VEHICLE_BREAKDOWN_REPORT = "Maximum Vehicle Breakdown";
@@ -6848,7 +6850,7 @@ function reportCategoryIdsForUser(permissions = {}, session = {}) {
   if (adminLevel === "Manager" && (!roleText || roleText.includes("project manager") || roleText.includes("director"))) {
     return reportCategoryTabs.map((category) => category.id);
   }
-  const categoryIds = new Set(["general", "vehicle-history"]);
+  const categoryIds = new Set(["general", "vehicle-history", "employee-tenure"]);
   if (roleText.includes("production")) categoryIds.add("production");
   if (roleText.includes("maintenance")) categoryIds.add("maintenance");
   if (roleText.includes("mis")) categoryIds.add("mis");
@@ -7050,6 +7052,10 @@ function withTimelineLinks(columns, token) {
   });
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
+  if (activeReportCategory === "employee-tenure" && reportCategoryIdsForUser(permissions, session).includes("employee-tenure")) return <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />;
+  return <FleetReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={permissions} session={session} />;
+}
+function FleetReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
   const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
