@@ -98,6 +98,30 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
   ];
   const tableKey = JSON.stringify(view.selection);
   const listRef = useRef(null);
+  const [horizontalScroll, setHorizontalScroll] = useState({ position: 0, maximum: 0 });
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return undefined;
+    const sync = () => {
+      const maximum = Math.max(0, list.scrollWidth - list.clientWidth);
+      const position = Math.max(0, Math.min(maximum, list.scrollLeft));
+      setHorizontalScroll(previous => previous.position === position && previous.maximum === maximum ? previous : { position, maximum });
+    };
+    sync();
+    list.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+    observer?.observe(list);
+    if (list.querySelector("table")) observer?.observe(list.querySelector("table"));
+    const mutations = typeof MutationObserver === "undefined" ? null : new MutationObserver(sync);
+    mutations?.observe(list, { childList: true, subtree: true });
+    return () => {
+      list.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+      observer?.disconnect();
+      mutations?.disconnect();
+    };
+  }, [tableKey]);
   // Every new selection shows its fleet list from the top, not where the previous list was scrolled.
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = 0; }, [tableKey]);
   const showIdleDate = lifecycleEvent === "idle" || /idle/i.test(title) || rows.some(row => ["idle", "ideal"].includes(String(row.requestStatus || "").toLowerCase()));
@@ -161,6 +185,14 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
         <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
         {!searchBesideDates && fleetSearch}
       </div>
+      {horizontalScroll.maximum > 0 && <label className="dashboard-mobile-scrollbar">
+        <span>Scroll columns left / right</span>
+        <input type="range" aria-label="Scroll table columns" min="0" max={horizontalScroll.maximum} step="1" value={horizontalScroll.position} onChange={event => {
+          const position = Number(event.target.value);
+          if (listRef.current) listRef.current.scrollLeft = position;
+          setHorizontalScroll(previous => ({ ...previous, position }));
+        }} />
+      </label>}
       <div className="dashboard-asset-list" ref={listRef}>
 <ActionsTable key={tableKey} toolbarTarget={toolbarTarget} toolbarPortal exportTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} data-oem-column-layout={columnTransform ? "true" : undefined} toolbarAfterCount={toolbarAfterCount} toolbarAfterDate={searchBesideDates ? fleetSearch : null} columnTransform={columnTransform} groupBySite={groupBySite} summaryTarget={summaryTarget} preserveColumnOrder printTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} showRowNumbers={showRowNumbers} disableDateColumnFilter={!showDateFilter} recordDateFilter={showDateFilter ? movementDateControl || { label: idleDateFilter ? "Idle Vehicle Date" : "Started", value: recordDateRange, onChange: setRecordDateRange } : false} className={bdBalanceColumns || requestRecords ? "dashboard-location-dates" : undefined} data-verification-last={lifecycleRecords && lifecycleEvent === "mis" ? "true" : undefined}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th>Days of breakdown</th>{bdBalanceColumns && showLocationColumn && <th>Current location</th>}<th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th><th>ETC</th>{showIdleDate && <th>Idle Vehicle Date</th>}{showBdClosingTime && <th>BD closing time</th>}<th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}{bdBalanceColumns && <><th>Type of breakdown</th><th>Reason of breakdown</th></>}{showUpdatesColumn && bdBalanceColumns && <th>Daily updates</th>}<th>Equipment group</th><th>Model</th><th>Opening HMR</th><th>Opening KMR</th>{showClosingMeters && <><th>Closing HMR</th><th>Closing KMR</th></>}{!bdBalanceColumns && showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th>{idleDateFilter && <><th>Idle reason</th><th>Days of idle</th></>}</>}{showUpdatesColumn && !bdBalanceColumns && <th>Daily updates</th>}{showClosedColumn && <th>Closed</th>}{showVerificationColumns && <><th>MIS verified at</th><th>First trip time</th></>}{extraColumns.map(column => <th key={column.key}>{column.label}</th>)}</tr></thead>

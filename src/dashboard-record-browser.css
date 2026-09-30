@@ -149,6 +149,32 @@
 @keyframes record-reset-spin { to { transform: rotate(-360deg); } }
 @keyframes record-search-scan { 0%, 60%, 100% { transform: rotate(0); } 15% { transform: rotate(-14deg) scale(1.08); } 35% { transform: rotate(12deg) scale(1.08); } }
 
+.dashboard-mobile-scrollbar { display: none; }
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  .dashboard-mobile-scrollbar {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    margin: 0;
+    padding: 6px 12px;
+    background: var(--bg, #f7f8fc);
+    color: var(--ink, #17304f);
+    border-block: 1px solid var(--line, #dde6f2);
+    font-size: 11px;
+  }
+  .dashboard-mobile-scrollbar input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    accent-color: #8252bf;
+  }
+}
+@media print { .dashboard-mobile-scrollbar { display: none !important; } }
 @media (max-width: 700px) {
   .dashboard-record-topline::before { display: none; }
   .dashboard-record-topline > .dashboard-record-level { flex-basis: 100%; }
