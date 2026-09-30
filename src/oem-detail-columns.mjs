@@ -6,7 +6,7 @@ export function orderOemDetailColumns(columns) {
   const adjacent = adjacentLabels.flatMap(name => columns.filter(column => label(column) === name));
   const meters = meterLabels.flatMap(name => columns.filter(column => label(column) === name));
   const ordered = columns.filter(column => !adjacent.includes(column) && !meters.includes(column));
-  const reason = ordered.findIndex(column => label(column) === 'breakdown reason');
+  const reason = ordered.findIndex(column => ['breakdown reason', 'bd reason'].includes(label(column)));
   ordered.splice(reason < 0 ? ordered.length : reason + 1, 0, ...adjacent);
   return [...ordered, ...meters];
 }

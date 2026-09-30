@@ -84,7 +84,7 @@ test("OEM report places grouping beside count and reasons before trailing meters
   assert.match(result.html, /Parts - OEM/);
   for (const model of result.exports) {
     const labels = model.columns.map(column => column.label);
-    const reason = labels.indexOf('Breakdown reason');
+    const reason = labels.indexOf('BD reason');
     assert.deepEqual(labels.slice(reason + 1, reason + 3), ['Delayed reason', 'Daily remarks']);
     assert.deepEqual(labels.slice(-4), ['Opening HMR', 'Opening KMR', 'Closing HMR', 'Closing KMR']);
   }

@@ -67,7 +67,7 @@ test("the breakdown table renders, exports and sorts ETC and closing time after 
   assert.match(breakdown, /showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time",/);
   assert.match(breakdown, /\["start", "Started"\], \["expectedCompletionAt", "ETC"\], \.\.\.\(showClosedAt \? \[\["closedAt", closedAtLabel\], \.\.\.\(showCompletionDetails \? \[\] : \[\["closingHmr", "Closing HMR"\], \["closingKmr", "Closing KMR"\]\]\)\] : \[\]\), \["hours",/);
   // Opening meter readings always follow the breakdown reason; closing readings sit right after the closing time.
-  assert.match(breakdown, /\.\.\.\(showReason \? \[\["complaint", "Breakdown reason"\]\] : \[\]\), \["openingHmr", "Opening HMR"\], \["openingKmr", "Opening KMR"\],/);
+  assert.match(breakdown, /\.\.\.\(showReason \? \[\["complaint", "BD reason"\]\] : \[\]\), \["openingHmr", "Opening HMR"\], \["openingKmr", "Opening KMR"\],/);
   assert.match(breakdown, /\{showClosedAt && <td>\{formatTwelveHourDateTime\(r\.closedAt\)\}<\/td>\}\r?\n\s*\{showClosedAt && !showCompletionDetails && <><td>\{breakdownMeterValue\(r, "HMR", "closing"\)\}<\/td><td>\{breakdownMeterValue\(r, "KMR", "closing"\)\}<\/td><\/>\}/);
   assert.match(breakdown, /if \(key === "closedAt"\) return formatTwelveHourDateTime\(row\.closedAt\);/);
   assert.match(main, /case "start": return <td>\{formatTwelveHourDateTime\(r\.start\)\}<\/td>;\r?\n\s*case "expectedCompletionAt": return <td>\{formatTwelveHourDateTime\(r\.expectedCompletionAt\)\}<\/td>;\r?\n\s*case "closedAt":/);

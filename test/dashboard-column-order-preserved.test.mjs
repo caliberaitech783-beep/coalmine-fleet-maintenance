@@ -8,7 +8,7 @@ test('dashboard preserves status, breakdown days, started order including reques
   const browser=fs.readFileSync(new URL('../src/dashboard-record-browser.jsx',import.meta.url),'utf8');
   const shared=fs.readFileSync(new URL('../src/shared-actions-table.jsx',import.meta.url),'utf8');
   assert.match(browser,/<ActionsTable[^>]*preserveColumnOrder/);
-  assert.match(browser,/\{requestRecords && <th>Job reference<\/th>\}<th>Status<\/th><th>Days of breakdown<\/th>\{bdBalanceColumns && showLocationColumn && <th>Current location<\/th>\}<th[^>]*>Started<\/th>/);
+  assert.match(browser,/\{requestRecords && <th>Job reference<\/th>\}<th>Status<\/th><th>Days of BD<\/th>\{bdBalanceColumns && showLocationColumn && <th>Current location<\/th>\}<th[^>]*>Started<\/th>/);
   assert.match(shared,/preserveColumnOrder \? jobReferenceColumnsLast\(originalColumns\)/);
   for(const [labels,expected] of [
     [['Status','Days of breakdown','Started','Door'],['Status','Days of breakdown','Started']],

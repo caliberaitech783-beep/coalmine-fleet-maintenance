@@ -182,9 +182,9 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   const overdue = {...open, ref: 'REQ-ETC-2', expectedCompletionAt: '2026-09-18 11:50'};
   const unset = {...open, ref: 'REQ-ETC-3', expectedCompletionAt: ''};
   const {tree, html, exports, headers} = renderTable({rows: [open, overdue, unset], showActions: true, showEtc: true, exportTitle: 'Active Maintenance Requests'});
-  const startedIndex = headers.indexOf('Started'), daysIndex = headers.indexOf('Days of breakdown');
+  const startedIndex = headers.indexOf('Started'), daysIndex = headers.indexOf('Days of BD');
   assert.deepEqual(headers.slice(startedIndex, startedIndex + 2), ['Started', 'ETC']);
-  assert.deepEqual(headers.slice(daysIndex, daysIndex + 3), ['Days of breakdown', 'Time left for ETC', 'Daily remarks']);
+  assert.deepEqual(headers.slice(daysIndex, daysIndex + 3), ['Days of BD', 'Time left for ETC', 'Daily remarks']);
   const cells = ref => children(children(tree, node => node.type === 'tr' && node.key === ref)[0], node => node.type === 'td' && node.props.className === 'etc-cell');
   assert.equal(cells(open.ref).length, 2);
   assert.equal(text(cells(open.ref)[0]), '18-09-2026 06:00:00 PM');

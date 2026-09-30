@@ -2689,11 +2689,11 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [showBreakdownDays]);
   const columns = [
       ...(showActionColumn ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
-      ...(showReason ? [["complaint", "Breakdown reason"]] : []), ["openingHmr", "Opening HMR"], ["openingKmr", "Opening KMR"], ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showUserRole ? [["requesterRole", "User role"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
+      ...(showReason ? [["complaint", "BD reason"]] : []), ["openingHmr", "Opening HMR"], ["openingKmr", "Opening KMR"], ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showUserRole ? [["requesterRole", "User role"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]] : []),
-      ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["expectedCompletionAt", "ETC"], ...(showClosedAt ? [["closedAt", closedAtLabel], ...(showCompletionDetails ? [] : [["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]])] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ...(showBreakdownDays ? [["breakdownDays", "Days of BD"]] : []),
+      ["category", "BD type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["expectedCompletionAt", "ETC"], ...(showClosedAt ? [["closedAt", closedAtLabel], ...(showCompletionDetails ? [] : [["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]])] : []), ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
     ],
     orderedColumns = columnOrder ? [...columns.filter(([key]) => key === "requestAction"), ...columnOrder.map((orderKey) => columns.find(([key]) => key === orderKey)).filter(Boolean)] : columns,
@@ -9547,7 +9547,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ] : []),
     ...(showMakeModel ? [{key: "make", label: "Make", value: (row) => row.make}, {key: "model", label: "Model", value: (row) => row.model}] : []),
     {key: "site", label: "Site location", value: (row) => row.site},
-    {key: "category", label: "Breakdown type", value: (row) => row.category},
+    {key: "category", label: "BD type", value: (row) => row.category},
     ...(showMisFlagData ? [
       {key: "misFlaggedAt", label: "MIS red flag raised", value: (row) => formatTwelveHourDateTime(row.misFlaggedAt, true)},
       {key: "misFlaggedBy", label: "Flagged by", value: (row) => row.misFlaggedBy},
@@ -9557,7 +9557,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     {key: "status", label: "Status", value: (row) => statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
     {key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason},
-    ...(showReason ? [{key: "complaint", label: "Breakdown reason", value: (row) => row.complaint}] : []),
+    ...(showReason ? [{key: "complaint", label: "BD reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(showUserRole ? [{key: "requesterRole", label: "User role", value: (row) => row.requesterRole || "—"}] : []),
     ...(startedFirst ? [startedColumn, etcColumn, ...(showIdleDate ? [idleDateColumn] : []), ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn, etcColumn, ...(showIdleDate ? [idleDateColumn] : [])]),
@@ -9571,7 +9571,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
       {key: "acceptedBy", label: "Received by", value: (row) => row.acceptedBy || "Pending"},
     ] : []),
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
-    {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysUntilClose(row.start, row.closedAt, now)},
+    {key: "breakdownDays", label: "Days of BD", value: (row) => calculateBreakdownDaysUntilClose(row.start, row.closedAt, now)},
     ...(showEtc ? [{key: "etcRemaining", label: "Time left for ETC", value: (row) => etcCountdown(row, now).summary}] : []),
     {key: "dailyRemarks", label: "Daily remarks", value: (row) => dailyUpdatesExportText(row.dailyRemarks, { category: row.category })},
     ...(showWorkCompletion ? [{key: "maintenanceWork", label: "Work completion action taken", value: (row) => row.maintenanceWork}] : []),
@@ -9645,10 +9645,10 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
-          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMisPeople && <>{workflowHeader("productionPerson", "Production person (created)")}{workflowHeader("maintenanceAcceptedBy", "Maintenance person (accepted)")}{workflowHeader("maintenanceClosedBy", "Maintenance person (closed)")}</>}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "Breakdown type")}
+          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMisPeople && <>{workflowHeader("productionPerson", "Production person (created)")}{workflowHeader("maintenanceAcceptedBy", "Maintenance person (accepted)")}{workflowHeader("maintenanceClosedBy", "Maintenance person (closed)")}</>}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "BD type")}
           {workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")}{showUserRole && workflowHeader("requesterRole", "User role")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && workflowHeader("etcRemaining", "Time left for ETC")}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "BD reason")} {showCreatedBy && workflowHeader("owner", "Created by")}{showUserRole && workflowHeader("requesterRole", "User role")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of BD")}{showEtc && workflowHeader("etcRemaining", "Time left for ETC")}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? visibleWorkflowRows.map((row) => {

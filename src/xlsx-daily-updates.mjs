@@ -26,8 +26,8 @@ function detailIdentity(row, columns = [], values = []) {
     equipmentGroup: empty(usable(request.equipmentGroup || request.group || request.equipment) || cellByLabel(columns, values, [/^equipment group$/i])),
     model: empty(usable(request.model) || cellByLabel(columns, values, [/^model$/i])),
     serial: empty(usable(request.manufacturerSerialNo || request.chassisNo || request.serialNo || request.serial) || cellByLabel(columns, values, [/serial/i, /chassis/i])),
-    breakdownType: empty(usable(request.repairCategory || request.category) || cellByLabel(columns, values, [/type of breakdown/i, /breakdown type/i, /repair category/i])),
-    breakdownReason: empty(usable(request.breakdownReason || request.complaint || request.reason) || cellByLabel(columns, values, [/reason of breakdown/i, /breakdown reason/i, /^reason$/i])),
+    breakdownType: empty(usable(request.repairCategory || request.category) || cellByLabel(columns, values, [/type of (?:breakdown|bd)/i, /(?:breakdown|bd) type/i, /repair category/i])),
+    breakdownReason: empty(usable(request.breakdownReason || request.complaint || request.reason) || cellByLabel(columns, values, [/reason of (?:breakdown|bd)/i, /(?:breakdown|bd) reason/i, /^reason$/i])),
   };
 }
 

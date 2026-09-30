@@ -115,7 +115,7 @@ export function ensureJobReferenceVisibleKeys(keys, columns) {
 
 // Keep original indices so headers, values, filters and exports stay aligned.
 export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
-  const priorities = ["days of breakdown", "status", "door no.", "site location", "repair category", "reason"];
+  const priorities = ["days of breakdown", "days of bd", "status", "door no.", "site location", "repair category", "reason"];
   const rank = (column) => {
     const label = column.label.trim().toLowerCase();
     const index = priorities.indexOf(label);
@@ -132,10 +132,10 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
     /^actions$/i,
     /^(?:started|production date and time)$/i,
     /^etc$/i,
-    /^days of breakdown$/i,
+    /^days of (?:breakdown|bd)$/i,
     /^time left for etc$/i,
-    /^(?:breakdown reason|reason of breakdown|reason)$/i,
-    /^(?:breakdown type|type of breakdown|repair category)$/i,
+    /^(?:(?:breakdown|bd) reason|reason of (?:breakdown|bd)|reason)$/i,
+    /^(?:(?:breakdown|bd) type|type of (?:breakdown|bd)|repair category)$/i,
     /^equipment group$/i,
     /^make$/i,
     /^model$/i,
@@ -174,11 +174,11 @@ export function jobReferenceColumnsLast(columns) {
   };
   moveAfter(({label}) => /^status$/i.test(label.trim()), ({label}) => /^(?:machine\s*\/\s*)?door\s*(?:no\.?|number)$/i.test(label.trim()));
   moveAfter(({label}) => /^status$/i.test(label.trim()), ({label}) => /^(?:current location|request site)$/i.test(label.trim()));
-  const isBreakdownDays = ({label}) => /^days of breakdown$/i.test(label.trim());
+  const isBreakdownDays = ({label}) => /^days of (?:breakdown|bd)$/i.test(label.trim());
   // Workflow tables can supply reason before type; enforce type then reason in every table.
-  moveAfter(isBreakdownDays, ({label}) => /^(?:reason of breakdown|breakdown reason|reason)$/i.test(label.trim()));
-  moveAfter(isBreakdownDays, ({label}) => /^(?:type of breakdown|breakdown type|repair category)$/i.test(label.trim()));
-  moveAfter(({label}) => /^(?:reason of breakdown|breakdown reason)$/i.test(label.trim()), ({label}) => /^(?:(?:opening|closing)\s+)?(?:hmr|kmr)$/i.test(label.trim()));
+  moveAfter(isBreakdownDays, ({label}) => /^(?:reason of (?:breakdown|bd)|(?:breakdown|bd) reason|reason)$/i.test(label.trim()));
+  moveAfter(isBreakdownDays, ({label}) => /^(?:type of (?:breakdown|bd)|(?:breakdown|bd) type|repair category)$/i.test(label.trim()));
+  moveAfter(({label}) => /^(?:reason of (?:breakdown|bd)|(?:breakdown|bd) reason)$/i.test(label.trim()), ({label}) => /^(?:(?:opening|closing)\s+)?(?:hmr|kmr)$/i.test(label.trim()));
   return ordered;
 }
 

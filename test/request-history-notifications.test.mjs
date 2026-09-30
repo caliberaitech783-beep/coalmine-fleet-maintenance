@@ -8,7 +8,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   const mobileStyles=fs.readFileSync(new URL("../src/mobile-workflow.css",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const access=fs.readFileSync(new URL("../mobile-access.mjs",import.meta.url),"utf8");
-  assert.match(source,/showReason \? \[\["complaint", "Breakdown reason"\]\]/);
+  assert.match(source,/showReason \? \[\["complaint", "BD reason"\]\]/);
   assert.match(source,/\["status", "Status"\]/);
   assert.match(source,/Closed history/);
   assert.match(source,/activeRequests=useMemo\(\(\)=>requestRows\.filter[\s\S]*!=="closed"/);

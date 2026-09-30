@@ -9,7 +9,7 @@ test("production, maintenance, and MIS request tables use header filter popovers
 
   assert.match(breakdownTable, /<FilterableHeader key=\{key\}/);
   assert.match(workflowTable, /const workflowHeader = \(key, label\) => <FilterableHeader/);
-  assert.match(workflowTable, /workflowHeader\("breakdownDays", "Days of breakdown"\)/);
+  assert.match(workflowTable, /workflowHeader\("breakdownDays", "Days of BD"\)/);
   assert.match(workflowTable, /workflowHeader\("dailyRemarks", "Daily remarks"\)/);
   assert.match(workflowTable, /showMakeModel && <>\{workflowHeader\("make", "Make"\)\}\{workflowHeader\("model", "Model"\)\}<\/>/);
   assert.match(workflowTable, /showMakeModel && <><td>\{row\.make \|\| "—"\}<\/td><td>\{row\.model \|\| "—"\}<\/td><\/>/);

@@ -6214,7 +6214,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
+    const {rows}=await client.query(`SELECT site,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -6252,6 +6252,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
       const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
       if(oemResponsibility!==undefined&&!eligible.rows[0].acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
+      if(oemResponsibility!==undefined&&eligible.rows[0].oemResponsibility&&eligible.rows[0].oemResponsibility!==oemResponsibility)throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
       const existingToday=await client.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
         AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
       const updatedToday=existingToday.rows.length>0;
@@ -6445,6 +6446,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(oemResponsibility!==undefined&&!before.acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
+    if(oemResponsibility!==undefined&&before.oemResponsibility&&before.oemResponsibility!==oemResponsibility)throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
     const previousExpectedAt=parseRequestTimelineTimestamp(before.expectedCompletionAt);
     const nextExpectedAt=parseRequestTimelineTimestamp(expectedAt);
     const revisingEtc=Boolean(previousExpectedAt&&nextExpectedAt&&previousExpectedAt.getTime()!==nextExpectedAt.getTime());

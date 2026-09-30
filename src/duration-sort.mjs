@@ -8,12 +8,12 @@ const durationKeys = new Set([
 // Dates/timestamps and meter readings are not durations.
 export function isDurationColumn(label = "", key = "") {
   return durationKeys.has(String(key).toLowerCase())
-    || /^(days of breakdown|bd timing|bd days\s*\/\s*hrs|(?:productive|breakdown|bd|available) (?:hrs|hours)|downtime|tat|turn\s*around time(?:\s*\(tat\))?|time taken|duration|arrival delay|waiting when flagged|time to accept)$/i.test(String(label).trim());
+    || /^(days of (?:breakdown|bd)|bd timing|bd days\s*\/\s*hrs|(?:productive|breakdown|bd|available) (?:hrs|hours)|downtime|tat|turn\s*around time(?:\s*\(tat\))?|time taken|duration|arrival delay|waiting when flagged|time to accept)$/i.test(String(label).trim());
 }
 
 export function defaultDurationSort(columns = []) {
   const durations = columns.filter((column) => isDurationColumn(column.label, column.key));
-  const column = durations.find((column) => ["breakdowndays", "days"].includes(String(column.key).toLowerCase()) || /^(days of breakdown|bd days\s*\/\s*hrs|(?:breakdown|bd) (?:hrs|hours))$/i.test(String(column.label).trim())) || durations[0];
+  const column = durations.find((column) => ["breakdowndays", "days"].includes(String(column.key).toLowerCase()) || /^(days of (?:breakdown|bd)|bd days\s*\/\s*hrs|(?:breakdown|bd) (?:hrs|hours))$/i.test(String(column.label).trim())) || durations[0];
   return column ? { key: column.key, direction: "desc" } : { key: "", direction: "asc" };
 }
 

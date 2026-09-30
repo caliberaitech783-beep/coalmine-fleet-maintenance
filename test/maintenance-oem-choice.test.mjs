@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {filterOemDelayedRows} from '../src/oem-delay-filter.mjs';
 
+test('responsibility locks immediately and disabled choice is submitted through a hidden field', () => {
+  const ui=readFileSync(new URL('../src/maintenance-oem-choice.jsx',import.meta.url),'utf8');
+  assert.ok(ui.includes('disabled={Boolean(selected)}'));
+  assert.ok(ui.includes('setSelected(current => current || value)'));
+  assert.ok(ui.includes('type="hidden" name="oemResponsibility" value={selected}'));
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  assert.ok(server.includes('SELECT site,oem_responsibility AS "oemResponsibility"'));
+  assert.ok(server.includes('before.oemResponsibility&&before.oemResponsibility!==oemResponsibility'));
+  assert.ok(server.includes('eligible.rows[0].oemResponsibility&&eligible.rows[0].oemResponsibility!==oemResponsibility'));
+});
+
 test('explicit responsibility overrides legacy reasons without including closed vehicles', () => {
   const requests = [
     {ref:'oem',status:'Accepted',oemResponsibility:'OEM',delayedReason:'Parts CMLL'},

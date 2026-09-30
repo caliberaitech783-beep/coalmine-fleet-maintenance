@@ -40,8 +40,8 @@ test('delayed reasons are offered per breakdown type in the approved order',()=>
   assert.deepEqual(delayedReasonsForRepairType('Super Structure',master),['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair']);
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.match(client,/delayedReasonsForRepairType\(request\.category,delayedReasonRecords\|\|\[\]\)/);
-  assert.match(client,/\{key: "category", label: "Breakdown type", value: \(row\) => row\.category\}/);
-  assert.match(client,/\["category", "Breakdown type"\], \["delayedReason", "Delayed reason"\]/);
+  assert.match(client,/\{key: "category", label: "BD type", value: \(row\) => row\.category\}/);
+  assert.match(client,/\["category", "BD type"\], \["delayedReason", "Delayed reason"\]/);
   assert.match(client,/case "delayedReason": return <td>\{r\.delayedReason \|\| "—"\}<\/td>;/);
 });
 

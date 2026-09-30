@@ -26,10 +26,10 @@ test("BD Balance places location, reasons and meter readings beside their reques
   const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
   const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true,
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
-  assert.match(html, /<th>Days of breakdown<\/th><th>Current location<\/th>/);
+  assert.match(html, /<th>Days of BD<\/th><th>Current location<\/th>/);
   assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
   assert.match(html, /10-09-2026 10:00:00 AM<\/td><td[^>]*>10-09-2026 06:00:00 PM<\/td>/);
-  assert.match(html, /<th>Equipment category<\/th><th>Type of breakdown<\/th><th>Reason of breakdown<\/th>/);
+  assert.match(html, /<th>Equipment category<\/th><th>Type of BD<\/th><th>Reason of BD<\/th>/);
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
   assert.match(html, /Brake repair/);
@@ -72,7 +72,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     assert.ok(columns.some(column => column.label === "Opening KMR"), title);
     if (event === "idle") {
       assert.equal(columns[3].label, "Idle Vehicle Date");
-      assert.equal(columns[columns.findIndex(column => column.label === "Breakdown reason") + 1].label, "Idle reason");
+      assert.equal(columns[columns.findIndex(column => column.label === "BD reason") + 1].label, "Idle reason");
       assert.equal(exported.columns.find(column => column.label === "Idle reason").value(exported.rows[0]), "No driver");
       assert.ok(html.includes("Not recorded"));
     }
