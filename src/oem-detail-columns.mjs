@@ -1,4 +1,4 @@
-// Keep cell indices intact so screen, print and export use the same data.
+// OEM-only layout: preserve cell indices so screen, print and export use the same data.
 export function orderOemDetailColumns(columns) {
   const label = column => column.label.trim().toLowerCase();
   const adjacentLabels = ['delayed reason', 'daily remarks'];
