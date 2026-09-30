@@ -25,10 +25,10 @@ test('report includes active employees at three months, excludes former staff an
   assert.deepEqual(TENURE_MONTHS,[3,6,9,12,24,36,48,60]);
 });
 
-test('C-Dir menu puts directory first, then masters and employee tenure and uses live employee data', () => {
+test('C-Dir menu puts directory first, then employee tenure and masters and uses live employee data', () => {
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.ok(!source.includes('{id: "employee-tenure", label:'));
-  assert.match(source,/cdir-dropdown[\s\S]*?data-workspace="directory"[\s\S]*?ClockMenu label="C-Dir Masters"[\s\S]*?data-workspace="report-employee-tenure"/);
+  assert.match(source,/cdir-dropdown[\s\S]*?data-workspace="directory"[\s\S]*?data-workspace="report-employee-tenure"[\s\S]*?ClockMenu label="C-Dir Masters"/);
   assert.match(source,/active === "Employee Tenure Report" \? \([\s\S]*?<EmployeeTenureReport/);
   const component=readFileSync(new URL('../src/employee-tenure-report.jsx',import.meta.url),'utf8');
   for(const label of ['Employee ID','Employee name','Department','Designation','Joining date','Working tenure']) assert.ok(component.includes(`label: '${label}'`));

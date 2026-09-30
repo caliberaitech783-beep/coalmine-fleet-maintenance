@@ -1174,8 +1174,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
           <div className="masters-dropdown cdir-dropdown" role="menu">
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "CD" ? " active" : ""}`} data-workspace="directory" onClick={event => selectDropdownPage("CD", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span><span className="nav-label">Directory</span></button></div>}
-            <ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Tenure Report" ? " active" : ""}`} data-workspace="report-employee-tenure" onClick={event => selectDropdownPage("Employee Tenure Report", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Tenure Report</span></button></div>}
+            <ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />
           </div>
         </div>}
       </nav>
