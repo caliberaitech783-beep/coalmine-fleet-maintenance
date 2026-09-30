@@ -1,13 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {requestDateKey} from '../src/dashboard-request-data.mjs';
+import {activeTodayBreakdowns} from '../src/dashboard-today-breakdowns.mjs';
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-test('trend badge opens today entries, including ones already closed, rather than net-change-sized list', () => {
-  const body = source.slice(source.indexOf('    if (key.startsWith("entered-today:"))'), source.indexOf('    if (key.startsWith("balance:"))'));
-  const rows = [{ref:'new',start:'2026-09-30 08:00:00',status:'Accepted'}, {ref:'closed',start:'2026-09-30 09:00:00',status:'Closed'}, {ref:'old',start:'2026-09-29 09:00:00'}];
-  const select = new Function('key','scopedBreakdowns','requestDateKey','requestAssetRows',body);
-  assert.deepEqual(select('entered-today:2026-09-30',rows,requestDateKey,rows=>rows).map(row=>row.ref),['new','closed']);
-  assert.match(source,/aria-label="View vehicles that entered breakdown today"/);
-  assert.match(source,/openAssetDrilldown\(`entered-today:\$\{breakdownCountChange.day \|\| todayKey\}`\)/);
+const day = '2026-09-30';
+const row = (ref, status, extra = {}) => ({ref,status,start:day+' 09:00:00',...extra});
+test('today badge excludes old, closed, verified, on-road and idle requests', () => {
+  const rows = [row('open','Open'),row('accepted','Accepted'),row('old','Open',{start:'2026-09-29 09:00:00'}),
+    ...['Closed','Verified','Idle','Ideal','On road','On-road','Completed'].map(status=>row(status,status)),
+    row('completed','Accepted',{closedAt:day+' 10:00:00'}),row('idle','Closed',{vehicleIdle:true})];
+  assert.deepEqual(activeTodayBreakdowns(rows,day).map(r=>r.ref),['open','accepted']);
+});
+test('new request increases the count and on-road completion removes it', () => {
+  const rows = [row('new','Accepted')];
+  assert.equal(activeTodayBreakdowns([],day).length,0);
+  assert.equal(activeTodayBreakdowns(rows,day).length,1);
+  rows[0] = {...rows[0],status:'Closed',closedAt:day+' 10:00:00'};
+  assert.equal(activeTodayBreakdowns(rows,day).length,0);
+});
+test('IST midnight boundary and timestamp fallback', () => {
+  const rows = [row('before','Open',{start:'2026-09-29T18:29:59Z'}),row('midnight','Open',{start:'2026-09-29T18:30:00Z'}),row('fallback','Open',{start:null,startedAt:day+' 11:00:00'})];
+  assert.deepEqual(activeTodayBreakdowns(rows,day).map(r=>r.ref),['midnight','fallback']);
+  assert.deepEqual(activeTodayBreakdowns(rows,''),[]);
+});
+test('badge and drilldown share the same active selection', () => {
+  assert.ok(source.includes('const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey)'));
+  assert.ok(source.includes('formatCountDelta(todayBreakdownRows.length)'));
+  assert.ok(source.includes('day === todayKey ? todayBreakdownRows : activeTodayBreakdowns(scopedBreakdowns, day)'));
+  assert.ok(source.includes('entered-today:${todayKey}'));
 });

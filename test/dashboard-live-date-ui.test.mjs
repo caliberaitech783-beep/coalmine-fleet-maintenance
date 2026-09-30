@@ -10,6 +10,7 @@ import * as movement from "../dashboard-breakdown-movement.mjs";
 import * as dailyBalance from "../src/daily-bd-balance.mjs";
 import * as actions from "../src/dashboard-card-actions.mjs";
 import * as dates from "../src/dashboard-request-data.mjs";
+import {activeTodayBreakdowns} from "../src/dashboard-today-breakdowns.mjs";
 import { encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
@@ -203,6 +204,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    activeTodayBreakdowns,
     useMasterRecords: () => [repairTypes],
     requestEquipmentDetails,
     requestsVisibleToDashboard,
