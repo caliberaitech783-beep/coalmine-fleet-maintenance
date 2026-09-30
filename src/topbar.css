@@ -1155,3 +1155,11 @@
   .cdir-masters-chevron, .app > aside nav .masters-dropdown .cdir-clock-item, .app > aside nav .masters-dropdown .cdir-clock-item::after { transition: none; }
   .app > aside nav .masters-dropdown .cdir-clock { animation: none; }
 }
+/* Keep the C-Dir master icons beneath their entry, inside the dropdown. */
+.app > aside nav .cdir-dropdown .cdir-clock {
+  position: relative;
+  top: auto;
+  left: auto;
+  margin: 12px auto 0;
+}
+.cdir-dropdown .cdir-masters-hub.open::after { display: none; }

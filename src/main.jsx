@@ -3645,7 +3645,7 @@ function PrintButton({ title, columns = [], rows = [], className = "secondary", 
 // portalClassName reaches the export menu and the "preparing file" overlay, both portaled to the body: a caller inside a higher overlay (Info Pulse) uses it to raise them above itself.
 // printSection: Smart Print captures the dashboard section (.mine-panel) holding the menu, as it is on screen.
 // excelSheets: a function returning [{name, title, columns, rows}]; Excel then has one sheet per table.
-function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Print/Export", printOnly = false, smartPrintItem = true, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Print/Export", printOnly = false, smartPrintItem = true, smartLabels = false, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -3751,7 +3751,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
   };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
-  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className={`export-menu-popover${portalClassName ? ` ${portalClassName}` : ""}`} style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button>{smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}</div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} className={portalClassName} /></>;
+  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className={`export-menu-popover${portalClassName ? ` ${portalClassName}` : ""}`} style={popoverPosition} role="menu" aria-label={`${title} export options`}>{smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}<button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> {smartLabels ? "Smart PDF" : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> {smartLabels ? "Smart Excel" : "Download as Excel"}</button>{!smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}</div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} className={portalClassName} /></>;
 }
 function ReportColumnSelector({ columns = [], visibleColumnKeys = [], layoutStore, onApply, onClose }) {
   const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
@@ -7009,7 +7009,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         <div className="generated-report-heading-actions">
           {headingControl}
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
-          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} className="secondary" label="Generate" />
+          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} smartLabels={category === "employee-tenure"} className="secondary" label="Generate" />
         </div>
       </div>
       {controls}
