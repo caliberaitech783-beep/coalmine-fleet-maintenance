@@ -1,5 +1,17 @@
 .mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
+.mine-oem-top-toolbar { flex: 0 0 auto; }
+.mine-oem-top-toolbar .shared-table-actions-toolbar { position: static; justify-content: flex-start; padding: 4px 8px; }
+.mine-oem-top-toolbar .shared-table-record-count { display: none; }
+.mine-oem-details .mine-oem-grouping-description { display: none; }
+.mine-oem-details .mine-oem-report-navigation > .mine-oem-summary-slot { padding: 4px 8px; border: 0; }
+.mine-oem-details .mine-oem-report-navigation .site-report-summary .site-summary-options { flex-wrap: nowrap; max-height: none; overflow-x: auto; }
+.mine-oem-details .mine-oem-report-navigation .site-summary-region { flex: 0 0 auto; flex-wrap: nowrap; }
+.mine-oem-details .mine-oem-report-navigation .site-summary-region > div { flex-wrap: nowrap; }
+.mine-oem-details .dashboard-record-toolbar:empty { display: none; }
+.mine-oem-details .dashboard-asset-list table { width: max-content; min-width: 100%; table-layout: auto; }
+.mine-oem-details .dashboard-asset-list :is(th, td) { padding: 6px 8px !important; }
+.mine-oem-details .site-report-columns th { background: var(--panel, #fff); white-space: nowrap; }
 /* OEM report only: remove the redundant toolbar asset badge. */
 .mine-oem-modal > header .shared-table-record-count,
 .mine-oem-inline-details .shared-table-record-count { display: none; }

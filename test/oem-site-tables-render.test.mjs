@@ -79,7 +79,7 @@ test("OEM report places grouping beside count and reasons before trailing meters
   const record = request('D1', 'Sasti OB', 'S-1');
   record.requestDetails.dailyRemarks = [{createdAt: '2026-09-30 10:00', remark: 'Waiting', delayReason: 'Parts - OEM'}];
   const result = renderDetails(selectionFor([record]));
-  assert.match(result.html, /All OEMs grouped by site<\/span><div class="mine-oem-summary-slot"/);
+  assert.doesNotMatch(result.html, /All OEMs grouped by site|Each site split by OEM equipment type, with separate counts/);
   assert.match(result.html, /shared-table-record-count[\s\S]*?mine-oem-view-tabs[\s\S]*?Site-wise report/);
   assert.match(result.html, /Parts - OEM/);
   for (const model of result.exports) {
@@ -87,6 +87,16 @@ test("OEM report places grouping beside count and reasons before trailing meters
     const reason = labels.indexOf('Breakdown reason');
     assert.deepEqual(labels.slice(reason + 1, reason + 3), ['Delayed reason', 'Daily remarks']);
     assert.deepEqual(labels.slice(-4), ['Opening HMR', 'Opening KMR', 'Closing HMR', 'Closing KMR']);
+  }
+});
+
+test("both OEM report modes place each site heading before its compact column headings", () => {
+  for (const oemWise of [false, true]) {
+    const {html} = renderDetails(selectionFor(requests), '', oemWise);
+    assert.match(html, /class="site-report-heading"[\s\S]*?class="site-report-columns"/);
+    assert.equal((html.match(/class="site-report-heading"/g) || []).length, (html.match(/class="site-report-columns"/g) || []).length);
+    assert.doesNotMatch(html, /<thead>/);
+    assert.ok(html.indexOf('mine-oem-top-toolbar') < html.indexOf('mine-oem-report-navigation'));
   }
 });
 

@@ -272,6 +272,7 @@ function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, Co
       if (showRowNumbers && section.type === "colgroup") return React.cloneElement(section, {}, <col key="row-number" />, section.props.children);
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);
+      if (section.type === "thead" && groupBySite && tableProps["data-oem-column-layout"] && selectedRows.length) return null;
       if (section.type === "thead") sectionRows = sectionRows.map((row, position) => position === sectionRows.length - 1 ? sortableHeaderRow(row) : row);
       if (section.type === "tbody") {
         const hadData = sectionRows.some(isDataRow);
@@ -289,7 +290,7 @@ function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, Co
         const numbered = React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
         if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
           const group = siteSummary.find(item => item.label === reportSite(row));
-          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{numbered}</React.Fragment>;
+          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{tableProps["data-oem-column-layout"] && sections.filter(item => item.type === "thead").flatMap(item => tableElements(item.props.children)).map((header, index) => { const projectedHeader = projectTableRow(sortableHeaderRow(header), indices); return React.cloneElement(projectedHeader, {key: `site-columns-${index}`, className: "site-report-columns"}, <th scope="col">{SERIAL_COLUMN_LABEL}</th>, projectedHeader.props.children); })}{numbered}</React.Fragment>;
         }
         return numbered;
       }));

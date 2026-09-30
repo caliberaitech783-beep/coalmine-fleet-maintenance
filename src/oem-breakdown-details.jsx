@@ -32,6 +32,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   const [filtersHidden, setFiltersHidden] = useState(false);
   // The site-wise summary shares the selection row, so the table starts higher.
   const [summaryTarget, setSummaryTarget] = useState(null);
+  const [reportToolbarTarget, setReportToolbarTarget] = useState(null);
   const categoryRows = selection.records.filter(record => !category || equipmentCategoryLabel(record) === category);
   const rows = categoryRows.filter(record => (!status || record.requestStatus === status) && (!group || oemEquipmentLabel(record) === group) && matchesSmartSearch(query,
     record.requestReference, record.door, record.requestSite, record.make, record.model, record.group, record.requestStatus,
@@ -44,7 +45,8 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   ];
   const reportTabs = !selection.fleetOnly && <div className="mine-oem-view-tabs" role="group" aria-label="Detail report grouping"><button type="button" aria-pressed={!oemWise} onClick={() => setOemWise(false)}>Site-wise report</button><button type="button" aria-pressed={oemWise} onClick={() => setOemWise(true)}>OEM-wise report</button></div>;
   return <div className={`mine-oem-details${filtersHidden ? " filters-hidden" : ""}`}>
-    {!selection.fleetOnly && <div className="mine-oem-view-tabs mine-oem-report-navigation" role="group" aria-label="Site report filters"><span className="mine-oem-grouping-description">{oemWise ? "Each site split by OEM equipment type, with separate counts" : "All OEMs grouped by site"}</span><div className="mine-oem-summary-slot" ref={setSummaryTarget} /></div>}
+    <div className="mine-oem-top-toolbar" ref={setReportToolbarTarget} />
+    {!selection.fleetOnly && <div className="mine-oem-view-tabs mine-oem-report-navigation" role="group" aria-label="Site report filters"><div className="mine-oem-summary-slot" ref={setSummaryTarget} /></div>}
     <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span>{selection.fleetOnly && <div className="mine-oem-summary-slot" ref={setSummaryTarget} />}<span className="mine-oem-context-end"><span role="status" aria-live="polite">{selection.periodLabel}</span><button type="button" className="mine-oem-filter-toggle" aria-pressed={filtersHidden} title={filtersHidden ? "Show search, filters and site summary" : "Hide search, filters and site summary for a taller table"} onClick={() => setFiltersHidden(hidden => !hidden)}>{filtersHidden ? <Eye size={16} /> : <EyeOff size={16} />}{filtersHidden ? "Show filters" : "Hide filters"}</button></span></div>
     <div className="table-search-toolbar mine-oem-detail-search">
       <label><ListFilter /><select aria-label="OEM breakdown status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(selection.records.map(record => record.requestStatus))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
@@ -53,7 +55,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
       <label className="mine-oem-inline-search"><Search /><input type="search" aria-label="Search OEM breakdown records" placeholder="Search door number, chassis, site, model or status" value={query} onChange={event => setQuery(event.target.value)} /></label>
     </div>
     <div className="mine-oem-site-tables" role="region" tabIndex={0} aria-label="Site-wise fleet records">
-      <DashboardRecordBrowser toolbarAfterCount={reportTabs} columnTransform={selection.fleetOnly ? null : orderOemDetailColumns} key={oemWise ? "site-oem" : "site"} {...tableProps} summaryTarget={summaryTarget} rows={groupedRows} regions={selection.regions} rowsAreScoped title={`${title}${oemWise ? " · OEM-wise report" : ""}`} groupBySite hideHierarchyFilters hideFleetSearch showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
+      <DashboardRecordBrowser toolbarAfterCount={reportTabs} columnTransform={selection.fleetOnly ? null : orderOemDetailColumns} key={oemWise ? "site-oem" : "site"} {...tableProps} toolbarTarget={reportToolbarTarget} summaryTarget={summaryTarget} rows={groupedRows} regions={selection.regions} rowsAreScoped title={`${title}${oemWise ? " · OEM-wise report" : ""}`} groupBySite hideHierarchyFilters hideFleetSearch showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
     </div>
   </div>;
 }
