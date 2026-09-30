@@ -79,7 +79,7 @@ test("OEM report places grouping beside count and reasons before trailing meters
   const record = request('D1', 'Sasti OB', 'S-1');
   record.requestDetails.dailyRemarks = [{createdAt: '2026-09-30 10:00', remark: 'Waiting', delayReason: 'Parts - OEM'}];
   const result = renderDetails(selectionFor([record]));
-  assert.doesNotMatch(result.html, /All OEMs grouped by site/);
+  assert.match(result.html, /All OEMs grouped by site<\/span><div class="mine-oem-summary-slot"/);
   assert.match(result.html, /shared-table-record-count[\s\S]*?mine-oem-view-tabs[\s\S]*?Site-wise report/);
   assert.match(result.html, /Parts - OEM/);
   for (const model of result.exports) {
