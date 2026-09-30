@@ -25,8 +25,8 @@ export function employeeTenure(joined, asOf) {
 }
 
 export function buildEmployeeTenureReport(directory, asOf, minimumMonths = 3, filters = {}) {
-  if (!dateParts(asOf)) return {rows: [], missingDates: 0};
-  const rows = [], seen = new Set();
+  if (!dateParts(asOf)) return {rows: [], excludedRows: [], missingDates: 0};
+  const rows = [], excludedRows = [], seen = new Set();
   let missingDates = 0;
   const sites = new Map((directory?.sites || []).map(site => [site.id, site]));
   for (const [key, people] of Object.entries(directory?.matrix || {})) {
@@ -41,11 +41,20 @@ export function buildEmployeeTenureReport(directory, asOf, minimumMonths = 3, fi
         department: employee.department || '', designation: employee.designation || ''};
       if (Object.entries(filters).some(([field, value]) => value && dimensions[field] !== value)) continue;
       const tenure = employeeTenure(employee.dojISO, asOf);
-      if (!tenure) { if (!dateParts(employee.dojISO)) missingDates++; continue; }
+      if (!tenure) {
+        if (!dateParts(employee.dojISO)) {
+          missingDates++;
+          const joiningDate = String(employee.dojRaw || employee.dojISO || employee.doj || '').trim();
+          excludedRows.push({...dimensions, empId: employee.empId || '', name: employee.name,
+            joiningDate, reason: joiningDate ? 'Invalid joining date' : 'Missing joining date'});
+        }
+        continue;
+      }
       if (tenure.months < Math.max(3, minimumMonths)) continue;
       rows.push({...dimensions, empId: employee.empId || '', name: employee.name, joiningDate: employee.dojISO, ...tenure});
     }
   }
   rows.sort((a, b) => b.months - a.months || b.days - a.days || a.name.localeCompare(b.name));
-  return {rows, missingDates};
+  excludedRows.sort((a, b) => a.name.localeCompare(b.name));
+  return {rows, excludedRows, missingDates};
 }

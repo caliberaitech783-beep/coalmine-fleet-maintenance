@@ -172,7 +172,7 @@ export function cdirDirectoryFromMasters(masters = {}, {generated = ''} = {}) {
     (matrix[`${siteId}|${category}`] ||= []).push({
       empId: clean(employee.empId), name: clean(employee.name) || null, designation: clean(employee.designation), department: clean(employee.department),
       contact: clean(contact.contact), whatsapp: clean(contact.whatsapp), emergencyContact: clean(contact.emergencyContact), email: clean(contact.email),
-      dob: dob.display, dobISO: dob.iso, dobMonth: dob.month, dobDay: dob.day, doj: doj.display, dojISO: doj.iso,
+      dob: dob.display, dobISO: dob.iso, dobMonth: dob.month, dobDay: dob.day, doj: doj.display, dojISO: doj.iso, dojRaw: clean(employee.doj),
       uan: clean(employee.uan), gender: clean(employee.gender), status, reportingTo: clean(employee.reportingTo), level: clean(employee.staffLevel),
       aadharMasked: clean(employee.aadharMasked), localStatus: clean(employee.localStatus), rank: numberOr(employee.rank, 30),
     });

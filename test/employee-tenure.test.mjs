@@ -53,3 +53,19 @@ test('site, region, department, category and designation filters intersect using
   assert.deepEqual(ids({site:'Site one',region:'NCL'}),[]);
   assert.equal(ids({}).length,4);
 });
+
+test('excluded details retain raw invalid dates, match scope and never include former or recent employees', () => {
+  const employee=(empId,dojISO,extra={})=>({empId,name:empId,status:'ACTIVE',dojISO,department:'HR',designation:'Officer',...extra});
+  const directory={sites:[{id:'s',label:'Office',group:'CORP'}],matrix:{'s|A':[
+    employee('Missing',''),employee('Invalid','',{dojRaw:'not a date'}),employee('Impossible','2026-02-30'),
+    employee('Former','',{status:'RESIGNED'}),employee('Recent','2026-09-01'),employee('Future','2027-01-01'),
+  ]}};
+  const report=buildEmployeeTenureReport(directory,'2026-09-30',60,{site:'Office',category:'A'});
+  assert.equal(report.rows.length,0);
+  assert.equal(report.missingDates,3);
+  assert.deepEqual(report.excludedRows.map(row=>[row.empId,row.reason]),[['Impossible','Invalid joining date'],['Invalid','Invalid joining date'],['Missing','Missing joining date']]);
+  assert.equal(report.excludedRows[1].joiningDate,'not a date');
+  assert.equal(report.excludedRows[0].region,'CORP');
+  assert.equal(buildEmployeeTenureReport(directory,'2026-09-30',3,{site:'Elsewhere'}).excludedRows.length,0);
+  assert.deepEqual(buildEmployeeTenureReport(directory,'invalid').excludedRows,[]);
+});

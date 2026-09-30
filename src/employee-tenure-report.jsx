@@ -13,6 +13,14 @@ const columns = [
   {key: 'tenure', label: 'Working tenure', value: row => row.label, sortValue: row => row.months * 32 + row.days},
 ];
 
+const excludedColumns = [
+  ...columns.slice(0, 2),
+  ...[['site', 'Site'], ['region', 'Region'], ['category', 'Category']].map(([key, label]) => ({key, label, value: row => row[key]})),
+  ...columns.slice(2, 4),
+  {key: 'joiningDate', label: 'Recorded joining date', value: row => row.joiningDate || 'Not recorded'},
+  {key: 'reason', label: 'Exclusion reason', value: row => row.reason},
+];
+
 export default function EmployeeTenureReport({token, ReportSection}) {
   const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
   const [asOf, setAsOf] = useState(today);
@@ -21,6 +29,8 @@ export default function EmployeeTenureReport({token, ReportSection}) {
   const [data, setData] = useState({token: '', loading: true, error: '', directory: null});
   const [filters, setFilters] = useState({site: '', region: '', department: '', category: '', designation: ''});
   const [search, setSearch] = useState('');
+  const [view, setView] = useState('included');
+  const [reason, setReason] = useState('');
   useEffect(() => {
     const controller = new AbortController();
     setData({token, loading: true, error: '', directory: null});
@@ -34,7 +44,11 @@ export default function EmployeeTenureReport({token, ReportSection}) {
     return () => controller.abort();
   }, [token, attempt]);
   const report = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum, filters), [data, token, asOf, minimum, filters]);
-  const available = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum).rows, [data, token, asOf, minimum]);
+  const available = useMemo(() => {
+    const all = buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum);
+    return [...all.rows, ...all.excludedRows];
+  }, [data, token, asOf, minimum]);
+  const excludedRows = report.excludedRows.filter(row => !reason || row.reason === reason);
   const fields = [['site', 'Site'], ['region', 'Region'], ['department', 'Department'], ['category', 'Category'], ['designation', 'Designation']];
   const filterSummary = fields.filter(([key]) => filters[key]).map(([key, label]) => `${label}: ${filters[key]}`).join(' · ');
   return <section className="reports-workspace employee-tenure-report">
@@ -46,15 +60,22 @@ export default function EmployeeTenureReport({token, ReportSection}) {
         <option value="">All {key === 'category' ? 'categories' : `${label.toLowerCase()}s`}</option>
         {[...new Set([...available.map(row => row[key]), filters[key]].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map(value => <option key={value} value={value}>{value}</option>)}
       </select></label>)}
-      <button type="button" onClick={() => setFilters({site: '', region: '', department: '', category: '', designation: ''})}>Clear filters</button>
+      <button type="button" onClick={() => {setFilters({site: '', region: '', department: '', category: '', designation: ''});setReason('');}}>Clear filters</button>
       <div className="employee-tenure-search-actions">
         <label className="employee-tenure-search"><input type="search" data-smart-search aria-label="Search employee tenure report" placeholder="Search this report" value={search} onChange={event => setSearch(event.target.value)} /></label>
         <button type="button" onClick={() => setAttempt(value => value + 1)}>Refresh</button>
       </div>
     </div>
     {data.loading || data.token !== token ? <p role="status">Loading employee records…</p> : data.error ? <p role="alert">{data.error} Use Refresh to retry.</p> : <>
-      {report.missingDates > 0 && <p role="status">{report.missingDates} active employee records excluded because their joining date is missing or invalid.</p>}
-      <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months${filterSummary ? ` · ${filterSummary}` : ''}`} category="employee-tenure" query={search} showSearch={false} description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees match the selected filters and tenure." />
+      <div className="employee-tenure-tabs" role="group" aria-label="Employee report view">
+        <button type="button" aria-pressed={view === 'included'} onClick={() => setView('included')}>Tenure report ({report.rows.length})</button>
+        <button type="button" aria-pressed={view === 'excluded'} onClick={() => setView('excluded')}>Excluded employees ({report.excludedRows.length})</button>
+      </div>
+      {view === 'excluded' && <label className="employee-tenure-reason">Exclusion reason <select aria-label="Exclusion reason" value={reason} onChange={event => setReason(event.target.value)}>
+        <option value="">All reasons</option><option>Missing joining date</option><option>Invalid joining date</option>
+      </select></label>}
+      {view === 'included' && report.missingDates > 0 && <p role="status">{report.missingDates} active employee records excluded because their joining date is missing or invalid.</p>}
+      {view === 'excluded' ? <ReportSection key="excluded" title={`Excluded Employees · ${formatDisplayDate(asOf)}${filterSummary ? ` · ${filterSummary}` : ''}${reason ? ` · ${reason}` : ''}`} category="employee-tenure" query={search} showSearch={false} description="Active employees whose joining date is missing or invalid. Tenure cannot be calculated until the joining date is corrected in C-Dir Masters." columns={excludedColumns} rows={excludedRows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No excluded employees match the selected filters." /> : <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months${filterSummary ? ` · ${filterSummary}` : ''}`} category="employee-tenure" query={search} showSearch={false} description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees match the selected filters and tenure." />}
     </>}
   </section>;
 }

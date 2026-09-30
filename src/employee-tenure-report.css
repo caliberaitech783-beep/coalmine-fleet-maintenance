@@ -22,3 +22,8 @@
   .employee-tenure-search-actions { width: 100%; }
   .employee-tenure-search { flex: 1; }
 }
+.employee-tenure-tabs { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 16px; }
+.employee-tenure-tabs button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel, #fff); color: var(--ink); font-size: 16px; cursor: pointer; }
+.employee-tenure-tabs button[aria-pressed="true"] { background: #553080; color: #fff; border-color: #553080; }
+.employee-tenure-reason { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.employee-tenure-reason select { font-size: 18px; }
