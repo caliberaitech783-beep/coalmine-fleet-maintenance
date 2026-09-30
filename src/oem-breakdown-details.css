@@ -1,6 +1,6 @@
 .mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
-/* Keep the shared fleet drilldown site strip compact. */
+/* Keep the shared fleet drilldown site strip compact and horizontally scrollable. */
 .fleet-site-tabs-modal .site-report-summary > b,
 .fleet-site-tabs-modal .site-summary-region > b { display: none; }
 .fleet-site-tabs-modal .site-report-summary .site-summary-options { flex-wrap: nowrap; max-height: none; overflow-x: auto; }
