@@ -9,6 +9,13 @@
 .mine-oem-top-toolbar { flex: 0 0 auto; }
 .mine-oem-top-toolbar .shared-table-actions-toolbar { position: static; justify-content: flex-start; padding: 4px 8px; }
 .mine-oem-top-toolbar .shared-table-record-count { display: none; }
+/* Keep report switching central and table actions at the right edge. */
+:is(.mine-oem-view-toolbar, .mine-oem-top-toolbar) .shared-table-actions-toolbar { justify-content: flex-end; }
+:is(.mine-oem-view-toolbar, .mine-oem-top-toolbar) .shared-table-actions-toolbar > .mine-oem-view-tabs { margin-inline: auto; }
+@media (min-width: 1400px) {
+  :is(.mine-oem-view-toolbar, .mine-oem-top-toolbar) .shared-table-actions-toolbar { position: relative; min-height: 52px; padding-left: calc(50% + 180px); flex-wrap: nowrap; }
+  :is(.mine-oem-view-toolbar, .mine-oem-top-toolbar) .shared-table-actions-toolbar > .mine-oem-view-tabs { position: absolute; left: 50%; transform: translateX(-50%); flex-wrap: nowrap; white-space: nowrap; }
+}
 .mine-oem-details .mine-oem-grouping-description { display: none; }
 .mine-oem-details .mine-oem-report-navigation > .mine-oem-summary-slot { padding: 4px 8px; border: 0; }
 .mine-oem-details .mine-oem-report-navigation .site-report-summary .site-summary-options { flex-wrap: nowrap; max-height: none; overflow-x: auto; }
