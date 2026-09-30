@@ -8,7 +8,7 @@ test('OEM BD retains its chart and adds a site-wise detail report view',()=>{
   assert.match(source,/aria-pressed=\{oemView === view\}/);
   assert.match(source,/oemView === "details" \? <section/);
   assert.match(source,/selection=\{oemSiteDetailSelection\}/);
-  assert.match(source,/<OemBreakdownChart toolbarTarget=\{oemViewToolbarTarget\} chart=\{oemChart\}/);
+  assert.match(source,/<OemBreakdownChart chart=\{oemChart\} toolbarTarget=\{oemViewToolbarTarget\}/);
   assert.match(source,/className="mine-oem-view-toolbar" ref=\{setOemViewToolbarTarget\}/);
 });
 test('site detail selection shares filtered chart data without a stale chart-bar category',()=>{
