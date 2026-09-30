@@ -1628,8 +1628,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardShift, setDashboardShift] = useState("all");
-  const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
-  const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
+  const [dashboardFrom, setDashboardFrom] = useState("");
+  const [dashboardTo, setDashboardTo] = useState("");
   const [stagePipelineRegion, setStagePipelineRegion] = useState("all");
   const [stagePipelineSite, setStagePipelineSite] = useState("all");
   const [stagePipelineShift, setStagePipelineShift] = useState("all");
@@ -1668,16 +1668,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendTo, setRequestTrendTo] = useState(() => localDateKey(new Date()));
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   const [throughputFiltersHidden, setThroughputFiltersHidden] = useState(false);
-  // Every dashboard date filter starts on today; clearing a date shows all time.
-  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
-  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState(() => localDateKey(new Date()));
+  // Date filters start unbounded; users can select a specific range.
+  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
+  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState("");
   const [breakdownSummaryManual, setBreakdownSummaryManual] = useState(false);
   const [throughputRegion, setThroughputRegion] = useState("all");
   const [throughputSite, setThroughputSite] = useState("all");
   const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
   const [breakdownDetailDays, setBreakdownDetailDays] = useState(5);
-  const [breakdownDetailFrom, setBreakdownDetailFrom] = useState(() => localDateKey(new Date()));
-  const [breakdownDetailTo, setBreakdownDetailTo] = useState(() => localDateKey(new Date()));
+  const [breakdownDetailFrom, setBreakdownDetailFrom] = useState("");
+  const [breakdownDetailTo, setBreakdownDetailTo] = useState("");
   const [breakdownDayReturnSite, setBreakdownDayReturnSite] = useState("");
   const [breakdownCustomDays, setBreakdownCustomDays] = useState(7);
   const [breakdownFiltersHidden, setBreakdownFiltersHidden] = useState(false);
@@ -1818,7 +1818,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
   const breakdownSummaryIsToday = breakdownSummaryFrom === todayKey && breakdownSummaryTo === todayKey;
-  const resetBreakdownSummaryRange = () => { setBreakdownSummaryManual(false); setBreakdownSummaryFrom(todayKey); setBreakdownSummaryTo(todayKey); };
+  const resetBreakdownSummaryRange = () => { setBreakdownSummaryManual(false); setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); };
   const updateBreakdownSummaryRange = (bound, value) => {
     setBreakdownSummaryManual(true);
     if (!value) { setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); return; }
@@ -1948,7 +1948,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setOemDrilldownKind("breakdown");
   };
   const filterOemChart = oem => { setDashboardOem(oem); setOemDrilldownCategory({}); };
-  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownCategory({}); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
+  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownCategory({}); setDashboardFrom(""); setDashboardTo(""); };
   // Derive the open list from the current filters and data on every render.
   const oemSelection = createOemBreakdownSelection(oemChart, oemDrilldownCategory);
   const oemSiteDetailSelection = {
@@ -2398,7 +2398,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Vehicle throughput shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>}
             <label><span>From date</span><DateInput aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><DateInput aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-            <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
+            <button type="button" onClick={resetBreakdownSummaryRange} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
@@ -2553,7 +2553,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <div>{[{ key: "onroad", label: "On road", value: selectedBreakdownSiteRoad.onRoad }, { key: "offroad", label: "Off road", value: selectedBreakdownSiteRoad.offRoad }, { key: "idle", label: "Idle", value: selectedBreakdownSiteRoad.idle }].map((item) => <button type="button" key={item.key} onClick={() => openSiteScopedDrilldown(`site-status:${breakdownDetailSite}|${item.key}`)} aria-label={`${item.label}: ${item.value}. Drill into equipment and vehicles.`}><span><b>{item.label}</b><strong>{item.value}</strong></span><i aria-hidden="true"><b style={{ width: `${selectedBreakdownSiteRoad.total ? (item.value / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></i><small>of {selectedBreakdownSiteRoad.total} fleet</small></button>)}</div>
         </section>
         <p className="dashboard-breakdown-day-help">Click a heading to sort. Click a date for that day's movement report, or a number for its entries. BD % opens the closing balance used in the percentage.</p>
-        <div className="dashboard-breakdown-day-table"><ActionsTable defaultDateToday printTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`} exportTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`}><thead><tr>{[["date", "Date"], ["open", "BD Open"], ["incoming", "BD In"], ["outgoing", "BD Out"], ["balance", "BD Balance"], ["percentage", "BD %"]].map(([key, label]) => <SortableHeader key={key} label={label} sortKey={key} sort={breakdownDaySort} onSort={changeBreakdownDaySort} />)}</tr></thead><tbody>{sortedBreakdownDetailRows.length ? sortedBreakdownDetailRows.map((day) => {
+        <div className="dashboard-breakdown-day-table"><ActionsTable printTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`} exportTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`}><thead><tr>{[["date", "Date"], ["open", "BD Open"], ["incoming", "BD In"], ["outgoing", "BD Out"], ["balance", "BD Balance"], ["percentage", "BD %"]].map(([key, label]) => <SortableHeader key={key} label={label} sortKey={key} sort={breakdownDaySort} onSort={changeBreakdownDaySort} />)}</tr></thead><tbody>{sortedBreakdownDetailRows.length ? sortedBreakdownDetailRows.map((day) => {
           const breakdownPercentage = selectedBreakdownSiteRoad.total ? (day.balance / selectedBreakdownSiteRoad.total) * 100 : 0;
           const dayLabel = formatDisplayDate(day.date);
           return <tr key={day.date}><td><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "all")} aria-label={`${breakdownDetailSite} · ${dayLabel}: open day movement report`}><b>{dayLabel}</b></button></td>{[["open", "BD Open", ""], ["incoming", "BD In", "+"], ["outgoing", "BD Out", "-"], ["balance", "BD Balance", ""]].map(([metric, label, prefix]) => <td key={metric} className={metric}><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, metric)} aria-label={`${breakdownDetailSite} · ${dayLabel}: ${label}, ${day[metric]} entries`}>{prefix}{day[metric]}</button></td>)}<td className="percentage"><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "balance")} aria-label={`${breakdownDetailSite} · ${dayLabel}: BD ${breakdownPercentage.toFixed(1)}%, show ${day.balance} balance entries`} title={`BD Balance ${day.balance} ÷ ${selectedBreakdownSiteRoad.total} registered fleet × 100`}><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></button></td></tr>;
@@ -2564,7 +2564,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} defaultDateToday rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
             value: encodeDateRange(movementDrilldownParts[1], movementDrilldownParts[2]),
