@@ -6,12 +6,13 @@
 @media screen and (min-width: 1181px) {
   .mine-oem-modal > .dashboard-filter-bar.in-dialog { display: grid; grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); align-items: center; }
   .mine-oem-modal > .dashboard-filter-bar.in-dialog > div:first-child { min-width: 0; }
-  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; margin-top: 0; gap: 8px; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)) auto auto auto; min-width: 0; margin-top: 0; gap: 8px; align-items: center; }
   .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions > label { min-width: 0; }
   .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions :is(input, select) { min-width: 0; width: 100%; }
-}
-@media screen and (min-width: 1600px) {
-  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions { grid-template-columns: repeat(6, minmax(0, 1fr)) auto auto auto; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions :is(input, select) { padding-inline: 6px; font-size: 12px; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions > label > span { font-size: 11px; white-space: nowrap; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-updated { padding-inline: 8px; font-size: 11px; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .dashboard-export-trigger { padding-inline: 8px; font-size: 11px; }
 }
 .mine-oem-view-tabs button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-weight: 700; }
 .mine-oem-view-tabs button[aria-pressed="true"] { background: var(--brand-purple, #522e90); color: #fff; }

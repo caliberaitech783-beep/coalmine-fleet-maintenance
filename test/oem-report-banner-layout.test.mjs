@@ -8,4 +8,6 @@ test('OEM report banner places desktop filters beside branding and hides only it
   assert.match(css, /@media screen and \(min-width: 1181px\)/);
   assert.match(css, /\.mine-oem-modal > \.dashboard-filter-bar\.in-dialog \{ display: grid; grid-template-columns: minmax\(230px, 280px\) minmax\(0, 1fr\)/);
   assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\) auto auto auto/);
+  assert.doesNotMatch(css, /min-width: 1600px/);
+  assert.doesNotMatch(css, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
 });
