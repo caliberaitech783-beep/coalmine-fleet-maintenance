@@ -51,6 +51,10 @@ export default function EmployeeTenureReport({token, ReportSection}) {
   const excludedRows = report.excludedRows.filter(row => !reason || row.reason === reason);
   const fields = [['site', 'Site'], ['region', 'Region'], ['department', 'Department'], ['category', 'Category'], ['designation', 'Designation']];
   const filterSummary = fields.filter(([key]) => filters[key]).map(([key, label]) => `${label}: ${filters[key]}`).join(' · ');
+  const viewTabs = <div className="employee-tenure-tabs" role="group" aria-label="Employee report view">
+        <button type="button" aria-pressed={view === 'included'} onClick={() => setView('included')}>Tenure report ({report.rows.length})</button>
+        <button type="button" aria-pressed={view === 'excluded'} onClick={() => setView('excluded')}>Excluded employees ({report.excludedRows.length})</button>
+      </div>;
   return <section className="reports-workspace employee-tenure-report">
     <h1>Employee Tenure Report</h1>
     <div className="employee-tenure-filters">
@@ -67,15 +71,12 @@ export default function EmployeeTenureReport({token, ReportSection}) {
       </div>
     </div>
     {data.loading || data.token !== token ? <p role="status">Loading employee records…</p> : data.error ? <p role="alert">{data.error} Use Refresh to retry.</p> : <>
-      <div className="employee-tenure-tabs" role="group" aria-label="Employee report view">
-        <button type="button" aria-pressed={view === 'included'} onClick={() => setView('included')}>Tenure report ({report.rows.length})</button>
-        <button type="button" aria-pressed={view === 'excluded'} onClick={() => setView('excluded')}>Excluded employees ({report.excludedRows.length})</button>
-      </div>
+
       {view === 'excluded' && <label className="employee-tenure-reason">Exclusion reason <select aria-label="Exclusion reason" value={reason} onChange={event => setReason(event.target.value)}>
         <option value="">All reasons</option><option>Missing joining date</option><option>Invalid joining date</option>
       </select></label>}
       {view === 'included' && report.missingDates > 0 && <p role="status">{report.missingDates} active employee records excluded because their joining date is missing or invalid.</p>}
-      {view === 'excluded' ? <ReportSection key="excluded" title={`Excluded Employees · ${formatDisplayDate(asOf)}${filterSummary ? ` · ${filterSummary}` : ''}${reason ? ` · ${reason}` : ''}`} category="employee-tenure" query={search} showSearch={false} description="Active employees whose joining date is missing or invalid. Tenure cannot be calculated until the joining date is corrected in C-Dir Masters." columns={excludedColumns} rows={excludedRows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No excluded employees match the selected filters." /> : <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months${filterSummary ? ` · ${filterSummary}` : ''}`} category="employee-tenure" query={search} showSearch={false} description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees match the selected filters and tenure." />}
+      {view === 'excluded' ? <ReportSection key="excluded" title={`Excluded Employees · ${formatDisplayDate(asOf)}${filterSummary ? ` · ${filterSummary}` : ''}${reason ? ` · ${reason}` : ''}`} headingControl={viewTabs} category="employee-tenure" query={search} showSearch={false} description="Active employees whose joining date is missing or invalid. Tenure cannot be calculated until the joining date is corrected in C-Dir Masters." columns={excludedColumns} rows={excludedRows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No excluded employees match the selected filters." /> : <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months${filterSummary ? ` · ${filterSummary}` : ''}`} headingControl={viewTabs} category="employee-tenure" query={search} showSearch={false} description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees match the selected filters and tenure." />}
     </>}
   </section>;
 }

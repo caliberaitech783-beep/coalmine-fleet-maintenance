@@ -38,7 +38,8 @@ test('employee report passes exact tenure and six requested columns to the expor
   slots[6]='excluded';
   const excludedHtml=render('fixture');
   assert.match(excludedHtml,/Only excluded/,'filter options include employees without joining dates');
-  assert.match(excludedHtml,/Excluded employees \(1\)/);
+  assert.match(renderToStaticMarkup(received.headingControl),/Excluded employees \(1\)/);
+  assert.doesNotMatch(excludedHtml,/Employee report view/);
   assert.equal(received.rows[0].empId,'E3');
   assert.equal(received.rows[0].reason,'Missing joining date');
   assert.ok(received.columns.some(column=>column.label==='Exclusion reason'));
