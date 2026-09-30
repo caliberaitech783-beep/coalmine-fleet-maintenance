@@ -1628,8 +1628,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardShift, setDashboardShift] = useState("all");
-  const [dashboardFrom, setDashboardFrom] = useState("");
-  const [dashboardTo, setDashboardTo] = useState("");
+  const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
+  const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
   const [stagePipelineRegion, setStagePipelineRegion] = useState("all");
   const [stagePipelineSite, setStagePipelineSite] = useState("all");
   const [stagePipelineShift, setStagePipelineShift] = useState("all");
@@ -1948,7 +1948,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setOemDrilldownKind("breakdown");
   };
   const filterOemChart = oem => { setDashboardOem(oem); setOemDrilldownCategory({}); };
-  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownCategory({}); setDashboardFrom(""); setDashboardTo(""); };
+  const resetOemFilters = () => { setDashboardRegion("all"); setDashboardSite("all"); setDashboardShift("all"); setDashboardOem("all"); setOemDrilldownCategory({}); setDashboardFrom(todayKey); setDashboardTo(todayKey); };
   // Derive the open list from the current filters and data on every render.
   const oemSelection = createOemBreakdownSelection(oemChart, oemDrilldownCategory);
   const oemSiteDetailSelection = {

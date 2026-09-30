@@ -132,23 +132,23 @@ test("BD In components appear only for default today and return on reset", () =>
   assert.equal(byLabel(tree, "BD In opening and new counts"), undefined);
 });
 
-test("dashboard From/To default to all days and explicit ranges filter", () => {
+test("dashboard From/To default to today as the live view and only an earlier range filters", () => {
   const view = harness();
   let tree = view.render();
-  assert.equal(byLabel(tree, "Dashboard from date").props.value, "");
-  assert.equal(byLabel(tree, "Dashboard to date").props.value, "");
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
   assert.equal(byLabel(tree, "Dashboard to date").props.max, todayKey);
-  assert.ok(text(byClass(tree, "mine-updated")).endsWith(" · All time"));
+  assert.ok(text(byClass(tree, "mine-updated")).endsWith(` · ${todayLabel}`));
   // Today's range is applied: only requests opened today count as historical analysis.
   byLabel(tree, "Dashboard from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Dashboard from date").props.value, "2026-09-01");
-  assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-01");
-  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Filtered · "));
-  assert.ok(text(byClass(tree, "mine-updated")).includes("01-09-2026"));
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
+  assert.ok(text(byClass(tree, "mine-updated")).includes(displayDates.formatDisplayDateRange("2026-09-01", todayKey)));
   byLabel(tree, "Dashboard to date").props.onChange({target: {value: "9999-12-31"}});
   tree = view.render();
-  assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-01");
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
   tree = setDashboardDate(view, todayKey);
   assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
   assert.ok(button(tree, "BD (%) 33.3"), "site summary shows BD balance as a share of total fleet");
@@ -158,13 +158,13 @@ test("dashboard From/To default to all days and explicit ranges filter", () => {
   assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
 });
 
-test("site-wise BD defaults to today while the top-level dashboard stays unfiltered", () => {
+test("every dashboard date filter starts on today, availability follows the To date and Reset restores today", () => {
   const view = harness();
   let tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, todayKey);
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, todayKey);
-  assert.equal(byLabel(tree, "Dashboard from date").props.value, "");
-  assert.equal(byLabel(tree, "Dashboard to date").props.value, "");
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
   assert.equal(byLabel(tree, "Breakdown trend from date").props.value, todayKey);
   assert.equal(byLabel(tree, "Breakdown trend to date").props.value, todayKey);
   assert.ok(byLabel(tree, "1 day recorded breakdown chart"));
@@ -287,12 +287,12 @@ test("dashboard opens in Breakdown by default", () => {
   assert.equal(button(byLabel(tree, "Fleet chart view"), "Breakdown").props["aria-pressed"], true);
 });
 
-test("OEM view retains unbounded shared filters and separate label and count actions", () => {
+test("OEM view retains today's shared filters and separate label and count actions", () => {
   const view = harness({...oemHarnessOptions, initialMode: "oem"});
   let tree = view.render(oemRequests);
   assertOemFilters(tree, {region: "all", site: "all", oem: "all"});
-  assert.equal(byLabel(tree, "Dashboard from date").props.value, "");
-  assert.equal(byLabel(tree, "Dashboard to date").props.value, "");
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
   assert.equal(button(byLabel(tree, "Fleet chart view"), "OEM BD").props["aria-pressed"], true);
   assert.equal(oemChart(tree).props.chart.rows.length, 5);
   assert.equal(text(fleetCount(tree, "OEM BD")), "5");

@@ -20,9 +20,9 @@ test("dashboard region selection exposes its sites and filters every scoped data
 
 test("dashboard date filters opening-date analysis without filtering live fleet status and remains responsive", () => {
   assert.match(source, /function dashboardRecordDate\(record = \{\}\)/);
-  // Date filters start blank and apply only when a range is selected.
-  assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(""\)/);
-  assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(""\)/);
+  // Dashboard header dates default to today; other pages remain unfiltered.
+  assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
