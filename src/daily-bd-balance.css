@@ -64,6 +64,14 @@
 .bd-balance-empty button { display:inline-flex; align-items:center; gap:6px; }
 .bd-balance-empty svg { width:16px; height:16px; }
 .bd-balance-range-error { color:#c52b43; padding:0 20px; }
+.bd-balance-site-table { width:100%; border-collapse:separate; border-spacing:0; color:var(--mine-text); font-variant-numeric:tabular-nums; }
+.bd-balance-site-table caption { text-align:left; padding:0 0 12px; color:var(--mine-muted); }
+.bd-balance-site-table :is(th,td) { padding:10px 12px; border-bottom:1px solid var(--mine-line); text-align:right; white-space:nowrap; }
+.bd-balance-site-table th { background:var(--mine-panel,#fff); }
+.bd-balance-site-table tr>th:first-child { position:sticky; left:0; z-index:1; text-align:left; border-right:1px solid var(--mine-line); }
+.bd-balance-site-table th small { display:block; color:var(--mine-muted); font-weight:400; margin-top:4px; }
+.mine-dashboard .bd-balance-site-table button { color:var(--mine-text); background:transparent; border:0; padding:6px 10px; min-width:44px; cursor:pointer; font:inherit; text-decoration:underline; text-underline-offset:3px; }
+.bd-balance-site-table tbody tr:hover { background:#64748b0b; }
 .mine-dashboard-night .bd-balance-change.increase { color:#ff9bac; background:#4b2030; }
 .mine-dashboard-night .bd-balance-change.decrease { color:#78dfb7; background:#143e30; }
 .mine-dashboard-night .bd-balance-change.steady { color:#becbdf; background:#334155; }

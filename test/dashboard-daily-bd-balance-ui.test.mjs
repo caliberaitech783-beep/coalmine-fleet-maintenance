@@ -11,6 +11,7 @@ import {recordBelongsToSite} from '../site-location.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
 import {dailyBdBalanceExport} from '../src/dashboard-section-export.mjs';
 import DateInput from '../src/date-input.mjs';
+import {timestampMatchesShift} from '../shift-report-time.mjs';
 
 const source = readFileSync(new URL('../src/daily-bd-balance-chart.jsx', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
 const {code} = await transformWithOxc(source, 'daily-bd-balance-chart.jsx', {jsx: {runtime: 'classic'}});
@@ -30,7 +31,7 @@ const button = (tree, value) => find(tree, node => node.type === 'button' && tex
 function harness() {
   const slots = [], calls = []; let cursor = 0;
   const bindings = {
-    React, ...ledger, dashboardCountScale, recordedBreakdownRangeLength, recordBelongsToSite, formatDisplayDate, dailyBdBalanceExport,
+    React, ...ledger, dashboardCountScale, recordedBreakdownRangeLength, recordBelongsToSite, formatDisplayDate, dailyBdBalanceExport, timestampMatchesShift,
     useMemo: fn => fn(),
     useState(initial) {const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => {slots[i] = value;}];},
     ...Object.fromEntries(['ArrowDown', 'ArrowRight', 'ArrowUp', 'Info', 'MapPin', 'RotateCcw'].map(name => [name, () => null])),
@@ -201,4 +202,66 @@ test('the Export menu prints the chart as it is on screen and hands its table to
   assert.deepEqual(exportRef.current.rows, menu.props.rows);
   view.render({ExportMenu, exportRef, ready: false});
   assert.equal(exportRef.current, null, 'nothing to export while loading');
+});
+
+test('every site view compares dates, includes zero sites, and drills into the exact site and date', () => {
+  const view = harness();
+  label(view.render(), 'Daily BD balance view').props.onChange({target: {value: 'sites'}});
+  label(view.render(), 'Daily BD balance from date').props.onChange({target: {value: '2026-09-10'}});
+  let tree = view.render({sites: ['Sasti OB', 'Majri OB', 'Empty site']});
+  assert.ok(label(tree, 'Every site BD balance by date'));
+  assert.ok(label(tree, 'Sasti OB, 10-09-2026: Closing BD, 2 requests'));
+  assert.ok(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'));
+  assert.ok(label(tree, 'Majri OB, 10-09-2026: Closing BD, 0 requests'));
+  assert.ok(label(tree, 'Empty site, 11-09-2026: Closing BD, 0 requests'));
+  label(tree, 'Sasti OB, 10-09-2026: Closing BD, 2 requests').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-10', '2026-09-10', 'Sasti OB']);
+  label(tree, 'Sasti OB: BD Out, 1 requests in selected period').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['outgoing', '2026-09-10', '2026-09-11', 'Sasti OB']);
+  label(tree, 'Daily BD balance site').props.onChange({target: {value: 'Majri OB'}});
+  tree = view.render();
+  assert.equal(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'), undefined);
+  assert.ok(label(tree, 'Majri OB, 11-09-2026: Closing BD, 1 requests'));
+  tree = view.render({sites: ['Sasti OB']});
+  assert.equal(label(tree, 'Daily BD balance site').props.value, '');
+  assert.equal(label(tree, 'Majri OB, 11-09-2026: Closing BD, 1 requests'), undefined);
+  assert.equal(label(view.render({ready: false}), 'Every site BD balance by date'), undefined);
+});
+
+test('every site export includes daily movements and period totals with idle kept separate', () => {
+  const view = harness(), exportRef = {};
+  label(view.render(), 'Daily BD balance view').props.onChange({target: {value: 'sites'}});
+  label(view.render(), 'Daily BD balance from date').props.onChange({target: {value: '2026-09-10'}});
+  const tree = view.render({exportRef, records: [
+    {ref: 'OPEN', site: 'Sasti', start: '2026-09-09', status: 'Open'},
+    {ref: 'IDLE', site: 'Sasti', start: '2026-09-09', status: 'Idle'},
+    {ref: 'CLOSED', site: 'Majri OB', start: '2026-09-10', closedAt: '2026-09-11', status: 'Closed'},
+  ]});
+  assert.ok(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'));
+  assert.ok(label(tree, 'Sasti OB: Idle Vehicles, 1 requests in selected period'));
+  const exported = exportRef.current;
+  assert.match(exported.title, /^Every site BD balance/);
+  assert.equal(exported.columns[0].label, 'Site name');
+  assert.equal(exported.rows.length, 6);
+  assert.deepEqual(exported.rows.filter(row => row.label === 'Selected period').map(row => [row.site, row.open, row.incoming, row.outgoing, row.balance, row.idle]), [
+    ['Sasti OB', 2, 0, 0, 1, 1], ['Majri OB', 0, 1, 1, 0, 0],
+  ]);
+  label(tree, 'Daily BD balance view').props.onChange({target: {value: 'chart'}});
+  view.render({exportRef});
+  assert.equal(exportRef.current.columns[0].label, 'Date');
+});
+
+test('every site view applies Shift Master to each site ledger', () => {
+  const view = harness();
+  label(view.render(), 'Daily BD balance view').props.onChange({target: {value: 'sites'}});
+  const tree = view.render({shift: 'A', shiftOptions: [{key: 'A', label: 'A Shift'}], shiftRecords: [
+    {site: 'Sasti OB', shiftName: 'Shift A', shiftCode: 'A', startTime: '06:00', endTime: '14:00'},
+    {site: 'Majri OB', shiftName: 'Shift A', shiftCode: 'A', startTime: '06:00', endTime: '14:00'},
+  ], records: [
+    {ref: 'A', site: 'Sasti OB', start: '2026-09-11T08:00:00+05:30'},
+    {ref: 'B', site: 'Sasti OB', start: '2026-09-11T16:00:00+05:30'},
+    {ref: 'C', site: 'Majri OB', start: '2026-09-11T09:00:00+05:30'},
+  ]});
+  assert.ok(label(tree, 'Sasti OB: BD In, 1 requests in selected period'));
+  assert.ok(label(tree, 'Majri OB: BD In, 1 requests in selected period'));
 });

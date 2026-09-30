@@ -32,6 +32,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const [site, setSite] = useState('');
   const [range, setRange] = useState({days: 1, from: '', to: ''});
   const [rangeError, setRangeError] = useState('');
+  const [view, setView] = useState('chart');
   const activeSite = sites.includes(site) ? site : '';
   const activeShift = shiftOptions.some(option => option.key === shift) ? shift : DAILY_BD_ALL_SHIFTS;
   const activeShiftLabel = shiftOptions.find(option => option.key === activeShift)?.label || 'All shifts';
@@ -44,10 +45,13 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
     shift: activeShift,
   });
   const ledger = useMemo(() => buildDailyBdBalance(scopedRecords, from, to, true, {matchesShift}), [scopedRecords, from, to, activeShift, shiftRecords]);
+  const siteLedgers = useMemo(() => view === 'sites' ? (activeSite ? [activeSite] : sites).map(name => ({
+    name, ledger: buildDailyBdBalance(scopedRecords.filter(record => recordBelongsToSite(record, name)), from, to, true, {matchesShift}),
+  })) : [], [view, sites, activeSite, scopedRecords, from, to, activeShift, shiftRecords]);
   // Only daily In/Out are plotted. Opening balances must not flatten their bars.
   const peak = Math.max(0, ...ledger.days.flatMap(day => [day.incoming, day.outgoing]));
   const maximum = Math.max(1, peak <= 20 ? peak : Math.ceil(peak / 5) * 5);
-  const inspect = (metric, start = from, end = to) => onInspect?.(metric === 'balance' ? 'active-balance' : metric, start, end, activeSite);
+  const inspect = (metric, start = from, end = to, selectedSite = activeSite) => onInspect?.(metric === 'balance' ? 'active-balance' : metric, start, end, selectedSite);
   const preset = days => {setRange({days, from: '', to: ''}); setRangeError('');};
   const changeDate = (bound, value) => {
     if (!value) {preset(1); return;}
@@ -59,11 +63,17 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const unavailable = !ready || Boolean(error);
   // The table its Export menu offers, also handed to the dashboard for the whole-dashboard Excel workbook.
   const exported = unavailable || !ledger.days.length ? null : dailyBdBalanceExport({ledger, from, to, today, stale, place: `${activeSite || scopeLabel}${activeShift === DAILY_BD_ALL_SHIFTS ? '' : ` · ${activeShiftLabel}`}`});
+  if (exported && view === 'sites') {
+    exported.title = exported.title.replace('Daily BD balance', 'Every site BD balance');
+    exported.columns = [{label: 'Site name', value: row => row.site}, ...exported.columns];
+    exported.rows = siteLedgers.flatMap(({name, ledger: siteLedger}) => dailyBdBalanceExport({ledger: siteLedger, from, to, today, stale}).rows.map(row => ({...row, site: name})));
+  }
   if (exportRef) exportRef.current = exported;
   return <article className="mine-panel daily-bd-balance" aria-label="Daily BD balance chart">
     <header className="bd-balance-header">
       <div><span className="mine-eyebrow">Daily breakdown movement</span><h2>Daily BD balance</h2><p>Opening + BD In − BD Out = Closing + Idle <ArrowRight aria-hidden="true"/> Idle shown separately</p></div>
       <div className="bd-balance-controls">
+        <label><span>View</span><select aria-label="Daily BD balance view" value={view} onChange={event => setView(event.target.value)}><option value="chart">Daily movement chart</option><option value="sites">Every site BD balance</option></select></label>
         <label><span><MapPin aria-hidden="true"/> Site</span><select aria-label="Daily BD balance site" value={activeSite} onChange={event => setSite(event.target.value)}><option value="">All sites</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
         {shiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Daily BD balance shift" value={activeShift} onChange={event => onShiftChange?.(event.target.value)}><option value={DAILY_BD_ALL_SHIFTS}>All shifts</option>{shiftOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>}
         <label><span>From</span><DateInput aria-label="Daily BD balance from date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
@@ -76,7 +86,18 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
       <div className="bd-balance-context"><span>{activeSite || scopeLabel} · {activeShiftLabel} · {formatDisplayDate(from)} to {formatDisplayDate(to)}{stale ? ' · Last checked data' : to === today ? ' · Today so far' : ''}</span><span className="bd-balance-context-change">Net change <b>{signedCount(ledger.totals.delta)} open</b><BalanceChange row={ledger.totals}/><span className="bd-balance-help" tabIndex={0} title="Opening includes all earlier requests still open at the start of the selected period. Closing balance excludes current Idle/Ideal cases, which are shown separately. Closing plus idle carries into the next day's opening. Change = (closing − opening) ÷ opening × 100. Red means more open BD; green means fewer. Each request is counted once; BD Out uses its actual maintenance closing date. Today's figures are live, not final." aria-label="How BD balance and percentage change are calculated"><Info aria-hidden="true"/></span></span></div>
       {rangeError && <p className="bd-balance-range-error" role="alert">{rangeError}</p>}
       <div className="bd-balance-summary" aria-label="BD movement totals for selected period">{[...DAILY_BD_METRICS, {key: 'idle', label: 'Idle Vehicles'}].map(({key,label}) => <button type="button" className={key} key={key} onClick={() => inspect(key)} aria-label={`${label}: ${ledger.totals[key]} requests in selected period`}><span><i/>{label}</span><strong>{ledger.totals[key].toLocaleString()}</strong></button>)}</div>
-      <div className="bd-balance-scroll" tabIndex={0} role="region" aria-label="Daily BD In and BD Out bars with opening and closing balances; scroll for more dates">
+      {view === 'sites' ? <div className="bd-balance-scroll" tabIndex={0} role="region" aria-label="Every site BD balance by date">
+        <table className="bd-balance-site-table">
+          <caption>Closing BD by site and day · Idle excluded · Period totals: {formatDisplayDate(from)} to {formatDisplayDate(to)}</caption>
+          <thead><tr><th scope="col">Site</th>{ledger.days.map(day => <th scope="col" key={day.date}>{formatDisplayDate(day.date)}{day.date === today && <small>Today so far</small>}</th>)}{[...DAILY_BD_METRICS, {key: 'idle', label: 'Idle Vehicles'}].map(({key, label}) => <th scope="col" key={key}>{label}<small>Selected period</small></th>)}</tr></thead>
+          <tbody>{siteLedgers.map(({name, ledger: siteLedger}) => <tr key={name}>
+            <th scope="row">{name}</th>
+            {siteLedger.days.map(day => <td key={day.date}><button type="button" aria-label={`${name}, ${formatDisplayDate(day.date)}: Closing BD, ${day.balance} requests`} onClick={() => inspect('balance', day.date, day.date, name)}>{day.balance.toLocaleString()}</button></td>)}
+            {[...DAILY_BD_METRICS, {key: 'idle', label: 'Idle Vehicles'}].map(({key, label}) => <td key={key}><button type="button" aria-label={`${name}: ${label}, ${siteLedger.totals[key]} requests in selected period`} onClick={() => inspect(key, from, to, name)}>{siteLedger.totals[key].toLocaleString()}</button></td>)}
+          </tr>)}</tbody>
+        </table>
+        {!siteLedgers.length && <p className="bd-balance-empty">No sites available in the current scope.</p>}
+      </div> : <div className="bd-balance-scroll" tabIndex={0} role="region" aria-label="Daily BD In and BD Out bars with opening and closing balances; scroll for more dates">
         <div className="bd-balance-days" style={{gridTemplateColumns: `repeat(${ledger.days.length}, minmax(154px, 1fr))`}}>
           {ledger.days.map(day => <section className={`bd-balance-day${day.date === today ? ' today' : ''}`} key={day.date} aria-label={`BD movement ${formatDisplayDate(day.date)}`}>
             <div className="bd-balance-day-change"><BalanceChange row={day}/></div>
@@ -90,7 +111,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
             <footer className="bd-balance-day-date"><b>{formatDisplayDate(day.date)}</b><small>{day.date === today ? (stale ? 'Today · last checked' : 'Today · live') : new Date(`${day.date}T12:00:00Z`).toLocaleDateString('en-GB', {weekday: 'short', timeZone: 'Asia/Kolkata'})}</small></footer>
           </section>)}
         </div>
-      </div>
+      </div>}
       {ledger.excluded.length > 0 && <button type="button" className="bd-balance-date-issue" onClick={() => inspect('undated')}>{ledger.excluded.length} requests excluded: start or closing dates need correction. View requests</button>}
     </>}
   </article>;

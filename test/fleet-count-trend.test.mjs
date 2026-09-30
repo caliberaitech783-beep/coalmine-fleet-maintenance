@@ -75,13 +75,13 @@ test("the dashboard endpoint gives the same result on both devices for the same 
   assert.match(queries[1], /ideal_requested_at < \$1/);
 });
 
-test("the badge reads the server count and does not use browser storage or dashboard filters", () => {
+test("the fleet total reads the server count while the badge shows today's active requests", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const dashboard = source.slice(source.indexOf("function Dashboard("), source.indexOf("function BreakdownTable"));
   assert.match(source, /setBreakdownCountChange\(change\)/);
   assert.match(source, /Date\.parse\(nextCountDayAt\) - Date\.now\(\)/);
   assert.match(dashboard, /const accountBreakdownCount = breakdownCountChange\?\.current \?\? liveBreakdownAssetCount/);
-  assert.match(dashboard, /formatCountDelta\(breakdownCountChange\.delta\)/);
+  assert.match(dashboard, /formatCountDelta\(todayBreakdownRows\.length\)/);
   assert.match(dashboard, /fleet-breakdown:account/);
   assert.doesNotMatch(dashboard, /trackCountChange|BREAKDOWN_COUNT_STORAGE_KEY/);
 });
