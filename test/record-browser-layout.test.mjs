@@ -21,7 +21,7 @@ test('Search fleet sits in the records bar on the right and Site chips sit besid
 });
 
 test('OEM breakdown drilldown moves the door and chassis search into the top filter row',()=>{
-  assert.match(oemJsx,/<label className="mine-oem-local-filter"><select aria-label="Equipment group"[\s\S]*?<\/label>\s*<label className="mine-oem-inline-search"><Search \/><input type="search" aria-label="Search OEM breakdown records" placeholder="Search door number, chassis, site, model or status"/,'search sits after the equipment group filter');
+  assert.match(oemJsx,/<label className="mine-oem-local-filter"><select aria-label="OEM equipment type"[\s\S]*?<\/label>\s*<label className="mine-oem-inline-search"><Search \/><input type="search" aria-label="Search OEM breakdown records" placeholder="Search door number, chassis, site, model or status"/,'search sits after the equipment type filter');
   assert.match(oemJsx,/<DashboardRecordBrowser [^>]*hideHierarchyFilters hideFleetSearch showDateFilter=\{false\}/,'duplicate table search is hidden for OEM details');
   assert.match(oemCss,/\.mine-oem-modal \.mine-oem-detail-search \.mine-oem-inline-search \{[^}]*flex: 1 1 360px;/,'search has room beside the filters');
 });
