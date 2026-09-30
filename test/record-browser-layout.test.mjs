@@ -7,16 +7,19 @@ const css=readFileSync(new URL('../src/dashboard-record-browser.css',import.meta
 const oemJsx=readFileSync(new URL('../src/oem-breakdown-details.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const oemCss=readFileSync(new URL('../src/oem-breakdown-details.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 
-test('Search fleet sits in the records bar on the right and Site chips sit beside the Region chips',()=>{
+test('Search fleet sits beside date filters and Site chips sit beside the Region chips',()=>{
   assert.match(jsx,/style=\{\{ gridTemplateRows: hideHierarchyFilters \? "minmax\(0, 1fr\)" : "auto minmax\(0, 1fr\)" \}\}>\s*\{!hideHierarchyFilters && <details/,'no separate search row above the filters');
-  assert.match(jsx,/<div className="dashboard-record-toolbar-row">\s*<div className="dashboard-record-toolbar" ref=\{setToolbarTarget\} \/>\s*\{!hideFleetSearch && <label className="dashboard-fleet-search"><span className="dashboard-fleet-search-label">Search fleet<\/span><input autoFocus data-smart-search type="search" aria-label="Search fleet"/,'search after the table actions in the same row');
+  assert.ok(jsx.includes('toolbarAfterDate={searchBesideDates ? fleetSearch : null}'));
+  assert.ok(jsx.includes('const searchBesideDates = showDateFilter && !hostToolbarTarget'));
+  assert.ok(jsx.includes('{!searchBesideDates && fleetSearch}'));
+  assert.match(jsx, /const fleetSearch = !hideFleetSearch && <label className="dashboard-fleet-search">/);
   assert.equal((jsx.match(/className="dashboard-fleet-search"/g)||[]).length,1);
   assert.match(jsx,/<\/div>\s*\{visibleLevel >= 1 && Array\.isArray\(view\.options\.site\) && <FilterTabRow key=\{`site-\$\{view\.selection\.region\}`\} name="site" label="Site" allLabel="All sites" options=\{view\.options\.site\} value=\{view\.selection\.site\} choose=\{choose\} resultsId=\{`\$\{id\}-records`\} \/>\}\s*<button type="button" className="dashboard-record-reset"/,'site row on the top line before Reset');
   assert.match(jsx,/fields\.slice\(0, visibleLevel\)\.map\(\(\[name, label, allLabel\], index\) => index >= 1 && view\.options\[fields\[index - 1\]\[0\]\]\.length > 0 && <FilterTabRow/,'deeper levels keep their own rows');
   assert.match(css,/\.dashboard-record-topline::before \{ content: "Region";/);
   assert.match(css,/\.dashboard-record-topline > \.dashboard-record-level \{ display: inline-grid;[^}]*border-top: 0;/);
-  assert.match(css,/\.dashboard-record-toolbar-row > \.dashboard-fleet-search \{[^}]*margin-left: auto;/);
-  assert.match(css,/\.dashboard-record-toolbar-row > \.dashboard-fleet-search input \{[^}]*border-radius: 999px;/);
+  assert.match(css,/:is\(\.dashboard-record-toolbar-row, \.shared-table-actions-toolbar\) > \.dashboard-fleet-search \{[^}]*margin-left: auto;/);
+  assert.match(css,/:is\(\.dashboard-record-toolbar-row, \.shared-table-actions-toolbar\) > \.dashboard-fleet-search input \{[^}]*border-radius: 999px;/);
   assert.match(css,/\.dashboard-fleet-search-label \{[^}]*position: absolute;[^}]*clip: rect\(0, 0, 0, 0\);/,'search label is hidden even when dashboard font sizes override it');
 });
 

@@ -334,7 +334,7 @@ The database connection uses `DATABASE_URL` and SSL with certificate verificatio
 
 ## 13. CI/CD and Azure deployment
 
-The dashboard's Daily BD balance panel offers **View → Every site BD balance**. Choose **All sites** and a From/To period to compare daily closing BD in one table, with one row for every site in the current dashboard scope, including zero-balance sites. Period opening, incoming, outgoing, closing and idle counts appear alongside the daily balances. Site, region and Shift Master filters continue to apply. Counts open the matching requests for that site and date or period. Smart Export and the dashboard workbook include the site name, daily movements and each site's period totals. **Daily movement chart** restores the combined or single-site chart.
+The dashboard's Daily BD balance panel offers **View → Every site BD balance**. Choose **All sites** and a From/To period to compare daily closing BD in a grid of site bar charts, including zero-balance sites. Every chart uses the same scale and each bar opens the matching site/date requests. Zero-balance days remain clickable. Period opening, incoming, outgoing, closing and idle counts appear below each graph. Long ranges scroll horizontally within each site graph. Site, region and Shift Master filters continue to apply. Counts open the matching requests for that site and date or period. Smart Export and the dashboard workbook include the site name, daily movements and each site's period totals. **Daily movement chart** restores the combined or single-site chart.
 
 The tracked GitHub workflows run on pushes to `azure-hosting` or `azure-hosting-1.0` and on manual dispatch:
 

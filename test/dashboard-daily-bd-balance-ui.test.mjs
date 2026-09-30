@@ -210,6 +210,15 @@ test('every site view compares dates, includes zero sites, and drills into the e
   label(view.render(), 'Daily BD balance from date').props.onChange({target: {value: '2026-09-10'}});
   let tree = view.render({sites: ['Sasti OB', 'Majri OB', 'Empty site']});
   assert.ok(label(tree, 'Every site BD balance by date'));
+  assert.equal(find(tree, node => node.type === 'table').length, 0);
+  assert.equal(find(tree, node => node.props.className === 'bd-site-card').length, 3);
+  const barHeight = name => find(label(tree, name), node => node.props.className === 'bd-site-bar-fill')[0].props.style.height;
+  assert.equal(barHeight('Sasti OB, 10-09-2026: Closing BD, 2 requests'), '100%');
+  assert.equal(barHeight('Majri OB, 11-09-2026: Closing BD, 1 requests'), '50%');
+  assert.equal(barHeight('Empty site, 11-09-2026: Closing BD, 0 requests'), '0%');
+  label(tree, 'Empty site, 11-09-2026: Closing BD, 0 requests').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-11', '2026-09-11', 'Empty site']);
+  assert.doesNotMatch(renderToStaticMarkup(tree), /NaN|Infinity/);
   assert.ok(label(tree, 'Sasti OB, 10-09-2026: Closing BD, 2 requests'));
   assert.ok(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'));
   assert.ok(label(tree, 'Majri OB, 10-09-2026: Closing BD, 0 requests'));
