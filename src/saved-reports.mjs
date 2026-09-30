@@ -30,7 +30,7 @@ export function savedReportKey(title = "", columns = []) {
 export function defaultSavedReportName(title = "", date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0"), month = String(date.getMonth() + 1).padStart(2, "0");
   const base = normalizeSavedReportName(title).slice(0, 60) || "Report";
-  return `${base} ${day}-${month}-${date.getFullYear()}`;
+  return `${base} ${day}-${month}-${String(date.getFullYear()).slice(-2)}`;
 }
 
 /** The part of a table view worth saving. */

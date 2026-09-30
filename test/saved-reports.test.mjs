@@ -28,7 +28,7 @@ test("report names are trimmed, required and capped; the table key mixes the tit
   assert.equal(savedReportKey("OEM BD · SCANIA", columns), "oem bd · scania|status,door");
   assert.notEqual(savedReportKey("OEM BD · SCANIA", columns), savedReportKey("OEM BD · SCANIA", [{ key: "status" }]));
   assert.equal(savedReportKey("", []), "table|");
-  assert.equal(defaultSavedReportName("Closed production requests", new Date(2026, 8, 15)), "Closed production requests 15-09-2026");
+  assert.equal(defaultSavedReportName("Closed production requests", new Date(2026, 8, 15)), "Closed production requests 15-09-26");
 });
 
 test("a saved view keeps only what the table can restore and drops columns that no longer exist", () => {

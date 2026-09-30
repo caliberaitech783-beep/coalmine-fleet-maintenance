@@ -61,10 +61,16 @@ export function formatDisplayDate(value, emptyValue = '—') {
   const text = String(value ?? '').trim();
   const dateOnly = text.match(DATE_PREFIX_PATTERN);
   if (dateOnly && !LOCAL_DATE_TIME_PATTERN.test(text)) {
-    return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1]}`;
+    return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1].slice(-2)}`;
   }
   const parts = indiaParts(value);
-  return parts ? `${parts.day}-${parts.month}-${parts.year}` : fallback(value, emptyValue);
+  return parts ? `${parts.day}-${parts.month}-${parts.year.slice(-2)}` : fallback(value, emptyValue);
+}
+
+// Machine-readable India date: never round-trip through a shortened display year.
+export function indiaCalendarDateKey(value) {
+  const parts = indiaParts(value);
+  return parts ? `${parts.year}-${parts.month}-${parts.day}` : '';
 }
 
 export function formatDisplayTime(value, emptyValue = '—') {
@@ -107,7 +113,7 @@ export function formatDisplayDateTime(value, emptyValue = '—') {
   if (!parts) return fallback(value, emptyValue);
   const hour24 = Number(parts.hour) % 24;
   const hour12 = hour24 % 12 || 12;
-  return `${parts.day}-${parts.month}-${parts.year} ${pad(hour12)}:${parts.minute}:${parts.second} ${hour24 >= 12 ? 'PM' : 'AM'}`;
+  return `${parts.day}-${parts.month}-${parts.year.slice(-2)} ${pad(hour12)}:${parts.minute}:${parts.second} ${hour24 >= 12 ? 'PM' : 'AM'}`;
 }
 
 export function formatDisplayDateRange(start, end, separator = ' to ') {

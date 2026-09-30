@@ -18,7 +18,7 @@ test('production first trip API stays open after MIS verification', () => {
 
 test('the rollout cutoff is a fixed date, so it never rolls forward with the clock', () => {
   assert.equal(PRODUCTION_FIRST_TRIP_ROLLOUT_IST, '2026-09-22 00:00:00');
-  assert.equal(PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL, '22-09-2026');
+  assert.equal(PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL, '22-09-26');
   const cutoff = productionFirstTripCutoffMs();
   for (const clock of ['2026-09-22T00:05:00+05:30', '2026-09-23T09:00:00+05:30', '2027-01-04T09:00:00+05:30']) {
     assert.equal(productionFirstTripCutoffMs(Date.parse(clock)), cutoff, `cutoff must not move on ${clock}`);

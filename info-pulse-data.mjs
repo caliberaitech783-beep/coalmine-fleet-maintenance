@@ -91,7 +91,7 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
 // they stay unverified. The date is fixed, not a rolling "today", so an entry
 // made on road late in the evening is still waiting for Production next morning.
 export const PRODUCTION_FIRST_TRIP_ROLLOUT_IST = '2026-09-22 00:00:00';
-export const PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL = '22-09-2026';
+export const PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL = '22-09-26';
 
 export function productionFirstTripCutoffMs() {
   return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_IST);

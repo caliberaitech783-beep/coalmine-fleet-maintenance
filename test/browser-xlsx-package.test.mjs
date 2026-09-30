@@ -28,7 +28,7 @@ function browserXlsxBuilder() {
   return new Function(
     "withSerialColumn", "recordCountLine", "formatDisplayDateTime", "prepareXlsxExportSheets", "exportCellText",
     `${source.slice(start, end)}; return { buildXlsxSheetsWorkbook, escapeXlsxText };`,
-  )(withSerialColumn, recordCountLine, () => "12:00 PM 22-09-2026", () => [], String);
+  )(withSerialColumn, recordCountLine, () => "12:00 PM 22-09-26", () => [], String);
 }
 
 test("browser XLSX worksheets use Excel's required element order and safe SpreadsheetML text", async () => {

@@ -72,7 +72,7 @@ test('OEM BD mode exports each site per OEM, site and region totals and the over
     ['Total', 'All sites', 'All OEMs', 5, '100.0'],
   ]);
   assertPlainExport(exported);
-  assert.deepEqual(cells(fleetSectionExport({mode: 'oem', place: 'WCL', oemChart: {rows: [], sites: []}, oemLabel: 'Volvo', period: '01-09-2026 - 19-09-2026'})), [['Total', 'All sites', 'Volvo', 0, '0.0']]);
+  assert.deepEqual(cells(fleetSectionExport({mode: 'oem', place: 'WCL', oemChart: {rows: [], sites: []}, oemLabel: 'Volvo', period: '01-09-26 - 19-09-26'})), [['Total', 'All sites', 'Volvo', 0, '0.0']]);
   assert.equal(fleetSectionExport({mode: 'oem', place: 'WCL', oemChart, oemLabel: 'Volvo', period: 'Current breakdowns', stale: true}).title, 'OEM BD · WCL · Volvo · Current breakdowns · Last checked data');
 });
 
@@ -82,29 +82,29 @@ test('Daily BD balance exports each day and, over several days, the selected-per
     {date: '2026-09-19', open: 0, incoming: 3, outgoing: 0, balance: 3, idle: 1, delta: 3, percent: null, direction: 'increase'},
   ], totals: {open: 4, incoming: 5, outgoing: 1, balance: 3, idle: 1, delta: -1, percent: -25, direction: 'decrease'}};
   const exported = dailyBdBalanceExport({ledger, from: '2026-09-18', to: '2026-09-19', today: '2026-09-19', place: 'Sasti OB'});
-  assert.equal(exported.title, 'Daily BD balance · Sasti OB · 18-09-2026 to 19-09-2026 · Today so far');
+  assert.equal(exported.title, 'Daily BD balance · Sasti OB · 18-09-26 to 19-09-26 · Today so far');
   assert.deepEqual(labels(exported), ['Date', 'Day', 'Opening BD', 'BD In', 'BD Out', 'Closing BD', 'Idle vehicles', 'Net change', 'Change (%)']);
   assert.deepEqual(cells(exported), [
-    ['18-09-2026', 'Fri', 4, 2, 1, 5, 0, '+1', '+25.0%'],
-    ['19-09-2026', 'Today · live', 0, 3, 0, 3, 1, '+3', '+3 from 0'],
-    ['Selected period', '18-09-2026 to 19-09-2026', 4, 5, 1, 3, 1, '-1', '-25.0%'],
+    ['18-09-26', 'Fri', 4, 2, 1, 5, 0, '+1', '+25.0%'],
+    ['19-09-26', 'Today · live', 0, 3, 0, 3, 1, '+3', '+3 from 0'],
+    ['Selected period', '18-09-26 to 19-09-26', 4, 5, 1, 3, 1, '-1', '-25.0%'],
   ]);
   assertPlainExport(exported);
   const stale = dailyBdBalanceExport({ledger: {...ledger, days: ledger.days.slice(1)}, from: '2026-09-19', to: '2026-09-19', today: '2026-09-19', stale: true, place: 'All regions'});
-  assert.equal(stale.title, 'Daily BD balance · All regions · 19-09-2026 to 19-09-2026 · Last checked data');
+  assert.equal(stale.title, 'Daily BD balance · All regions · 19-09-26 to 19-09-26 · Last checked data');
   assert.deepEqual(stale.rows.map(row => row.day), ['Today · last checked'], 'one day needs no period row');
-  assert.equal(dailyBdBalanceExport({ledger: ledger, from: '2026-09-17', to: '2026-09-18', today: '2026-09-19'}).title, 'Daily BD balance · All regions · 17-09-2026 to 18-09-2026');
+  assert.equal(dailyBdBalanceExport({ledger: ledger, from: '2026-09-17', to: '2026-09-18', today: '2026-09-19'}).title, 'Daily BD balance · All regions · 17-09-26 to 18-09-26');
   assert.deepEqual(dailyBdBalanceExport({ledger: {days: [], totals: null, excluded: []}, from: '2026-09-19', to: '2026-09-19', today: '2026-09-19'}).rows, []);
 });
 
 test('Tracking Vehicle Throughput exports the open tab: site movement with availability, totals, summary cards and BD type mix, or the availability count', () => {
-  const common = {place: 'WCL', period: '19-09-2026 to 19-09-2026', availabilityLabel: 'Availability: live · 19-09-2026', availabilityTotals: {total: 12, onRoad: 9, offRoad: 2, idle: 1, availability: 75}};
+  const common = {place: 'WCL', period: '19-09-26 to 19-09-26', availabilityLabel: 'Availability: live · 19-09-26', availabilityTotals: {total: 12, onRoad: 9, offRoad: 2, idle: 1, availability: 75}};
   const movement = throughputSectionExport({...common, tab: 'breakdown',
     sites: [{site: 'Sasti OB', open: 2, incoming: 1, outgoing: 1, balance: 2, idle: 1}, {site: 'Majri OB', open: 0, incoming: 0, outgoing: 0, balance: 0, idle: 0}],
     roadBySite: new Map([['Sasti OB', {total: 10, onRoad: 7, offRoad: 2, idle: 1, availability: 70}]]),
     movementTotals: {open: 2, incoming: 1, outgoing: 1, balance: 2}, openBalance: 1, idleRequests: 1,
     typeMix: [{label: 'Mechanical', count: 1, percentage: 50}, {label: 'Electrical', count: 1, percentage: 50}]});
-  assert.equal(movement.title, 'Tracking Vehicle Throughput · Site-wise BD Movement · WCL · 19-09-2026 to 19-09-2026 · Availability: live · 19-09-2026');
+  assert.equal(movement.title, 'Tracking Vehicle Throughput · Site-wise BD Movement · WCL · 19-09-26 to 19-09-26 · Availability: live · 19-09-26');
   assert.deepEqual(labels(movement), ['Site name', 'BD Open', 'BD In', 'BD Out', 'BD Balance', 'Idle Vehicles', 'Availability count (%)', 'On road', 'Off road', 'Total fleet', 'Share of open BD balance (%)']);
   assert.deepEqual(cells(movement), [
     ['Sasti OB', 2, 1, 1, 2, 1, 80, 7, 2, 10, ''],
@@ -122,7 +122,7 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
     {site: 'Sasti OB', total: 10, onRoad: 7, offRoad: 2, idle: 1, availability: 70},
     {site: 'Majri OB', total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0},
   ]});
-  assert.equal(availability.title, 'Tracking Vehicle Throughput · Availability Count · WCL · 19-09-2026 to 19-09-2026 · Availability: live · 19-09-2026');
+  assert.equal(availability.title, 'Tracking Vehicle Throughput · Availability Count · WCL · 19-09-26 to 19-09-26 · Availability: live · 19-09-26');
   assert.deepEqual(cells(availability), [
     ['Sasti OB', 10, 7, 2, 1, 80, 'On road 70.0% · Off road 20.0% · Idle 10.0%'],
     ['Majri OB', 0, 0, 0, 0, 0, ''],
@@ -144,12 +144,12 @@ test('Request Lifecycle exports the six grouped bars per day in chart order, Ope
     {date: '2026-09-18', production: 2, mis: 1, opened: 1, closed: 1, verified: 0, idle: 0},
     {date: '2026-09-19', production: 3, mis: 1, opened: 2, closed: 2, verified: 1, idle: 0},
   ];
-  const exported = requestLifecycleExport({trend, readings, place: 'Sasti OB', rangeLabel: '18-09-2026 - 19-09-2026'});
-  assert.equal(exported.title, 'Request Lifecycle · Sasti OB · 18-09-2026 - 19-09-2026');
+  const exported = requestLifecycleExport({trend, readings, place: 'Sasti OB', rangeLabel: '18-09-26 - 19-09-26'});
+  assert.equal(exported.title, 'Request Lifecycle · Sasti OB · 18-09-26 - 19-09-26');
   assert.deepEqual(labels(exported), ['Date', 'Day', 'Production Request', 'Closed', 'Verified', 'Idle Vehicles', 'Open in Maintenance', 'Open in MIS']);
   assert.deepEqual(cells(exported), [
-    ['18-09-2026', 'Fri', 2, 1, 0, 0, 1, 1],
-    ['19-09-2026', 'Sat', 3, 2, 1, 0, 2, 1],
+    ['18-09-26', 'Fri', 2, 1, 0, 0, 1, 1],
+    ['19-09-26', 'Sat', 3, 2, 1, 0, 2, 1],
     ['Summary cards', '', 5, 2, 1, 0, 3, 2],
   ]);
   assertPlainExport(exported);
@@ -162,18 +162,18 @@ test('Breakdown trend exports each day bar with its running total and gap to the
     {date: '2026-09-18', count: 0, kind: 'actual', anchor: false},
     {date: '2026-09-19', count: 1, kind: 'actual', anchor: true},
   ]});
-  assert.equal(exported.title, 'Breakdown trend · All regions · 17-09-2026 to 19-09-2026');
+  assert.equal(exported.title, 'Breakdown trend · All regions · 17-09-26 to 19-09-26');
   assert.deepEqual(labels(exported), ['Date', 'Day', 'Recorded breakdowns', 'Running total', 'Vs daily baseline']);
   assert.deepEqual(cells(exported), [
-    ['17-09-2026', 'Thu', 2, 2, '+1.0'],
-    ['18-09-2026', 'Fri', 0, 2, '-1.0'],
-    ['19-09-2026', 'Sat', 1, 3, '0.0'],
+    ['17-09-26', 'Thu', 2, 2, '+1.0'],
+    ['18-09-26', 'Fri', 0, 2, '-1.0'],
+    ['19-09-26', 'Sat', 1, 3, '0.0'],
     ['Recorded', '3 selected days', 3, '', ''],
     ['Daily baseline', 'Recorded per day', '1.0', '', ''],
   ]);
   assertPlainExport(exported);
   const forecast = breakdownTrendExport({place: 'Sasti OB', from: '2026-09-20', to: '2026-09-20', total: 0, average: '0.5', trend: [{date: '2026-09-20', count: 1, kind: 'forecast'}]});
-  assert.deepEqual(cells(forecast)[0], ['20-09-2026', 'Sun · Forecast', 1, 1, '+0.5']);
+  assert.deepEqual(cells(forecast)[0], ['20-09-26', 'Sun · Forecast', 1, 1, '+0.5']);
   assert.equal(forecast.rows[1].day, '0 selected days');
   assert.deepEqual(breakdownTrendExport({trend: [], from: '2026-09-19', to: '2026-09-18'}).rows, []);
 });

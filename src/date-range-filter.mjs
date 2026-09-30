@@ -21,6 +21,8 @@ export function dateKeyOf(value) {
   if (match) return `${match[1]}-${match[2]}-${match[3]}`;
   match = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  match = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2})(?!\d)/);
+  if (match) return `${Number(match[3]) >= 70 ? '19' : '20'}${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
   return "";
 }
 
@@ -38,7 +40,7 @@ export function looksLikeDateColumn(values = []) {
   return recorded.length > 0 && recorded.every((value) => dateKeyOf(value));
 }
 
-const displayDate = (iso) => (iso ? iso.split("-").reverse().join("-") : "…");
+const displayDate = (iso) => (iso ? iso.split("-").reverse().map((part, index) => index === 2 ? part.slice(-2) : part).join("-") : "…");
 export function describeDateRange(range) {
   return `Date range ${displayDate(range?.from)} to ${displayDate(range?.to)}`;
 }

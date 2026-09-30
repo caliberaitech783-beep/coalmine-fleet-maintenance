@@ -249,7 +249,7 @@ test('the started-date range is inclusive on IST days, presets set today-anchore
   tree = app.render();
   assert.deepEqual(kpiCounts(tree), {'BD balance': 4, Critical: 0, Warning: 1, Open: 3});
   assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['W1', 'J9', 'V167', 'S145']);
-  assert.match(html(tree), /15-09-2026 – 16-09-2026/);
+  assert.match(html(tree), /15-09-26 – 16-09-26/);
   byLabel(tree, 'Info Pulse to date').props.onChange({target: {value: '2026-09-15'}});
   tree = app.render();
   assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['W1']);
@@ -319,9 +319,9 @@ test('large phone-friendly result sets render 24 rows first and expand without c
 test('each row shows standing since, down for and the ETC as overdue, due in or not set', () => {
   const rows = descendants(byLabel(allDates().tree, 'BD balance breakdowns, longest standing first'), node => node.type === 'li');
   const [dozer, , , volvo, scania] = rows.map(html);
-  assert.match(dozer, /Standing since 14-09-2026 08:01(:00)? AM Down for 2d 2h 59m ETC Not set/);
-  assert.match(volvo, /Standing since 16-09-2026 06:02(:00)? AM Down for 4h 58m ETC 16-09-2026 06:20(:00)? AM Overdue by 4h 40m/);
-  assert.match(scania, /Standing since 16-09-2026 09:36(:00)? AM Down for 1h 24m ETC 16-09-2026 01:00(:00)? PM Due in 2h 0m/);
+  assert.match(dozer, /Standing since 14-09-26 08:01(:00)? AM Down for 2d 2h 59m ETC Not set/);
+  assert.match(volvo, /Standing since 16-09-26 06:02(:00)? AM Down for 4h 58m ETC 16-09-26 06:20(:00)? AM Overdue by 4h 40m/);
+  assert.match(scania, /Standing since 16-09-26 09:36(:00)? AM Down for 1h 24m ETC 16-09-26 01:00(:00)? PM Due in 2h 0m/);
   const annotated = timing.pulseBreakdownRows(data.buildInfoPulseBreakdowns(REQUESTS), NOW);
   assert.equal(annotated[0].share, 1, 'longest standing fills the bar');
   assert.equal(annotated[3].share.toFixed(3), (298 / 3059).toFixed(3));
@@ -412,7 +412,7 @@ test('filters, KPI cards and rows follow the dashboard record-browser styling an
 test('each row shows its recorded delay reason under the breakdown reason, and nothing when none exists', () => {
   const rows = descendants(byLabel(allDates().tree, 'BD balance breakdowns, longest standing first'), node => node.type === 'li');
   const [dozer, eicher, drill] = rows.map(html);
-  assert.match(dozer, /Breakdown reason LHS track chain loose and battery terminal damage Delay reason Awaiting track chain from supplier 15-09-2026 06:30(:00)? PM IST · Maintenance team/);
+  assert.match(dozer, /Breakdown reason LHS track chain loose and battery terminal damage Delay reason Awaiting track chain from supplier 15-09-26 06:30(:00)? PM IST · Maintenance team/);
   assert.ok(!dozer.includes('Vendor inspection pending'), 'only the latest daily delay reason is shown');
   assert.match(eicher, /Breakdown reason Gear box noise Overdue reason Gear box sent to workshop/);
   assert.ok(!eicher.includes('Spares not in stock'), 'the ETC overdue reason wins over daily updates');

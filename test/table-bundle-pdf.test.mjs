@@ -4,7 +4,7 @@ import {buildTableBundlePdf,buildTableExportPdf} from '../table-export-pdf.mjs';
 
 const generatedAt=new Date('2026-09-15T13:30:00Z');
 const title='Sasti OB site report';
-const subtitle='Reporting window: 15-09-2026 07:00 AM to 07:00 PM IST';
+const subtitle='Reporting window: 15-09-26 07:00 AM to 07:00 PM IST';
 const fragments=source=>[...source.matchAll(/<([0-9a-f]+)>/gi)].map((match)=>Buffer.from(match[1],'hex').toString('latin1')).join('');
 const pageStreams=pdf=>[...pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((match)=>match[1]);
 const pageCount=pdf=>Number(pdf.toString('latin1').match(/\/Count (\d+)\b/)?.[1]);
@@ -25,9 +25,9 @@ test('site PDF starts each selected report on a clear page with site, window and
     assert.ok(page.includes(subtitle));
     assert.ok(page.includes(tables[index].title));
     assert.ok(page.includes(`Page ${index+1} of 2`));
-    assert.ok(page.includes('Generated 15-09-2026 07:00:00 PM'));
+    assert.ok(page.includes('Generated 15-09-26 07:00:00 PM'));
   });
-  assert.match(pages[0],/Operator A.*5:00 PM 15-09-2026/);
+  assert.match(pages[0],/Operator A.*5:00 PM 15-09-26/);
   assert.doesNotMatch(pages[0],/Open breakdowns/);
   assert.match(pages[1],/REQ-1.*Inspect pump & hose/);
   assert.equal(tables[0].rows[0][1],'2026-09-15 17:00');

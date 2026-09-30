@@ -17,7 +17,7 @@ test("reconnecting notice displays the recorded India timestamp, not a live time
   const updatedAt = Date.parse("2026-09-10T10:00:00Z");
   const html = renderToStaticMarkup(React.createElement(Notice, {updatedAt}));
   assert.match(html, /Reconnecting · Last updated/);
-  assert.ok(html.includes("10-09-2026 03:30:00 PM"));
+  assert.ok(html.includes("10-09-26 03:30:00 PM"));
   assert.match(html, /Showing last successfully loaded data. Retrying automatically./);
   assert.match(html, /Retry now/);
   assert.doesNotMatch(html, />Live[ <]/);

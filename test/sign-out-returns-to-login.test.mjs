@@ -7,7 +7,7 @@ const bell = main.slice(main.indexOf("function NotificationBell("), main.indexOf
 const app = main.slice(main.indexOf("function App()"));
 
 // Signing out unmounts the whole signed-in tree, which runs every effect
-// cleanup. A cleanup that throws (on 19-09-2026 the bell called `sound.close()`
+// cleanup. A cleanup that throws (on 19-09-26 the bell called `sound.close()`
 // after the `sound` variable had been removed) makes React drop the entire
 // application, so the user saw a blank white page instead of the sign-in form.
 

@@ -978,7 +978,7 @@ window.cdirDirectoryReady = (async function(){
     function pad(n){ return String(n).padStart(2,'0'); }
     function update(){
       const d = new Date();
-      const dateStr = pad(d.getDate())+'-'+pad(d.getMonth()+1)+'-'+d.getFullYear();
+      const dateStr = pad(d.getDate())+'-'+pad(d.getMonth()+1)+'-'+String(d.getFullYear()).slice(-2);
       let hrs = d.getHours();
       const ampm = hrs>=12 ? 'PM' : 'AM';
       hrs = hrs % 12; if(hrs===0) hrs = 12;
@@ -1058,7 +1058,7 @@ window.cdirDirectoryReady = (async function(){
     const d = new Date(iso+'T00:00:00');
     if(isNaN(d.getTime())) return '';
     const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return String(d.getDate()).padStart(2,'0')+'-'+months[d.getMonth()]+'-'+d.getFullYear();
+    return String(d.getDate()).padStart(2,'0')+'-'+months[d.getMonth()]+'-'+String(d.getFullYear()).slice(-2);
   }
   function applyPatchToStore(key, patch){
     const b = findStoredBucket(key);

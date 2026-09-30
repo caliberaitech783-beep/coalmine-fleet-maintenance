@@ -14,18 +14,18 @@ test("daily updates export includes every saved update and all of its details", 
 
   const lines = text.split("\n");
   assert.equal(lines.length, 2);
-  assert.match(lines[0], /^#1 \| 7:43:00 PM 20-09-2026/);
+  assert.match(lines[0], /^#1 \| 7:43:00 PM 20-09-26/);
   assert.match(lines[0], /By: Maintenance A/);
   assert.match(lines[0], /Update: Compressor removed/);
   assert.match(lines[0], /Type: Preventive/);
   assert.match(lines[0], /Delayed reason: Clutch kit unavailable/);
-  assert.match(lines[1], /^#2 \| 10:48:00 AM 21-09-2026/);
+  assert.match(lines[1], /^#2 \| 10:48:00 AM 21-09-26/);
   assert.match(lines[1], /Update: Parts fitted/);
   assert.match(lines[1], /Delayed reason: Testing pending/);
   assert.equal(dailyUpdatesExportText([]), "—");
   assert.deepEqual(dailyUpdatesExportRows([{createdAt:"2026-09-20 19:43:00",authorName:"Maintenance A",remark:"Compressor removed",delayedReason:"Clutch kit unavailable"}], {category:"Preventive"})[0], {
     number: 1,
-    dateTime: "7:43:00 PM 20-09-2026",
+    dateTime: "7:43:00 PM 20-09-26",
     author: "Maintenance A",
     update: "Compressor removed",
     breakdownType: "Preventive",
@@ -35,13 +35,13 @@ test("daily updates export includes every saved update and all of its details", 
 
 test("complete rendered daily update text is rebuilt into one structured row per update", () => {
   const rows = dailyUpdatesExportRowsFromText([
-    "#1 | 7:58 PM 02-09-2026 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
-    "#2 | 9:19 PM 03-09-2026 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
+    "#1 | 7:58 PM 02-09-26 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
+    "#2 | 9:19 PM 03-09-26 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
   ].join("\n"));
 
   assert.deepEqual(rows, [
-    {number:1,dateTime:"7:58 PM 02-09-2026",author:"SUNIL KUMAR MAHATO",update:"Compressor removed",breakdownType:"Preventive",delayedReason:"Waiting for parts"},
-    {number:2,dateTime:"9:19 PM 03-09-2026",author:"TARKESHWAR NATH",update:"Compressor fitted",breakdownType:"Preventive",delayedReason:"Testing pending"},
+    {number:1,dateTime:"7:58 PM 02-09-26",author:"SUNIL KUMAR MAHATO",update:"Compressor removed",breakdownType:"Preventive",delayedReason:"Waiting for parts"},
+    {number:2,dateTime:"9:19 PM 03-09-26",author:"TARKESHWAR NATH",update:"Compressor fitted",breakdownType:"Preventive",delayedReason:"Testing pending"},
   ]);
 });
 
@@ -63,7 +63,7 @@ test("Excel keeps the report compact and writes every daily update on its own de
   });
 
   assert.equal(report.rows[0][0], "LDM6 - 1064");
-  assert.match(report.rows[0][1], /^18 updates · Latest 7:43:00 PM 18-09-2026 · Full history in Daily Updates sheet$/);
+  assert.match(report.rows[0][1], /^18 updates · Latest 7:43:00 PM 18-09-26 · Full history in Daily Updates sheet$/);
   assert.equal(report.rows[0][1].includes("Saved maintenance update"), false);
   assert.equal(details.name, "Daily Updates");
   assert.equal(details.rows.length, 18);
@@ -74,8 +74,8 @@ test("Excel keeps the report compact and writes every daily update on its own de
 
 test("Excel recovers complete updates and equipment identity from rendered dashboard rows", () => {
   const complete = [
-    "#1 | 7:58 PM 02-09-2026 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
-    "#2 | 9:19 PM 03-09-2026 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
+    "#1 | 7:58 PM 02-09-26 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
+    "#2 | 9:19 PM 03-09-26 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
   ].join("\n");
   const renderedRow = {cells:["LDM6 - 1064","Preventive","Air compressor assembly","DRILL MACHINE","CLG922E","LGI922EZANN901064",complete]};
   const labels = ["Machine / Door no.","Type of breakdown","Reason of breakdown","Equipment group","Model","Serial / chassis no.","Daily updates"];
@@ -86,12 +86,12 @@ test("Excel recovers complete updates and equipment identity from rendered dashb
     formatCell:value=>String(value ?? "—"),
   });
 
-  assert.equal(layout.rows[0][6], "2 updates · Latest 9:19 PM 03-09-2026 · Full history in Daily Updates sheet");
+  assert.equal(layout.rows[0][6], "2 updates · Latest 9:19 PM 03-09-26 · Full history in Daily Updates sheet");
   assert.equal(layout.detailRows.length, 2);
   assert.deepEqual(layout.detailRows[0].slice(3, 10), ["LDM6 - 1064","—","DRILL MACHINE","CLG922E","LGI922EZANN901064","Preventive","Air compressor assembly"]);
   assert.deepEqual(layout.detailRows.map(row=>row.slice(10)), [
-    [1,"7:58 PM 02-09-2026","SUNIL KUMAR MAHATO","Compressor removed","Waiting for parts"],
-    [2,"9:19 PM 03-09-2026","TARKESHWAR NATH","Compressor fitted","Testing pending"],
+    [1,"7:58 PM 02-09-26","SUNIL KUMAR MAHATO","Compressor removed","Waiting for parts"],
+    [2,"9:19 PM 03-09-26","TARKESHWAR NATH","Compressor fitted","Testing pending"],
   ]);
 });
 

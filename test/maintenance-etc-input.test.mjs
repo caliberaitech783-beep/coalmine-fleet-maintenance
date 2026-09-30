@@ -33,7 +33,7 @@ test('ETC remains required and submits the existing field name without incomplet
 test('past ETC dates, periods, hours and minutes are closed using the current IST minute', () => {
   const minimum = etcMinimum(new Date('2026-09-15T10:52:31Z')); // 16:22:31 IST
   assert.equal(minimum, '2026-09-15T16:23');
-  assert.equal(etcMinimumLabel(minimum), '15-09-2026 04:23 PM IST');
+  assert.equal(etcMinimumLabel(minimum), '15-09-26 04:23 PM IST');
   assert.equal(etcMinimum(new Date('2026-09-15T18:29:59Z')), '2026-09-16T00:00');
   assert.equal(isEtcBackdated('2026-09-15T16:22', minimum), true);
   assert.equal(isEtcBackdated('2026-09-15T16:23', minimum), false);
@@ -60,7 +60,7 @@ test('elapsed existing ETC stays auditable and locked until replacement is chose
   assert.match(locked, /<input type="date"[^>]*disabled=""/);
   const fresh = renderToStaticMarkup(React.createElement(MaintenanceEtcInput, {value: '', onChange() {}, now}));
   assert.match(fresh, /min="2026-09-15"/);
-  assert.match(fresh, /Earliest allowed: 15-09-2026 04:23 PM IST/);
+  assert.match(fresh, /Earliest allowed: 15-09-26 04:23 PM IST/);
   assert.doesNotMatch(fresh, /Change to a future ETC/);
   assert.match(source, /disabled=\{etcPeriodDisabled\(parts\.date, period, minimum\)\}/);
 });

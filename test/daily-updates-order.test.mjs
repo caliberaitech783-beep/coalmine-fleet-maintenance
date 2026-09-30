@@ -71,11 +71,11 @@ const render = (props, Component = DailyUpdatesList) => renderToStaticMarkup(Rea
 
 test("the updates cell collapses to a count with the latest time and opens into a scrolling, numbered list", () => {
   const html = render({ remarks: updates, category: "Breakdown" });
-  assert.match(html, /^<details class="daily-remarks"><summary><b>4 updates<\/b><small>Latest 16-09-2026 08:38:00 PM<\/small><\/summary><div class="daily-remarks-panel" data-order="newest">/);
+  assert.match(html, /^<details class="daily-remarks"><summary><b>4 updates<\/b><small>Latest 16-09-26 08:38:00 PM<\/small><\/summary><div class="daily-remarks-panel" data-order="newest">/);
   assert.match(html, /<div class="daily-remarks-order" role="group" aria-label="Order of daily updates"><span>Show<\/span><button type="button" aria-pressed="true" title="[^"]+">Newest first<\/button><button type="button" aria-pressed="false" title="[^"]+">Oldest first<\/button><\/div>/);
   assert.match(html, /<ol class="daily-remarks-list" aria-label="4 updates, newest first">/);
   const badges = [...html.matchAll(/<i aria-label="Update (\d) of 4">#(\d)<\/i><b>([^<]+)<\/b><span>([^<]+)<\/span>/g)].map((match) => match.slice(1));
-  assert.deepEqual(badges, [["4", "4", "16-09-2026 08:38:00 PM", "SUNIL KUMAR MAHATO"], ["3", "3", "15-09-2026 09:24:00 PM", "SUNIL KUMAR MAHATO"], ["2", "2", "14-09-2026 07:46:00 PM", "SUNIL KUMAR MAHATO"], ["1", "1", "13-09-2026 07:27:00 PM", "SUNIL KUMAR MAHATO"]]);
+  assert.deepEqual(badges, [["4", "4", "16-09-26 08:38:00 PM", "SUNIL KUMAR MAHATO"], ["3", "3", "15-09-26 09:24:00 PM", "SUNIL KUMAR MAHATO"], ["2", "2", "14-09-26 07:46:00 PM", "SUNIL KUMAR MAHATO"], ["1", "1", "13-09-26 07:27:00 PM", "SUNIL KUMAR MAHATO"]]);
   assert.match(html, /<p>Compressor removed<\/p><small>Breakdown · Delayed reason: Waiting for compressor assembly<\/small>/, "legacy delayReason values still show");
   assert.match(html, /<p>Inspection completed<\/p><small>Breakdown · Delayed reason: Parts inspection<\/small>/);
   assert.match(html, /<footer class="daily-remarks-more">Scroll inside the list to see all 4 updates<\/footer><\/div><\/details>$/);
@@ -96,7 +96,7 @@ test("the panel stands alone in the journal, time breakdown and Info Pulse with 
   const pulseRecords = [{ remark: "Fresh saved note", delayReason: "New delay reason", createdAt: "", author: "mechanic" }, { remark: "Chain inspected", delayReason: "Vendor inspection pending", createdAt: "2026-09-14 18:00", author: "Site team" }];
   const html = render({ remarks: pulseRecords, missingLabel: "Not recorded", className: "pulse-updates-panel", formatDateTime: (value) => `${formatDisplayDateTime(value)} IST` }, DailyUpdatesPanel);
   assert.match(html, /^<div class="daily-remarks-panel pulse-updates-panel" data-order="newest">/);
-  assert.match(html, /<i aria-label="Update 2 of 2">#2<\/i><b>14-09-2026 06:00:00 PM IST<\/b><span>Site team<\/span>/);
+  assert.match(html, /<i aria-label="Update 2 of 2">#2<\/i><b>14-09-26 06:00:00 PM IST<\/b><span>Site team<\/span>/);
   assert.match(html, /<i aria-label="Update 1 of 2">#1<\/i><b>Date not recorded<\/b><span>mechanic<\/span><\/header><p>Fresh saved note<\/p><small>Delayed reason: New delay reason<\/small>/);
   assert.doesNotMatch(html, /<details|<summary/);
   const audited = render({ remarks: [{ createdAt: "2026-09-06 01:34", remark: "" }], missingLabel: "Not recorded", authorLabel: (item) => `${item.authorName || "Unknown"} (audit)` }, DailyUpdatesPanel);

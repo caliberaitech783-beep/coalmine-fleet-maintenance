@@ -260,7 +260,7 @@ test("legacy creator and daily updates are visible without inventing acceptance 
   assert.match(text(articles[1]),/does not mean the vehicle never reached maintenance/);
   assert.doesNotMatch(text(articles[1]),/AVADH|ASHISH|System recorded/);
   const updates = panelText(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
-  assert.match(updates,/#1 06 Sept 2026, 01:34:00 AM IST AVADH KISHORE TIWARI \(maintenance-fixture\) Air Compressor Removed (?:Breakdown · )?Delayed reason: Air Compressor Clutch Kit Not Available/);
+  assert.match(updates,/#1 06 Sept 26, 01:34:00 AM IST AVADH KISHORE TIWARI \(maintenance-fixture\) Air Compressor Removed (?:Breakdown · )?Delayed reason: Air Compressor Clutch Kit Not Available/);
   assert.match(text(tree),/not arrival waiting time or confirmed hands-on repair time/);
   assert.equal(events.find(event=>event.event === "acceptedAt").eventAt,null);
   assert.deepEqual(legacy,original);
@@ -280,7 +280,7 @@ test("updates show saved remarks newest first by default, numbered from the firs
   const tree = harness("RequestTimelineView").render({data:body(request.ref,{request:changed})});
   const html = renderToStaticMarkup(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
   const updates = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1].replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim());
-  assert.deepEqual(updates,["#2 06 Sept 2026, 01:34:00 AM IST Not recorded Newer update Delayed reason: Not recorded","#1 05 Sept 2026, 01:34:00 AM IST Not recorded Older update Delayed reason: Not recorded"]);
+  assert.deepEqual(updates,["#2 06 Sept 26, 01:34:00 AM IST Not recorded Newer update Delayed reason: Not recorded","#1 05 Sept 26, 01:34:00 AM IST Not recorded Older update Delayed reason: Not recorded"]);
   assert.match(html,/<button type="button" aria-pressed="true" title="[^"]+">Newest first<\/button><button type="button" aria-pressed="false" title="[^"]+">Oldest first<\/button>/);
 });
 
@@ -297,7 +297,7 @@ test("editing unchanged ETC preserves minute display without a correction prompt
   tree = app.render();
   assert.equal(field(tree, "correctionReason").props.required, true);
   assert.equal(field(tree, "correctionReason").props.maxLength, 500);
-  assert.match(text(tree), /Previous ETC: 08-09-2026 12:00:17 PM/);
+  assert.match(text(tree), /Previous ETC: 08-09-26 12:00:17 PM/);
   await submit(tree, submitValues({expectedCompletionAt: "2026-09-08T13:00", correctionReason: "  "}));
   assert.match(alerts(app.render()), /Explain why/);
   assert.equal(saved.length, 1);

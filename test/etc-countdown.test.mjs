@@ -57,7 +57,7 @@ test('a passed ETC shows how long the repair is overdue', () => {
 test('legacy same-day AM ETCs count down to the intended PM time', () => {
   const legacy = {status: 'Open', start: '2026-09-15 10:05:00', expectedCompletionAt: '2026-09-15 03:00'};
   assert.equal(etcDisplayValue(legacy), '2026-09-15T09:30:00.000Z');
-  assert.equal(formatDisplayDateTime(etcDisplayValue(legacy)), '15-09-2026 03:00:00 PM');
+  assert.equal(formatDisplayDateTime(etcDisplayValue(legacy)), '15-09-26 03:00:00 PM');
   assert.equal(etcCountdown(legacy, at('2026-09-15 16:08:00')).label, 'Overdue by 1h 8m 0s');
   assert.equal(etcCountdown(legacy, at('2026-09-15 12:00:00')).label, '3h 0m 0s left');
 });
@@ -93,8 +93,8 @@ test('time-left sorting puts the most overdue first and requests without a live 
 });
 
 test('the countdown chip carries its state, timer role and the ETC as a tooltip', () => {
-  const html = renderToStaticMarkup(React.createElement(EtcCountdown, {request: open, now, etcLabel: '18-09-2026 06:00:00 PM'}));
-  assert.equal(html, '<span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-2026 06:00:00 PM">4h 0m 0s left</span>');
+  const html = renderToStaticMarkup(React.createElement(EtcCountdown, {request: open, now, etcLabel: '18-09-26 06:00:00 PM'}));
+  assert.equal(html, '<span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-26 06:00:00 PM">4h 0m 0s left</span>');
   assert.match(renderToStaticMarkup(React.createElement(EtcCountdown, {request: {...open, expectedCompletionAt: '2026-09-18 11:50'}, now})), /class="etc-countdown overdue"[^>]*role="timer"[^>]*>Overdue by 2h 10m 0s</);
   const unset = renderToStaticMarkup(React.createElement(EtcCountdown, {request: {...open, expectedCompletionAt: ''}, now}));
   assert.equal(unset, '<span class="etc-countdown none" data-state="none">Not set</span>');
@@ -187,10 +187,10 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   assert.deepEqual(headers.slice(daysIndex, daysIndex + 3), ['Days of BD', 'Time left for ETC', 'Daily remarks']);
   const cells = ref => children(children(tree, node => node.type === 'tr' && node.key === ref)[0], node => node.type === 'td' && node.props.className === 'etc-cell');
   assert.equal(cells(open.ref).length, 2);
-  assert.equal(text(cells(open.ref)[0]), '18-09-2026 06:00:00 PM');
-  assert.match(html, /<td class="etc-cell">18-09-2026 06:00:00 PM<\/td>/);
-  assert.match(html, /<span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-2026 06:00:00 PM">4h 0m 0s left<\/span>/);
-  assert.match(html, /<td class="etc-cell">18-09-2026 11:50:00 AM<\/td>/);
+  assert.equal(text(cells(open.ref)[0]), '18-09-26 06:00:00 PM');
+  assert.match(html, /<td class="etc-cell">18-09-26 06:00:00 PM<\/td>/);
+  assert.match(html, /<span class="etc-countdown due" data-state="due" role="timer" title="ETC 18-09-26 06:00:00 PM">4h 0m 0s left<\/span>/);
+  assert.match(html, /<td class="etc-cell">18-09-26 11:50:00 AM<\/td>/);
   assert.match(html, /<span class="etc-countdown overdue"[^>]*>Overdue by 2h 10m 0s<\/span>/);
   assert.match(html, /<td class="etc-cell">—<\/td>/);
   assert.match(html, /<span class="etc-countdown none" data-state="none">Not set<\/span>/);
@@ -198,8 +198,8 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   for (const columns of [exports.menu.columns, exports.menu.smartPrintColumns || exports.menu.columns]) {
     const etc = columns.find(column => column.key === 'etc'), remaining = columns.find(column => column.key === 'etcRemaining');
     assert.deepEqual([etc.label, remaining.label], ['ETC', 'Time left for ETC']);
-    assert.deepEqual([etc.value(open), remaining.value(open)], ['18-09-2026 06:00:00 PM', '4h 0m left']);
-    assert.deepEqual([etc.value(overdue), remaining.value(overdue)], ['18-09-2026 11:50:00 AM', 'Overdue by 2h 10m']);
+    assert.deepEqual([etc.value(open), remaining.value(open)], ['18-09-26 06:00:00 PM', '4h 0m left']);
+    assert.deepEqual([etc.value(overdue), remaining.value(overdue)], ['18-09-26 11:50:00 AM', 'Overdue by 2h 10m']);
     assert.deepEqual([etc.value(unset), remaining.value(unset)], ['—', '—']);
   }
 });
@@ -208,7 +208,7 @@ test('every workflow table shows ETC while maintenance can additionally opt into
   const plain = renderTable({rows: [open], showActions: true});
   assert.equal(plain.html.includes('Time left for ETC'), false);
   assert.equal(plain.html.includes('etc-countdown'), false);
-  assert.equal(plain.exports.menu.columns.find(column => column.key === 'etc').value(open), '18-09-2026 06:00:00 PM');
+  assert.equal(plain.exports.menu.columns.find(column => column.key === 'etc').value(open), '18-09-26 06:00:00 PM');
   assert.deepEqual(plain.headers.slice(plain.headers.indexOf('Started'), plain.headers.indexOf('Started') + 2), ['Started', 'ETC']);
   const colSpan = props => children(renderTable(props).tree, node => node.type === 'td' && node.props.className === 'empty-state')[0].props.colSpan;
   assert.equal(colSpan({rows: [], showEtc: true}) - colSpan({rows: []}), 1);

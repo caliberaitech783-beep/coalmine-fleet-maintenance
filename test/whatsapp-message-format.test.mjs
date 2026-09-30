@@ -26,7 +26,7 @@ test('each event renders the saved site, breakdown and relevant reason/work on s
   }
   assert.match(render('requestClosed',{request}),/\*Delay reason:\* Awaiting spare pump/);
   assert.match(render('requestVerified',{request}),/\*Closing meter:\* HMR 1532 \| KMR 30555/);
-  assert.match(render('requestVerified',{request}),/\*First trip:\* Completed at 15-09-2026 06:50:00 AM IST/);
+  assert.match(render('requestVerified',{request}),/\*First trip:\* Completed at 15-09-26 06:50:00 AM IST/);
   assert.match(render('requestVerified',{request:{...request,firstTripDone:false}}),/\*First trip:\* Pending/);
   assert.match(render('requestIdle',{request}),/\*Marked by:\* Maintenance Operator/);
   assert.match(render('offRoadEscalation',{request}),/\| Off Road Escalation\*/);
@@ -48,14 +48,14 @@ test('CRM creation and resolution include the actual site, category, priority, i
     assert.match(message,/\*Issue \/ reason:\* No operator available/);
     if(purpose==='ticketResolved'){
       assert.match(message,/\*Resolution:\* Operator assigned/);
-      assert.match(message,/15-09-2026 07:10:00 AM/);
+      assert.match(message,/15-09-26 07:10:00 AM/);
     }
   }
 });
 
 test('maintenance updates contain progress, delay, equipment, ETC and a real timestamp',()=>{
   const message=render('dailyUpdate',{request,remark:'Pump fitting in progress',delayReason:'Crane unavailable',updatedAt:new Date('2026-09-15T01:30:00Z'),url:'https://bdms.cmll.in/?request=REQ_42'});
-  for(const text of ['*SITE: Sasti OC*','*Maintenance update:* Pump fitting in progress','*Delay reason:* Crane unavailable','*Expected completion (IST):* 15-09-2026 07:00:00 AM','*Updated at (IST):* 15-09-2026 07:00:00 AM','?request=REQ_42'])assert.ok(message.includes(text),text);
+  for(const text of ['*SITE: Sasti OC*','*Maintenance update:* Pump fitting in progress','*Delay reason:* Crane unavailable','*Expected completion (IST):* 15-09-26 07:00:00 AM','*Updated at (IST):* 15-09-26 07:00:00 AM','?request=REQ_42'])assert.ok(message.includes(text),text);
 });
 
 test('audio-only complaints and missing values are explicit and long free text retains the request link',()=>{
@@ -74,7 +74,7 @@ test('provider payload keeps site first, structured lines static, full site PDF/
   assert.equal(parameters[0],'Sasti OC');assert.equal(parameters[4],report.pdfUrl);assert.equal(parameters[5],report.xlsxUrl);
   assert.ok(parameters.every(value=>!/[\r\n\t]/.test(value)));
   const message=renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES.consolidatedRequestReport,parameters);
-  assert.match(message,/^\*LOCATIONS: Sasti OC\*\n/);assert.match(message,/14-09-2026 07:00:00 PM to 15-09-2026 07:00:00 AM/);
+  assert.match(message,/^\*LOCATIONS: Sasti OC\*\n/);assert.match(message,/14-09-26 07:00:00 PM to 15-09-26 07:00:00 AM/);
   assert.match(message,/\n\*PDF \/ files:\* https:/);assert.match(message,/\n\*Excel \/ other files:\* https:/);
   assert.doesNotMatch(message,/old summary|Majri/);
 });

@@ -24,7 +24,7 @@ const backupDetail=(row)=>{
   if(row.status==='Running')return 'The recovery file is being created.';
   return 'No recovery file is available.';
 };
-const displayDateTime=(value)=>value?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value)).replace(',','').replaceAll('/','-').replace(/\b(am|pm)\b/i,(period)=>period.toUpperCase()):'—';
+const displayDateTime=(value)=>value?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value)).replace(',','').replaceAll('/','-').replace(/\b(am|pm)\b/i,(period)=>period.toUpperCase()):'—';
 const displayScheduleTime=(value)=>{
   const [hour24,minute]=String(value||'02:00').split(':').map(Number);
   return `${String(hour24%12||12).padStart(2,'0')}:${String(minute||0).padStart(2,'0')}:00 ${hour24>=12?'PM':'AM'}`;

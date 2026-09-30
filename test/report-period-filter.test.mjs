@@ -77,8 +77,8 @@ test('calendar edits are draft-only; Apply commits, Cancel discards, and Clear r
 test('two calendar clicks select an ordered range and disable Apply for unfinished selection',()=>{
   const app=harness();let tree=app.render();
   const choose=day=>{all(tree,n=>n.type==='button'&&n.props['aria-label']?.startsWith(day))[0].props.onClick();tree=app.render();};
-  choose('08-09-2026');assert.equal(button(tree,'Apply').props.disabled,true);
-  choose('03-09-2026');assert.equal(button(tree,'Apply').props.disabled,false);
+  choose('08-09-26');assert.equal(button(tree,'Apply').props.disabled,true);
+  choose('03-09-26');assert.equal(button(tree,'Apply').props.disabled,false);
   all(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.deepEqual(app.applied[0],['2026-09-03T00:00:00','2026-09-08T23:59:59.999']);
 });

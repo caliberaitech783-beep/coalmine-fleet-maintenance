@@ -65,7 +65,7 @@ test('audit details identify the full route, completed work, and next pending ow
   assert.match(audit.reason,/V-12: Sasti OB to Majri OB/);
   assert.equal(audit.changedFields.find(({field})=>field==='Source location').after,'Sasti OB');
   assert.equal(audit.changedFields.find(({field})=>field==='Destination location').after,'Majri OB');
-  assert.equal(audit.changedFields.find(({field})=>field==='Transfer date').after,'15-09-2026');
+  assert.equal(audit.changedFields.find(({field})=>field==='Transfer date').after,'15-09-26');
   assert.equal(audit.changedFields.find(({field})=>field==='Work completed').after,'MIS submitted by MIS User; Source PM released by Source PM');
   assert.equal(audit.changedFields.find(({field})=>field==='Work pending').after,'Destination MIS verification at Majri OB');
   assert.deepEqual(audit.changedFields.find(({field})=>field==='Status'),{field:'Status',before:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,after:VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION});

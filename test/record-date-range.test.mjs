@@ -24,7 +24,7 @@ test("range includes both whole Indian days, handles UTC midnight boundaries and
     {id:"first",at:"2026-09-08T18:30:00Z"},
     {id:"last",at:"2026-09-10T18:29:59Z"},
     {id:"after",at:"2026-09-10T18:30:00Z"},
-    {id:"local",at:"10-09-2026 05:30:00 PM"},
+    {id:"local",at:"10-09-26 05:30:00 PM"},
     {id:"missing",at:"—"},
   ];
   const range = encodeDateRange("2026-09-09", "2026-09-10");
@@ -89,7 +89,7 @@ test("visible From and To fields apply valid ranges, preserve the prior filter f
   change("Started from date","2026-09-09");
   change("Started to date","2026-09-10");
   assert.equal(currentValue,encodeDateRange("2026-09-09","2026-09-10"));
-  assert.match(renderToStaticMarkup(render()),/Date range 09-09-2026 to 10-09-2026/);
+  assert.match(renderToStaticMarkup(render()),/Date range 09-09-26 to 10-09-26/);
   change("Started from date","2026-09-11");
   assert.match(renderToStaticMarkup(render()),/previous filter is still applied/);
   assert.equal(currentValue,encodeDateRange("2026-09-09","2026-09-10"));

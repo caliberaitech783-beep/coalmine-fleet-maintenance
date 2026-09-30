@@ -39,7 +39,7 @@ export function calendarDays(month) {
   const count=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).getUTCDate();
   return Array.from({length:Math.ceil((offset+count)/7)*7},(_,i)=>i<offset||i>=offset+count ? '' : `${month}-${String(i-offset+1).padStart(2,'0')}`);
 }
-export const displayDate = date => date ? date.split('-').reverse().join('-') : 'Select date';
+export const displayDate = date => date ? date.split('-').reverse().map((part, index) => index === 2 ? part.slice(-2) : part).join('-') : 'Select date';
 export function periodBounds(start,end,startTime,endTime) {
   if (![start,end].every(value=>/^\d{4}-\d{2}-\d{2}$/.test(value)) || ![startTime,endTime].every(value=>/^([01]\d|2[0-3]):[0-5]\d$/.test(value))) return null;
   if ([start,end].some(value=>!Number.isFinite(utc(value).getTime()) || iso(utc(value))!==value)) return null;

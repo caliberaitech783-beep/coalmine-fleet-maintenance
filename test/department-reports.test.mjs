@@ -75,10 +75,10 @@ test('shift master timings are shown beside report event timestamps when shift r
     {site:'Sasti OB',shiftName:'Shift C',startTime:'21:00:00',endTime:'05:00:00'},
   ];
   const report=buildDepartmentReports({requests:[row],shiftRecords:shifts}).find(r=>r.title==='Summary Report');
-  assert.equal(cell(report,'submittedAt',row),'A Shift · 8:00:00 AM 23-09-2026');
-  assert.equal(cell(report,'acceptedAt',row),'A Shift · 9:00:00 AM 23-09-2026');
-  assert.equal(cell(report,'closedAt',row),'B Shift · 5:00:00 PM 23-09-2026');
-  assert.equal(cell(report,'firstTripAt',row),'C Shift · 10:30:00 PM 23-09-2026');
+  assert.equal(cell(report,'submittedAt',row),'A Shift · 8:00:00 AM 23-09-26');
+  assert.equal(cell(report,'acceptedAt',row),'A Shift · 9:00:00 AM 23-09-26');
+  assert.equal(cell(report,'closedAt',row),'B Shift · 5:00:00 PM 23-09-26');
+  assert.equal(cell(report,'firstTripAt',row),'C Shift · 10:30:00 PM 23-09-26');
 });
 test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);

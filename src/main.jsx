@@ -1198,7 +1198,7 @@ function formatTwelveHourDateTime(value) {
   if (!match) return value || "—";
   const [year, month, day] = match[1].split("-");
   const hour = Number(match[2]);
-  return `${day}-${month}-${year} ${hour % 12 || 12}:${match[3]}:${match[4] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+  return `${day}-${month}-${year.slice(-2)} ${hour % 12 || 12}:${match[3]}:${match[4] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
 function dashboardRecordDate(record = {}) {
@@ -9725,7 +9725,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!match) return value || "—";
     const hour = Number(match[4]);
-    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+    return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
   };
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
@@ -9813,7 +9813,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!match) return value || "—";
     const hour = Number(match[4]);
-    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+    return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
   };
   const [formError,setFormError] = useState("");
   const opened = requestStartParts(request.start);
@@ -9932,7 +9932,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!match) return value || "—";
     const hour = Number(match[4]);
-    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+    return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
   };
   const [formError,setFormError] = useState("");
   const today = requestStartParts("");
@@ -10214,7 +10214,7 @@ function TicketPage({ session }) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!match) return value || "—";
     const hour = Number(match[4]);
-    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+    return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
   };
   const [ticketState, setTicketState] = useState(null), [refreshing, setRefreshing] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null), [refreshCount, setRefreshCount] = useState(0);
   const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null), responseEtags = useRef(new Map());

@@ -47,7 +47,7 @@ test('XLSX bundle has one ordered worksheet per selected report with complete re
     assert.equal(widths.length,table.columns.length+1);
     widths.forEach((match)=>{assert.equal(match[1],match[2]);assert.ok(Number(match[3])>=12&&Number(match[3])<=48);});
   });
-  assert.deepEqual(cells(files.get('xl/worksheets/sheet1.xml')).map((cell)=>cell.value).slice(2),['Sr. No.','User','Activity at','1','Operator A','5:00 PM 15-09-2026']);
+  assert.deepEqual(cells(files.get('xl/worksheets/sheet1.xml')).map((cell)=>cell.value).slice(2),['Sr. No.','User','Activity at','1','Operator A','5:00 PM 15-09-26']);
   assert.equal(cells(files.get('xl/worksheets/sheet1.xml'))[0].value,'Site activity');
   assert.equal(tables[0].rows[0][1],'2026-09-15 17:00');
 });

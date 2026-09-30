@@ -8,7 +8,7 @@ import {createNotificationTracker, createNotificationSound} from '../src/notific
 
 test('legacy opened/closed messages put site and one door before retained details', () => {
   for (const action of ['opened', 'closed']) {
-    const message = `Request REQ-1 ${action} for E32-MH34BZ2802 | Door: E32-MH34BZ2802 | Chassis: MC2DALRC0NH003558. Breakdown: WGM. Date & time: 10-09-2026 11:15:23 AM. Location: Majri OB. User: Example.`;
+    const message = `Request REQ-1 ${action} for E32-MH34BZ2802 | Door: E32-MH34BZ2802 | Chassis: MC2DALRC0NH003558. Breakdown: WGM. Date & time: 10-09-26 11:15:23 AM. Location: Majri OB. User: Example.`;
     const text = notificationText({message});
     assert.ok(text.startsWith('Site: Majri OB — Door No. E32-MH34BZ2802 — Request REQ-1'));
     assert.equal(text.split('E32-MH34BZ2802').length - 1, 1);
@@ -122,7 +122,7 @@ test('site filtering handles all sites, legacy messages, missing sites and casin
 
 test('chassis labels are removed without losing following fields', () => {
   for(const label of ['Chassis','Chassis No.','Chassis Number']) {
-    const parts=notificationParts({site:'Majri OB',door:'24',message:`Request closed. ${label}: YV2XBG99. Breakdown: Breakdown. Date & time: 10-09-2026 12:15:13 PM. User: Example.`});
+    const parts=notificationParts({site:'Majri OB',door:'24',message:`Request closed. ${label}: YV2XBG99. Breakdown: Breakdown. Date & time: 10-09-26 12:15:13 PM. User: Example.`});
     assert.doesNotMatch(parts.details,/Chassis|YV2XBG99/);
     assert.match(parts.details,/Breakdown: Breakdown/);
     assert.match(parts.details,/12:15:13 PM/);

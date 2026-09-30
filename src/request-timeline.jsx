@@ -4,7 +4,7 @@ import {DailyUpdatesPanel} from "./daily-updates-list.jsx";
 import {stageTimingSteps} from "../stage-timing-report.mjs";
 import "./request-timeline.css";
 
-const clock = new Intl.DateTimeFormat("en-IN", {timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true});
+const clock = new Intl.DateTimeFormat("en-IN", {timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true});
 const stamp = value => {
   const parsed = parseRequestTimelineTimestamp(value);
   return parsed ? `${clock.format(parsed).replace(/\b(am|pm)\b/gi, period => period.toUpperCase())} IST` : "Not recorded";

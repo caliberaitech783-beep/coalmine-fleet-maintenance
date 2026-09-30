@@ -28,7 +28,7 @@ test("BD Balance places location, reasons and meter readings beside their reques
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
   assert.match(html, /<th>Days of BD<\/th><th>Current location<\/th>/);
   assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
-  assert.match(html, /10-09-2026 10:00:00 AM<\/td><td[^>]*>10-09-2026 06:00:00 PM<\/td>/);
+  assert.match(html, /10-09-26 10:00:00 AM<\/td><td[^>]*>10-09-26 06:00:00 PM<\/td>/);
   assert.match(html, /<th>Equipment category<\/th><th>Type of BD<\/th><th>Reason of BD<\/th>/);
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
@@ -77,7 +77,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
       assert.ok(html.includes("Not recorded"));
     }
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
-    if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
+    if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-26 11:00:00 AM", title);
     const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
     assert.ok(empty.includes(`colSpan="${16 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
   }
@@ -106,7 +106,7 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
     const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
     assert.equal(exported.rows.length, count);
     const closing = exported.columns.find(column => column.label === "BD closing time");
-    assert.equal(closing.value(exported.rows[0]), "10-09-2026 11:00:00 AM");
+    assert.equal(closing.value(exported.rows[0]), "10-09-26 11:00:00 AM");
     if (label !== "WCL") assert.equal(closing.value(exported.rows.at(-1)), "Not recorded");
     // Render the real children as well, including all FilterTabRow controls.
     const html = renderToStaticMarkup(tree);

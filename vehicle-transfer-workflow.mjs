@@ -67,7 +67,7 @@ const auditText = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' 
 const auditDate = (value) => {
   const text = auditText(value);
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  return match ? `${match[3]}-${match[2]}-${match[1]}` : text;
+  return match ? `${match[3]}-${match[2]}-${match[1].slice(-2)}` : text;
 };
 
 export function vehicleTransferWorkStatus(record = {}) {

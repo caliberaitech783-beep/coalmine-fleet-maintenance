@@ -35,7 +35,7 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
     if (!pickingEnd) {setStart(date);setEnd('');setPickingEnd(true);}
     else {setStart(date<start?date:start);setEnd(date<start?start:date);setPickingEnd(false);}
   }
-  const monthLabel=new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(`${month}-01T00:00:00Z`));
+  const monthLabel=new Intl.DateTimeFormat('en-GB',{month:'long',year:'2-digit',timeZone:'UTC'}).format(new Date(`${month}-01T00:00:00Z`));
   return createPortal(<dialog ref={dialog} className="report-period-dialog" aria-labelledby={`${id}-title`} onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
     <form onSubmit={e=>{e.preventDefault();if(bounds)onApply(bounds.from,bounds.to);}}>
       <header><h2 id={`${id}-title`}>Filter</h2><button type="button" className="period-icon" aria-label="Close filter" onClick={onClose}><X size={20}/></button></header>

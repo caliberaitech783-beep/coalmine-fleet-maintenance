@@ -7,7 +7,7 @@ test("one-time sync dates are strict and do not change the full-history default"
   for (const value of [undefined, null, ""]) assert.equal(transferSyncDate(value), null);
   assert.equal(transferSyncDate("2026-09-03"), "2026-09-03");
   assert.equal(transferSyncDate("2024-02-29"), "2024-02-29");
-  for (const value of ["03-09-2026", "2026-02-29", "2026-09-31", "2026-13-01", {}, 20260903, "2026-09-03' OR 1=1"]) assert.throws(() => transferSyncDate(value));
+  for (const value of ["03-09-2026", "03-09-26", "2026-02-29", "2026-09-31", "2026-13-01", {}, 20260903, "2026-09-03' OR 1=1"]) assert.throws(() => transferSyncDate(value));
 });
 
 test("scoped sync binds the Oracle date and preserves older PostgreSQL history", () => {

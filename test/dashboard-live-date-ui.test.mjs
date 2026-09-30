@@ -181,11 +181,11 @@ test("every dashboard date filter starts on today, availability follows the To d
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-08");
   assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /1 on road, 2 off road and 0 idle/);
-  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 08-09-2026To: 08-09-2026Availability as of 08-09-2026");
-  assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes("Availability count impact08-09-2026"));
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 08-09-26To: 08-09-26Availability as of 08-09-26");
+  assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes("Availability count impact08-09-26"));
   button(tree, "Availability Count").props.onClick();
   tree = view.render();
-  assert.equal(text(byLabel(tree, "Availability table period")), "From: 08-09-2026To: 08-09-2026Availability as of 08-09-2026");
+  assert.equal(text(byLabel(tree, "Availability table period")), "From: 08-09-26To: 08-09-26Availability as of 08-09-26");
   button(tree, "Reset dates").props.onClick();
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, todayKey);
@@ -367,7 +367,7 @@ test("an open OEM list follows refreshed requests and shared OEM, site, region a
 
   tree = setDashboardDate(view, "2026-09-08", refreshed);
   assertReferences(["BD-1", "LATER", "HISTORICAL"]);
-  assert.equal(oemDetails(tree).selection.periodLabel, "08-09-2026");
+  assert.equal(oemDetails(tree).selection.periodLabel, "08-09-26");
   assert.equal(text(fleetCount(tree, "OEM BD")), "2");
   tree = setDashboardDate(view, todayKey, refreshed);
   assertReferences(["BD-1", "LATER"]);
@@ -660,7 +660,7 @@ test("day movement headings and Actions sort dates chronologically and all metri
       const schema = tableModel(table.props.children);
       const exported = tableExportModel(dataRows, schema.columns, schema.columns.map(column => column.key));
       assert.deepEqual(exported.rows.map(row => row.key), dataRows.map(row => row.key));
-      assert.ok(table.props.exportTitle.includes("30-08-2026 to 02-09-2026"));
+      assert.ok(table.props.exportTitle.includes("30-08-26 to 02-09-26"));
     }
     // Clicking the header toggles direction without requesting a sort dialog.
     const header = findAll(byClass(tree, "dashboard-breakdown-day-table"), node => node.props.sortKey === key)[0];
@@ -678,8 +678,8 @@ test("six-reading Closed and MIS bars match their pending request cards", () => 
   let tree = view.render(rows);
   tree = setDashboardDate(view, "2026-09-09", rows);
   tree = setLifecycleFrom(view, "2026-09-01", rows);
-  assert.ok(byLabel(tree, "09-09-2026: 0 Open in Maintenance requests"));
-  byLabel(tree, "09-09-2026: 1 Open in MIS requests").props.onClick();
+  assert.ok(byLabel(tree, "09-09-26: 0 Open in Maintenance requests"));
+  byLabel(tree, "09-09-26: 1 Open in MIS requests").props.onClick();
   tree = view.render(rows);
   assert.equal(detailView(tree).rows.length, 1);
   const pending = findAll(tree, (node) => node.type === "button" && text(node).includes("Open in MIS"))[0];
@@ -794,9 +794,9 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
   let tree = view.render();
   tree = setDashboardDate(view, "2026-09-09");
   tree = setLifecycleFrom(view, "2026-09-01");
-  assert.ok(byLabel(tree, "09-09-2026: 1 Idle Vehicles requests"));
-  assert.ok(byLabel(tree, "09-09-2026: 1 Closed requests"));
-  assert.ok(byLabel(tree, "09-09-2026: 0 Verified requests"));
+  assert.ok(byLabel(tree, "09-09-26: 1 Idle Vehicles requests"));
+  assert.ok(byLabel(tree, "09-09-26: 1 Closed requests"));
+  assert.ok(byLabel(tree, "09-09-26: 0 Verified requests"));
   const graph = findAll(tree, node => node.props?.className === "mine-request-chart-days mine-request-grouped-readings")[0];
   const groups = findAll(graph, node => node.props?.className === "mine-request-chart-day");
   assert.ok(groups.length > 1);
@@ -804,7 +804,7 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
   assert.equal(byLabel(tree, "Request lifecycle custom days").props.value, undefined);
   const withoutIdleTime = requests.map((row) => row.ref === "OLD-IDLE" ? {...row, idealRequestedAt: ""} : row);
   tree = view.render(withoutIdleTime);
-  assert.ok(byLabel(tree, "09-09-2026: 0 Idle Vehicles requests"));
+  assert.ok(byLabel(tree, "09-09-26: 0 Idle Vehicles requests"));
 });
 
 test("site-wise From/To updates inclusive movement, availability, exports and linked details together", () => {
@@ -819,7 +819,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 1 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
   assert.ok(!text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of"), "redundant filter note is removed; table caption retains the date");
-  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-26To: 08-09-26Availability as of 08-09-26");
   const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard")[0].props.rows;
   const incoming = exported.find((row) => row.section === "Breakdown movement" && row.metric === "BD In");
   assert.equal(incoming.value, 2);
@@ -832,7 +832,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   button(tree, "Availability Count").props.onClick();
   tree = view.render();
   assert.ok(byLabel(tree, "Sasti OB: 1 on road, 2 off road and 0 idle. Open fleet details."));
-  assert.equal(text(byLabel(tree, "Availability table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
+  assert.equal(text(byLabel(tree, "Availability table period")), "From: 01-09-26To: 08-09-26Availability as of 08-09-26");
   // The independent top-level date and live fleet chart are not changed.
   assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-09");
   assert.equal(text(fleetCount(tree, "Breakdown")), "1");
@@ -1004,7 +1004,7 @@ test("From and To stay visible above the table without a calendar trigger or pop
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
   assert.equal(findAll(tree, (node) => node.props.className === "dashboard-breakdown-date-modal").length, 0);
-  assert.ok(text(byLabel(tree, "Site-wise BD table period")).includes("From: 01-09-2026"));
+  assert.ok(text(byLabel(tree, "Site-wise BD table period")).includes("From: 01-09-26"));
 });
 
 test("Breakdown Trend From/To keeps bars, counts, average and View all on the same inclusive period", () => {
@@ -1017,18 +1017,18 @@ test("Breakdown Trend From/To keeps bars, counts, average and View all on the sa
   tree = view.render(rows);
   byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render(rows);
-  assert.equal(text(byLabel(tree, "Breakdown trend selected period")), "From: 01-09-2026 · To: 09-09-2026");
+  assert.equal(text(byLabel(tree, "Breakdown trend selected period")), "From: 01-09-26 · To: 09-09-26");
   assert.equal(text(byClass(tree, "mine-trend-summary")), "Recorded39 selected daysDaily baseline0.3Recorded per day");
   assert.ok(byLabel(tree, "9 day recorded breakdown chart"));
-  assert.ok(byLabel(tree, "01-09-2026: 2 recorded breakdown requests"));
-  assert.ok(byLabel(tree, "02-09-2026: 0 recorded breakdown requests"));
-  assert.ok(byLabel(tree, "09-09-2026: 1 recorded breakdown requests"));
+  assert.ok(byLabel(tree, "01-09-26: 2 recorded breakdown requests"));
+  assert.ok(byLabel(tree, "02-09-26: 0 recorded breakdown requests"));
+  assert.ok(byLabel(tree, "09-09-26: 1 recorded breakdown requests"));
   button(byClass(tree, "mine-panel mine-breakdown-trend"), "View all").props.onClick();
   tree = view.render(rows);
   let details = findAll(tree, (node) => node.props.requestRecords === true && Array.isArray(node.props.rows))[0].props;
   assert.deepEqual(details.rows.map((row) => row.requestReference), ["OLD-OPEN", "OLD-IDLE", "NEW-CLOSED"]);
   assert.ok(details.title.includes(displayDates.formatDisplayDateRange("2026-09-01", "2026-09-09")));
-  const day = byLabel(tree, "01-09-2026: 2 recorded breakdown requests");
+  const day = byLabel(tree, "01-09-26: 2 recorded breakdown requests");
   const target = {};
   day.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
   tree = view.render(rows);
@@ -1196,7 +1196,7 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   assert.match(sheets[3].title, /^Tracking Vehicle Throughput · Availability Count · /);
   // The Daily BD balance chart hands its current table over; the workbook then includes it after Total Fleet.
   const chart = findAll(tree, (node) => node.props.exportRef && node.props.onInspect)[0];
-  chart.props.exportRef.current = {title: "Daily BD balance · test", columns: [{label: "Date", value: (row) => row.date}], rows: [{date: "19-09-2026"}]};
+  chart.props.exportRef.current = {title: "Daily BD balance · test", columns: [{label: "Date", value: (row) => row.date}], rows: [{date: "19-09-26"}]};
   assert.deepEqual(names(), ["KPIs", "Total Fleet", "Daily BD balance", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
   // A collapsed banner keeps the same whole-dashboard menu beside its eye toggle.
   const banner = findAll(tree, (node) => node.props.collapsedAction)[0];

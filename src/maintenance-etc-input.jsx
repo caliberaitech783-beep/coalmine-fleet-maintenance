@@ -31,7 +31,7 @@ export function etcMinimumLabel(minimum) {
   const match = String(minimum || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return '';
   const hour24 = Number(match[4]);
-  return `${match[3]}-${match[2]}-${match[1]} ${String(hour24 % 12 || 12).padStart(2, '0')}:${match[5]} ${hour24 >= 12 ? 'PM' : 'AM'} IST`;
+  return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${String(hour24 % 12 || 12).padStart(2, '0')}:${match[5]} ${hour24 >= 12 ? 'PM' : 'AM'} IST`;
 }
 
 export function etcPeriodDisabled(date, period, minimum) {

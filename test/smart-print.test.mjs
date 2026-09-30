@@ -184,9 +184,9 @@ test('daily update journals stay compact in Smart Print while ordinary columns a
  const ordinary={key:'door',label:'Door',value:row=>row.door};
  const daily={key:'dailyRemarks',label:'Daily updates',value:row=>row.updates};
  const fitted=compactSmartPrintColumns([ordinary,daily]);
- const row={door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted'};
+ const row={door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-26 | By: A | Update: Removed\n#2 | 9:19 PM 03-09-26 | By: B | Update: Fitted'};
  assert.equal(fitted[0],ordinary);
- assert.equal(fitted[1].value(row),'2 updates\nLatest 9:19 PM 03-09-2026');
+ assert.equal(fitted[1].value(row),'2 updates\nLatest 9:19 PM 03-09-26');
  assert.equal(compactDailyUpdatesForPrint('#1 | Date not recorded | By: A | Update: Checked'),'1 update\nLatest Date not recorded');
  assert.equal(compactDailyUpdatesForPrint('—'),'—');
 });
@@ -209,14 +209,14 @@ test('Smart Print keeps the main report compact and puts every update in separat
   openSmartPrint({
    title:'BD Balance',
    columns:[{key:'door',label:'Door No',value:row=>row.door},{key:'dailyRemarks',label:'Daily updates',value:row=>row.updates}],
-   rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed | Type: Preventive | Delayed reason: Parts\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted | Type: Preventive | Delayed reason: Testing'}],
+   rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-26 | By: A | Update: Removed | Type: Preventive | Delayed reason: Parts\n#2 | 9:19 PM 03-09-26 | By: B | Update: Fitted | Type: Preventive | Delayed reason: Testing'}],
    onPrint:args=>printed.push(args),
    onExport:null,
   });
   let nodes=all(body.children.at(-1));
   const sheets=nodes.filter(node=>String(node.className||'').includes('smart-print-sheet'));
   assert.equal(sheets.length,2);
-  assert.deepEqual(all(sheets[0]).filter(node=>node.tag==='td').map(node=>node.textContent),['1','LDM6 - 1064','2 updates\nLatest 9:19 PM 03-09-2026']);
+  assert.deepEqual(all(sheets[0]).filter(node=>node.tag==='td').map(node=>node.textContent),['1','LDM6 - 1064','2 updates\nLatest 9:19 PM 03-09-26']);
   const updateCells=all(sheets[1]).filter(node=>node.tag==='td').map(node=>node.textContent);
   assert.ok(updateCells.includes('Removed'));
   assert.ok(updateCells.includes('Fitted'));
@@ -228,7 +228,7 @@ test('Smart Print keeps the main report compact and puts every update in separat
   nodes=all(body.children.at(-1));nodes.find(node=>node.textContent==='Print now').onclick();
   assert.equal(printed[0].appendices.length,1);
   assert.equal(printed[0].appendices[0].rows.length,2);
-  assert.equal(printed[0].columns[1].value(printed[0].rows[0]),'2 updates\nLatest 9:19 PM 03-09-2026');
+  assert.equal(printed[0].columns[1].value(printed[0].rows[0]),'2 updates\nLatest 9:19 PM 03-09-26');
  }finally{globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
 

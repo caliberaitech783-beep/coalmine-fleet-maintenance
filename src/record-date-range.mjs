@@ -1,10 +1,10 @@
-import { formatDisplayDate } from "../date-time-format.mjs";
+import { indiaCalendarDateKey } from "../date-time-format.mjs";
 import { dateKeyOf, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 
 // Use the same Indian calendar day that the record displays, including zoned API timestamps.
 export function recordDateKey(value) {
   if (value instanceof Date || /[T ]\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(value ?? ""))) {
-    return dateKeyOf(formatDisplayDate(value, ""));
+    return indiaCalendarDateKey(value);
   }
   return dateKeyOf(value);
 }

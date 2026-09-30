@@ -1,11 +1,11 @@
 import React, { forwardRef, useState } from "react";
 
-// "2026-09-21" -> "21-09-2026"; "2026-09-21T14:05" -> "21-09-2026 14:05".
+// "2026-09-21" -> "21-09-26"; "2026-09-21T14:05" -> "21-09-26 14:05".
 export function formatDayFirstInputValue(value, type = "date") {
   const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}(?::\d{2})?))?/.exec(String(value ?? ""));
   if (!match) return "";
   const [, year, month, day, time] = match;
-  const date = `${day}-${month}-${year}`;
+  const date = `${day}-${month}-${year.slice(-2)}`;
   return type === "datetime-local" && time ? `${date} ${time}` : date;
 }
 
@@ -34,7 +34,7 @@ const DateInput = forwardRef(function DateInput({ type = "date", className, valu
     ...props,
     ref,
     className: overlaySupported ? (className ? `dmy-date-input ${className}` : "dmy-date-input") : className,
-    "data-dmy": display || (type === "datetime-local" ? "dd-mm-yyyy --:--" : "dd-mm-yyyy"),
+    "data-dmy": display || (type === "datetime-local" ? "dd-mm-yy --:--" : "dd-mm-yy"),
     "data-empty": display ? undefined : "true",
     ...(controlled ? { value } : { defaultValue }),
     onChange: (event) => { if (!controlled) setUncontrolledValue(event.target.value); onChange?.(event); },

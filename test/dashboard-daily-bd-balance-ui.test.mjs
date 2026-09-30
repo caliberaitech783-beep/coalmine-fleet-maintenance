@@ -54,7 +54,7 @@ test('today is selected and applied by default to all counts and exact date dril
   for (const preset of ['7D', '14D', '30D']) assert.equal(button(tree, preset).props['aria-pressed'], false);
   assert.equal(find(tree, node => node.props.className?.startsWith('bd-balance-day ') || node.props.className === 'bd-balance-day').length, 1);
   for (const metric of ['Opening BD: 2', 'BD In: 1', 'BD Out: 1', 'Closing balance: 2']) assert.ok(label(tree, `${metric} requests in selected period`), metric);
-  const bar = label(tree, '11-09-2026: BD Out, 1 requests');
+  const bar = label(tree, '11-09-26: BD Out, 1 requests');
   assert.equal(text(bar), '1');
   bar.props.onClick();
   assert.deepEqual(view.calls.pop(), ['outgoing', '2026-09-11', '2026-09-11', '']);
@@ -76,11 +76,11 @@ test('each day plots only In and Out; opening and closing counts remain clickabl
     assert.ok(find(day, node => node.props.className === 'bd-balance-opening').length);
     assert.ok(find(day, node => node.props.className?.startsWith('bd-balance-closing ')).length);
   }
-  label(tree, '10-09-2026: Closing balance, 2 requests').props.onClick();
+  label(tree, '10-09-26: Closing balance, 2 requests').props.onClick();
   assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-10', '2026-09-10', '']);
-  label(tree, '11-09-2026: Opening BD, 2 requests').props.onClick();
+  label(tree, '11-09-26: Opening BD, 2 requests').props.onClick();
   assert.deepEqual(view.calls.pop(), ['open', '2026-09-11', '2026-09-11', '']);
-  assert.match(text(label(tree, '11-09-2026: Closing balance, 2 requests')), /Balance now/);
+  assert.match(text(label(tree, '11-09-26: Closing balance, 2 requests')), /Balance now/);
   assert.match(text(tree), /Net change \+1 open/);
 });
 
@@ -90,9 +90,9 @@ test('large opening balances do not shrink the In and Out plot; all dates share 
   const records = [...Array.from({length: 1000}, (_, i) => ({ref: `OLD-${i}`, start: '2026-08-01'})), {ref: 'NEW', start: '2026-09-10', closedAt: '2026-09-11'}];
   const tree = view.render({records});
   const barHeight = node => find(node, item => item.props.className === 'bd-balance-bar')[0].props.style.height;
-  assert.equal(barHeight(label(tree, '10-09-2026: BD In, 1 requests')), '100%');
-  assert.equal(barHeight(label(tree, '11-09-2026: BD Out, 1 requests')), '100%');
-  assert.equal(barHeight(label(tree, '11-09-2026: BD In, 0 requests')), '0%');
+  assert.equal(barHeight(label(tree, '10-09-26: BD In, 1 requests')), '100%');
+  assert.equal(barHeight(label(tree, '11-09-26: BD Out, 1 requests')), '100%');
+  assert.equal(barHeight(label(tree, '11-09-26: BD In, 0 requests')), '0%');
 });
 
 test('site, period and date filters keep totals and drill-down in sync', () => {
@@ -181,15 +181,15 @@ test('an Export menu beside the period buttons exports the days and totals on sc
   assert.equal(menuOf(view.render({ExportMenu, ready: false})), undefined, 'nothing while loading');
   let menu = menuOf(view.render({ExportMenu}));
   assert.equal(menu.props.className, 'mine-section-export');
-  assert.equal(menu.props.title, 'Daily BD balance · All regions · 11-09-2026 to 11-09-2026 · Today so far');
-  assert.deepEqual(cells(menu), [['11-09-2026', 'Today · live', 2, 1, 1, 2, 0, '0', '0.0%']]);
+  assert.equal(menu.props.title, 'Daily BD balance · All regions · 11-09-26 to 11-09-26 · Today so far');
+  assert.deepEqual(cells(menu), [['11-09-26', 'Today · live', 2, 1, 1, 2, 0, '0', '0.0%']]);
   button(view.render({ExportMenu}), '7D').props.onClick();
   menu = menuOf(view.render({ExportMenu}));
-  assert.equal(menu.props.title, 'Daily BD balance · All regions · 05-09-2026 to 11-09-2026 · Today so far');
+  assert.equal(menu.props.title, 'Daily BD balance · All regions · 05-09-26 to 11-09-26 · Today so far');
   assert.equal(menu.props.rows.length, 8, 'seven days and the selected period');
-  assert.deepEqual(cells(menu).at(-1), ['Selected period', '05-09-2026 to 11-09-2026', 1, 2, 1, 2, 0, '+1', '+100.0%']);
+  assert.deepEqual(cells(menu).at(-1), ['Selected period', '05-09-26 to 11-09-26', 1, 2, 1, 2, 0, '+1', '+100.0%']);
   label(view.render({ExportMenu}), 'Daily BD balance site').props.onChange({target: {value: 'Majri OB'}});
-  assert.match(menuOf(view.render({ExportMenu})).props.title, /^Daily BD balance · Majri OB · 05-09-2026 to 11-09-2026/);
+  assert.match(menuOf(view.render({ExportMenu})).props.title, /^Daily BD balance · Majri OB · 05-09-26 to 11-09-26/);
 });
 
 test('the Export menu prints the chart as it is on screen and hands its table to the dashboard workbook', () => {
@@ -213,27 +213,27 @@ test('every site view compares dates, includes zero sites, and drills into the e
   assert.equal(find(tree, node => node.type === 'table').length, 0);
   assert.equal(find(tree, node => node.props.className === 'bd-site-card').length, 3);
   const barHeight = name => find(label(tree, name), node => node.props.className === 'bd-site-bar-fill')[0].props.style.height;
-  assert.equal(barHeight('Sasti OB, 10-09-2026: Closing BD, 2 requests'), '100%');
-  assert.equal(barHeight('Majri OB, 11-09-2026: Closing BD, 1 requests'), '50%');
-  assert.equal(barHeight('Empty site, 11-09-2026: Closing BD, 0 requests'), '0%');
-  label(tree, 'Empty site, 11-09-2026: Closing BD, 0 requests').props.onClick();
+  assert.equal(barHeight('Sasti OB, 10-09-26: Closing BD, 2 requests'), '100%');
+  assert.equal(barHeight('Majri OB, 11-09-26: Closing BD, 1 requests'), '50%');
+  assert.equal(barHeight('Empty site, 11-09-26: Closing BD, 0 requests'), '0%');
+  label(tree, 'Empty site, 11-09-26: Closing BD, 0 requests').props.onClick();
   assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-11', '2026-09-11', 'Empty site']);
   assert.doesNotMatch(renderToStaticMarkup(tree), /NaN|Infinity/);
-  assert.ok(label(tree, 'Sasti OB, 10-09-2026: Closing BD, 2 requests'));
-  assert.ok(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'));
-  assert.ok(label(tree, 'Majri OB, 10-09-2026: Closing BD, 0 requests'));
-  assert.ok(label(tree, 'Empty site, 11-09-2026: Closing BD, 0 requests'));
-  label(tree, 'Sasti OB, 10-09-2026: Closing BD, 2 requests').props.onClick();
+  assert.ok(label(tree, 'Sasti OB, 10-09-26: Closing BD, 2 requests'));
+  assert.ok(label(tree, 'Sasti OB, 11-09-26: Closing BD, 1 requests'));
+  assert.ok(label(tree, 'Majri OB, 10-09-26: Closing BD, 0 requests'));
+  assert.ok(label(tree, 'Empty site, 11-09-26: Closing BD, 0 requests'));
+  label(tree, 'Sasti OB, 10-09-26: Closing BD, 2 requests').props.onClick();
   assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-10', '2026-09-10', 'Sasti OB']);
   label(tree, 'Sasti OB: BD Out, 1 requests in selected period').props.onClick();
   assert.deepEqual(view.calls.pop(), ['outgoing', '2026-09-10', '2026-09-11', 'Sasti OB']);
   label(tree, 'Daily BD balance site').props.onChange({target: {value: 'Majri OB'}});
   tree = view.render();
-  assert.equal(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'), undefined);
-  assert.ok(label(tree, 'Majri OB, 11-09-2026: Closing BD, 1 requests'));
+  assert.equal(label(tree, 'Sasti OB, 11-09-26: Closing BD, 1 requests'), undefined);
+  assert.ok(label(tree, 'Majri OB, 11-09-26: Closing BD, 1 requests'));
   tree = view.render({sites: ['Sasti OB']});
   assert.equal(label(tree, 'Daily BD balance site').props.value, '');
-  assert.equal(label(tree, 'Majri OB, 11-09-2026: Closing BD, 1 requests'), undefined);
+  assert.equal(label(tree, 'Majri OB, 11-09-26: Closing BD, 1 requests'), undefined);
   assert.equal(label(view.render({ready: false}), 'Every site BD balance by date'), undefined);
 });
 
@@ -246,7 +246,7 @@ test('every site export includes daily movements and period totals with idle kep
     {ref: 'IDLE', site: 'Sasti', start: '2026-09-09', status: 'Idle'},
     {ref: 'CLOSED', site: 'Majri OB', start: '2026-09-10', closedAt: '2026-09-11', status: 'Closed'},
   ]});
-  assert.ok(label(tree, 'Sasti OB, 11-09-2026: Closing BD, 1 requests'));
+  assert.ok(label(tree, 'Sasti OB, 11-09-26: Closing BD, 1 requests'));
   assert.ok(label(tree, 'Sasti OB: Idle Vehicles, 1 requests in selected period'));
   const exported = exportRef.current;
   assert.match(exported.title, /^Every site BD balance/);

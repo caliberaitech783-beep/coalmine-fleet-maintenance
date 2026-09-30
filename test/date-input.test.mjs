@@ -6,14 +6,14 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import DateInput, {dateInputOverlaySupported, formatDayFirstInputValue} from '../src/date-input.mjs';
 
 test('date inputs display day-first regardless of browser locale', () => {
-  assert.equal(formatDayFirstInputValue('2026-09-21'), '21-09-2026');
-  assert.equal(formatDayFirstInputValue('2026-09-21T14:05', 'datetime-local'), '21-09-2026 14:05');
-  assert.equal(formatDayFirstInputValue('2026-09-21T14:05', 'date'), '21-09-2026');
+  assert.equal(formatDayFirstInputValue('2026-09-21'), '21-09-26');
+  assert.equal(formatDayFirstInputValue('2026-09-21T14:05', 'datetime-local'), '21-09-26 14:05');
+  assert.equal(formatDayFirstInputValue('2026-09-21T14:05', 'date'), '21-09-26');
   assert.equal(formatDayFirstInputValue(''), '');
   assert.equal(formatDayFirstInputValue(undefined), '');
   const html = renderToStaticMarkup(React.createElement(DateInput, {value: '2026-09-21', onChange() {}}));
-  assert.match(html, /^<input type="date" data-dmy="21-09-2026" value="2026-09-21"\/>$/);
-  assert.match(renderToStaticMarkup(React.createElement(DateInput, {defaultValue: ''})), /data-dmy="dd-mm-yyyy" data-empty="true"/);
+  assert.match(html, /^<input type="date" data-dmy="21-09-26" value="2026-09-21"\/>$/);
+  assert.match(renderToStaticMarkup(React.createElement(DateInput, {defaultValue: ''})), /data-dmy="dd-mm-yy" data-empty="true"/);
 });
 
 test('the custom date overlay stays off on mobile and touch devices', () => {

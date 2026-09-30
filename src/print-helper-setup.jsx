@@ -4,7 +4,7 @@ import { printHelperAvailable } from "./direct-print.mjs";
 
 const formatWhen = (value) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(date).replaceAll("/", "-").toUpperCase();
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }).format(date).replaceAll("/", "-").toUpperCase();
 };
 
 /**
