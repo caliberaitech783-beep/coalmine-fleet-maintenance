@@ -2217,7 +2217,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return [];
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
-  const requestDrilldownKey = (key = "") => key.startsWith("entered-today:") || key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
+  const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix)) || key.startsWith("entered-today:");
   const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
