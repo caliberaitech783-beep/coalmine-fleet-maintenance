@@ -6367,6 +6367,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(req.body?.complaintMedia!==undefined&&!validComplaintMedia(complaintMedia))return res.status(400).json({error:'Attach at most one photo and one video, in supported formats, up to 5 MB each.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     const requester=await currentUserRecord(req.session);
+    if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
+      if(!resolveMobileAccess({user:requester}).permissions.createRequests)return res.status(403).json({error:'Create request privilege is not enabled for this manager.'});
+      if(!userManagesSite(requester,storedSite))return res.status(403).json({error:'Create maintenance requests only for your assigned sites.'});
+    }
     if(req.session.role==='normal'){
       const assignedScope=userSiteScope(requester);
       if(!reportScopeIncludesSite(assignedScope,storedSite))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});

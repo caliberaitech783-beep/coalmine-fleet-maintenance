@@ -106,7 +106,13 @@ export function adminAccessPermissions(user = {}) {
   const tabAccess = [...new Set([...(selectedTabs ?? ADMIN_DEFAULT_TAB_OPTIONS), ...requiredTabs])];
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
+  const enabled=value=>value===true||/^(true|yes|1|on)$/i.test(String(value||'').trim());
+  const desktopManagerCreateRequest=adminLevel==='Manager'&&enabled(user.desktopManagerCreateRequest);
+  const mobileManagerCreateRequest=adminLevel==='Manager'&&enabled(user.mobileManagerCreateRequest);
   return {
+    createRequests: adminLevel!=='Manager'||desktopManagerCreateRequest||mobileManagerCreateRequest,
+    desktopManagerCreateRequest,
+    mobileManagerCreateRequest,
     adminLevel,
     managerRole: managerRoles[0]||"",
     managerRoles,
@@ -130,6 +136,7 @@ export function adminAccessPermissions(user = {}) {
 export function navigationPermissionsForView(permissions={},mobile=false){
   if(!mobile)return permissions;
   return {...permissions,
+    desktopManagerCreateRequest:permissions.mobileManagerCreateRequest===true,
     masterAccess:permissions.mobileMasterAccess??permissions.masterAccess,
     tabAccess:permissions.mobileTabAccess??permissions.tabAccess,
     dashboardAccess:permissions.mobileDashboardAccess??permissions.dashboardAccess,

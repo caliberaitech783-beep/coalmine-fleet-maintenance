@@ -1381,7 +1381,13 @@ function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
   </div>;
 }
 
-function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null }) {
+function ManagerCreateRequestForm({equipmentRecords, equipmentLoaded, requests, onCreate, close}) {
+  const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
+  return <MaintenanceForm normal equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} activeRequestRecords={requests} close={close} onSubmit={async request => { await onCreate(request); close(); }} />;
+}
+
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null, canCreateRequest = false, onCreateRequest }) {
+  const [creatingRequest, setCreatingRequest] = useState(false);
   const [queueTab,setQueueTab]=useState("active");
   const [requestUpdate, setRequestUpdate] = useState(null);
   const [productionFirstTrip, setProductionFirstTrip] = useState(null);
@@ -1486,6 +1492,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     { section: "Request queue", metric: "Closed history", value: historyRows.length, scope: managerScopeLabel, details: "Closed or verified requests" },
   ];
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
+    {canCreateRequest && <div className="manager-dashboard-actions"><button type="button" className="primary" disabled={!equipmentLoaded || !requestsLoaded} onClick={() => setCreatingRequest(true)}><Plus /> Create request</button></div>}
+    {canCreateRequest && creatingRequest && <ManagerCreateRequestForm equipmentRecords={siteEquipment} equipmentLoaded={equipmentLoaded} requests={scopedRequests} onCreate={onCreateRequest} close={() => setCreatingRequest(false)} />}
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Smart Export" dashboardPdf />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} data-nav="role" className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active");setManagerDrilldown("")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
@@ -2926,6 +2934,7 @@ const mobileAccessKey=(key)=>`mobile${key[0].toUpperCase()}${key.slice(1)}`;
 const desktopSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
 const mobileSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [mobileAccessKey(field), `Mobile ${label}`, "multi-checkbox"]);
 const userSubmenuFields = [...desktopSubmenuFields, ...mobileSubmenuFields, ["mobileTabAccess", "Mobile visible tabs", "multi-checkbox"]];
+userSubmenuFields.push(["desktopManagerCreateRequest", "Desktop manager create request", "checkbox"], ["mobileManagerCreateRequest", "Mobile manager create request", "checkbox"]);
 const operationalViewFields = [
   ["desktopUserMenuAccess","Desktop user menus","multi-checkbox"],
   ["desktopUserRequestAccess","Desktop request submenus","multi-checkbox"],
@@ -4073,7 +4082,7 @@ function AccessSelectAll({label,options=[],selected=[],onChange}){
   return <label className="access-select-all"><input ref={control} type="checkbox" checked={allSelected} onChange={(event)=>onChange(event.target.checked?[...options]:[])} /><span>{label}</span></label>;
 }
 
-function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false}){
+function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false,managerRequestPrivileges=false}){
   const prefix=view==="mobile"?"mobile":"";
   const keyFor=(field)=>prefix?mobileAccessKey(field):field;
   const requiredTabs=isManager?["Dashboard","Tickets"]:[];
@@ -4087,6 +4096,7 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
   const toggleSubmenu=(field,option,checked)=>setSubmenuSelections((current)=>({...current,[field]:checked?[...new Set([...(current[field]||[]),option])]:(current[field]||[]).filter((item)=>item!==option)}));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{shownTabs.length} selected</span></header>
+    {managerRequestPrivileges && <fieldset className="user-access-field access-section-card"><legend>Manager request privileges</legend><label><input type="checkbox" name={`${view}ManagerCreateRequest`} defaultChecked={isCheckedValue(record[`${view}ManagerCreateRequest`])} /><span><b>Create request</b><small>Allow all assigned manager profiles to create maintenance requests for their assigned sites in this view.</small></span></label></fieldset>}
     <fieldset className="user-access-field access-section-card">
       <legend>Selected menus</legend>
       {requiredTabs.map((tab)=><input key={tab} type="hidden" name={keyFor("tabAccess")} value={tab} />)}
@@ -4192,8 +4202,8 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
-      <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager />
-      <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager />
+      <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager managerRequestPrivileges={isManager} />
+      <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager managerRequestPrivileges={isManager} />
     </>}
     {accountRole && !isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "All menu choices are available and unticked by default. Select only the menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
@@ -11545,7 +11555,7 @@ function App() {
           ) : active === "CD" ? (
             <CaliberDirectoryPage />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
+            <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

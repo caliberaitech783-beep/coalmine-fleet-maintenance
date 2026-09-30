@@ -25,6 +25,7 @@ const RequestDataState = () => null;
 const FleetDataState = () => null;
 const DashboardConnectionNotice = () => null;
 const ManagerIdleConfirmation = () => null;
+const ManagerCreateRequestForm = () => null;
 const all = (tree, predicate) => {
   const result = [];
   const visit = (node) => {
@@ -65,7 +66,7 @@ function managerHarness(equipment, equipmentState = {}) {
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
     preventTableAutoScroll: () => {}, BreakdownTable, MobileWorkflowTable, DashboardRecordBrowser, Modal, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,
     ActionsTable: Null, Status: Null, RequestTimelineButton: Null, MaintenanceRemarks: Null, REGION_DATA: [], formatTwelveHourDateTime: (value) => value, formatDisplayTime: (value) => value, authToken: "fixture-token",
-    ShieldCheck: Null, ChevronRight: Null,
+    ShieldCheck: Null, ChevronRight: Null, Plus: Null, ManagerCreateRequestForm,
   };
   const component = new Function(...Object.keys(scope), `${managerCode}; return ManagerDashboard;`)(...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component({ requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props }); } };
@@ -80,6 +81,20 @@ const open = { ref: "OPEN", door: "D1", chassis: "CH1", site: "Sasti OB", status
 const idle = { ref: "IDLE", door: "D2", chassis: "CH2", site: "Sasti OB", status: "Idle" };
 const closed = { ref: "CLOSED", door: "D3", chassis: "CH3", site: "Sasti OB", status: "Closed" };
 const verified = { ...closed, ref: "VERIFIED", verifiedAt: "2026-09-09 12:00:00", firstTripDone: true, productionFirstTripAt: "2026-09-09 11:45:00" };
+
+for (const managerRole of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${managerRole}: create action follows privilege and supplies site-scoped form data`, () => {
+  const app=managerHarness(equipment);
+  const props={managerRole,requests:[open,{...open,ref:'OTHER',site:'Jayant OB'}],canCreateRequest:false,onCreateRequest:()=>{}};
+  assert.equal(button(app.render(props),'Create request'),undefined);
+  props.canCreateRequest=true;
+  button(app.render(props),'Create request').props.onClick();
+  const form=all(app.render(props),node=>node.type===ManagerCreateRequestForm)[0];
+  assert.equal(form.props.onCreate,props.onCreateRequest);
+  assert.deepEqual(form.props.equipmentRecords,equipment);
+  assert.deepEqual(form.props.requests.map(row=>row.ref),['OPEN']);
+  props.canCreateRequest=false;
+  assert.equal(all(app.render(props),node=>node.type===ManagerCreateRequestForm).length,0);
+});
 
 for (const role of ["Project Manager", "Production Manager"]) test(`${role}: current request source reconciles the 303-asset fixture and a subsequent closure`, () => {
   const assets = Array.from({ length: 303 }, (_, index) => ({ door: `ASSET-${index}`, category: "Vehicle", currentLocation: "Sasti OB", status: index < 64 ? "Breakdown" : "Operational" }));
