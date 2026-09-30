@@ -21,7 +21,7 @@ export function employeeTenure(joined, asOf) {
   };
   if (anniversary(months) > end.time) months--;
   const days = Math.floor((end.time - anniversary(months)) / 86400000);
-  return {months, days, label: `${months}M - ${days} D`};
+  return {months, days, label: `${Math.floor(months / 12)}Y ${months % 12}M ${days}D`};
 }
 
 export function buildEmployeeTenureReport(directory, asOf, minimumMonths = 3) {

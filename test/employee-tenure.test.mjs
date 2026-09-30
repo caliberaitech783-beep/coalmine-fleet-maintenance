@@ -4,11 +4,13 @@ import {readFileSync} from 'node:fs';
 import {employeeTenure, buildEmployeeTenureReport, TENURE_MONTHS} from '../src/employee-tenure.mjs';
 
 test('tenure uses calendar months and remaining days, including month ends and leap years', () => {
-  assert.deepEqual(employeeTenure('2026-06-15','2026-09-30'), {months:3,days:15,label:'3M - 15 D'});
-  assert.equal(employeeTenure('2026-07-01','2026-09-30').label,'2M - 29 D');
-  assert.equal(employeeTenure('2026-01-31','2026-04-30').label,'3M - 0 D');
-  assert.equal(employeeTenure('2024-02-29','2025-02-28').label,'12M - 0 D');
-  assert.equal(employeeTenure('2024-02-29','2025-03-01').label,'12M - 1 D');
+  assert.equal(employeeTenure('2023-07-15','2026-09-30').label,'3Y 2M 15D');
+  assert.equal(employeeTenure('2023-10-06','2026-09-30').label,'2Y 11M 24D');
+  assert.deepEqual(employeeTenure('2026-06-15','2026-09-30'), {months:3,days:15,label:'0Y 3M 15D'});
+  assert.equal(employeeTenure('2026-07-01','2026-09-30').label,'0Y 2M 29D');
+  assert.equal(employeeTenure('2026-01-31','2026-04-30').label,'0Y 3M 0D');
+  assert.equal(employeeTenure('2024-02-29','2025-02-28').label,'1Y 0M 0D');
+  assert.equal(employeeTenure('2024-02-29','2025-03-01').label,'1Y 0M 1D');
   for (const date of ['', '2026-02-30','2026-10-01']) assert.equal(employeeTenure(date,'2026-09-30'),null);
 });
 
@@ -18,7 +20,7 @@ test('report includes active employees at three months, excludes former staff an
   const report=buildEmployeeTenureReport(directory,'2026-09-30');
   assert.deepEqual(report.rows.map(row=>row.empId),['old','eligible']);
   assert.equal(report.missingDates,1);
-  assert.equal(report.rows[1].label,'3M - 0 D');
+  assert.equal(report.rows[1].label,'0Y 3M 0D');
   assert.deepEqual(buildEmployeeTenureReport(directory,'2026-09-30',60).rows.map(row=>row.empId),['old']);
   assert.deepEqual(TENURE_MONTHS,[3,6,9,12,24,36,48,60]);
 });

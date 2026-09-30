@@ -33,7 +33,7 @@ export default function EmployeeTenureReport({token, ReportSection}) {
   const report = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum), [data, token, asOf, minimum]);
   return <section className="reports-workspace">
     <h1>Employee Tenure Report</h1>
-    <p>Currently working employees only. Service is counted from joining date through the selected date, in completed calendar months and remaining days. Employees with less than three months of service and employees who have left are excluded.</p>
+    <p>Currently working employees only. Service is counted from joining date through the selected date, in completed years, months and remaining days. Employees with less than three months of service and employees who have left are excluded.</p>
     <div style={{display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'end', marginBottom: 16}}>
       <label>Counted through <DateInput aria-label="Employee tenure counted through" value={asOf} max={today} onChange={event => {if (event.target.value && event.target.value <= today) setAsOf(event.target.value);}} /></label>
       <label>Minimum completed service <select aria-label="Minimum completed service" value={minimum} onChange={event => setMinimum(Number(event.target.value))}>{TENURE_MONTHS.map(months => <option value={months} key={months}>{months}+ months</option>)}</select></label>
@@ -41,7 +41,7 @@ export default function EmployeeTenureReport({token, ReportSection}) {
     </div>
     {data.loading || data.token !== token ? <p role="status">Loading employee records…</p> : data.error ? <p role="alert">{data.error} Use Refresh to retry.</p> : <>
       {report.missingDates > 0 && <p role="status">{report.missingDates} active employee records excluded because their joining date is missing or invalid.</p>}
-      <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months`} category="employee-tenure" description={`Counted through ${formatDisplayDate(asOf)}. Example: 3M - 15 D means 3 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees meet the selected tenure." />
+      <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months`} category="employee-tenure" description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees meet the selected tenure." />
     </>}
   </section>;
 }

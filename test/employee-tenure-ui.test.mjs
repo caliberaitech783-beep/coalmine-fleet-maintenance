@@ -20,9 +20,9 @@ test('employee report passes exact tenure and six requested columns to the expor
   const bindings={React,DateInput,formatDisplayDate,TENURE_MONTHS,buildEmployeeTenureReport,useMemo:fn=>fn(),useEffect:()=>{},useState(initial){const i=cursor++;return [slots[i] ?? initial,value=>{slots[i]=value;}];}};
   const Component=new Function(...Object.keys(bindings),code+'; return EmployeeTenureReport;')(...Object.values(bindings));
   const render=token=>{cursor=0;return renderToStaticMarkup(Component({token,ReportSection:Section}));};
-  assert.match(render('fixture'),/3M - 15 D/);
+  assert.match(render('fixture'),/0Y 3M 15D/);
   assert.deepEqual(received.columns.map(c=>c.label),['Employee ID','Employee name','Department','Designation','Joining date','Working tenure']);
-  assert.deepEqual(received.columns.map(c=>c.value(received.rows[0])),['E1','Example employee','HR','Officer','15-06-2026','3M - 15 D']);
+  assert.deepEqual(received.columns.map(c=>c.value(received.rows[0])),['E1','Example employee','HR','Officer','15-06-2026','0Y 3M 15D']);
   assert.match(received.title,/30-09-2026/);
   assert.equal(received.rows.length,1);
   slots[1]=6;
