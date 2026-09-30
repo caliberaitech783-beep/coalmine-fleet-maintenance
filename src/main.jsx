@@ -49,7 +49,7 @@ import FleetSiteBars from "./fleet-site-bars.jsx";
 import OemBreakdownChart from "./oem-breakdown-chart.jsx";
 import OemBreakdownDetails from "./oem-breakdown-details.jsx";
 import DashboardFilterBar from "./dashboard-filter-bar.jsx";
-import { oemFiltersForSelection, oemRowsForLocation } from "./oem-dashboard-filters.mjs";
+import { oemFiltersForSelection, oemRowsForLocation, groupOemRecordsBySite, oemDetailReportRows } from "./oem-dashboard-filters.mjs";
 import { buildOemBreakdownRows, buildOemBreakdownChart, createOemBreakdownSelection, oemLabel } from "./oem-breakdown-model.mjs";
 import { filterOemDelayedRows } from "./oem-delay-filter.mjs";
 import MaintenanceOemChoice from "./maintenance-oem-choice.jsx";
@@ -1651,6 +1651,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       setFleetChartMode("breakdown");
       setAssetDrilldown("");
       setOemDrilldownKind(null);
+      requestAnimationFrame(() => dashboardBannerRef.current?.scrollIntoView({block: "start", behavior: "auto"}));
     };
     window.addEventListener("nerve-center:dashboard-home", showBreakdownDashboard);
     return () => window.removeEventListener("nerve-center:dashboard-home", showBreakdownDashboard);
@@ -2227,6 +2228,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     sites: region.sites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))),
   }));
   const siteScopedDrilldown = assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("site-status:");
+  const showFleetSiteTabs = ["all", "fleet-breakdown:account", "fleet-breakdown:balance", "fleet-breakdown:all"].includes(assetDrilldown) || assetDrilldown.startsWith("entered-today:");
+  const fleetSiteTabRows = showFleetSiteTabs ? oemDetailReportRows(groupOemRecordsBySite(assetDrilldownRows, assetDrilldownRegions), true) : assetDrilldownRows;
   const siteScopedParts = siteScopedDrilldown ? assetDrilldown.slice(12).split("|") : [];
   const siteScopedSite = siteScopedParts[0] || "";
   const siteScopedFocus = siteScopedParts[1] || "";
@@ -2567,9 +2570,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       {oemDrilldown && <Modal className="dashboard-asset-modal mine-oem-modal" overlayClassName="dashboard-asset-overlay" topBar={renderDashboardHeader(true)} title={oemDrilldown.title} close={() => setOemDrilldownKind(null)} headerActions={<div className="modal-header-actions" ref={setOemToolbarTarget} />}>
         <OemBreakdownDetails key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, oemDrilldownKind].join("|")} selection={oemDrilldown} title={oemDrilldown.title} toolbarTarget={oemToolbarTarget} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} />
       </Modal>}
-      {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
+      {assetDrilldown && <Modal className={`dashboard-asset-modal${showFleetSiteTabs ? " fleet-site-tabs-modal" : ""}`} overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+        <DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} groupBySite={showFleetSiteTabs} hideHierarchyFilters={showFleetSiteTabs} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
             value: encodeDateRange(movementDrilldownParts[1], movementDrilldownParts[2]),
