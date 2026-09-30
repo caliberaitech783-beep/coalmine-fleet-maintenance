@@ -1,5 +1,11 @@
 .mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
+.mine-oem-view-toolbar { flex: 1 1 0; min-width: 0; }
+.mine-oem-view-toolbar .shared-table-actions-toolbar { position: static; padding: 0; border: 0; justify-content: flex-start; background: transparent; }
+.mine-oem-view-toolbar .shared-table-record-count { display: none; }
+.mine-oem-view-toolbar .mine-oem-summary { margin: 0; padding: 0; gap: 8px; }
+.mine-oem-view-toolbar .mine-oem-summary h3 { font-size: 14px; margin: 0; }
+@media (max-width: 900px) { .mine-oem-view-toolbar { flex-basis: 100%; } }
 .mine-oem-top-toolbar { flex: 0 0 auto; }
 .mine-oem-top-toolbar .shared-table-actions-toolbar { position: static; justify-content: flex-start; padding: 4px 8px; }
 .mine-oem-top-toolbar .shared-table-record-count { display: none; }

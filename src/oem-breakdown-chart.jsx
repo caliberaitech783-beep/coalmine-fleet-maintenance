@@ -83,7 +83,7 @@ function OemChartSurface({ chart, plotHeight, children }) {
   </div>;
 }
 
-export default function OemBreakdownChart({ chart, from, to, error, onSelect, onFilterOem, onReset, availableHeight = 0 }) {
+export default function OemBreakdownChart({ toolbarTarget = null, chart, from, to, error, onSelect, onFilterOem, onReset, availableHeight = 0 }) {
   const plotHeight = fitPlotHeight(chart, availableHeight);
   const inspect = (event, selection) => { event.stopPropagation(); onSelect(selection); };
   const sourceRows = chart.sourceRows || chart.rows;
@@ -96,11 +96,12 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
   const siteScope = chart.sites.length === 1 ? chart.sites[0].name : "Sites matching current filters";
   const siteWidth = site => Math.max(132, site.bars.length * 44 + 20);
   const chartWidth = chart.sites.reduce((total, site) => total + siteWidth(site), 0);
-  return <OemChartSurface chart={chart} plotHeight={plotHeight}>
-    <div className="mine-oem-summary">
+  const summary = <div className="mine-oem-summary">
       <h3>Site-wise OEM and equipment-category breakdown</h3>
       <div className="mine-oem-actions"><button type="button" className="secondary" onClick={event => { event.stopPropagation(); onReset?.(); }}>Reset filters</button><button type="button" className="secondary" title="View all breakdown assets matching the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-full-list", totalOem, chart.rows.length, siteScope)} onClick={event => inspect(event, {})}>View full list <b>{chart.rows.length.toLocaleString()}</b></button></div>
-    </div>
+    </div>;
+  return <OemChartSurface chart={chart} plotHeight={plotHeight}>
+    {toolbarTarget ? createPortal(summary, toolbarTarget) : summary}
     {error ? <p className="mine-oem-error" role="alert">{error}</p> : <>
       {!!visibleCategories.length && <div className="mine-oem-category-legend" aria-label="OEM equipment-category breakdown totals">
         <strong>Equipment categories</strong>
