@@ -43,8 +43,8 @@ function ChipRow({name, label, allLabel, options, value, choose}) {
 // and one ranked list of open breakdowns, longest standing first.
 export default function InfoPulseContent({breakdowns = [], firstTripPending = [], session = null, scope, now, updatedAt, ready, error, refreshing, onRefresh, ExportMenu = null, renderRequestReference = null}) {
   const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
-  // BD balance as of today: every open breakdown started on or before today.
-  const defaults = {region: 'all', site: '', category: '', from: '', to: today};
+  // Start on today's requests; Until today remains available for the full balance.
+  const defaults = {region: 'all', site: '', category: '', from: today, to: today};
   const [tier, setTier] = useState('all');
   const [expandedUpdates, setExpandedUpdates] = useState({});
   const [filters, setFilters] = useState(defaults);

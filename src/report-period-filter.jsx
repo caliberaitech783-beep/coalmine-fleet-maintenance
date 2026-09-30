@@ -60,6 +60,15 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
 }
 export default function ReportPeriodFilter({from,to,onApply}) {
   const [open,setOpen]=useState(false);
+  const initialized=useRef(false);
+  useEffect(()=>{
+    if(initialized.current)return;
+    initialized.current=true;
+    if(!from&&!to){
+      const today=indiaToday(),bounds=periodBounds(today,today,'00:00','23:59');
+      onApply(bounds.from,bounds.to);
+    }
+  },[from,to,onApply]);
   const updateDate=(bound,value)=>{
     if (!value) {onApply('','');return;}
     const start=from?.slice(0,10),end=to?.slice(0,10);
@@ -73,7 +82,7 @@ export default function ReportPeriodFilter({from,to,onApply}) {
     <label className="report-period-date"><span>From</span><DateInput aria-label="Report from date" value={from?.slice(0,10)||''} max={to?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
     <label className="report-period-date"><span>To</span><DateInput aria-label="Report to date" value={to?.slice(0,10)||''} min={from?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
     {(from||to)&&<button type="button" className="secondary" onClick={()=>onApply('','')}>Clear dates</button>}
-    <span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:'All dates'}</span>
+    <span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:''}</span>
     {open&&<ReportPeriodDialog from={from} to={to} onClose={()=>setOpen(false)} onApply={(start,end)=>{onApply(start,end);setOpen(false);}}/>}
   </div>;
 }

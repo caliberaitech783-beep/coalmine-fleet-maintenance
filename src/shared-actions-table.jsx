@@ -238,13 +238,11 @@ function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, Co
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
       <span className="shared-table-record-count" role="status">{groupBySite ? reportCount(new Set(selectedRows.map(reportAsset)).size, selectedRows.length) : `${selectedRows.length} of ${dataRows.length} records`}</span>
       {toolbarAfterCount}
-      {printData && dateRangeControl}
-      {printData && <ExportMenu printOnly reportGrouping={reportGrouping} title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
+      {dateRangeControl}
       <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>
       <TableLayoutSelect store={layoutStore} visibleKeys={visible} onSelect={setVisible} />
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
-      {!printData && dateRangeControl}
-      {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} reportGrouping={reportGrouping} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} smartPrintItem={!printData} />}
+      {(exportData || printData) && <ExportMenu title={exportTitle || printTitle} columns={(exportData || printData).columns} rows={(exportData || printData).rows} reportGrouping={reportGrouping} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} smartPrintItem />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} layoutStore={layoutStore} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
       {SavedReports && <SavedReports title={reportTitle} tableKey={tableProps.className || ""} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentView} onApply={applySavedView} canPrint={canPrintReport} onPrint={printCurrentView} />}

@@ -8,6 +8,7 @@ import { recordDateKey, filterRecordsByDate, primaryRecordDateColumn } from "../
 import { describeDateRange, encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import { tableModel, tableExportModel } from "../src/table-actions-model.mjs";
 import DateInput from '../src/date-input.mjs';
+import { indiaToday } from '../src/report-period-model.mjs';
 
 test("non-report record dates prefer Started over closure/verification and ignore undated masters", () => {
   const columns = ["Status", "MIS verified at", "Closed", "Started", "Days of breakdown"].map((label, index) => ({key: `${index}:${label}`, label}));
@@ -52,9 +53,35 @@ const source=readFileSync(new URL("../src/record-date-range.jsx",import.meta.url
 const {code}=await transformWithOxc(source,"record-date-range.jsx",{jsx:{runtime:"classic"}});
 const descendants=(node,predicate)=>Array.isArray(node)?node.flatMap(child=>descendants(child,predicate)) : React.isValidElement(node)?[...(predicate(node)?[node]:[]),...descendants(node.props.children,predicate)]:[];
 
+test("today is applied once in IST; clearing, rerendering and explicit ranges remain user controlled", () => {
+  assert.equal(indiaToday(new Date('2026-09-29T18:30:00Z')), '2026-09-30');
+  assert.equal(indiaToday(new Date('2026-09-29T18:29:59Z')), '2026-09-29');
+  for (const initialValue of ['', encodeDateRange('2026-09-01', '2026-09-05')]) {
+    let state, value=initialValue;
+    const initialized={current:false}, effects=[], changes=[];
+    const bindings={React,describeDateRange,encodeDateRange,parseDateRange,indiaToday:()=> '2026-09-30',
+      useId:()=> 'default-test',useRef:()=>initialized,useEffect:callback=>effects.push(callback),
+      useState(initial){if(state===undefined)state=initial();return[state,next=>{state=next;}];}};
+    const Component=new Function('DateInput',...Object.keys(bindings),`${code};return RecordDateRange;`)(DateInput,...Object.values(bindings));
+    const render=()=>{const tree=Component({label:'Started',value,onChange:next=>{value=next;changes.push(next);}});effects.splice(0).forEach(effect=>effect());return tree;};
+    render(); render();
+    assert.equal(value,initialValue||encodeDateRange('2026-09-30','2026-09-30'));
+    assert.equal(changes.length,initialValue?0:1);
+    const rows=[{at:'2026-09-29T18:30:00Z'},{at:'2026-09-29T18:29:59Z'}];
+    if(!initialValue)assert.deepEqual(filterRecordsByDate(rows,value,row=>row.at),[rows[0]]);
+    descendants(render(),node=>node.type==='button')[0].props.onClick();
+    render(); render();
+    assert.equal(value,'');
+    assert.deepEqual(state,{from:'',to:''});
+    assert.equal(filterRecordsByDate(rows,value,row=>row.at),rows);
+    value=encodeDateRange('2026-08-01','2026-08-31'); render(); render();
+    assert.deepEqual(state,{from:'2026-08-01',to:'2026-08-31'});
+  }
+});
+
 test("visible From and To fields apply valid ranges, preserve the prior filter for reversed dates, and reset", () => {
   let state, currentValue="";
-  const bindings={React,describeDateRange,encodeDateRange,parseDateRange,useId:()=>"date-test",useEffect(){},useState(initial){if(state===undefined)state=initial();return[state,next=>{state=next;}];}};
+  const bindings={React,describeDateRange,encodeDateRange,parseDateRange,useId:()=>"date-test",useRef:()=>({current:false}),useEffect(){},useState(initial){if(state===undefined)state=initial();return[state,next=>{state=next;}];}};
   const Component=new Function('DateInput',...Object.keys(bindings),`${code};return RecordDateRange;`)(DateInput,...Object.values(bindings));
   const render=()=>Component({label:"Started",value:currentValue,onChange:value=>{currentValue=value;}});
   const change=(label,value)=>descendants(render(),node=>(node.type==="input"||node.type===DateInput)&&node.props["aria-label"]===label)[0].props.onChange({target:{value}});
@@ -68,7 +95,7 @@ test("visible From and To fields apply valid ranges, preserve the prior filter f
   assert.equal(currentValue,encodeDateRange("2026-09-09","2026-09-10"));
   descendants(render(),node=>node.type==="button")[0].props.onClick();
   assert.equal(currentValue,"");
-  assert.match(renderToStaticMarkup(render()),/All dates/);
+  assert.doesNotMatch(renderToStaticMarkup(render()),/All dates|record-date-range-basis/);
 });
 
 test("Reports stay on their existing table implementation; dated workflow tables share their existing filter/export state", () => {
@@ -78,6 +105,23 @@ test("Reports stay on their existing table implementation; dated workflow tables
   assert.doesNotMatch(report,/RecordDateRange|recordDateFilter|primaryRecordDateColumn/);
   const shared=readFileSync(new URL("../src/shared-actions-table.jsx",import.meta.url),"utf8");
   assert.match(shared,/value: effectiveFilters\[dateColumn.key\], onChange: \(value\) => updateFilter\(dateColumn.key, value\)/);
-  assert.match(shared,/\{printData && dateRangeControl\}\s*\{printData && <ExportMenu printOnly/);
+  assert.match(shared,/\{dateRangeControl\}/);
+  assert.doesNotMatch(shared,/<ExportMenu printOnly/);
+  assert.match(shared,/smartPrintRows=\{smartPrintData.rows\} smartPrintItem/);
   assert.match(main,/filterRecordsByDate\(sameScope \? ticketState.records : \[\], ticketDateRange, \(ticket\) => ticket.createdAt\)/);
+});
+
+test('date-column popovers default on opening, never while closed or when sorting dates only',()=>{
+  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const start=main.indexOf('  const dateRangeOpened = useRef(false);');
+  const effect=main.slice(start,main.indexOf('  const chooseDurationSort',start));
+  const ref={current:false},changes=[];
+  const run=new Function('useRef','useEffect','open','dateColumn','dateSortOnly','durationSortOnly','filterValue','onFilterChange','indiaDateTimeInputValue','encodeDateRange',effect);
+  const render=(props={})=>run(()=>ref,callback=>callback(),props.open??true,true,props.dateSortOnly??false,false,props.value??'',value=>changes.push(value),()=> '2026-09-30T00:15:00',encodeDateRange);
+  render({open:false});assert.equal(changes.length,0);
+  render({dateSortOnly:true});assert.equal(changes.length,0);
+  render();assert.deepEqual(changes,[encodeDateRange('2026-09-30','2026-09-30')]);
+  render();assert.equal(changes.length,1,'clearing while open stays clear');
+  render({open:false});render({value:encodeDateRange('2026-08-01','2026-08-31')});
+  assert.equal(changes.length,1,'existing ranges are preserved');
 });

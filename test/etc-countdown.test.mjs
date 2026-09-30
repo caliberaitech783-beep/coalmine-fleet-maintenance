@@ -194,7 +194,8 @@ test('the maintenance table shows the ETC beside a live countdown, and prints an
   assert.match(html, /<span class="etc-countdown overdue"[^>]*>Overdue by 2h 10m 0s<\/span>/);
   assert.match(html, /<td class="etc-cell">—<\/td>/);
   assert.match(html, /<span class="etc-countdown none" data-state="none">Not set<\/span>/);
-  for (const columns of [exports.menu.columns, exports.print.columns]) {
+  assert.equal(exports.print, undefined, 'Smart Print is inside the export menu');
+  for (const columns of [exports.menu.columns, exports.menu.smartPrintColumns || exports.menu.columns]) {
     const etc = columns.find(column => column.key === 'etc'), remaining = columns.find(column => column.key === 'etcRemaining');
     assert.deepEqual([etc.label, remaining.label], ['ETC', 'Time left for ETC']);
     assert.deepEqual([etc.value(open), remaining.value(open)], ['18-09-2026 06:00:00 PM', '4h 0m left']);

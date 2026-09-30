@@ -114,8 +114,9 @@ test("OEM-wise view splits site sections and preserves the same grouping in prin
 
 test("one toolbar controls the complete site-grouped report and distinguishes assets from records", () => {
   const result = renderDetails(selectionFor(requests));
-  assert.equal(result.exports.length, 2);
-  assert.equal(result.exports.filter(model => model.printOnly).length, 1);
+  assert.equal(result.exports.length, 1);
+  assert.equal(result.exports[0].smartPrintItem, true);
+  assert.deepEqual(result.exports[0].smartPrintRows, result.exports[0].rows);
   assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
   assert.equal((result.html.match(/class="site-report-heading"/g) || []).length, 3);
   assert.match(result.html, /Site-wise summary/);
@@ -137,7 +138,7 @@ test("one toolbar controls the complete site-grouped report and distinguishes as
 test("filtered, fleet-only and empty selections use the same combined report", () => {
   for (const selection of [selectionFor([requests[0]]), selectionFor(fleet, { fleetOnly: true }), selectionFor([])]) {
     const result = renderDetails(selection);
-    assert.equal(result.exports.length, 2);
+    assert.equal(result.exports.length, 1);
     assert.equal(result.exports[0].rows.length, selection.records.length);
     assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
   }

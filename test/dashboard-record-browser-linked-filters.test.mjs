@@ -309,7 +309,9 @@ test("the real browser and shared table render OEM controls and numbered exports
   assert.match(html, /<th class="table-serial-header" scope="col">Sr\. No\.<\/th>/);
   assert.match(html, /<td class="table-serial-cell">1<\/td>/);
   assert.match(html, /<td class="table-serial-cell">2<\/td>/);
-  assert.equal(exports.length, 2);
+  assert.equal(exports.length, 1);
+  assert.equal(exports[0].smartPrintItem, true);
+  assert.deepEqual(exports[0].smartPrintRows, exports[0].rows);
   for (const model of exports) {
     assert.deepEqual(model.rows.map(row => model.columns[0].value(row)), [1, 2]);
     assert.deepEqual(model.rows.map(row => model.columns.find(column => column.label === "Job reference").value(row)), ["JOB-A", "JOB-C"]);

@@ -42,6 +42,29 @@ function harness(componentName='ReportPeriodDialog') {
 const all=(tree,predicate)=>{const result=[];const visit=n=>{if(Array.isArray(n))return n.forEach(visit);if(!React.isValidElement(n))return;if(predicate(n))result.push(n);visit(n.props.children);};visit(tree);return result;};
 const text=node=>Array.isArray(node)?node.map(text).join(''):React.isValidElement(node)?text(node.props.children):String(node??'');
 const button=(tree,label)=>all(tree,n=>n.type==='button'&&text(n.props.children)===label)[0];
+
+test('report default applies the whole IST day once and does not undo Clear dates',()=>{
+  for(const initial of [['',''],['2026-08-01T00:00:00','2026-08-31T23:59:59.999']]){
+    let [from,to]=initial;
+    const ref={current:false},effects=[],applied=[];
+    const names=['React','useState','useEffect','useRef',...Object.keys(model),'Filter'];
+    const values=[React,()=>[false,()=>{}],callback=>effects.push(callback),()=>ref,...Object.values(model),()=>null];
+    const Component=new Function('DateInput',...names,`${code};return ReportPeriodFilter;`)(DateInput,...values);
+    const render=()=>{
+      const tree=Component({from,to,onApply:(start,end)=>{from=start;to=end;applied.push([start,end]);}});
+      effects.splice(0).forEach(effect=>effect());
+      return tree;
+    };
+    render();render();
+    if(!initial[0])assert.deepEqual([from,to],[`${model.indiaToday()}T00:00:00`,`${model.indiaToday()}T23:59:59.999`]);
+    else assert.deepEqual([from,to],initial);
+    assert.equal(applied.length,initial[0]?0:1);
+    button(render(),'Clear dates').props.onClick();
+    render();render();
+    assert.deepEqual([from,to],['','']);
+    assert.doesNotMatch(text(render()),/All dates/);
+  }
+});
 test('calendar edits are draft-only; Apply commits, Cancel discards, and Clear resets',()=>{
   const app=harness();let tree=app.render();
   button(tree,'Fortnight').props.onClick();tree=app.render();

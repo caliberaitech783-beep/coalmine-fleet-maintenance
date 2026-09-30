@@ -16,11 +16,13 @@ test("employee rows place Change password before Edit and normalize identity fie
   assert.match(server, /login:String\(record\.login\|\|''\)\.trim\(\)\.toUpperCase\(\)/);
 });
 
-test("request toolbars use the Actions filter without a duplicate beside Smart Print", () => {
+test("request toolbars use Actions and Smart Export without duplicate print or filter buttons", () => {
   const breakdown = source.slice(source.indexOf("function BreakdownTable("), source.indexOf("const masterFields"));
   const workflow = source.slice(source.indexOf("function MobileWorkflowTable("), source.indexOf("function RequestEditForm("));
-  assert.match(breakdown, /className="master-actions-slot"[\s\S]*?<PrintButton[\s\S]*?<ExportMenu/);
-  assert.match(workflow, /className="workflow-actions-slot"[\s\S]*?<PrintButton[\s\S]*?<ExportMenu/);
+  assert.match(breakdown, /className="master-actions-slot"[\s\S]*?<ExportMenu/);
+  assert.match(workflow, /className="workflow-actions-slot"[\s\S]*?<ExportMenu/);
+  assert.doesNotMatch(breakdown, /<PrintButton/);
+  assert.doesNotMatch(workflow, /<PrintButton/);
   assert.doesNotMatch(breakdown, /<TableParameterFilter columns=\{filterColumns\}/);
   assert.doesNotMatch(workflow, /<TableParameterFilter columns=\{filterColumns\}/);
   assert.match(source, /role="menuitem" onClick=\{\(\) => run\(onFilter\)\}><ListFilter \/><span>Filter<\/span>/);

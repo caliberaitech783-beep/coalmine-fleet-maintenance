@@ -97,7 +97,8 @@ test('verified history badges, filtering, print and export use Verified in every
     find(tree,'select').props.onChange({target:{value:'Verified'}});
     tree = app.render(props);
     assert.deepEqual(rowKeys(tree), ['VERIFIED']);
-    for (const type of [PrintButton,ExportMenu]) {
+    assert.equal(find(tree,PrintButton), undefined);
+    for (const type of [ExportMenu]) {
       const output = find(tree,type).props;
       assert.equal(output.columns.find(column => column.key === 'status').value(verified),'Verified');
       assert.deepEqual(output.rows,[verified]);
@@ -144,7 +145,8 @@ test('search, status filter, column filter, sorting, print and export agree with
   find(tree, 'select').props.onChange({ target: { value: 'Accepted' } });
   tree = app.render(props);
   assert.deepEqual(rowKeys(tree), ['REQ-RECEIVED', 'REQ-WORKING']);
-  for (const type of [PrintButton, ExportMenu]) {
+  assert.equal(find(tree,PrintButton), undefined);
+  for (const type of [ExportMenu]) {
     const output = find(tree, type).props;
     assert.deepEqual(output.rows, [rows[1], rows[2]]);
     assert.deepEqual(output.rows.map(output.columns.find(column => column.key === 'status').value), ['Accepted', 'Accepted']);

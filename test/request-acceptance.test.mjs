@@ -84,7 +84,8 @@ test("late acceptance red rows are carried into print, PDF and Excel exports", (
   const pdfSource = readFileSync(new URL("../table-export-pdf.mjs", import.meta.url), "utf8");
   assert.match(client, /const lateAcceptanceHighlight = highlightLateAcceptance \? requestAcceptedLate : undefined;/);
   assert.match(client, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} highlightRow=\{lateAcceptanceHighlight\} \/>/);
-  assert.match(client, /<PrintButton title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} highlightRow=\{lateAcceptanceHighlight\} \/>/);
+  assert.match(client, /smartPrintColumns = columns, smartPrintRows = rows/);
+  assert.match(client, /openSmartPrint\(\{ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow/);
   assert.match(client, /const highlightedRows = new Set\(rows\.flatMap\(\(row, index\) => highlightRow\?\.\(row\) \? \[index\] : \[\]\)\);/);
   assert.match(client, /<tr\$\{highlightRow\?\.\(rows\[index\]\) \? ' class="highlight-row"' : ""\}>/);
   assert.match(client, /tr\.highlight-row td\{background:#f8caca\}/);
