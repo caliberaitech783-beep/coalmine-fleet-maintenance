@@ -1628,7 +1628,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardShift, setDashboardShift] = useState("all");
-  // Header defaults are dashboard-only; shared record tables retain all-days defaults.
+  // From/To start on today in this header only; shared record tables retain all-days defaults.
   const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
   const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
   const [stagePipelineRegion, setStagePipelineRegion] = useState("all");
