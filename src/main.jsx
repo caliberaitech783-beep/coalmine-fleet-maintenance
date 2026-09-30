@@ -935,6 +935,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [workspacesSelectionClosed, setWorkspacesSelectionClosed] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
+  const [cdirOpen, setCdirOpen] = useState(false);
+  const [cdirSelectionClosed, setCdirSelectionClosed] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSelectionClosed, setAdminSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
@@ -958,6 +960,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setWorkspacesOpen(false);
     setReportsOpen(false);
     setAdminOpen(false);
+    setCdirOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -970,7 +973,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setActive(page);
   };
   const selectMaster = (page, event) => {
-    setMastersOpen(false);
+    closeMenus();
+    setCdirSelectionClosed(true);
     setMastersSelectionClosed(true);
     event.currentTarget.blur();
     setActive(page);
@@ -995,10 +999,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
-  const allowedMasterNav = [...visibleMasterNav, ...cdirMasterNav];
+  const canViewDirectory = accessAllows(viewPermissions.tabAccess, "CD");
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
-  const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && (visibleMasterNav.length > 0 || cdirMasterNav.length > 0);
+  const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
@@ -1031,7 +1035,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setMastersSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={`header-nav-item${allowedMasterNav.some(([name]) => name === active) ? " active" : ""}`}
+            className={`header-nav-item${visibleMasterNav.some(([name]) => name === active) ? " active" : ""}`}
             data-nav="masters"
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
@@ -1056,8 +1060,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 <span className="nav-label">{name}</span>
               </button></div>
             ))}
-            {/* The seven C-Dir masters open as a clock face of icons. */}
-            <ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />
           </div>
         </div>}
         {canViewWhatsApp && <div
@@ -1163,16 +1165,21 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
         </div>}
-        {visibleNav.filter(([name]) => name === "CD").map(([n, I]) => (
-          <div className="nav-config-row" key={n}><button
-            className={`header-nav-item${active === n ? " active" : ""}`}
-            data-nav={n.toLowerCase()}
-            onClick={() => selectPage(n)}
-          >
-            <span className="header-nav-icon" aria-hidden="true"><I /></span>
-            <span className="nav-label">C-Dir</span>
+        {(canViewDirectory || cdirMasterNav.length > 0) && <div
+          className={`masters-menu cdir-menu${cdirOpen ? " open" : ""}${cdirSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setCdirSelectionClosed(false)}
+        >
+          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);setCdirOpen(value => !value);}}>
+            <span className="header-nav-icon" aria-hidden="true"><BookUser /></span><span className="nav-label">C-Dir</span><ChevronDown className="masters-chevron" />
           </button></div>
-        ))}
+          <div className="masters-dropdown cdir-dropdown" role="menu">
+            <ClockMenu label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} active={active} onSelect={selectMaster} />
+            {canViewDirectory && <>
+              <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Tenure Report" ? " active" : ""}`} data-workspace="report-employee-tenure" onClick={event => selectDropdownPage("Employee Tenure Report", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Tenure Report</span></button></div>
+              <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "CD" ? " active" : ""}`} data-workspace="directory" onClick={event => selectDropdownPage("CD", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span><span className="nav-label">Directory</span></button></div>
+            </>}
+          </div>
+        </div>}
       </nav>
       <div className="user">
         <span className="header-user-copy">
@@ -6177,7 +6184,6 @@ const reportCategoryTabs = [
   {id: "maintenance", label: "Maintenance report", description: "Repair turnaround, open off-road cases, and availability. Oracle utilization pending.", icon: Wrench},
   {id: "mis", label: "MIS Report", description: "Verification, first-trip mismatch, transfers, fleet, and daily in/out reports.", icon: ShieldCheck},
   {id: "vehicle-history", label: "Vehicle History Report", description: "Fleet history, repeat breakdown analysis, and common maintenance remarks.", icon: History},
-  {id: "employee-tenure", label: "Employee Tenure Report", description: "Currently working employees with at least three months of service.", icon: Users},
 ];
 const VEHICLE_HISTORY_REPORT = "Vehicle History";
 const MAXIMUM_VEHICLE_BREAKDOWN_REPORT = "Maximum Vehicle Breakdown";
@@ -6850,7 +6856,7 @@ function reportCategoryIdsForUser(permissions = {}, session = {}) {
   if (adminLevel === "Manager" && (!roleText || roleText.includes("project manager") || roleText.includes("director"))) {
     return reportCategoryTabs.map((category) => category.id);
   }
-  const categoryIds = new Set(["general", "vehicle-history", "employee-tenure"]);
+  const categoryIds = new Set(["general", "vehicle-history"]);
   if (roleText.includes("production")) categoryIds.add("production");
   if (roleText.includes("maintenance")) categoryIds.add("maintenance");
   if (roleText.includes("mis")) categoryIds.add("mis");
@@ -7052,10 +7058,6 @@ function withTimelineLinks(columns, token) {
   });
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
-  if (activeReportCategory === "employee-tenure" && reportCategoryIdsForUser(permissions, session).includes("employee-tenure")) return <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />;
-  return <FleetReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={permissions} session={session} />;
-}
-function FleetReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
   const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
@@ -10809,6 +10811,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const needsDedicatedDashboardFeed = !embedded && mobileRole === "Production User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [productionFirstTrip, setProductionFirstTrip] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
+  const [directoryView, setDirectoryView] = useState("directory");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
@@ -11016,7 +11019,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
-      {!embedded&&section==="directory"&&showDirectoryMenu&&<CaliberDirectoryPage />}
+      {!embedded&&section==="directory"&&showDirectoryMenu&&<><div className="report-category-tabs"><button type="button" onClick={() => setDirectoryView("tenure")}>Employee Tenure Report</button><button type="button" onClick={() => setDirectoryView("directory")}>Directory</button></div>{directoryView === "tenure" ? <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} /> : <CaliberDirectoryPage />}</>}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
@@ -11166,6 +11169,7 @@ function App() {
     if ([...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
+    if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -11575,6 +11579,8 @@ function App() {
         <div className="body">
           {active === "Dashboard" ? (
             requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+          ) : active === "Employee Tenure Report" ? (
+            <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
           ) : active === "CD" ? (
             <CaliberDirectoryPage />
           ) : active === "Manager Profile" ? (

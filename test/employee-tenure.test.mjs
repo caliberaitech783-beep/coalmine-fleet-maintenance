@@ -25,13 +25,31 @@ test('report includes active employees at three months, excludes former staff an
   assert.deepEqual(TENURE_MONTHS,[3,6,9,12,24,36,48,60]);
 });
 
-test('Reports menu puts employee tenure immediately below vehicle history and uses live employee data', () => {
+test('C-Dir menu puts masters before employee tenure and uses live employee data', () => {
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.match(source,/id: "vehicle-history"[^\n]+\r?\n\s*\{id: "employee-tenure", label: "Employee Tenure Report"/);
-  assert.match(source,/activeReportCategory === "employee-tenure"[\s\S]*?<EmployeeTenureReport/);
+  assert.ok(!source.includes('{id: "employee-tenure", label:'));
+  assert.match(source,/cdir-dropdown[\s\S]*?ClockMenu label="C-Dir Masters"[\s\S]*?data-workspace="report-employee-tenure"[\s\S]*?data-workspace="directory"/);
+  assert.match(source,/active === "Employee Tenure Report" \? \([\s\S]*?<EmployeeTenureReport/);
   const component=readFileSync(new URL('../src/employee-tenure-report.jsx',import.meta.url),'utf8');
   for(const label of ['Employee ID','Employee name','Department','Designation','Joining date','Working tenure']) assert.ok(component.includes(`label: '${label}'`));
   assert.ok(component.includes("fetch('/api/cdir/directory'"));
   assert.ok(component.includes('ReportSection title='));
   assert.ok(component.includes('data.token === token'));
+});
+
+test('site, region, department, category and designation filters intersect using C-Dir matrix assignments', () => {
+  const person=(id,department,designation)=>({empId:id,name:id,status:'ACTIVE',dojISO:'2023-01-01',department,designation});
+  const directory={sites:[{id:'s1',label:'Site one',group:'WCL'},{id:'s2',label:'Site two',group:'NCL'}],matrix:{
+    's1|A':[person('E1','HR','Officer')], 's1|B':[person('E2','Mining','Supervisor')],
+    's2|A':[person('E3','HR','Officer')], 's2|B':[person('E4','Mining','Manager')],
+  }};
+  const ids=filters=>buildEmployeeTenureReport(directory,'2026-09-30',3,filters).rows.map(row=>row.empId);
+  assert.deepEqual(ids({site:'Site one'}),['E1','E2']);
+  assert.deepEqual(ids({region:'NCL'}),['E3','E4']);
+  assert.deepEqual(ids({department:'HR'}),['E1','E3']);
+  assert.deepEqual(ids({category:'B'}),['E2','E4']);
+  assert.deepEqual(ids({designation:'Supervisor'}),['E2']);
+  assert.deepEqual(ids({site:'Site one',region:'WCL',department:'HR',category:'A',designation:'Officer'}),['E1']);
+  assert.deepEqual(ids({site:'Site one',region:'NCL'}),[]);
+  assert.equal(ids({}).length,4);
 });

@@ -24,20 +24,26 @@ export function employeeTenure(joined, asOf) {
   return {months, days, label: `${Math.floor(months / 12)}Y ${months % 12}M ${days}D`};
 }
 
-export function buildEmployeeTenureReport(directory, asOf, minimumMonths = 3) {
+export function buildEmployeeTenureReport(directory, asOf, minimumMonths = 3, filters = {}) {
   if (!dateParts(asOf)) return {rows: [], missingDates: 0};
   const rows = [], seen = new Set();
   let missingDates = 0;
-  for (const people of Object.values(directory?.matrix || {})) {
+  const sites = new Map((directory?.sites || []).map(site => [site.id, site]));
+  for (const [key, people] of Object.entries(directory?.matrix || {})) {
+    const [siteId, category = ''] = key.split('|');
+    const site = sites.get(siteId);
     for (const employee of people) {
       if (String(employee.status || '').trim().toUpperCase() !== 'ACTIVE' || !String(employee.name || '').trim()) continue;
       const id = String(employee.empId || '').trim().toUpperCase() || employee._k;
       if (id && seen.has(id)) continue;
       if (id) seen.add(id);
+      const dimensions = {site: site?.label || siteId, region: site?.group || '', category,
+        department: employee.department || '', designation: employee.designation || ''};
+      if (Object.entries(filters).some(([field, value]) => value && dimensions[field] !== value)) continue;
       const tenure = employeeTenure(employee.dojISO, asOf);
       if (!tenure) { if (!dateParts(employee.dojISO)) missingDates++; continue; }
       if (tenure.months < Math.max(3, minimumMonths)) continue;
-      rows.push({empId: employee.empId || '', name: employee.name, department: employee.department || '', designation: employee.designation || '', joiningDate: employee.dojISO, ...tenure});
+      rows.push({...dimensions, empId: employee.empId || '', name: employee.name, joiningDate: employee.dojISO, ...tenure});
     }
   }
   rows.sort((a, b) => b.months - a.months || b.days - a.days || a.name.localeCompare(b.name));

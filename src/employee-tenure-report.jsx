@@ -18,6 +18,7 @@ export default function EmployeeTenureReport({token, ReportSection}) {
   const [minimum, setMinimum] = useState(3);
   const [attempt, setAttempt] = useState(0);
   const [data, setData] = useState({token: '', loading: true, error: '', directory: null});
+  const [filters, setFilters] = useState({site: '', region: '', department: '', category: '', designation: ''});
   useEffect(() => {
     const controller = new AbortController();
     setData({token, loading: true, error: '', directory: null});
@@ -30,18 +31,26 @@ export default function EmployeeTenureReport({token, ReportSection}) {
       }).catch(error => {if (!controller.signal.aborted) setData({token, loading: false, error: error.message, directory: null});});
     return () => controller.abort();
   }, [token, attempt]);
-  const report = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum), [data, token, asOf, minimum]);
+  const report = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum, filters), [data, token, asOf, minimum, filters]);
+  const available = useMemo(() => buildEmployeeTenureReport(data.token === token ? data.directory : null, asOf, minimum).rows, [data, token, asOf, minimum]);
+  const fields = [['site', 'Site'], ['region', 'Region'], ['department', 'Department'], ['category', 'Category'], ['designation', 'Designation']];
+  const filterSummary = fields.filter(([key]) => filters[key]).map(([key, label]) => `${label}: ${filters[key]}`).join(' · ');
   return <section className="reports-workspace">
     <h1>Employee Tenure Report</h1>
     <p>Currently working employees only. Service is counted from joining date through the selected date, in completed years, months and remaining days. Employees with less than three months of service and employees who have left are excluded.</p>
     <div style={{display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'end', marginBottom: 16}}>
       <label>Counted through <DateInput aria-label="Employee tenure counted through" value={asOf} max={today} onChange={event => {if (event.target.value && event.target.value <= today) setAsOf(event.target.value);}} /></label>
       <label>Minimum completed service <select aria-label="Minimum completed service" value={minimum} onChange={event => setMinimum(Number(event.target.value))}>{TENURE_MONTHS.map(months => <option value={months} key={months}>{months}+ months</option>)}</select></label>
+      {fields.map(([key, label]) => <label key={key}>{label} <select aria-label={label} value={filters[key]} onChange={event => setFilters(current => ({...current, [key]: event.target.value}))}>
+        <option value="">All {key === 'category' ? 'categories' : `${label.toLowerCase()}s`}</option>
+        {[...new Set([...available.map(row => row[key]), filters[key]].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map(value => <option key={value} value={value}>{value}</option>)}
+      </select></label>)}
+      <button type="button" onClick={() => setFilters({site: '', region: '', department: '', category: '', designation: ''})}>Clear filters</button>
       <button type="button" onClick={() => setAttempt(value => value + 1)}>Refresh</button>
     </div>
     {data.loading || data.token !== token ? <p role="status">Loading employee records…</p> : data.error ? <p role="alert">{data.error} Use Refresh to retry.</p> : <>
       {report.missingDates > 0 && <p role="status">{report.missingDates} active employee records excluded because their joining date is missing or invalid.</p>}
-      <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months`} category="employee-tenure" description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees meet the selected tenure." />
+      <ReportSection title={`Employee Tenure Report · ${formatDisplayDate(asOf)} · ${minimum}+ months${filterSummary ? ` · ${filterSummary}` : ''}`} category="employee-tenure" description={`Counted through ${formatDisplayDate(asOf)}. Example: 3Y 2M 15D means 3 years, 2 months and 15 days. Roster: ${data.directory.meta?.generated || 'Employee master'}.`} columns={columns} rows={report.rows} rowKey={(row, index) => row.empId || `${row.name}-${index}`} emptyMessage="No currently working employees match the selected filters and tenure." />
     </>}
   </section>;
 }
