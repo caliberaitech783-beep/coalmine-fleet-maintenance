@@ -114,11 +114,11 @@
 
 .dashboard-record-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0; min-width: 0; background: var(--panel, #fff); }
 .dashboard-record-toolbar-row > .dashboard-record-toolbar { flex: 1 1 560px; min-width: 0; }
-.dashboard-record-toolbar-row > .dashboard-fleet-search { position: relative; display: block; flex: 0 1 380px; min-width: 240px; margin-left: auto; padding: 6px 12px 6px 0; }
+:is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search { position: relative; display: block; flex: 0 1 380px; min-width: 240px; margin-left: auto; padding: 6px 12px 6px 0; }
 .dashboard-fleet-search-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.dashboard-record-toolbar-row > .dashboard-fleet-search::before { content: ""; position: absolute; left: 12px; top: calc(50% - 9px); width: 18px; height: 18px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2.4' stroke-linecap='round'><circle cx='10' cy='10' r='6.5'/><path d='M15 15l5.5 5.5'/></svg>") center / contain no-repeat; transform-origin: 60% 60%; animation: record-search-scan 3.2s ease-in-out infinite; pointer-events: none; }
-.dashboard-record-toolbar-row > .dashboard-fleet-search input { width: 100%; min-height: 42px; padding: 8px 12px 8px 40px; border: 1px solid #e3e8f0; border-radius: 999px; background: var(--panel, #fff); color: inherit; font: inherit; font-size: 14px; line-height: 1.3; box-sizing: border-box; transition: box-shadow .2s ease, border-color .2s ease; }
-.dashboard-record-toolbar-row > .dashboard-fleet-search input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px #a855f72e; outline: 0; }
+:is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search::before { content: ""; position: absolute; left: 12px; top: calc(50% - 9px); width: 18px; height: 18px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2.4' stroke-linecap='round'><circle cx='10' cy='10' r='6.5'/><path d='M15 15l5.5 5.5'/></svg>") center / contain no-repeat; transform-origin: 60% 60%; animation: record-search-scan 3.2s ease-in-out infinite; pointer-events: none; }
+:is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search input { width: 100%; min-height: 42px; padding: 8px 12px 8px 40px; border: 1px solid #e3e8f0; border-radius: 999px; background: var(--panel, #fff); color: inherit; font: inherit; font-size: 14px; line-height: 1.3; box-sizing: border-box; transition: box-shadow .2s ease, border-color .2s ease; }
+:is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px #a855f72e; outline: 0; }
 
 .dashboard-record-tabs, .dashboard-record-level-tabs { padding: 5px; gap: 6px; border: 1px solid #e3e8f0; border-radius: 12px; background: linear-gradient(135deg, #f3f0fb, #eef3fa); }
 .dashboard-record-tabs button, .dashboard-record-level-tabs > button { position: relative; isolation: isolate; overflow: hidden; min-height: 40px; border: 1px solid transparent !important; border-radius: 9px !important; transition: transform .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease; animation: record-chip-in .5s both; }
@@ -142,7 +142,7 @@
 :root[data-theme="dark"] .dashboard-record-tabs button:hover, :root[data-theme="dark"] .dashboard-record-level-tabs > button:hover { background: #2a2036; color: #e9dcff; }
 :root[data-theme="dark"] .dashboard-record-tabs button b, :root[data-theme="dark"] .dashboard-record-level-tabs > button b { background: #2a2036; color: #d8c6ff; box-shadow: inset 0 0 0 1px #3a2d4a; }
 :root[data-theme="dark"] .dashboard-record-reset { border-color: #3a2d4a; background: #1b1424; }
-:root[data-theme="dark"] .dashboard-record-toolbar-row > .dashboard-fleet-search input { border-color: #806c87; }
+:root[data-theme="dark"] :is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search input { border-color: #806c87; }
 
 @keyframes record-chip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes record-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -152,7 +152,7 @@
 @media (max-width: 700px) {
   .dashboard-record-topline::before { display: none; }
   .dashboard-record-topline > .dashboard-record-level { flex-basis: 100%; }
-  .dashboard-record-toolbar-row > .dashboard-fleet-search { flex-basis: 100%; min-width: 0; margin-left: 0; padding: 6px 10px; }
+  :is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search { flex-basis: 100%; min-width: 0; margin-left: 0; padding: 6px 10px; }
 }
 
 /* On phones the controls and table must share one vertical scroller. Keeping
@@ -184,5 +184,10 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-record-tabs button, .dashboard-record-level-tabs > button, .dashboard-record-tabs button::before, .dashboard-record-level-tabs > button::before, .dashboard-record-tabs button[aria-selected="true"]::after, .dashboard-record-level-tabs > button[aria-pressed="true"]::after,
-  .dashboard-record-reset, .dashboard-record-reset svg, .dashboard-record-toolbar-row > .dashboard-fleet-search::before { animation: none !important; transition: none !important; }
+  .dashboard-record-reset, .dashboard-record-reset svg, :is(.dashboard-record-toolbar-row, .shared-table-actions-toolbar) > .dashboard-fleet-search::before { animation: none !important; transition: none !important; }
+}
+/* Keep search directly beside the date range, with table actions on the right. */
+.dashboard-record-toolbar .shared-table-actions-toolbar > .dashboard-fleet-search { flex: 1 1 280px; min-width: 180px; max-width: 450px; margin-left: 0; margin-right: auto; padding: 0; }
+@media (max-width: 680px) {
+  .dashboard-record-toolbar .shared-table-actions-toolbar > .dashboard-fleet-search { flex-basis: 100%; max-width: none; min-width: 0; }
 }
