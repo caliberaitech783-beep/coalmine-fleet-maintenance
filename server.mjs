@@ -6237,6 +6237,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=String(req.body?.remark||'').trim();
+    // Responsibility and its required daily update are committed in one guarded transaction.
     const oemResponsibility=req.body?.oemResponsibility;
     if(oemResponsibility!==undefined&&!['OEM','NON OEM'].includes(oemResponsibility))return res.status(400).json({error:'Choose OEM or NON OEM.'});
     // delayedReason is the master reason chosen for the breakdown type. The legacy delay_reason column mirrors it
