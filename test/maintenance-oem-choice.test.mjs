@@ -12,13 +12,26 @@ test('explicit responsibility overrides legacy reasons without including closed 
   ];
   assert.deepEqual(filterOemDelayedRows([{requests}])[0].requests.map(r=>r.ref), ['oem','legacy']);
 });
-test('selection waits for a successful daily update; cancellation does not persist it', () => {
+test('selection is exclusive, stays in the edit form and does not open daily updates', () => {
   const source=readFileSync(new URL('../src/maintenance-oem-choice.jsx',import.meta.url),'utf8');
-  assert.match(source,/if \(!request.acceptedAt \|\| !onSave\) return null/);
-  assert.match(source,/checked=\{\(pending \|\| saved\) === value\}/);
-  assert.match(source,/await onSave\(request.ref, \{\.\.\.payload, oemResponsibility: pending\}\); setSaved\(pending\)/);
-  assert.match(source,/if \(!saveLock.current\) setPending\(null\)/);
+  assert.ok(source.includes('if (!request.acceptedAt) return null'));
+  assert.ok(source.includes('checked={selected === value}'));
+  assert.ok(source.includes('name="oemResponsibility"'));
+  assert.doesNotMatch(source,/DailyRemarkForm|createPortal|onSave/);
+  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.ok(main.includes('oemResponsibility: form.get("oemResponsibility")'));
 });
+
+test('edit saves responsibility atomically without changing request status', () => {
+  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const route=source.slice(source.indexOf("app.patch('/api/requests/:reference',"),source.indexOf("app.patch('/api/requests/:reference/close',"));
+  assert.ok(route.includes("!['OEM','NON OEM'].includes(oemResponsibility)"));
+  assert.ok(route.includes('oemResponsibility!==undefined&&!before.acceptedAt'));
+  assert.ok(route.includes('oem_responsibility=COALESCE($14::text,oem_responsibility)'));
+  assert.ok(route.includes('revisingEtc,oemResponsibility??null'));
+  assert.doesNotMatch(route,/SET status=|status=\$/);
+});
+
 test('server persists responsibility with the guarded daily update and exposes it to dashboards', () => {
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(source,/ADD COLUMN IF NOT EXISTS oem_responsibility/);

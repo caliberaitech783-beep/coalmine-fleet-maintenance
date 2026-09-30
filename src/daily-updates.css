@@ -18,5 +18,7 @@
 @media print{.daily-remarks-order,.daily-remarks-more{display:none}.daily-remarks-panel .daily-remarks-list{max-height:none;overflow:visible}}
 .maintenance-oem-choice > div { display: flex; gap: 18px; align-items: center; }
 .maintenance-oem-choice label { display: inline-flex; align-items: center; gap: 8px; }
-.maintenance-oem-choice input[type="checkbox"] { width: 18px; min-height: 18px; }
+.maintenance-oem-choice > span { display: block; font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+.maintenance-oem-choice label { font-size: 17px; font-weight: 600; }
+.maintenance-oem-choice input[type="checkbox"] { width: 22px; min-height: 22px; }
 .maintenance-oem-save-error { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20000; padding: 12px 20px; background: #a31627; color: white; border-radius: 8px; }
