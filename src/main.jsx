@@ -52,6 +52,7 @@ import DashboardFilterBar from "./dashboard-filter-bar.jsx";
 import { oemFiltersForSelection, oemRowsForLocation } from "./oem-dashboard-filters.mjs";
 import { buildOemBreakdownRows, buildOemBreakdownChart, createOemBreakdownSelection, oemLabel } from "./oem-breakdown-model.mjs";
 import { filterOemDelayedRows } from "./oem-delay-filter.mjs";
+import MaintenanceOemChoice from "./maintenance-oem-choice.jsx";
 import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
@@ -1542,7 +1543,7 @@ function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange
     const saved = await onUpdateRequest(request.ref, payload, "arrival-flag");
     onChange(update.next ? { kind: update.next, request: saved } : null);
   };
-  if (update.kind === "edit") return <RequestEditForm request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
+  if (update.kind === "edit") return <RequestEditForm onAddDailyRemark={onAddDailyRemark} request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
   if (update.kind === "remark") return <DailyRemarkForm request={request} close={close} onSave={saveRemark} />;
   return <RequestRedFlagForm flagKind="arrival" request={request} close={close} onSave={saveArrivalFlag} />;
 }
@@ -9709,7 +9710,7 @@ function meterReadingsFromForm(form, request, stage, equipmentRecords = []) {
     .map(([type, reading]) => [type, String(form.get(`${stage}${type}Reading`) ?? reading).trim()]));
 }
 
-function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, repairTypeRecords = [], repairTypesLoaded = false }) {
+function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, onAddDailyRemark, repairTypeRecords = [], repairTypesLoaded = false }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const displayDateTime = (value) => {
     if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
@@ -9782,6 +9783,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<DateInput name="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (12-hour with seconds)<input name="time" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
+        <MaintenanceOemChoice key={request.ref} request={request} onSave={onAddDailyRemark} DailyRemarkForm={DailyRemarkForm} />
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
         <MaintenanceEtcInput value={expectedCompletionAt} displayValue={displayedInitialEtc} onChange={setExpectedCompletionAt} changeUsed={request.expectedCompletionChangeUsed === true} />
         {etcDelayed && <label className="full">Delayed reason *<select name="delayedReason" required defaultValue={etcDelayedReasonOptions.includes(request.delayedReason) ? request.delayedReason : ""} key={editCategory}><option value="">Select delayed reason</option>{etcDelayedReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><small>The ETC is being pushed later. Reasons shown are for breakdown type {editCategory || "Breakdown"}.</small></label>}
@@ -11041,7 +11043,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
-    {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
+    {editing && <RequestEditForm onAddDailyRemark={onAddDailyRemark} request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} equipmentRecords={equipmentRecords} close={() => setVerifying(null)} onSave={verifyRequest} />}
     {productionFirstTrip && <ProductionFirstTripForm request={productionFirstTripSourceRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}

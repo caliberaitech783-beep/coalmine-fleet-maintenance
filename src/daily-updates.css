@@ -16,3 +16,7 @@
 .daily-remarks-more{padding:5px 8px;border-top:1px solid var(--line,#e5e9f1);font-size:10.5px;color:var(--muted,#71809d);text-align:center}
 [data-theme="dark"] .daily-remarks-order button{background:#17253a}[data-theme="dark"] .daily-remarks-panel .daily-remarks-list article{background:#111d30}[data-theme="dark"] .daily-remarks-panel .daily-remarks-list article header i{background:#22365a;color:#9dbcff}
 @media print{.daily-remarks-order,.daily-remarks-more{display:none}.daily-remarks-panel .daily-remarks-list{max-height:none;overflow:visible}}
+.maintenance-oem-choice > div { display: flex; gap: 18px; align-items: center; }
+.maintenance-oem-choice label { display: inline-flex; align-items: center; gap: 8px; }
+.maintenance-oem-choice input[type="checkbox"] { width: 18px; min-height: 18px; }
+.maintenance-oem-save-error { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 20000; padding: 12px 20px; background: #a31627; color: white; border-radius: 8px; }

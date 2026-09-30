@@ -521,6 +521,7 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS maintenance_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -5531,7 +5532,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", (expected_completion_changed_at IS NOT NULL) AS "expectedCompletionChangeUsed", verification_status AS "verificationStatus",
+  oem_responsibility AS "oemResponsibility", closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", (expected_completion_changed_at IS NOT NULL) AS "expectedCompletionChangeUsed", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
@@ -6236,9 +6237,12 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=String(req.body?.remark||'').trim();
+    const oemResponsibility=req.body?.oemResponsibility;
+    if(oemResponsibility!==undefined&&!['OEM','NON OEM'].includes(oemResponsibility))return res.status(400).json({error:'Choose OEM or NON OEM.'});
     // delayedReason is the master reason chosen for the breakdown type. The legacy delay_reason column mirrors it
     // so reports, Info Pulse and WhatsApp alerts keep showing the delay reason for every daily update.
     const dailyDelayedReason=approvedDelayedReason(req.body?.delayedReason);
+    if(oemResponsibility!==undefined&&!dailyDelayedReason)return res.status(400).json({error:'Select the delayed reason before assigning OEM responsibility.'});
     const delayReason=String(req.body?.delayReason||'').trim()||dailyDelayedReason;
     if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and select the delayed reason.'});
     const authorLogin=String(req.session.login||'').trim().toLowerCase();
@@ -6246,6 +6250,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
       const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
+      if(oemResponsibility!==undefined&&!eligible.rows[0].acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
       const existingToday=await client.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
         AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
       const updatedToday=existingToday.rows.length>0;
@@ -6257,6 +6262,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
           [reference,remark,delayReason,authorLogin,authorName,dailyDelayedReason]);
       }
       if(dailyDelayedReason)await client.query(`UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2`,[dailyDelayedReason,reference]);
+      if(oemResponsibility!==undefined)await client.query(`UPDATE maintenance_requests SET oem_responsibility=$1 WHERE reference=$2`,[oemResponsibility,reference]);
       return {eligible,updatedToday};
     });
     try{
