@@ -39,12 +39,12 @@ function ChipRow({name, label, allLabel, options, value, choose}) {
 }
 
 // Info Pulse: dashboard-style filters (region tabs, site and equipment/vehicle
-// chips, started-date range defaulting to today), four standing-time KPI cards
+// chips, an optional started-date range), four standing-time KPI cards
 // and one ranked list of open breakdowns, longest standing first.
 export default function InfoPulseContent({breakdowns = [], firstTripPending = [], session = null, scope, now, updatedAt, ready, error, refreshing, onRefresh, ExportMenu = null, renderRequestReference = null}) {
   const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
-  // Start on today's requests; Until today remains available for the full balance.
-  const defaults = {region: 'all', site: '', category: '', from: today, to: today};
+  // Outside the dashboard, show all days until the user chooses a range.
+  const defaults = {region: 'all', site: '', category: '', from: '', to: ''};
   const [tier, setTier] = useState('all');
   const [expandedUpdates, setExpandedUpdates] = useState({});
   const [filters, setFilters] = useState(defaults);

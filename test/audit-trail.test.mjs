@@ -45,6 +45,8 @@ test("audit date range defaults to the current India date and validates selectio
   const now=new Date("2026-09-11T20:30:00Z");
   assert.equal(auditIndiaDateKey(now),"2026-09-12");
   assert.deepEqual(auditDateRange({},now),{fromDate:"2026-09-12",toDate:"2026-09-12"});
+  assert.deepEqual(auditDateRange({allDates:"true",fromDate:"",toDate:""},now),{fromDate:null,toDate:null});
+  assert.deepEqual(auditDateRange({allDates:"true",fromDate:"2026-09-08",toDate:"2026-09-11"},now),{fromDate:"2026-09-08",toDate:"2026-09-11"});
   assert.deepEqual(auditDateRange({fromDate:"2026-09-08",toDate:"2026-09-11"},now),{fromDate:"2026-09-08",toDate:"2026-09-11"});
   assert.throws(()=>auditDateRange({fromDate:"2026-09-31",toDate:"2026-10-01"},now),/valid From and To/);
   assert.throws(()=>auditDateRange({fromDate:"2026-09-12",toDate:"2026-09-11"},now),/cannot be after/);
@@ -105,6 +107,9 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /action:profile\.sessionRole==='super'\?'Administrator login':'User login'/);
   assert.match(server, /app\.get\('\/api\/audit-events',requireSuper/);
   assert.match(server, /auditDateRange\(req\.query\)/);
+  assert.match(server, /\$1::date IS NULL OR occurred_at >=/);
+  assert.match(server, /\$2::date IS NULL OR occurred_at </);
+  assert.match(client, /if \(!dateRange.fromDate && !dateRange.toDate\) params.set\("allDates","true"\)/);
   assert.match(server, /occurred_at >= \(\$1::date::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
   assert.match(server, /occurred_at < \(\(\(\$2::date\+1\)::timestamp\) AT TIME ZONE 'Asia\/Kolkata'\)/);
   assert.match(server, /DELETE FROM audit_events WHERE occurred_at<=\$1/);

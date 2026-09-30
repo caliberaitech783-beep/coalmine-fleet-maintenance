@@ -60,15 +60,6 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
 }
 export default function ReportPeriodFilter({from,to,onApply}) {
   const [open,setOpen]=useState(false);
-  const initialized=useRef(false);
-  useEffect(()=>{
-    if(initialized.current)return;
-    initialized.current=true;
-    if(!from&&!to){
-      const today=indiaToday(),bounds=periodBounds(today,today,'00:00','23:59');
-      onApply(bounds.from,bounds.to);
-    }
-  },[from,to,onApply]);
   const updateDate=(bound,value)=>{
     if (!value) {onApply('','');return;}
     const start=from?.slice(0,10),end=to?.slice(0,10);

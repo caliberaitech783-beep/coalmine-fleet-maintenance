@@ -18,6 +18,7 @@ function validDateKey(value) {
 }
 
 export function auditDateRange(query = {}, now = new Date()) {
+  if (String(query.allDates).toLowerCase() === "true" && !query.fromDate && !query.toDate) return {fromDate:null,toDate:null};
   const today = auditIndiaDateKey(now);
   const fromDate = String(query.fromDate || today).trim();
   const toDate = String(query.toDate || today).trim();

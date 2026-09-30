@@ -63,7 +63,7 @@ test("today is applied once in IST; clearing, rerendering and explicit ranges re
       useId:()=> 'default-test',useRef:()=>initialized,useEffect:callback=>effects.push(callback),
       useState(initial){if(state===undefined)state=initial();return[state,next=>{state=next;}];}};
     const Component=new Function('DateInput',...Object.keys(bindings),`${code};return RecordDateRange;`)(DateInput,...Object.values(bindings));
-    const render=()=>{const tree=Component({label:'Started',value,onChange:next=>{value=next;changes.push(next);}});effects.splice(0).forEach(effect=>effect());return tree;};
+    const render=()=>{const tree=Component({label:'Started',value,defaultToday:true,onChange:next=>{value=next;changes.push(next);}});effects.splice(0).forEach(effect=>effect());return tree;};
     render(); render();
     assert.equal(value,initialValue||encodeDateRange('2026-09-30','2026-09-30'));
     assert.equal(changes.length,initialValue?0:1);
@@ -111,17 +111,23 @@ test("Reports stay on their existing table implementation; dated workflow tables
   assert.match(main,/filterRecordsByDate\(sameScope \? ticketState.records : \[\], ticketDateRange, \(ticket\) => ticket.createdAt\)/);
 });
 
-test('date-column popovers default on opening, never while closed or when sorting dates only',()=>{
+test('non-dashboard filters remain blank and unfiltered on mount',()=>{
+  const effects=[],changes=[];
+  const bindings={React,describeDateRange,encodeDateRange,parseDateRange,indiaToday,
+    useId:()=> 'all-days',useRef:()=>({current:false}),useEffect:callback=>effects.push(callback),useState:initial=>[initial(),()=>{}]};
+  const Component=new Function('DateInput',...Object.keys(bindings),`${code};return RecordDateRange;`)(DateInput,...Object.values(bindings));
+  const tree=Component({label:'Started',value:'',onChange:value=>changes.push(value)});
+  effects.forEach(effect=>effect());
+  assert.deepEqual(changes,[]);
+  assert.deepEqual(descendants(tree,node=>node.type===DateInput).map(node=>node.props.value),['','']);
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  const start=main.indexOf('  const dateRangeOpened = useRef(false);');
-  const effect=main.slice(start,main.indexOf('  const chooseDurationSort',start));
-  const ref={current:false},changes=[];
-  const run=new Function('useRef','useEffect','open','dateColumn','dateSortOnly','durationSortOnly','filterValue','onFilterChange','indiaDateTimeInputValue','encodeDateRange',effect);
-  const render=(props={})=>run(()=>ref,callback=>callback(),props.open??true,true,props.dateSortOnly??false,false,props.value??'',value=>changes.push(value),()=> '2026-09-30T00:15:00',encodeDateRange);
-  render({open:false});assert.equal(changes.length,0);
-  render({dateSortOnly:true});assert.equal(changes.length,0);
-  render();assert.deepEqual(changes,[encodeDateRange('2026-09-30','2026-09-30')]);
-  render();assert.equal(changes.length,1,'clearing while open stays clear');
-  render({open:false});render({value:encodeDateRange('2026-08-01','2026-08-31')});
-  assert.equal(changes.length,1,'existing ranges are preserved');
+  assert.doesNotMatch(main,/dateRangeOpened/);
+  const browser=readFileSync(new URL('../src/dashboard-record-browser.jsx',import.meta.url),'utf8');
+  assert.match(browser,/defaultDateToday = false/);
+  assert.match(browser,/<ActionsTable defaultDateToday=\{defaultDateToday\}/);
+  assert.match(main,/<DashboardRecordBrowser key=\{assetDrilldown\} defaultDateToday/);
+  assert.doesNotMatch(main,/<DashboardRecordBrowser key=\{managerDrilldown\}[^>]*defaultDateToday/);
+  const shared=readFileSync(new URL('../src/shared-actions-table.jsx',import.meta.url),'utf8');
+  assert.match(shared,/defaultDateToday = false/);
+  assert.match(shared,/defaultToday=\{defaultDateToday\}/);
 });

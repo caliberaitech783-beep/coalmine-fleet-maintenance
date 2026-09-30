@@ -18,7 +18,7 @@ const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && N
 const DESKTOP_TABLE_PAGE_SIZE = 100;
 const sharedTablePageSize = () => (typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0) || DESKTOP_TABLE_PAGE_SIZE;
 
-export default function SharedActionsTable({ toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
+export default function SharedActionsTable({ toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, defaultDateToday = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -56,10 +56,10 @@ export default function SharedActionsTable({ toolbarAfterCount = null, columnTra
   }
   if (columnTransform) columns.splice(0, columns.length, ...columnTransform(columns));
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
 
-function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
+function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}${tableProps["data-oem-column-layout"] ? ":oem-reasons-meters-v1" : ""}`;
   const allColumnKeys = columns.map((column) => column.key);
@@ -188,7 +188,7 @@ function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, Co
   const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
   const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(allColumnKeys); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
-  const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
+  const dateRangeControl = dateControl && <RecordDateRange {...dateControl} defaultToday={defaultDateToday} />;
   // Saved reports: named views of this table (visible columns, filters, sort, date range).
   // The SavedReports panel owns storage and dialogs; this table only exposes its view.
   const reportTitle = printTitle || exportTitle || "";

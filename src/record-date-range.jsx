@@ -3,7 +3,7 @@ import { describeDateRange, encodeDateRange, parseDateRange } from "./date-range
 import { indiaToday } from "./report-period-model.mjs";
 import DateInput from "./date-input.mjs";
 
-export default function RecordDateRange({ label, value = "", onChange }) {
+export default function RecordDateRange({ label, value = "", onChange, defaultToday = false }) {
   const [draft, setDraft] = useState(() => parseDateRange(value) || { from: "", to: "" });
   const id = useId();
   useEffect(() => { setDraft(parseDateRange(value) || { from: "", to: "" }); }, [value]);
@@ -13,12 +13,12 @@ export default function RecordDateRange({ label, value = "", onChange }) {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    if (!value) {
+    if (defaultToday && !value) {
       const today = indiaToday();
       setDraft({ from: today, to: today });
       onChange(encodeDateRange(today, today));
     }
-  }, [value, onChange]);
+  }, [value, onChange, defaultToday]);
   const invalid = Boolean(draft.from && draft.to && draft.from > draft.to);
   const change = (key, value) => {
     const next = { ...draft, [key]: value };

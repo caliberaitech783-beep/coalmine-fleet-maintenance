@@ -3120,8 +3120,8 @@ app.get('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next
     const {fromDate,toDate}=auditDateRange(req.query);
     const params=[fromDate,toDate];
     const conditions=[
-      `occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')`,
-      `occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata')`,
+      `($1::date IS NULL OR occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata'))`,
+      `($2::date IS NULL OR occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata'))`,
       AUDIT_VISIBLE_SCOPE_SQL,
     ];
     if(paged&&beforeAt&&beforeId){
@@ -3144,8 +3144,8 @@ app.get('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next
         COUNT(*) FILTER (WHERE outcome='Failed')::int AS failed,
         COUNT(DISTINCT NULLIF(actor_login,''))::int AS users,
         COUNT(DISTINCT NULLIF(device_id,''))::int AS devices FROM audit_events
-        WHERE occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
-          AND occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata')
+        WHERE ($1::date IS NULL OR occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata'))
+          AND ($2::date IS NULL OR occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata'))
           AND ${AUDIT_VISIBLE_SCOPE_SQL}`,[fromDate,toDate]);
       summary=summaryRows[0]||{total:0,failed:0,users:0,devices:0};
     }

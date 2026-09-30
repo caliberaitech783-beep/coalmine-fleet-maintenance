@@ -2553,7 +2553,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <div>{[{ key: "onroad", label: "On road", value: selectedBreakdownSiteRoad.onRoad }, { key: "offroad", label: "Off road", value: selectedBreakdownSiteRoad.offRoad }, { key: "idle", label: "Idle", value: selectedBreakdownSiteRoad.idle }].map((item) => <button type="button" key={item.key} onClick={() => openSiteScopedDrilldown(`site-status:${breakdownDetailSite}|${item.key}`)} aria-label={`${item.label}: ${item.value}. Drill into equipment and vehicles.`}><span><b>{item.label}</b><strong>{item.value}</strong></span><i aria-hidden="true"><b style={{ width: `${selectedBreakdownSiteRoad.total ? (item.value / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></i><small>of {selectedBreakdownSiteRoad.total} fleet</small></button>)}</div>
         </section>
         <p className="dashboard-breakdown-day-help">Click a heading to sort. Click a date for that day's movement report, or a number for its entries. BD % opens the closing balance used in the percentage.</p>
-        <div className="dashboard-breakdown-day-table"><ActionsTable printTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`} exportTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`}><thead><tr>{[["date", "Date"], ["open", "BD Open"], ["incoming", "BD In"], ["outgoing", "BD Out"], ["balance", "BD Balance"], ["percentage", "BD %"]].map(([key, label]) => <SortableHeader key={key} label={label} sortKey={key} sort={breakdownDaySort} onSort={changeBreakdownDaySort} />)}</tr></thead><tbody>{sortedBreakdownDetailRows.length ? sortedBreakdownDetailRows.map((day) => {
+        <div className="dashboard-breakdown-day-table"><ActionsTable defaultDateToday printTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`} exportTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`}><thead><tr>{[["date", "Date"], ["open", "BD Open"], ["incoming", "BD In"], ["outgoing", "BD Out"], ["balance", "BD Balance"], ["percentage", "BD %"]].map(([key, label]) => <SortableHeader key={key} label={label} sortKey={key} sort={breakdownDaySort} onSort={changeBreakdownDaySort} />)}</tr></thead><tbody>{sortedBreakdownDetailRows.length ? sortedBreakdownDetailRows.map((day) => {
           const breakdownPercentage = selectedBreakdownSiteRoad.total ? (day.balance / selectedBreakdownSiteRoad.total) * 100 : 0;
           const dayLabel = formatDisplayDate(day.date);
           return <tr key={day.date}><td><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "all")} aria-label={`${breakdownDetailSite} · ${dayLabel}: open day movement report`}><b>{dayLabel}</b></button></td>{[["open", "BD Open", ""], ["incoming", "BD In", "+"], ["outgoing", "BD Out", "-"], ["balance", "BD Balance", ""]].map(([metric, label, prefix]) => <td key={metric} className={metric}><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, metric)} aria-label={`${breakdownDetailSite} · ${dayLabel}: ${label}, ${day[metric]} entries`}>{prefix}{day[metric]}</button></td>)}<td className="percentage"><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "balance")} aria-label={`${breakdownDetailSite} · ${dayLabel}: BD ${breakdownPercentage.toFixed(1)}%, show ${day.balance} balance entries`} title={`BD Balance ${day.balance} ÷ ${selectedBreakdownSiteRoad.total} registered fleet × 100`}><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></button></td></tr>;
@@ -2564,7 +2564,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+        <DashboardRecordBrowser key={assetDrilldown} defaultDateToday rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
             value: encodeDateRange(movementDrilldownParts[1], movementDrilldownParts[2]),
@@ -3126,16 +3126,6 @@ function FilterableHeader({
     // Date columns open only From / To pickers that filter the column by day.
     dateColumn = looksLikeDateColumn(values),
     dateRange = parseDateRange(filterValue) || { from: "", to: "" };
-  const dateRangeOpened = useRef(false);
-  useEffect(() => {
-    if (!open) { dateRangeOpened.current = false; return; }
-    if (dateRangeOpened.current || !dateColumn || dateSortOnly || durationSortOnly) return;
-    dateRangeOpened.current = true;
-    if (!filterValue) {
-      const today = indiaDateTimeInputValue().slice(0, 10);
-      onFilterChange?.(encodeDateRange(today, today));
-    }
-  }, [open, dateColumn, dateSortOnly, durationSortOnly, filterValue, onFilterChange]);
   const chooseDurationSort = (direction) => {
     onFilterChange?.("");
     onSort(direction ? sortKey : "", direction || "asc");
@@ -6297,8 +6287,8 @@ function auditEventValues(event) {
 function AuditTrailPage({ session }) {
   const auditLoadSequence = useRef(0);
   const today = indiaDateTimeInputValue().slice(0,10);
-  const appliedDateRange = useRef({fromDate:today,toDate:today});
-  const [fromDate,setFromDate] = useState(today), [toDate,setToDate] = useState(today);
+  const appliedDateRange = useRef({fromDate:"",toDate:""});
+  const [fromDate,setFromDate] = useState(""), [toDate,setToDate] = useState("");
   const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [purgeOpen, setPurgeOpen] = useState(false), [purgeDays, setPurgeDays] = useState("2"), [purging, setPurging] = useState(false);
   const [purgeMode, setPurgeMode] = useState("days"), [purgeDate, setPurgeDate] = useState(yesterdayDateKey);
@@ -6317,6 +6307,7 @@ function AuditTrailPage({ session }) {
       const params = new URLSearchParams({paged:"true",limit:String(AUDIT_PAGE_SIZE)});
       params.set("fromDate",dateRange.fromDate);
       params.set("toDate",dateRange.toDate);
+      if (!dateRange.fromDate && !dateRange.toDate) params.set("allDates","true");
       if (!append) params.set("summary","true");
       if (append && nextCursor) { params.set("beforeAt",nextCursor.beforeAt); params.set("beforeId",String(nextCursor.beforeId)); }
       const response = await fetch(`/api/audit-events?${params}`, {cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
@@ -6334,8 +6325,8 @@ function AuditTrailPage({ session }) {
   useEffect(() => { load(); }, [session?.token]);
   const applyDateRange = (event) => {
     event.preventDefault();
-    if (!fromDate || !toDate) return alert("Select both From and To dates.");
-    if (fromDate > toDate) return alert("From date cannot be after To date.");
+    if (Boolean(fromDate) !== Boolean(toDate)) return alert("Select both From and To dates, or clear both for all days.");
+    if (fromDate && fromDate > toDate) return alert("From date cannot be after To date.");
     appliedDateRange.current={fromDate,toDate};
     load({dateRange:appliedDateRange.current});
   };
