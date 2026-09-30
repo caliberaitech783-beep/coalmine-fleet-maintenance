@@ -123,8 +123,8 @@ test('non-dashboard filters remain blank and unfiltered on mount',()=>{
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.doesNotMatch(main,/dateRangeOpened/);
   const browser=readFileSync(new URL('../src/dashboard-record-browser.jsx',import.meta.url),'utf8');
-  assert.match(browser,/defaultDateToday = false/);
-  assert.match(browser,/<ActionsTable defaultDateToday=\{defaultDateToday\}/);
+  assert.doesNotMatch(browser,/defaultDateToday/);
+  assert.match(browser,/<ActionsTable key=\{tableKey\}/);
   assert.doesNotMatch(main,/<DashboardRecordBrowser key=\{assetDrilldown\}[^>]*defaultDateToday/);
   assert.doesNotMatch(main,/<DashboardRecordBrowser key=\{managerDrilldown\}[^>]*defaultDateToday/);
   const shared=readFileSync(new URL('../src/shared-actions-table.jsx',import.meta.url),'utf8');

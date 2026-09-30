@@ -20,9 +20,11 @@ test("dashboard region selection exposes its sites and filters every scoped data
 
 test("dashboard date filters opening-date analysis without filtering live fleet status and remains responsive", () => {
   assert.match(source, /function dashboardRecordDate\(record = \{\}\)/);
-  // The top From/To range defaults to today on both ends and is applied to opening-date analysis.
-  assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
-  assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  // Date filters start blank and apply only when a range is selected.
+  assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(""\)/);
+  assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(""\)/);
+  assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(""\)/);
+  assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(""\)/);
   assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
   assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
   assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);
@@ -32,8 +34,8 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   assert.match(source, /<DateInput aria-label="Dashboard from date" value=\{dashboardFrom\} max=\{dashboardTo \|\| todayKey\}/);
   assert.match(source, /<DateInput aria-label="Dashboard to date" value=\{dashboardTo\} min=\{dashboardFrom \|\| undefined\} max=\{todayKey\}/);
   assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardIsLive \? "Live" : "Filtered"\} · \{filteredDateLabel\}/);
-  // Every other From/To pair also starts on today.
-  for (const name of ["breakdownTrendAnchor", "breakdownTrendFrom", "requestTrendFrom", "requestTrendTo", "breakdownSummaryFrom", "breakdownSummaryTo"]) {
+  // Dedicated trend charts retain their existing initial period.
+  for (const name of ["breakdownTrendAnchor", "breakdownTrendFrom", "requestTrendFrom", "requestTrendTo"]) {
     assert.match(source, new RegExp(`const \\[${name}, set\\w+\\] = useState\\(\\(\\) => localDateKey\\(new Date\\(\\)\\)\\)`), name);
   }
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);
