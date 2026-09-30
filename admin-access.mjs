@@ -109,6 +109,7 @@ export function adminAccessPermissions(user = {}) {
   const enabled=value=>value===true||/^(true|yes|1|on)$/i.test(String(value||'').trim());
   const desktopManagerCreateRequest=adminLevel==='Manager'&&enabled(user.desktopManagerCreateRequest);
   const mobileManagerCreateRequest=adminLevel==='Manager'&&enabled(user.mobileManagerCreateRequest);
+  // Either view may authorize creation; each responsive view exposes only its own grant.
   return {
     createRequests: adminLevel!=='Manager'||desktopManagerCreateRequest||mobileManagerCreateRequest,
     desktopManagerCreateRequest,
