@@ -23,8 +23,8 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   // Date filters start blank and apply only when a range is selected.
   assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(""\)/);
   assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(""\)/);
-  assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(""\)/);
-  assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(""\)/);
+  assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
   assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
   assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);

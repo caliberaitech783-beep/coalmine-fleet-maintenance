@@ -1668,9 +1668,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendTo, setRequestTrendTo] = useState(() => localDateKey(new Date()));
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   const [throughputFiltersHidden, setThroughputFiltersHidden] = useState(false);
-  // Date filters start unbounded; users can select a specific range.
-  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
-  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState("");
+  // Site-wise BD movement defaults to today to show the opening balance.
+  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
+  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState(() => localDateKey(new Date()));
   const [breakdownSummaryManual, setBreakdownSummaryManual] = useState(false);
   const [throughputRegion, setThroughputRegion] = useState("all");
   const [throughputSite, setThroughputSite] = useState("all");
@@ -1818,7 +1818,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
   const breakdownSummaryIsToday = breakdownSummaryFrom === todayKey && breakdownSummaryTo === todayKey;
-  const resetBreakdownSummaryRange = () => { setBreakdownSummaryManual(false); setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); };
+  const resetBreakdownSummaryRange = () => { setBreakdownSummaryManual(false); setBreakdownSummaryFrom(todayKey); setBreakdownSummaryTo(todayKey); };
   const updateBreakdownSummaryRange = (bound, value) => {
     setBreakdownSummaryManual(true);
     if (!value) { setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); return; }
@@ -2398,7 +2398,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Vehicle throughput shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>}
             <label><span>From date</span><DateInput aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><DateInput aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-            <button type="button" onClick={resetBreakdownSummaryRange} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
+            <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
