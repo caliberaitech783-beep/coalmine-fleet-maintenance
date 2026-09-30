@@ -29,10 +29,10 @@ test("dashboard and OEM lists project and display ETC beside Started", () => {
 
 test("history, report, ageing and master lists include ETC immediately after their breakdown timestamp", () => {
   for (const pattern of [
-    /label: "Breakdown opened"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "ETC"/,
-    /label: "Breakdown time"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "ETC"/,
+    /label: "BD opened"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "ETC"/,
+    /label: "BD time"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "ETC"/,
     /label: "Opened at"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "ETC"/,
-    /label: "Latest breakdown"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "Latest ETC"/,
+    /label: "Latest BD"[^\n]+\r?\n\s*\{key: "expectedCompletionAt", label: "Latest ETC"/,
     /<th>Created<\/th><th>ETC<\/th><th>Age<\/th>/,
     /\["start", "Started"\],\r?\n\s*\["expectedCompletionAt", "ETC"\]/,
   ]) assert.match(main, pattern);
