@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source = readFileSync(new URL('../src/shared-actions-table.jsx', import.meta.url), 'utf8');
+const start = source.indexOf('  const brandOf =');
+const end = source.indexOf('  useEffect(', start);
+const select = new Function('availableRows', 'groupBySite', 'reportAsset', 'siteSummary', 'selectedSite', 'const reportSite = row => row.props.site;' + source.slice(start, end) + '; return {brandSummary, activeBrand, activeSite, brandOf, contextualBrand};');
+const row = (brand, asset, site) => ({props: {'data-report-brand': brand, asset, site}});
+const rows = [row('Volvo', 'V1', 'Sasti — VOLVO TIPPERS'), row(' VOLVO ', 'E1', 'Majri — VOLVO EXCAVATOR'), row('Scania', 'S1', 'Sasti — SCANIA TIPPERS')];
+const sites = [...new Set(rows.map(row => row.props.site))].map(label => ({label}));
+test('View All Volvo includes equipment and vehicles across sites without other brands', () => {
+  const result = select(rows, true, row => row.props.asset, sites, 'brand:VOLVO');
+  assert.equal(result.activeBrand, 'VOLVO');
+  assert.equal(result.contextualBrand.brand, 'VOLVO');
+  assert.deepEqual(result.brandSummary.find(group => group.brand === 'VOLVO').rows, rows.slice(0, 2));
+  assert.equal(result.brandSummary.find(group => group.brand === 'VOLVO').assets, 2);
+  assert.equal(result.brandSummary.length, 2);
+});
+test('category options, cleared selection and existing filtered scope stay intact', () => {
+  const category = select(rows, true, row => row.props.asset, sites, sites[0].label);
+  assert.equal(category.activeSite, sites[0].label);
+  assert.equal(category.activeBrand, '');
+  assert.equal(category.contextualBrand.brand, 'VOLVO');
+  assert.equal(select(rows, true, row => row.props.asset, sites, '').contextualBrand, undefined);
+  assert.equal(select(rows, true, row => row.props.asset, sites, sites[2].label).contextualBrand.brand, 'SCANIA');
+  assert.equal(select(rows, true, row => row.props.asset, sites, '').activeSite, '');
+  const scoped = select(rows.slice(0, 1), true, row => row.props.asset, sites, 'brand:VOLVO');
+  assert.equal(scoped.brandSummary[0].assets, 1);
+  assert.equal(select(rows.slice(2), true, row => row.props.asset, sites, 'brand:VOLVO').activeSite, '');
+  assert.equal(select(rows, false, row => row.props.asset, sites, '').brandSummary.length, 0);
+  assert.match(source, /activeBrand \? brandOf\(row\) === activeBrand : reportSite\(row\) === activeSite/);
+  assert.match(source, /data.rows = selectedRows/);
+  assert.match(source, /contextualBrand && <button/);
+  assert.doesNotMatch(source, /brandSummary.map\(group => <button/);
+});
