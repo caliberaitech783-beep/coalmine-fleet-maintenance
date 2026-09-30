@@ -7,6 +7,9 @@ import {TENURE_MONTHS, buildEmployeeTenureReport} from './employee-tenure.mjs';
 const columns = [
   {key: 'empId', label: 'Employee ID', value: row => row.empId},
   {key: 'name', label: 'Employee name', value: row => row.name},
+  {key: 'site', label: 'Site', value: row => row.site},
+  {key: 'region', label: 'Region', value: row => row.region},
+  {key: 'category', label: 'Category', value: row => row.category},
   {key: 'department', label: 'Department', value: row => row.department},
   {key: 'designation', label: 'Designation', value: row => row.designation},
   {key: 'joiningDate', label: 'Joining date', value: row => formatDisplayDate(row.joiningDate)},
@@ -14,9 +17,7 @@ const columns = [
 ];
 
 const excludedColumns = [
-  ...columns.slice(0, 2),
-  ...[['site', 'Site'], ['region', 'Region'], ['category', 'Category']].map(([key, label]) => ({key, label, value: row => row[key]})),
-  ...columns.slice(2, 4),
+  ...columns.slice(0, 7),
   {key: 'joiningDate', label: 'Recorded joining date', value: row => row.joiningDate || 'Not recorded'},
   {key: 'reason', label: 'Exclusion reason', value: row => row.reason},
 ];
