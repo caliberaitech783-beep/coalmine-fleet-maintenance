@@ -33,6 +33,7 @@ import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows,normalizeAdminLevel,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
+import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
@@ -233,6 +234,7 @@ pool.on('error',error=>console.error('PostgreSQL pool connection error (will rec
 process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
 const sessionStore=createSessionStore(pool);
 let databaseReady=false;
+let cdirRosterRevision=null;
 let databaseError='Database initialization is pending.';
 
 async function revokeAuthorizationSessions(client,loginValues=[]){
@@ -3375,6 +3377,7 @@ app.get('/api/health',async(_req,res)=>{
     res.json({
       status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
+      cdirRosterRevision,
       performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},requestFeedCache:requestFeedCache.stats,slowRequestThresholdMs},
     });
   }catch(error){
@@ -7762,6 +7765,15 @@ async function initializeDatabase(){
     await seedCdirMasters()
       .then(result=>result.seeded&&console.log(`C-Dir masters created from the directory file (${result.records} records).`))
       .catch(error=>console.error('Could not create the C-Dir masters from the directory file.',error.message));
+    if(process.env.CDIR_ROSTER_IMPORT_BROTLI_BASE64&&scheduledJobsEnabled){
+      const imported=await replaceCdirRoster(pool,process.env.CDIR_ROSTER_IMPORT_BROTLI_BASE64);
+      cdirRosterRevision=imported.revision;
+      if(imported.applied)await appendBackendProcessAudit({module:'C-Dir',action:'Replace approved employee roster',targetReference:imported.revision,
+        reason:`${imported.rows} roster rows imported: ${imported.active} active assignments, ${imported.vacant} vacancies. Previous C-Dir masters retained for recovery.`});
+    }else{
+      const exists=await pool.query("SELECT to_regclass('cdir_roster_imports') AS name");
+      if(exists.rows[0]?.name)cdirRosterRevision=(await pool.query('SELECT revision FROM cdir_roster_imports ORDER BY applied_at DESC LIMIT 1')).rows[0]?.revision||null;
+    }
     // Users who connected before the profile fields existed get them filled in.
     await pool.query(`UPDATE master_records m SET record_data=m.record_data||jsonb_build_object(
         'telegramChatId',l.chat_id,'telegramUsername',l.telegram_username,'telegramLinkedAt',to_char(l.linked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'))

@@ -239,6 +239,58 @@ jobs:
           echo "Automatic rollback did not restore a healthy response"
           exit 1
 
+      - name: Apply approved private C-Dir roster when supplied
+        id: cdir_roster
+        env:
+          CDIR_ROSTER_IMPORT_BROTLI_BASE64: ${{ secrets.CDIR_ROSTER_IMPORT_BROTLI_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CDIR_ROSTER_IMPORT_BROTLI_BASE64" ]; then exit 0; fi
+          node --input-type=module <<'JS'
+          import {writeFileSync,appendFileSync} from 'node:fs';
+          import {decodeCdirRoster} from './cdir-roster-import.mjs';
+          const encoded=process.env.CDIR_ROSTER_IMPORT_BROTLI_BASE64;
+          const {revision,summary}=decodeCdirRoster(encoded);
+          writeFileSync(`${process.env.RUNNER_TEMP}/cdir-settings.json`,JSON.stringify({CDIR_ROSTER_IMPORT_BROTLI_BASE64:encoded}),{mode:0o600});
+          appendFileSync(process.env.GITHUB_OUTPUT,`configured=true\nrevision=${revision}\n`);
+          appendFileSync(process.env.GITHUB_ENV,`CDIR_EXPECTED_REVISION=${revision}\n`);
+          writeFileSync(`${process.env.RUNNER_TEMP}/cdir-revision`,revision);
+          console.log(JSON.stringify({revision,...summary}));
+          JS
+          export CDIR_EXPECTED_REVISION="$(cat "$RUNNER_TEMP/cdir-revision")"
+          az webapp config appsettings set --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --settings @"$RUNNER_TEMP/cdir-settings.json" --output none
+          az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME"
+          for attempt in {1..60}; do
+            response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?cdir=${CDIR_EXPECTED_REVISION}")" || response='{}'
+            if HEALTH_RESPONSE="$response" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.cdirRosterRevision!==process.env.CDIR_EXPECTED_REVISION)process.exit(1)'; then
+              echo "Approved roster committed and production healthy: ${CDIR_EXPECTED_REVISION}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'Roster replacement could not be verified.'
+          exit 1
+
+      - name: Remove transient C-Dir import setting
+        if: always() && steps.cdir_roster.outputs.configured == 'true'
+        shell: bash
+        run: |
+          az webapp config appsettings delete --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --setting-names CDIR_ROSTER_IMPORT_BROTLI_BASE64 --output none
+          rm -f "$RUNNER_TEMP/cdir-settings.json" "$RUNNER_TEMP/cdir-revision"
+
+      - name: Verify C-Dir replacement persists without import configuration
+        if: success() && steps.cdir_roster.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?cdir-persisted=${CDIR_EXPECTED_REVISION}")" || response='{}'
+            if HEALTH_RESPONSE="$response" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.cdirRosterRevision!==process.env.CDIR_EXPECTED_REVISION)process.exit(1)'; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+
       - name: Enforce Front Door-only production origin
         if: always()
         shell: bash
