@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {UsersRound,SlidersHorizontal,RotateCcw,FilterX} from 'lucide-react';
 import './employee-tenure-report.css';
 import DateInput from './date-input.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
@@ -57,18 +58,19 @@ export default function EmployeeTenureReport({token, ReportSection}) {
         <button type="button" aria-pressed={view === 'excluded'} onClick={() => setView('excluded')}>Excluded employees ({report.excludedRows.length})</button>
       </div>;
   return <section className="reports-workspace employee-tenure-report">
-    <h1>Employee Tenure Report</h1>
+    <h1><UsersRound aria-hidden="true"/> Employee Tenure Report</h1>
     <div className="employee-tenure-filters">
+      <div className="employee-tenure-filter-heading"><SlidersHorizontal aria-hidden="true"/><strong>Filter employees</strong></div>
       <label>Counted through <DateInput aria-label="Employee tenure counted through" value={asOf} max={today} onChange={event => {if (event.target.value && event.target.value <= today) setAsOf(event.target.value);}} /></label>
       <label>Minimum completed service <select aria-label="Minimum completed service" value={minimum} onChange={event => setMinimum(Number(event.target.value))}>{TENURE_MONTHS.map(months => <option value={months} key={months}>{months}+ months</option>)}</select></label>
       {fields.map(([key, label]) => <label key={key}>{label} <select aria-label={label} value={filters[key]} onChange={event => setFilters(current => ({...current, [key]: event.target.value}))}>
         <option value="">All {key === 'category' ? 'categories' : `${label.toLowerCase()}s`}</option>
         {[...new Set([...available.map(row => row[key]), filters[key]].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map(value => <option key={value} value={value}>{value}</option>)}
       </select></label>)}
-      <button type="button" onClick={() => {setFilters({site: '', region: '', department: '', category: '', designation: ''});setReason('');}}>Clear filters</button>
+      <button type="button" onClick={() => {setFilters({site: '', region: '', department: '', category: '', designation: ''});setReason('');}}><FilterX aria-hidden="true"/>Clear filters</button>
       <div className="employee-tenure-search-actions">
         <label className="employee-tenure-search"><input type="search" data-smart-search aria-label="Search employee tenure report" placeholder="Search this report" value={search} onChange={event => setSearch(event.target.value)} /></label>
-        <button type="button" onClick={() => setAttempt(value => value + 1)}>Refresh</button>
+        <button type="button" onClick={() => setAttempt(value => value + 1)}><RotateCcw aria-hidden="true"/>Refresh</button>
       </div>
     </div>
     {data.loading || data.token !== token ? <p role="status">Loading employee records…</p> : data.error ? <p role="alert">{data.error} Use Refresh to retry.</p> : <>

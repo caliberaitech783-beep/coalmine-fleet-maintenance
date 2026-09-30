@@ -24,7 +24,7 @@ test('all user-facing server report formatters use the project date-time standar
 test('the application clock and user-facing timestamps use shared formatters',async()=>{
   const source=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.match(source,/const date = formatDisplayDate\(currentDateTime\)/);
-  assert.match(source,/const time = formatDisplayTime\(currentDateTime\)/);
+  assert.match(source,/const time = simple \?.* : formatDisplayTime\(currentDateTime\)/);
   assert.match(source,/function formatTwelveHourDateTime\(value\)/);
   assert.match(source,/formatDisplayDateTime\(value\)/);
   assert.doesNotMatch(source,/month\s*:\s*['"](?:short|long)['"]/);

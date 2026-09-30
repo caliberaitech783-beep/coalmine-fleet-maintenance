@@ -986,7 +986,7 @@ window.cdirDirectoryReady = (async function(){
       el.textContent = dateStr + '  ' + timeStr + ' IST';
     }
     update();
-    setInterval(update, 1000);
+    if(document.documentElement.dataset.simpleMobile!=='true')setInterval(update, 1000);
   })();
 
   function flagMark(site){
@@ -2318,7 +2318,7 @@ window.cdirDirectoryReady = (async function(){
     else if(v.type==='person') renderPersonView(v.person);
     else if(v.type==='personEdit') renderPersonEditForm(v.person);
     else if(v.type==='matrix') renderMatrixView();
-    else if(v.type==='chart') renderChartView();
+    else if(v.type==='chart') document.documentElement.dataset.simpleMobile==='true' ? renderMatrixView() : renderChartView();
     else if(v.type==='vacant') renderVacantView();
     else if(v.type==='newPerson') renderNewPersonForm(v.presetSiteId, v.presetCat, v.presetReportingTo);
     else if(v.type==='siteDeptDesig') renderSiteDeptDesigView(v);
@@ -2443,7 +2443,7 @@ window.cdirDirectoryReady = (async function(){
     }
     if(chartTimer) clearInterval(chartTimer);
     tickChartClock();
-    chartTimer = setInterval(tickChartClock, 1000);
+    if(document.documentElement.dataset.simpleMobile!=='true')chartTimer = setInterval(tickChartClock, 1000);
   }
 
   document.getElementById('btnMatrix').addEventListener('click', ()=> go({type:'matrix'}));

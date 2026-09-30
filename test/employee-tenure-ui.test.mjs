@@ -17,7 +17,7 @@ test('employee report passes exact tenure and nine requested columns to the expo
   ]}}}];
   let cursor=0, received;
   const Section=props=>{received=props;return React.createElement('div',null,props.rows.map(row=>row.label).join(','));};
-  const bindings={React,DateInput,formatDisplayDate,TENURE_MONTHS,buildEmployeeTenureReport,useMemo:fn=>fn(),useEffect:()=>{},useState(initial){const i=cursor++;return [slots[i] ?? initial,value=>{slots[i]=value;}];}};
+  const bindings={React,UsersRound:()=>null,SlidersHorizontal:()=>null,RotateCcw:()=>null,FilterX:()=>null,DateInput,formatDisplayDate,TENURE_MONTHS,buildEmployeeTenureReport,useMemo:fn=>fn(),useEffect:()=>{},useState(initial){const i=cursor++;return [slots[i] ?? initial,value=>{slots[i]=value;}];}};
   const Component=new Function(...Object.keys(bindings),code+'; return EmployeeTenureReport;')(...Object.values(bindings));
   const render=token=>{cursor=0;return renderToStaticMarkup(Component({token,ReportSection:Section}));};
   assert.match(render('fixture'),/0Y 3M 15D/);

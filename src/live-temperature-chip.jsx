@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from "react";
+import {useSimpleMobile} from './mobile-display.jsx';
 import {Thermometer} from "lucide-react";
 import {fetchLiveTemperature, formatTemperature, resolveTemperatureCoordinates, TEMPERATURE_REFRESH_MS} from "./live-temperature.mjs";
 import "./live-temperature-chip.css";
@@ -33,7 +34,9 @@ export function temperatureChipTitle(reading) {
 
 /** Header chip: "(37°C) 98.6°F" with a live dot, for Admin, Super Admin and Manager headers. */
 export default function LiveTemperatureChip({location = "", className = ""}) {
-  const reading = useLiveTemperature(location, true);
+  const simple=useSimpleMobile();
+  const reading = useLiveTemperature(location, !simple);
+  if(simple)return null;
   const state = reading.error ? " is-error" : Number.isFinite(reading.celsius) ? "" : " is-loading";
   return <span className={`live-temperature-chip${state} ${className}`.trim()} role="status" aria-live="polite" title={temperatureChipTitle(reading)}>
     <Thermometer aria-hidden="true" />

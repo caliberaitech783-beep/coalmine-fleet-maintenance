@@ -1,6 +1,10 @@
 const MOBILE_REFRESH_MS = 60_000;
 const CONSTRAINED_REFRESH_MS = 120_000;
 
+export function simpleMobileDisplay(session, mobile=false){
+  return Boolean(session?.token&&(mobile||session.role==='normal'||session.userType==='Mobile User'||session.permissions?.userType==='Mobile User'));
+}
+
 function mediaMatches(win, query) {
   try { return Boolean(win?.matchMedia?.(query)?.matches); }
   catch { return false; }
@@ -10,7 +14,7 @@ export function mobileDataProfile(win = globalThis.window) {
   const connection = win?.navigator?.connection || globalThis.navigator?.connection;
   const effectiveType = String(connection?.effectiveType || "").trim().toLowerCase();
   const constrained = connection?.saveData === true || effectiveType === "slow-2g" || effectiveType === "2g";
-  const mobile = mediaMatches(win, "(max-width: 900px)") || mediaMatches(win, "(pointer: coarse)");
+  const mobile = win?.document?.documentElement?.dataset?.simpleMobile === 'true' || mediaMatches(win, "(max-width: 900px)") || mediaMatches(win, "(pointer: coarse)");
   return { mobile, constrained };
 }
 

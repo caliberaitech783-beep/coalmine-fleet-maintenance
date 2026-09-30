@@ -1,4 +1,5 @@
 import React from "react";
+import {useSimpleMobile} from './mobile-display.jsx';
 import "./motion-icons.css";
 
 // Animated header icons shared by every login. Motion lives in motion-icons.css
@@ -9,11 +10,12 @@ export const PULSE_PATH = "M2 12h4.5l2.5-9 6 18 2.5-9H22";
 
 /** Heartbeat trace that runs left to right with a round dot travelling along it. */
 export function PulseIcon({ className = "" }) {
+  const simple=useSimpleMobile();
   return <svg className={`pulse-icon ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
     <path className="pulse-icon-trace" d={PULSE_PATH} />
-    <circle className="pulse-icon-dot" r="1.9" fill="currentColor" stroke="none">
+    {!simple && <circle className="pulse-icon-dot" r="1.9" fill="currentColor" stroke="none">
       <animateMotion dur="1.6s" repeatCount="indefinite" path={PULSE_PATH} />
-    </circle>
+    </circle>}
   </svg>;
 }
 

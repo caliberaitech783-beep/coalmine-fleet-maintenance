@@ -12,7 +12,7 @@ const theme=read('../src/theme.css');
 
 test('the pulse icon runs left to right with a dot travelling along the same path',()=>{
   assert.match(icons,/export const PULSE_PATH = "M2 12h4\.5l2\.5-9 6 18 2\.5-9H22";/,'path starts at the left edge');
-  assert.match(icons,/<path className="pulse-icon-trace" d=\{PULSE_PATH\} \/>\s*<circle className="pulse-icon-dot" r="1\.9" fill="currentColor" stroke="none">\s*<animateMotion dur="1\.6s" repeatCount="indefinite" path=\{PULSE_PATH\} \/>/);
+  assert.match(icons,/<path className="pulse-icon-trace" d=\{PULSE_PATH\} \/>\s*\{!simple && <circle className="pulse-icon-dot" r="1\.9" fill="currentColor" stroke="none">\s*<animateMotion dur="1\.6s" repeatCount="indefinite" path=\{PULSE_PATH\} \/>/);
   assert.match(motion,/\.pulse-icon-trace \{ stroke-dasharray: 22 60; animation: pulse-icon-trace 1\.6s linear infinite; \}/);
   assert.match(motion,/@keyframes pulse-icon-trace \{ to \{ stroke-dashoffset: -82; \} \}/,'negative offset moves the dash forward along a left-to-right path');
   assert.match(motion,/\.pulse-icon-dot \{ display: none; \}/,'no moving dot under reduced motion');
