@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Search, ListFilter, Eye, EyeOff } from "lucide-react";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
-import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
+import { equipmentCategoryLabel } from "./dashboard-drilldown-model.mjs";
 import { groupOemRecordsBySite, oemDetailReportRows, oemEquipmentLabel } from "./oem-dashboard-filters.mjs";
 import {ProtectedAudio} from "./protected-media.jsx";
 import { dailyUpdatesExportText } from "./daily-updates-order.mjs";
@@ -41,7 +41,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
     { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
   ];
   return <div className={`mine-oem-details${filtersHidden ? " filters-hidden" : ""}`}>
-    {!selection.fleetOnly && <div className="mine-oem-view-tabs" role="group" aria-label="Detail report grouping"><button type="button" aria-pressed={!oemWise} onClick={() => setOemWise(false)}>Site-wise report</button><button type="button" aria-pressed={oemWise} onClick={() => setOemWise(true)}>OEM-wise report</button><span>{oemWise ? "Each site split by OEM, with separate counts" : "All OEMs grouped by site"}</span></div>}
+    {!selection.fleetOnly && <div className="mine-oem-view-tabs" role="group" aria-label="Detail report grouping"><button type="button" aria-pressed={!oemWise} onClick={() => setOemWise(false)}>Site-wise report</button><button type="button" aria-pressed={oemWise} onClick={() => setOemWise(true)}>OEM-wise report</button><span>{oemWise ? "Each site split by OEM equipment type, with separate counts" : "All OEMs grouped by site"}</span></div>}
     <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span><div className="mine-oem-summary-slot" ref={setSummaryTarget} /><span className="mine-oem-context-end"><span role="status" aria-live="polite">{selection.periodLabel}</span><button type="button" className="mine-oem-filter-toggle" aria-pressed={filtersHidden} title={filtersHidden ? "Show search, filters and site summary" : "Hide search, filters and site summary for a taller table"} onClick={() => setFiltersHidden(hidden => !hidden)}>{filtersHidden ? <Eye size={16} /> : <EyeOff size={16} />}{filtersHidden ? "Show filters" : "Hide filters"}</button></span></div>
     <div className="table-search-toolbar mine-oem-detail-search">
       <label><ListFilter /><select aria-label="OEM breakdown status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(selection.records.map(record => record.requestStatus))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
