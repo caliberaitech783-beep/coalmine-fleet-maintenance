@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import {resolveMobileAccess} from '../mobile-access.mjs';
 import {navigationPermissionsForView, MANAGER_ROLE_OPTIONS} from '../admin-access.mjs';
 import {readFileSync} from 'node:fs';
+import React from 'react';
+import {transformWithOxc} from 'vite';
+import {recordsForSite} from '../site-location.mjs';
+
+test('manager form forwards Jayant and multi-site assignments to the existing equipment filter',async()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const body=source.slice(source.indexOf('function ManagerCreateRequestForm('),source.indexOf('function ManagerDashboard('));
+  const {code}=await transformWithOxc(body,'ManagerCreateRequestForm.jsx',{jsx:{runtime:'classic'}});
+  const Form=new Function('React','useMasterRecords','MaintenanceForm',`${code}; return ManagerCreateRequestForm;`)(React,()=>[[],null,true],()=>null);
+  const equipmentRecords=[{door:'J1',currentLocation:'Jayant OC'},{door:'S1',currentLocation:'Sasti OC'}];
+  for(const [assignedLocation,doors] of [['Jayant OB',['J1']],['Jayant OC | Sasti OC',['J1','S1']],['',[]]]){
+    const form=Form({assignedLocation,equipmentRecords,equipmentLoaded:true,requests:[],onCreate:async()=>{},close:()=>{}});
+    assert.equal(form.props.assignedLocation,assignedLocation);
+    assert.deepEqual(recordsForSite(form.props.equipmentRecords,form.props.assignedLocation).map(row=>row.door),doors);
+  }
+});
 
 test('all manager profiles require an explicit desktop or mobile create privilege',()=>{
   for(const managerRole of MANAGER_ROLE_OPTIONS){

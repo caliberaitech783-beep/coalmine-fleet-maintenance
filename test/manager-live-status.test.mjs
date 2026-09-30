@@ -90,6 +90,7 @@ for (const managerRole of ["Project Manager", "Production Manager", "Maintenance
   button(app.render(props),'Create request').props.onClick();
   const form=all(app.render(props),node=>node.type===ManagerCreateRequestForm)[0];
   assert.equal(form.props.onCreate,props.onCreateRequest);
+  assert.equal(form.props.assignedLocation,'Sasti OB');
   assert.deepEqual(form.props.equipmentRecords,equipment);
   assert.deepEqual(form.props.requests.map(row=>row.ref),['OPEN']);
   props.canCreateRequest=false;

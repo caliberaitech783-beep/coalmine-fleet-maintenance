@@ -1381,9 +1381,9 @@ function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
   </div>;
 }
 
-function ManagerCreateRequestForm({equipmentRecords, equipmentLoaded, requests, onCreate, close}) {
+function ManagerCreateRequestForm({equipmentRecords, equipmentLoaded, assignedLocation, requests, onCreate, close}) {
   const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
-  return <MaintenanceForm normal equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} activeRequestRecords={requests} close={close} onSubmit={async request => { await onCreate(request); close(); }} />;
+  return <MaintenanceForm normal assignedLocation={assignedLocation} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} activeRequestRecords={requests} close={close} onSubmit={async request => { await onCreate(request); close(); }} />;
 }
 
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null, canCreateRequest = false, onCreateRequest }) {
@@ -1493,7 +1493,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   ];
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     {canCreateRequest && <div className="manager-dashboard-actions"><button type="button" className="primary" disabled={!equipmentLoaded || !requestsLoaded} onClick={() => setCreatingRequest(true)}><Plus /> Create request</button></div>}
-    {canCreateRequest && creatingRequest && <ManagerCreateRequestForm equipmentRecords={siteEquipment} equipmentLoaded={equipmentLoaded} requests={scopedRequests} onCreate={onCreateRequest} close={() => setCreatingRequest(false)} />}
+    {canCreateRequest && creatingRequest && <ManagerCreateRequestForm assignedLocation={(restrictManagerScope ? managerAllowedSites || [] : [...new Set(siteEquipment.map(record => requestEquipmentCreationDetails(record).site).filter(Boolean))]).join(" | ")} equipmentRecords={siteEquipment} equipmentLoaded={equipmentLoaded} requests={scopedRequests} onCreate={onCreateRequest} close={() => setCreatingRequest(false)} />}
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Smart Export" dashboardPdf />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} data-nav="role" className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active");setManagerDrilldown("")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
