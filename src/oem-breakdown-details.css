@@ -1,4 +1,4 @@
-.mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
 .mine-oem-view-tabs button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-weight: 700; }
 .mine-oem-view-tabs button[aria-pressed="true"] { background: var(--brand-purple, #522e90); color: #fff; }
@@ -86,6 +86,9 @@
 .mine-oem-summary-slot .site-summary-region { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 8px; }
 .mine-oem-summary-slot .site-summary-region > div { flex-wrap: nowrap; }
 .mine-oem-summary-slot .site-summary-button { flex: 0 0 auto; padding: 6px 10px; white-space: nowrap; }
+.mine-oem-details .mine-oem-detail-context > :is(.mine-oem-selection, .mine-oem-context-end),
+.mine-oem-details .site-report-summary > b,
+.mine-oem-details .site-summary-region > b { display: none; }
 @media (max-width: 1100px) {
   .mine-oem-modal > header { flex-wrap: wrap; }
   .mine-oem-modal > header .modal-header-actions { order: 5; flex: 1 0 100%; }

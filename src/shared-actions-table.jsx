@@ -18,7 +18,7 @@ const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && N
 const DESKTOP_TABLE_PAGE_SIZE = 100;
 const sharedTablePageSize = () => (typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0) || DESKTOP_TABLE_PAGE_SIZE;
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
+export default function SharedActionsTable({ toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -54,13 +54,14 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
       columns.splice(columns.indexOf(idleReason) + 1, 0, idleDays);
     }
   }
+  if (columnTransform) columns.splice(0, columns.length, ...columnTransform(columns));
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
 
-function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
+function TableView({ sections, columns, toolbarAfterCount, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
-  const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
+  const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}${tableProps["data-oem-column-layout"] ? ":oem-reasons-meters-v1" : ""}`;
   const allColumnKeys = columns.map((column) => column.key);
   const [visible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
   const setVisible = (keys) => {
@@ -236,6 +237,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
       <span className="shared-table-record-count" role="status">{groupBySite ? reportCount(new Set(selectedRows.map(reportAsset)).size, selectedRows.length) : `${selectedRows.length} of ${dataRows.length} records`}</span>
+      {toolbarAfterCount}
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly reportGrouping={reportGrouping} title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>

@@ -1,4 +1,6 @@
 import { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, siteReportHtml } from "../src/site-report.mjs";
+import { orderOemDetailColumns } from "../src/oem-detail-columns.mjs";
+import { pulseDelayReason } from "../src/info-pulse-reasons.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -29,7 +31,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
+const bindings = { orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };
@@ -72,6 +74,21 @@ function renderDetails(selection, selectedSite = "", oemWise = false) {
     Status: ({ children }) => children, formatDate: formatDisplayDateTime, MaintenanceRemarks: Empty }));
   return { html, exports };
 }
+
+test("OEM report places grouping beside count and reasons before trailing meters", () => {
+  const record = request('D1', 'Sasti OB', 'S-1');
+  record.requestDetails.dailyRemarks = [{createdAt: '2026-09-30 10:00', remark: 'Waiting', delayReason: 'Parts - OEM'}];
+  const result = renderDetails(selectionFor([record]));
+  assert.doesNotMatch(result.html, /All OEMs grouped by site/);
+  assert.match(result.html, /shared-table-record-count[\s\S]*?mine-oem-view-tabs[\s\S]*?Site-wise report/);
+  assert.match(result.html, /Parts - OEM/);
+  for (const model of result.exports) {
+    const labels = model.columns.map(column => column.label);
+    const reason = labels.indexOf('Breakdown reason');
+    assert.deepEqual(labels.slice(reason + 1, reason + 3), ['Delayed reason', 'Daily remarks']);
+    assert.deepEqual(labels.slice(-4), ['Opening HMR', 'Opening KMR', 'Closing HMR', 'Closing KMR']);
+  }
+});
 
 test("OEM-wise view splits site sections and preserves the same grouping in print and export", () => {
   const result=renderDetails(selectionFor([...requests,{...request('V1','Sasti OB','V-1'),make:'Volvo'}]),'',true);

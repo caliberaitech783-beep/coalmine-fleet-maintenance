@@ -8,6 +8,8 @@ import {ProtectedAudio} from "./protected-media.jsx";
 import { dailyUpdatesExportText } from "./daily-updates-order.mjs";
 import { breakdownMeterColumns } from "../breakdown-meter-columns.mjs";
 import "./oem-breakdown-details.css";
+import { orderOemDetailColumns } from "./oem-detail-columns.mjs";
+import { pulseDelayReason } from "./info-pulse-reasons.mjs";
 
 // Sorting the Daily remarks column orders rows by their most recent update (server stamps are "YYYY-MM-DD HH:MM").
 const latestUpdateStamp = remarks => (Array.isArray(remarks) ? remarks : []).reduce((latest, item) => { const stamp = String(item?.createdAt || ""); return stamp > latest ? stamp : latest; }, "");
@@ -35,13 +37,13 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
     record.requestReference, record.door, record.requestSite, record.make, record.model, record.group, record.requestStatus,
     record.requestDetails?.complaint, record.requestDetails?.owner, record.manufacturerSerialNo));
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
-  const groupedRows = oemDetailReportRows(siteGroups, oemWise);
+  const groupedRows = oemDetailReportRows(siteGroups, oemWise).map(record => ({ ...record, delayedReason: pulseDelayReason(record.requestDetails)?.value || record.delayedReason }));
   const columns = [...extraColumns,
     { key: "remarks", label: "Daily remarks", sortValue: record => latestUpdateStamp(record.requestDetails.dailyRemarks), exportValue: record => dailyUpdatesExportText(record.requestDetails.dailyRemarks, { category: record.requestDetails.category }), render: record => <MaintenanceRemarks remarks={record.requestDetails.dailyRemarks} category={record.requestDetails.category} /> },
     { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
   ];
+  const reportTabs = !selection.fleetOnly && <div className="mine-oem-view-tabs" role="group" aria-label="Detail report grouping"><button type="button" aria-pressed={!oemWise} onClick={() => setOemWise(false)}>Site-wise report</button><button type="button" aria-pressed={oemWise} onClick={() => setOemWise(true)}>OEM-wise report</button></div>;
   return <div className={`mine-oem-details${filtersHidden ? " filters-hidden" : ""}`}>
-    {!selection.fleetOnly && <div className="mine-oem-view-tabs" role="group" aria-label="Detail report grouping"><button type="button" aria-pressed={!oemWise} onClick={() => setOemWise(false)}>Site-wise report</button><button type="button" aria-pressed={oemWise} onClick={() => setOemWise(true)}>OEM-wise report</button><span>{oemWise ? "Each site split by OEM equipment type, with separate counts" : "All OEMs grouped by site"}</span></div>}
     <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span><div className="mine-oem-summary-slot" ref={setSummaryTarget} /><span className="mine-oem-context-end"><span role="status" aria-live="polite">{selection.periodLabel}</span><button type="button" className="mine-oem-filter-toggle" aria-pressed={filtersHidden} title={filtersHidden ? "Show search, filters and site summary" : "Hide search, filters and site summary for a taller table"} onClick={() => setFiltersHidden(hidden => !hidden)}>{filtersHidden ? <Eye size={16} /> : <EyeOff size={16} />}{filtersHidden ? "Show filters" : "Hide filters"}</button></span></div>
     <div className="table-search-toolbar mine-oem-detail-search">
       <label><ListFilter /><select aria-label="OEM breakdown status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(selection.records.map(record => record.requestStatus))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
@@ -50,7 +52,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
       <label className="mine-oem-inline-search"><Search /><input type="search" aria-label="Search OEM breakdown records" placeholder="Search door number, chassis, site, model or status" value={query} onChange={event => setQuery(event.target.value)} /></label>
     </div>
     <div className="mine-oem-site-tables" role="region" tabIndex={0} aria-label="Site-wise fleet records">
-      <DashboardRecordBrowser key={oemWise ? "site-oem" : "site"} {...tableProps} summaryTarget={summaryTarget} rows={groupedRows} regions={selection.regions} rowsAreScoped title={`${title}${oemWise ? " · OEM-wise report" : ""}`} groupBySite hideHierarchyFilters hideFleetSearch showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
+      <DashboardRecordBrowser toolbarAfterCount={reportTabs} columnTransform={selection.fleetOnly ? null : orderOemDetailColumns} key={oemWise ? "site-oem" : "site"} {...tableProps} summaryTarget={summaryTarget} rows={groupedRows} regions={selection.regions} rowsAreScoped title={`${title}${oemWise ? " · OEM-wise report" : ""}`} groupBySite hideHierarchyFilters hideFleetSearch showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
     </div>
   </div>;
 }
