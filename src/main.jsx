@@ -6268,7 +6268,10 @@ const AUDIT_PAGE_SIZE = 500;
 function auditEventValues(event) {
   let values = auditValueCache.get(event);
   if (!values) {
-    const device = auditDeviceDetails(event.userAgent);
+    const systemEvent = String(event.requestMethod || "").toUpperCase() === "SYSTEM";
+    const device = systemEvent && !event.userAgent ? {type: "Server", platform: "Not applicable", browser: "Not applicable"} : auditDeviceDetails(event.userAgent);
+    const notRecorded = systemEvent ? "Not applicable" : "Not recorded";
+    const changeValue = field => { const value = auditChangeAfter(event.changedFields, field); return value === "—" ? notRecorded : value; };
     values = {
       device,
       deviceType: device.type, platform: device.platform, browser: device.browser,
@@ -6279,22 +6282,22 @@ function auditEventValues(event) {
       module: event.module,
       action: event.action,
       target: [event.targetType, event.targetReference].filter(Boolean).join(" · "),
-      sourceLocation: auditChangeAfter(event.changedFields,"Source location"),
-      destinationLocation: auditChangeAfter(event.changedFields,"Destination location"),
-      workCompleted: auditChangeAfter(event.changedFields,"Work completed"),
-      workPending: auditChangeAfter(event.changedFields,"Work pending"),
+      sourceLocation: changeValue("Source location"),
+      destinationLocation: changeValue("Destination location"),
+      workCompleted: changeValue("Work completed"),
+      workPending: changeValue("Work pending"),
       outcome: event.outcome,
       requestMethod: event.requestMethod,
       requestPath: event.requestPath,
-      statusCode: event.statusCode,
+      statusCode: event.statusCode || notRecorded,
       durationMs: Number.isFinite(Number(event.durationMs)) ? `${Number(event.durationMs).toLocaleString("en-IN")} ms` : "—",
       errorCode: event.errorCode,
       requestId: event.requestId,
       reason: event.reason,
-      changes: auditChangesLabel(event.changedFields),
-      ipAddress: event.ipAddress,
-      deviceId: event.deviceId,
-      sessionId: event.sessionId,
+      changes: event.changedFields?.length ? auditChangesLabel(event.changedFields) : "No field changes recorded",
+      ipAddress: event.ipAddress || notRecorded,
+      deviceId: event.deviceId || notRecorded,
+      sessionId: event.sessionId || notRecorded,
     };
     auditValueCache.set(event, values);
   }
@@ -6430,9 +6433,9 @@ function AuditTrailPage({ session }) {
           <td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td>
           <td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td>{valueFor(event,"sourceLocation")}</td><td>{valueFor(event,"destinationLocation")}</td>
           <td className="audit-wrap-cell">{valueFor(event,"workCompleted")}</td><td className="audit-wrap-cell">{valueFor(event,"workPending")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td>
-          <td>{event.statusCode || "—"}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td>
-          <td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td>
-          <td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td>
+          <td>{valueFor(event,"statusCode")}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td>
+          <td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{valueFor(event,"ipAddress")}</td><td><code>{valueFor(event,"deviceId")}</code></td>
+          <td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{valueFor(event,"sessionId")}</code></td>
         </tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody>
       </ActionsTable>
   ), [tableRows, sort, openFilter, filters, actionsToolbarTarget, loading, headerValueCache]);

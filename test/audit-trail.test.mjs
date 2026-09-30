@@ -222,3 +222,18 @@ test("the Audit Trail page stays responsive with hundreds of events", () => {
   assert.match(page, /const AUDIT_PAGE_SIZE = 500;/);
   assert.match(page, /limit:String\(AUDIT_PAGE_SIZE\)/, "smaller pages; older records load on demand");
 });
+
+test('background jobs display server context without inventing device or user metadata', async () => {
+  const {auditDeviceDetails}=await import('../device-details.mjs');
+  const source=client.slice(client.indexOf('function auditEventValues('),client.indexOf('\nfunction AuditTrailPage'));
+  const values=new Function('auditValueCache','auditDeviceDetails','auditTimestampLabel','auditChangeAfter','auditChangesLabel',source+'; return auditEventValues;')(new WeakMap(),auditDeviceDetails,value=>value,(changes=[],field)=>changes.find(change=>change.field===field)?.after||'—',changes=>changes.map(change=>change.field).join(','));
+  const system=values({requestMethod:'SYSTEM',changedFields:[],reason:'{"checked":452,"updated":0}'});
+  assert.equal(system.deviceType,'Server');
+  for(const field of ['platform','browser','ipAddress','deviceId','sessionId','statusCode','sourceLocation','workCompleted']) assert.equal(system[field],'Not applicable',field);
+  assert.equal(system.changes,'No field changes recorded');
+  const user=values({requestMethod:'POST',ipAddress:'192.0.2.1',deviceId:'fixture-device',sessionId:'fixture-session',statusCode:200,changedFields:[{field:'Source location',after:'Site A'}]});
+  assert.equal(user.ipAddress,'192.0.2.1');
+  assert.equal(user.sourceLocation,'Site A');
+  assert.equal(user.statusCode,200);
+  assert.equal(user.workPending,'Not recorded');
+});

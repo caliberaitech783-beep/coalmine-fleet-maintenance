@@ -1198,3 +1198,18 @@
   height: 12px;
   background: transparent;
 }
+/* Use the C-Dir purple-to-pink selection treatment consistently in navigation. */
+.app > aside nav .header-nav-item.active,
+.app > aside nav .header-nav-item[aria-expanded="true"],
+.app > aside nav .masters-dropdown button.workspace-menu-item.active,
+.app > aside nav .masters-dropdown button.workspace-menu-item:hover,
+.app > aside nav .masters-dropdown button.workspace-menu-item:focus-visible,
+.app > aside nav .masters-dropdown .cdir-clock-item.active .cdir-clock-badge,
+.app > aside nav .masters-dropdown .cdir-clock-item:hover .cdir-clock-badge,
+.app > aside nav .masters-dropdown .cdir-clock-item:focus-visible .cdir-clock-badge,
+.normal-header-nav > button.active {
+  background: linear-gradient(110deg, #6d3fd1, #c32e6d);
+  box-shadow: 0 0 0 2px #ffd166, 0 8px 22px #c32e6d66;
+  color: #fff;
+  border-radius: 12px;
+}
