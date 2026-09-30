@@ -127,10 +127,16 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
   }));
   const availableRows = [...availableBodySelections.values()].flat().filter(isDataRow);
   const siteSummary = groupBySite ? groupReportRows(availableRows, reportSite, reportAsset) : [];
-  const activeSite = groupBySite && siteSummary.some(group => group.label === selectedSite) ? selectedSite : "";
+  const brandOf = row => String(row.props["data-report-brand"] || "").trim().replace(/\s+/g, " ").toUpperCase();
+  const brandSummary = groupBySite ? [...new Set(availableRows.map(brandOf).filter(Boolean))].sort().map(brand => {
+    const rows = availableRows.filter(row => brandOf(row) === brand);
+    return { brand, key: `brand:${brand}`, rows, assets: new Set(rows.map(reportAsset)).size };
+  }) : [];
+  const activeBrand = brandSummary.find(group => group.key === selectedSite)?.brand || "";
+  const activeSite = groupBySite && (activeBrand || siteSummary.some(group => group.label === selectedSite)) ? selectedSite : "";
   useEffect(() => { if (selectedSite && !activeSite) selectSite(""); }, [selectedSite, activeSite]);
   const bodySelections = new Map([...availableBodySelections].map(([section, selected]) =>
-    [section, activeSite ? selected.filter(row => isDataRow(row) && reportSite(row) === activeSite) : selected]));
+    [section, activeSite ? selected.filter(row => isDataRow(row) && (activeBrand ? brandOf(row) === activeBrand : reportSite(row) === activeSite)) : selected]));
   const selectedRows = [...bodySelections.values()].flat().filter(isDataRow);
   const summaryRegions = [...new Set(siteSummary.map(group => splitReportSite(group.label).region))];
   const reportTableRef = useRef(null);
@@ -254,6 +260,9 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
     <b>Site-wise summary · {siteSummary.length} sites</b>
     <div className="site-summary-options">
       <button type="button" className="site-summary-button" aria-pressed={!activeSite} onClick={() => selectSite("")}><strong>All sites</strong><span>{reportCount(new Set(availableRows.map(reportAsset)).size, availableRows.length)}</span></button>
+      {brandSummary.map(group => <button type="button" className="site-summary-button" key={group.key} aria-pressed={activeSite === group.key} onClick={() => selectSite(activeSite === group.key ? "" : group.key)}>
+        <strong>View All {group.brand}</strong><span>{reportCount(group.assets, group.rows.length)}</span>
+      </button>)}
       {summaryRegions.map(region => <div className="site-summary-region" key={region} role="group" aria-label={region}>
         <b>{region}</b><div>{siteSummary.filter(group => splitReportSite(group.label).region === region).map(group =>
           <button type="button" className="site-summary-button" key={group.label} aria-pressed={activeSite === group.label} onClick={() => selectSite(activeSite === group.label ? "" : group.label)}>
