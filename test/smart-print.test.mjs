@@ -116,9 +116,9 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent||n.children[0]?.children[1]?.textContent),['Sr. No.','Job reference','Door','Secret','Status']);
   assert.equal(nodes.filter(n=>n.className==='smart-print-column-off').length,3);
   assert.deepEqual(nodes.filter(n=>n.tag==='tr'&&n.className==='highlight-row').length,1);
-  // A single Smart Export button asks only for the format; exports never ask for a page size.
-  assert.equal(nodes.filter(n=>n.tag==='button'&&/^Smart Export/.test(n.textContent)).length,1);
-  nodes.find(n=>n.textContent==='Smart Export').onclick();
+  // A single Print\/Export button asks only for the format; exports never ask for a page size.
+  assert.equal(nodes.filter(n=>n.tag==='button'&&/^Print\/Export/.test(n.textContent)).length,1);
+  nodes.find(n=>n.textContent==='Print\/Export').onclick();
   assert.equal(exported.length,0);
   assert.deepEqual(all(body.children.at(-1)).filter(n=>n.tag==='button'&&['PDF','Excel (.xlsx)'].includes(n.textContent)).map(n=>n.textContent),['PDF','Excel (.xlsx)']);
   assert.equal(all(body.children.at(-1)).some(n=>/^A[34] · /.test(n.textContent)),false);
@@ -128,7 +128,7 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(exported[0].columns,[columns[2],columns[0],columns[3]]);
   assert.equal(exported[0].rows,rows);
   assert.equal(exported[0].highlightRow,highlightRow);
-  nodes.find(n=>n.textContent==='Smart Export').onclick();
+  nodes.find(n=>n.textContent==='Print\/Export').onclick();
   assert.equal(exported.length,1);
   all(body.children.at(-1)).find(n=>n.textContent==='PDF').onclick();
   await new Promise(resolve=>setTimeout(resolve));
@@ -155,7 +155,7 @@ test('direct smart export opens with header ticks and one download action',async
   const columns=[{label:'Door',value:r=>r.door},{label:'Status',value:r=>r.status}],rows=[{door:'24',status:'Open'}];
   openSmartPrint({title:'Report',columns,rows,onPrint:()=>assert.fail('direct export should not print'),onExport:args=>exported.push(args),exportFormat:'xlsx',exportOnly:true});
   let nodes=all(body.children.at(-1));
-  assert.equal(nodes.find(n=>n.tag==='h2').textContent,'Smart Export');
+  assert.equal(nodes.find(n=>n.tag==='h2').textContent,'Print\/Export');
   assert.equal(nodes.some(n=>n.textContent==='Print current selection'),false);
   assert.equal(nodes.some(n=>n.textContent==='Export'),false);
   assert.equal(nodes.some(n=>n.textContent==='Download Excel'),true);
@@ -208,7 +208,7 @@ test('Smart Print keeps the main report compact and puts every update in separat
   const printed=[];
   openSmartPrint({
    title:'BD Balance',
-   columns:[{key:'door',label:'Machine / Door no.',value:row=>row.door},{key:'dailyRemarks',label:'Daily updates',value:row=>row.updates}],
+   columns:[{key:'door',label:'Door No',value:row=>row.door},{key:'dailyRemarks',label:'Daily updates',value:row=>row.updates}],
    rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed | Type: Preventive | Delayed reason: Parts\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted | Type: Preventive | Delayed reason: Testing'}],
    onPrint:args=>printed.push(args),
    onExport:null,

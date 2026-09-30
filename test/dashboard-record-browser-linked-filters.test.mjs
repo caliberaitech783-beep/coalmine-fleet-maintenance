@@ -332,7 +332,7 @@ test("the real browser and shared table render OEM controls and numbered exports
       const meterAnchor = requestRecords ? "Breakdown reason" : "Model", anchorAt = model.columns.findIndex(column => column.label === meterAnchor);
       assert.deepEqual(model.columns.slice(anchorAt, anchorAt + 3).map(column => column.label), [meterAnchor, "Opening HMR", "Opening KMR"]);
       assert.equal(model.columns[0].value(model.rows[0]), 1);
-      assert.equal(model.columns.find(column => column.label === "Machine / Door no.").value(model.rows[0]), "T10");
+      assert.equal(model.columns.find(column => column.label === "Door No").value(model.rows[0]), "T10");
     }
     const emptyHtml = renderToStaticMarkup(h(Browser, { ...props, rows: [] }));
     assert.ok(emptyHtml.includes(`colSpan="${columnCount}"`), "empty state spans the visible numbered columns");

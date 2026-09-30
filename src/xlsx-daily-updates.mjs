@@ -32,7 +32,7 @@ function detailIdentity(row, columns = [], values = []) {
 }
 
 export const DAILY_UPDATES_DETAIL_COLUMNS = [
-  "Report", "Report row", "Job reference", "Machine / Door no.", "Location", "Equipment group", "Model",
+  "Report", "Report row", "Job reference", "Door No", "Location", "Equipment group", "Model",
   "Serial / chassis no.", "Breakdown type", "Breakdown reason", "Update no.", "Update date/time",
   "Updated by", "Daily update", "Delayed reason",
 ].map((label) => ({ label }));

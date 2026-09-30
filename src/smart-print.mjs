@@ -128,13 +128,13 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   }catch{storageError='Layouts cannot be saved in this browser right now. You can still customize and print.';}
   const previousFocus=document.activeElement;
   const exportName=exportFormat==='pdf'?'PDF':exportFormat==='xlsx'?'Excel':'';
-  const dialog=document.createElement('dialog');dialog.className='smart-print-dialog';dialog.setAttribute('aria-label',exportOnly?'Smart Export':'Smart Print');
+  const dialog=document.createElement('dialog');dialog.className='smart-print-dialog';dialog.setAttribute('aria-label',exportOnly?'Print/Export':'Smart Print');
   const make=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
   const button=(text,action,parent,className)=>{const node=make('button',text,className);node.type='button';node.onclick=action;parent.append(node);return node;};
   const close=()=>{dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus();};
   const header=make('header');
   const back=button('←',close,header);back.setAttribute('aria-label','Back');
-  const heading=make('div');heading.append(make('h2',exportOnly?'Smart Export':'Smart Print'),make('p',title));header.append(heading);
+  const heading=make('div');heading.append(make('h2',exportOnly?'Print/Export':'Smart Print'),make('p',title));header.append(heading);
   const closeButton=button('×',close,header);closeButton.setAttribute('aria-label','Close Smart Print');dialog.append(header);
   const body=make('div',undefined,'smart-print-body');dialog.append(body);
   // A snapshot (a dashboard) prints as it is on screen, so there are no columns to choose.
@@ -249,9 +249,9 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;})
       .finally(()=>{exporting=false;render();});
   };
-  // One Smart Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
-  const exportButtons=onExport&&!snapshot&&!exportOnly?[button('Smart Export',()=>{
-    if(currentReport().chosen.length)askChoice('Smart Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
+  // One Print/Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
+  const exportButtons=onExport&&!snapshot&&!exportOnly?[button('Print/Export',()=>{
+    if(currentReport().chosen.length)askChoice('Print/Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
   },footer,'smart-print-export')]:[];
   const directExportButton=exportOnly&&exportName?button(`Download ${exportName}`,()=>runExport(exportFormat),footer,'primary'):null;
   const printButton=exportOnly?null:button(snapshot?'Print as shown on screen':'Print current selection',printSelection,footer,'primary');

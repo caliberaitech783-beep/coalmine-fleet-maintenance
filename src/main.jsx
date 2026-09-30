@@ -1503,7 +1503,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     {canCreateRequest && <div className="manager-dashboard-actions"><button type="button" className="primary" disabled={!equipmentLoaded || !requestsLoaded} onClick={() => setCreatingRequest(true)}><Plus /> Create request</button></div>}
     {canCreateRequest && creatingRequest && <ManagerCreateRequestForm assignedLocation={(restrictManagerScope ? managerAllowedSites || [] : [...new Set(siteEquipment.map(record => requestEquipmentCreationDetails(record).site).filter(Boolean))]).join(" | ")} equipmentRecords={siteEquipment} equipmentLoaded={equipmentLoaded} requests={scopedRequests} onCreate={onCreateRequest} close={() => setCreatingRequest(false)} />}
-    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Smart Export" dashboardPdf />}</div></header>
+    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Print/Export" dashboardPdf />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} data-nav="role" className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active");setManagerDrilldown("")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
@@ -2346,7 +2346,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ]),
   ].filter(Boolean);
   // The whole dashboard: PDF and Smart Print capture it as it is on screen; Excel has every section.
-  const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Smart Export" dashboardPdf />;
+  const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Print/Export" dashboardPdf />;
   const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-shift-filter"><span>Shift Master</span><select aria-label="Shift Master" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label><label className="mine-date-filter"><span>From</span><DateInput aria-label="Dashboard from date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><DateInput aria-label="Dashboard to date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => filterOemChart(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}{dashboardShift !== "all" ? ` · ${dashboardShiftLabel}` : ""}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
@@ -3645,7 +3645,7 @@ function PrintButton({ title, columns = [], rows = [], className = "secondary", 
 // portalClassName reaches the export menu and the "preparing file" overlay, both portaled to the body: a caller inside a higher overlay (Info Pulse) uses it to raise them above itself.
 // printSection: Smart Print captures the dashboard section (.mine-panel) holding the menu, as it is on screen.
 // excelSheets: a function returning [{name, title, columns, rows}]; Excel then has one sheet per table.
-function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Smart Export", printOnly = false, smartPrintItem = true, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Print/Export", printOnly = false, smartPrintItem = true, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -6091,7 +6091,7 @@ function Generic({ name, requests = [] }) {
           {isReport || isAudit ? (
             <>
               <Download />
-              Smart Export
+              Print/Export
             </>
           ) : (
             <>
@@ -6900,12 +6900,12 @@ function openVehicleRepairHistory(record) {
 function vehicleRepairHistoryColumns(token) {
   return [
     {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={token} Dialog={Modal} />},
-    {key: "nextBreakdown", label: "Time since previous breakdown", value: (request) => request.timeSincePreviousBreakdown, sortValue: (request) => request.gapMilliseconds ?? -1, render: (request) => request.breakdownSequence === 1 ? "—" : <strong>{request.timeSincePreviousBreakdown || "—"}</strong>},
-    {key: "complaint", label: "Breakdown problem / reason", value: (request) => request.complaint || request.category},
+    {key: "nextBreakdown", label: "Time since previous BD", value: (request) => request.timeSincePreviousBreakdown, sortValue: (request) => request.gapMilliseconds ?? -1, render: (request) => request.breakdownSequence === 1 ? "—" : <strong>{request.timeSincePreviousBreakdown || "—"}</strong>},
+    {key: "complaint", label: "BD problem / reason", value: (request) => request.complaint || request.category},
     ...breakdownMeterColumns({stage: "opening"}),
-    {key: "site", label: "Breakdown location", value: (request) => request.reportSite || request.site},
+    {key: "site", label: "BD location", value: (request) => request.reportSite || request.site},
     {key: "driver", label: "Driver at that time", value: (request) => request.driverName || request.driver},
-    {key: "openedAt", label: "Breakdown opened", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "openedAt", label: "BD opened", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
     {key: "closedAt", label: "Maintenance closed", value: (request) => request.closedAt, sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
     ...breakdownMeterColumns({stage: "closing"}),
@@ -6919,9 +6919,9 @@ function BreakdownOccurrencesModal({ summary, onClose }) {
   const rows = summary?.breakdowns || [];
   const columns = [
     {key: "reference", label: "Request ID", value: (request) => request.ref, render: (request) => <RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} />},
-    {key: "opened", label: "Breakdown time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
+    {key: "opened", label: "BD time", value: (request) => request.start, sortValue: (request) => request.start, render: (request) => request.start ? formatTwelveHourDateTime(request.start) : "—"},
     {key: "expectedCompletionAt", label: "ETC", value: (request) => request.expectedCompletionAt, sortValue: (request) => request.expectedCompletionAt, render: (request) => formatTwelveHourDateTime(request.expectedCompletionAt)},
-    {key: "reason", label: "Breakdown reason", value: (request) => request.complaint || request.category},
+    {key: "reason", label: "BD reason", value: (request) => request.complaint || request.category},
     ...breakdownMeterColumns({stage: "opening"}),
     ...breakdownMeterColumns({stage: "closing"}),
     {key: "location", label: "Location", value: (request) => request.reportSite || request.site},
@@ -7277,17 +7277,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "equipment", label: "Vehicle / equipment", value: (record) => record.reportEquipment},
     {key: "registration", label: "Registration no.", value: (record) => record.registrationNumber},
     {key: "chassis", label: "Chassis / serial no.", value: (record) => record.chassisNumber},
-    {key: "breakdowns", label: "Total breakdowns", value: (record) => record.breakdownCount, sortValue: (record) => record.breakdownCount, render: (record) => <strong>{record.breakdownCount}</strong>},
-    {key: "latest", label: "Latest breakdown", value: (record) => record.latestBreakdownAt, sortValue: (record) => record.latestBreakdownAt, render: (record) => record.latestBreakdownAt ? formatTwelveHourDateTime(record.latestBreakdownAt) : "No breakdown recorded"},
+    {key: "breakdowns", label: "Total BD", value: (record) => record.breakdownCount, sortValue: (record) => record.breakdownCount, render: (record) => <strong>{record.breakdownCount}</strong>},
+    {key: "latest", label: "Latest BD", value: (record) => record.latestBreakdownAt, sortValue: (record) => record.latestBreakdownAt, render: (record) => record.latestBreakdownAt ? formatTwelveHourDateTime(record.latestBreakdownAt) : "No breakdown recorded"},
     {key: "expectedCompletionAt", label: "Latest ETC", value: (record) => record.expectedCompletionAt, sortValue: (record) => record.expectedCompletionAt, render: (record) => formatTwelveHourDateTime(record.expectedCompletionAt)},
     ...breakdownMeterColumns({stage: "latest", source: (record) => record.latestBreakdownAt ? record : null}),
   ];
   const maximumBreakdownColumns = [
     {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <b>{row.reportDoor || row.reportEquipment || "—"}</b>},
-    {key: "count", label: "Number of breakdowns", value: (row) => row.breakdownCount, sortValue: (row) => row.breakdownCount, render: (row) => <button type="button" className="breakdown-count-link" onClick={() => setBreakdownOccurrencesTarget(row)} aria-label={`View ${row.breakdownCount} breakdowns for ${row.reportDoor || row.reportEquipment}`}>{row.breakdownCount}<Eye /></button>},
+    {key: "count", label: "Number of BD", value: (row) => row.breakdownCount, sortValue: (row) => row.breakdownCount, render: (row) => <button type="button" className="breakdown-count-link" onClick={() => setBreakdownOccurrencesTarget(row)} aria-label={`View ${row.breakdownCount} breakdowns for ${row.reportDoor || row.reportEquipment}`}>{row.breakdownCount}<Eye /></button>},
     {key: "equipment", label: "Vehicle / equipment", value: (row) => row.reportEquipment},
     {key: "site", label: "Latest location", value: (row) => row.reportSite},
-    {key: "latestReason", label: "Latest breakdown reason", value: (row) => row.breakdowns.at(-1)?.complaint || row.breakdowns.at(-1)?.category},
+    {key: "latestReason", label: "Latest BD reason", value: (row) => row.breakdowns.at(-1)?.complaint || row.breakdowns.at(-1)?.category},
     ...breakdownMeterColumns({stage: "latest", source: (row) => row.breakdowns.at(-1)}),
   ];
   const vehicleCommonRemarkColumns = [
@@ -7296,7 +7296,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "notice", label: "Notice", value: (row) => row.notice, render: (row) => <span className={`vehicle-notice${row.notice.includes("open") ? " attention" : ""}`}>{row.notice}</span>},
     {key: "remark", label: "Latest maintenance remark", value: (row) => row.remark},
     {key: "site", label: "Site", value: (row) => row.reportSite},
-    {key: "reason", label: "Common breakdown reason", value: (row) => row.breakdownReason, render: (row) => row.breakdownReason ? <span>{row.breakdownReason}{row.commonReasonCount > 1 ? <small className="reason-frequency">Repeated {row.commonReasonCount} times</small> : null}</span> : "—"},
+    {key: "reason", label: "Common BD reason", value: (row) => row.breakdownReason, render: (row) => row.breakdownReason ? <span>{row.breakdownReason}{row.commonReasonCount > 1 ? <small className="reason-frequency">Repeated {row.commonReasonCount} times</small> : null}</span> : "—"},
   ];
   const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
