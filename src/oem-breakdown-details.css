@@ -1,5 +1,18 @@
 .mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
+/* OEM report only: remove the redundant toolbar asset badge. */
+.mine-oem-modal > header .shared-table-record-count,
+.mine-oem-inline-details .shared-table-record-count { display: none; }
+@media screen and (min-width: 1181px) {
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog { display: grid; grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); align-items: center; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog > div:first-child { min-width: 0; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; margin-top: 0; gap: 8px; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions > label { min-width: 0; }
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions :is(input, select) { min-width: 0; width: 100%; }
+}
+@media screen and (min-width: 1600px) {
+  .mine-oem-modal > .dashboard-filter-bar.in-dialog .mine-head-actions { grid-template-columns: repeat(6, minmax(0, 1fr)) auto auto auto; }
+}
 .mine-oem-view-tabs button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-weight: 700; }
 .mine-oem-view-tabs button[aria-pressed="true"] { background: var(--brand-purple, #522e90); color: #fff; }
 .mine-oem-inline-details { height: min(760px, 75vh); min-height: 420px; display: flex; flex-direction: column; overflow: hidden; }
