@@ -8,6 +8,8 @@ import DateInput from './date-input.mjs';
 import './stock-statement.css';
 import './iboss-accounts.css';
 import IbossReportMerge from './iboss-report-merge.jsx';
+import DrillPanel from './iboss-drill-panel.jsx';
+import {accountDrill,ACCOUNT_DRILLS} from '../iboss-drill.mjs';
 const SECTIONS=[['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']];
 const icons=[BookUser,Contact,Wallet,Landmark,Settings,Network,BookOpen,Percent];
 export default function IbossAccounts({token,ReportSection,initialSection='masters'}) {
@@ -16,6 +18,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='maste
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
+ const [drill,setDrill]=useState(null);
  const definition=ACCOUNT_VIEWS[view];
  useEffect(()=>{setSection(initialSection);setView('');setValidation('');},[initialSection]);
  useEffect(()=>{
@@ -27,7 +30,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='maste
    .catch(error=>{if(!controller.signal.aborted)setData({rows:[],loading:false,error:error.message});});
   return ()=>controller.abort();
  },[token,view,range,attempt]);
- const columns=useMemo(()=>definition?.columns.map(column=>({...column,value:row=>(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key]??'',sortValue:row=>row[column.key]}))||[],[definition]);
+ const columns=useMemo(()=>definition?.columns.map(column=>({...column,value:row=>(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key]??'',sortValue:row=>row[column.key],...(ACCOUNT_DRILLS[view]?.[column.key]?{render:row=>{const target=accountDrill(view,column.key,row);const text=(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key];if(!target)return text===''||text===null||text===undefined?'—':text;return <button type="button" className="merge-doc-link" title="Drill down" onClick={()=>setDrill(target)}>{text}</button>;}}:{})}))||[],[definition,view]);
  const open=key=>{
   if(key==='day-book'){const today=indiaDateTimeInputValue().slice(0,10);const currentDay={from:today,to:today};setRange(currentDay);setDraft(currentDay);}
   setData({rows:[],loading:true,error:''});setValidation('');setView(key);
@@ -56,5 +59,6 @@ export default function IbossAccounts({token,ReportSection,initialSection='maste
     <ReportSection key={view} title={definition.title} category="iboss-accounts" description={`${definition.asOf?`Stored on / before ${formatDisplayDate(range.to)} · `:definition.dated?`${formatDisplayDate(range.from)} to ${formatDisplayDate(range.to)} · `:''}${data.rows.length.toLocaleString('en-IN')} records · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this report and date range."/>
    </>}
   </>}
+  {drill&&<DrillPanel target={drill} range={definition?.dated||definition?.asOf?range:{from:indiaDateTimeInputValue(new Date(Date.now()-364*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}} token={token} close={()=>setDrill(null)}/>}
  </section>;
 }

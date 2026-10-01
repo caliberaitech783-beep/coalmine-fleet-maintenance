@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {Combine,ArrowLeft,ArrowRight,RefreshCw,X,Lock,Link2,CheckSquare} from 'lucide-react';
+import {Combine,RefreshCw,Lock,Link2,CheckSquare} from 'lucide-react';
 import {MERGE_CHAINS,MAX_MERGE_STEPS,resolveSelection} from '../iboss-report-merge.mjs';
 import {purchaseOrderRange} from '../purchase-order-report.mjs';
 import {indiaDateTimeInputValue} from '../report-date-range.mjs';
@@ -8,49 +8,7 @@ import DateInput from './date-input.mjs';
 import './stock-statement.css';
 import './iboss-accounts.css';
 import './iboss-report-merge.css';
-
-const money=value=>value===''||value===null||value===undefined||!Number.isFinite(Number(value))?'':Number(value).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
-const show=(type,value)=>type==='date'?(value?formatDisplayDate(value):''):type==='amount'?money(value):Array.isArray(value)?value.join(', '):value??'';
-
-function Trail({chainKey,anchor,focus,range,token,close}){
- const chain=MERGE_CHAINS[chainKey],focusIndex=Math.max(0,chain.steps.findIndex(step=>step.key===focus.step));
- const [direction,setDirection]=useState(focusIndex>0?'backward':'forward');
- const [data,setData]=useState({steps:[],loading:true,error:''});
- useEffect(()=>{
-  const controller=new AbortController();
-  fetch(`/api/reports/iboss-accounts-merge/${chainKey}/trail?${new URLSearchParams({...range,key:anchor})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load the document trail.');return body;})
-   .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false,error:''});})
-   .catch(error=>{if(!controller.signal.aborted)setData({steps:[],loading:false,error:error.message});});
-  return ()=>controller.abort();
- },[chainKey,anchor,token,range]);
- useEffect(()=>{const onKey=event=>{if(event.key==='Escape')close();};window.addEventListener('keydown',onKey);return ()=>window.removeEventListener('keydown',onKey);},[close]);
- const ordered=direction==='backward'?data.steps.slice(0,focusIndex+1).reverse():data.steps.slice(focusIndex);
- return <div className="merge-trail-backdrop" onClick={close}>
-  <aside className="merge-trail" role="dialog" aria-modal="true" aria-labelledby="merge-trail-title" onClick={event=>event.stopPropagation()}>
-   <header>
-    <div><small>{chain.title}</small><h2 id="merge-trail-title">Document trail · {focus.docNo}</h2></div>
-    <button type="button" className="merge-trail-close" onClick={close} aria-label="Close document trail"><X/></button>
-   </header>
-   <div className="merge-trail-direction" role="group" aria-label="Trail direction">
-    <button type="button" aria-pressed={direction==='backward'} onClick={()=>setDirection('backward')}><ArrowLeft/>Back to origin</button>
-    <button type="button" aria-pressed={direction==='forward'} onClick={()=>setDirection('forward')}>Forward to completion<ArrowRight/></button>
-   </div>
-   {data.loading?<p role="status">Tracing documents in Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<ol className="merge-trail-steps">
-    {ordered.map(step=><li key={step.key} className={`${step.documents.length?'done':'pending'}${step.key===focus.step?' focus':''}`}>
-     <span className="merge-trail-dot" aria-hidden="true"/>
-     <div>
-      <h3>{step.title}<small>{step.documents.length?`${step.documents.length} document${step.documents.length===1?'':'s'}`:'Not recorded'}</small></h3>
-      {step.documents.map((document,index)=><details key={`${document.docNo}-${index}`} open={step.key===focus.step&&(!focus.docNo||document.docNo===focus.docNo)||step.documents.length===1}>
-       <summary><b className={step.key===focus.step&&document.docNo===focus.docNo?'hit':''}>{document.docNo||'—'}</b>{document.docDate&&<span>{formatDisplayDate(document.docDate)}</span>}</summary>
-       <dl>{document.details.map(item=><React.Fragment key={item.label}><dt>{item.label}</dt><dd>{show(item.type,item.value)||'—'}</dd></React.Fragment>)}</dl>
-      </details>)}
-     </div>
-    </li>)}
-   </ol>}
-  </aside>
- </div>;
-}
+import DrillPanel,{showValue as show} from './iboss-drill-panel.jsx';
 
 export default function IbossReportMerge({token,ReportSection,embedded=false}){
  const [chainKey,setChainKey]=useState('');
@@ -86,16 +44,17 @@ export default function IbossReportMerge({token,ReportSection,embedded=false}){
  };
  const columns=useMemo(()=>(data.columns||[]).map(column=>({...column,
   value:row=>show(column.type,row[column.key]),sortValue:row=>Array.isArray(row[column.key])?row[column.key].length:row[column.key],
-  render:column.type==='doc'?row=><button type="button" className="merge-doc-link" onClick={()=>setTrail({anchor:row.ANCHOR,focus:{step:column.step,docNo:row.DOC_NO}})}>{row.DOC_NO}</button>
-   :column.type==='docs'?row=>(row[column.key]||[]).length?<span className="merge-doc-list">{row[column.key].map(docNo=><button type="button" key={docNo} className="merge-doc-link" onClick={()=>setTrail({anchor:row.ANCHOR,focus:{step:column.step,docNo}})}>{docNo}</button>)}</span>:<span className="merge-missing">Not recorded</span>
-   :undefined})),[data.columns]);
+  render:column.link?row=>row[column.key]?<button type="button" className="merge-doc-link" onClick={()=>setTrail({chain:column.link,key:String(row[column.key]),focus:{step:MERGE_CHAINS[column.link].steps[0].key,docNo:String(row[column.key])}})}>{row[column.key]}</button>:'—'
+   :column.type==='doc'?row=><button type="button" className="merge-doc-link" onClick={()=>setTrail({chain:request.chain,key:row.ANCHOR,focus:{step:column.step,docNo:row.DOC_NO}})}>{row.DOC_NO}</button>
+   :column.type==='docs'?row=>(row[column.key]||[]).length?<span className="merge-doc-list">{row[column.key].map(docNo=><button type="button" key={docNo} className="merge-doc-link" onClick={()=>setTrail({chain:request.chain,key:row.ANCHOR,focus:{step:column.step,docNo}})}>{docNo}</button>)}</span>:<span className="merge-missing">Not recorded</span>
+   :undefined})),[data.columns,request]);
  const ran=request&&MERGE_CHAINS[request.chain];
  const Wrapper=embedded?'div':'section';
  return <Wrapper className={embedded?'iboss-report-merge':'reports-workspace stock-statement iboss-accounts iboss-report-merge'}>
   {!embedded&&<h1><Combine aria-hidden="true"/> Accounts · Report Merge</h1>}
   <div className="iboss-accounts-panel" role="region" aria-labelledby="merge-process-heading">
    <h2 id="merge-process-heading">1. Choose a process</h2>
-   <div className="merge-process-grid">{Object.entries(MERGE_CHAINS).map(([key,entry])=><button type="button" key={key} aria-pressed={chainKey===key} onClick={()=>choose(key)}><b>{entry.title}</b><span>{entry.description}</span><small>{entry.steps.length} linked reports</small></button>)}</div>
+   <div className="merge-process-grid">{Object.entries(MERGE_CHAINS).filter(([,entry])=>!entry.drillOnly).map(([key,entry])=><button type="button" key={key} aria-pressed={chainKey===key} onClick={()=>choose(key)}><b>{entry.title}</b><span>{entry.description}</span><small>{entry.steps.length} linked reports</small></button>)}</div>
   </div>
   {chain&&<div className="iboss-accounts-panel" role="region" aria-labelledby="merge-steps-heading">
    <h2 id="merge-steps-heading">2. Select reports to merge <small>{selection.steps.length} / {MAX_MERGE_STEPS} selected</small></h2>
@@ -120,6 +79,6 @@ export default function IbossReportMerge({token,ReportSection,embedded=false}){
    <p>Click any document number to trace it back to its origin or forward to completion. Shared columns appear once; child reports are summarised per {ran.rowLabel}.</p>
    <ReportSection key={`${request.chain}-${request.at}`} title={`${ran.title} · Merged`} category="iboss-accounts" description={`${formatDisplayDate(request.range.from)} to ${formatDisplayDate(request.range.to)} · ${request.steps.length} reports · ${(data.rows||[]).length.toLocaleString('en-IN')} rows${data.checkedAt?` · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`:''}`} rows={data.rows||[]} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this process and date range."/>
   </>)}
-  {trail&&ran&&<Trail chainKey={request.chain} anchor={trail.anchor} focus={trail.focus} range={request.range} token={token} close={()=>setTrail(null)}/>}
+  {trail&&ran&&<DrillPanel target={trail} range={request.range} token={token} close={()=>setTrail(null)}/>}
  </Wrapper>;
 }

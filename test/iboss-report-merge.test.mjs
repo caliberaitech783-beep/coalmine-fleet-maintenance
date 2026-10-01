@@ -27,7 +27,8 @@ test('only master lookups and the unlinked asset reports stay outside Report Mer
 });
 
 test('six processes each have one anchor, valid 10-report defaults and read-only SQL',()=>{
- assert.deepEqual(Object.keys(MERGE_CHAINS),['bank-guarantee','fixed-deposit','loan-emi','party-position','bank-position','vehicle-cost']);
+ assert.deepEqual(Object.keys(MERGE_CHAINS),['bank-guarantee','fixed-deposit','loan-emi','party-position','bank-position','vehicle-cost','voucher']);
+ assert.deepEqual(Object.entries(MERGE_CHAINS).filter(([,chain])=>chain.drillOnly).map(([key])=>key),['voucher']);
  const titles=new Set(Object.values(MERGE_CHAINS).flatMap(chain=>chain.steps.map(step=>step.title)));
  for(const title of ['Vendor Master','Account Opening Register','Day Book','Party Wise TCS Summary','Bill Outstanding More than 180 Days','Imprest Balance','Internal Balance Details','Bank Balance Details','Bank Interest','EMI Schedule','Expense Vehiclewise'])assert.ok(titles.has(title),title);
  assert.equal(MERGE_CHAINS['party-position'].steps.length,16);

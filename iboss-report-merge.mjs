@@ -17,6 +17,7 @@ const partyScoped=(dateColumn,keyExpression)=>scope=>scope.key?`${keyExpression}
 const bgScope=anchored('a.bankgaurantydate','TO_CHAR(a.tno)');
 const fdScope=anchored('a.fixeddepositdate','TO_CHAR(a.tno)');
 const loanScope=anchored('a.loandate','TO_CHAR(a.tno)');
+const voucherScope=anchored('v.voucherdate','TO_CHAR(v.tno)');
 
 const paid=value=>['Y','YES','1','T','TRUE','PAID'].includes(String(value??'').trim().toUpperCase());
 const today=()=>new Date().toISOString().slice(0,10);
@@ -41,8 +42,8 @@ export const MERGE_CHAINS={
   dateLabel:'Bank guarantee register date',
   steps:[
    {key:'bg',title:'Bank Guaranty Report',role:'anchor',docLabel:'BG Register No',dateLabel:'BG Register Date',
-    fields:[f('COMPANYCODE','Company Code'),f('BGNO','Bank Guarantee No'),f('BANK_NAME','Issuing Bank'),f('BENEFICIARYNAME','Beneficiary'),f('TYPE_CODE','BG Type Code','text',{hiddenBy:'type'}),f('NATURE_CODE','BG Nature Code','text',{hiddenBy:'nature'}),date('ISSUE_DATE','Issue Date'),date('EXPIRY_DATE','Expiry Date'),date('CLAIM_VALIDITY_DATE','Claim Validity Date'),amount('AMOUNT','Guarantee Amount'),amount('BALANCE','Recorded BG Balance')],
-    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.bankgaurantyno AS doc_no,${day('a.bankgaurantydate')} AS doc_date,a.companycode,a.bgno,p.partyname AS bank_name,a.beneficiaryname,a.bankgaurantytypecode AS type_code,a.bankgaurantynaturecode AS nature_code,${day('a.issuedate')} AS issue_date,${day('a.expirydate')} AS expiry_date,${day('a.claimvaliditydate')} AS claim_validity_date,a.bankgaurantyamount AS amount,a.bgbalance AS balance FROM cmpl.bankgauranty a LEFT JOIN cmpl.party p ON p.partycode=a.issueingbankcode WHERE ${bgScope(s)} ORDER BY a.bankgaurantydate,a.tno`},
+    fields:[f('COMPANYCODE','Company Code'),f('BGNO','Bank Guarantee No'),f('BANK_CODE','Issuing Bank Code','text',{link:'bank-position'}),f('BANK_NAME','Issuing Bank'),f('BENEFICIARYNAME','Beneficiary'),f('TYPE_CODE','BG Type Code','text',{hiddenBy:'type'}),f('NATURE_CODE','BG Nature Code','text',{hiddenBy:'nature'}),date('ISSUE_DATE','Issue Date'),date('EXPIRY_DATE','Expiry Date'),date('CLAIM_VALIDITY_DATE','Claim Validity Date'),amount('AMOUNT','Guarantee Amount'),amount('BALANCE','Recorded BG Balance')],
+    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.bankgaurantyno AS doc_no,${day('a.bankgaurantydate')} AS doc_date,a.companycode,a.bgno,a.issueingbankcode AS bank_code,p.partyname AS bank_name,a.beneficiaryname,a.bankgaurantytypecode AS type_code,a.bankgaurantynaturecode AS nature_code,${day('a.issuedate')} AS issue_date,${day('a.expirydate')} AS expiry_date,${day('a.claimvaliditydate')} AS claim_validity_date,a.bankgaurantyamount AS amount,a.bgbalance AS balance FROM cmpl.bankgauranty a LEFT JOIN cmpl.party p ON p.partycode=a.issueingbankcode WHERE ${bgScope(s)} ORDER BY a.bankgaurantydate,a.tno`},
    {key:'type',title:'Bank Guaranty Type',role:'lookup',docLabel:'BG Type Code',fields:[f('TYPE_NAME','BG Type')],
     sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,t.bankgaurantytypecode AS doc_no,t.bankgaurantytypename AS type_name FROM cmpl.bankgauranty a JOIN cmpl.bankgaurantytype t ON t.bankgaurantytypecode=a.bankgaurantytypecode WHERE ${bgScope(s)}`},
    {key:'nature',title:'Bank Guaranty Nature',role:'lookup',docLabel:'BG Nature Code',fields:[f('NATURE_NAME','BG Nature')],
@@ -65,8 +66,8 @@ export const MERGE_CHAINS={
   dateLabel:'Fixed deposit date',
   steps:[
    {key:'fd',title:'Fixed Deposit Register',role:'anchor',docLabel:'Fixed Deposit No',dateLabel:'Deposit Date',
-    fields:[f('COMPANYCODE','Company Code'),f('ACCOUNT_NAME','Deposit Account'),f('CERTIFICATE_NO','Certificate No'),amount('DEPOSIT_AMOUNT','Deposit Amount'),f('INTEREST_RATE','Interest Rate'),date('MATURITY_DATE','Maturity Date'),amount('MATURITY_AMOUNT','Maturity Amount')],
-    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.fixeddepositno AS doc_no,${day('a.fixeddepositdate')} AS doc_date,a.companycode,p.partyname AS account_name,a.fixeddepositcertificateno AS certificate_no,a.fixeddepositamount AS deposit_amount,a.interestrate AS interest_rate,${day('a.maturitydate')} AS maturity_date,a.maturityamount AS maturity_amount FROM cmpl.fixeddeposit a LEFT JOIN cmpl.party p ON p.partycode=a.fixeddepositaccountcode WHERE ${fdScope(s)} ORDER BY a.fixeddepositdate,a.tno`},
+    fields:[f('COMPANYCODE','Company Code'),f('ACCOUNT_CODE','Deposit Account Code','text',{link:'party-position'}),f('ACCOUNT_NAME','Deposit Account'),f('CERTIFICATE_NO','Certificate No'),amount('DEPOSIT_AMOUNT','Deposit Amount'),f('INTEREST_RATE','Interest Rate'),date('MATURITY_DATE','Maturity Date'),amount('MATURITY_AMOUNT','Maturity Amount')],
+    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.fixeddepositno AS doc_no,${day('a.fixeddepositdate')} AS doc_date,a.companycode,a.fixeddepositaccountcode AS account_code,p.partyname AS account_name,a.fixeddepositcertificateno AS certificate_no,a.fixeddepositamount AS deposit_amount,a.interestrate AS interest_rate,${day('a.maturitydate')} AS maturity_date,a.maturityamount AS maturity_amount FROM cmpl.fixeddeposit a LEFT JOIN cmpl.party p ON p.partycode=a.fixeddepositaccountcode WHERE ${fdScope(s)} ORDER BY a.fixeddepositdate,a.tno`},
    {key:'interest',title:'Fixed Deposit Interest',role:'many',docLabel:'Interest Nos',dateLabel:'Last Interest Date',
     sums:[amount('INTEREST_AMOUNT','Interest Earned'),amount('TDS_AMOUNT','TDS on Interest')],latest:[amount('CLOSING_BALANCE','Balance after Last Interest')],
     fields:[date('PERIOD_FROM','Period From'),date('PERIOD_TO','Period To'),amount('INTEREST_AMOUNT','Interest Amount'),amount('TDS_AMOUNT','TDS'),amount('CLOSING_BALANCE','Closing Balance')],
@@ -87,8 +88,8 @@ export const MERGE_CHAINS={
   dateLabel:'Loan date',
   steps:[
    {key:'loan',title:'Emi Details',role:'anchor',docLabel:'Loan No',dateLabel:'Loan Date',
-    fields:[f('COMPANYCODE','Company Code'),f('PARTY_NAME','Lender / Party'),f('LOANGROUPNO','Loan Group No'),amount('LOAN_AMOUNT','Loan Amount'),f('ROI','Rate of Interest'),amount('EMI','EMI Amount'),f('NOOFEMI','Number of EMIs'),date('LOAN_START_DATE','Loan Start Date'),amount('BALANCE_AMOUNT','Recorded Loan Balance')],
-    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.loanno AS doc_no,${day('a.loandate')} AS doc_date,a.companycode,p.partyname AS party_name,a.loangroupno,a.loanamount AS loan_amount,a.roi,a.emi,a.noofemi,${day('a.loanstartdate')} AS loan_start_date,a.balanceamount AS balance_amount FROM cmpl.loan a LEFT JOIN cmpl.party p ON p.partycode=a.partycode WHERE ${loanScope(s)} ORDER BY a.loandate,a.tno`},
+    fields:[f('COMPANYCODE','Company Code'),f('PARTY_CODE','Lender / Party Code','text',{link:'party-position'}),f('PARTY_NAME','Lender / Party'),f('LOANGROUPNO','Loan Group No'),amount('LOAN_AMOUNT','Loan Amount'),f('ROI','Rate of Interest'),amount('EMI','EMI Amount'),f('NOOFEMI','Number of EMIs'),date('LOAN_START_DATE','Loan Start Date'),amount('BALANCE_AMOUNT','Recorded Loan Balance')],
+    sql:s=>`SELECT TO_CHAR(a.tno) AS anchor,a.loanno AS doc_no,${day('a.loandate')} AS doc_date,a.companycode,a.partycode AS party_code,p.partyname AS party_name,a.loangroupno,a.loanamount AS loan_amount,a.roi,a.emi,a.noofemi,${day('a.loanstartdate')} AS loan_start_date,a.balanceamount AS balance_amount FROM cmpl.loan a LEFT JOIN cmpl.party p ON p.partycode=a.partycode WHERE ${loanScope(s)} ORDER BY a.loandate,a.tno`},
    {key:'instalments',title:'Combined and Individual EMI Schedule',role:'many',docLabel:'Instalments',dateLabel:'Last Due Date',
     sums:[amount('INSTALMENT_EMI','Total Scheduled EMI'),amount('PRINCIPLE_AMOUNT','Scheduled Principal'),amount('INTEREST_AMOUNT','Scheduled Interest')],
     fields:[f('SNO','Instalment No'),amount('INSTALMENT_EMI','EMI'),amount('PRINCIPLE_AMOUNT','Principal'),amount('INTEREST_AMOUNT','Interest'),amount('INSTALMENT_BALANCE','Balance'),f('ISPAID','Paid Flag')],
@@ -139,14 +140,14 @@ export const MERGE_CHAINS={
     fields:[amount('ADVICE_AMOUNT','Amount'),f('PAYMENTDONE','Payment Done'),f('PRIORITY','Priority'),f('NARRATION','Narration')],
     keys:`SELECT c.partycode FROM cmpl.paymentadvice c WHERE ${range('c.paymentadvicedate')}`,
     sql:s=>`SELECT c.partycode AS anchor,c.paymentadviceno AS doc_no,${day('c.paymentadvicedate')} AS doc_date,c.amount AS advice_amount,c.paymentdone,c.priority,c.narration FROM cmpl.paymentadvice c WHERE ${partyScoped('c.paymentadvicedate','c.partycode')(s)} ORDER BY c.paymentadvicedate,c.tno`},
-   {key:'day-book',title:'Day Book',role:'many',docLabel:'Voucher Nos',dateLabel:'Last Voucher',sums:[amount('VOUCHER_AMOUNT','Net Day Book Amount (signed)')],
+   {key:'day-book',title:'Day Book',role:'many',docLink:{chain:'voucher',keyField:'VOUCHER_TNO'},docLabel:'Voucher Nos',dateLabel:'Last Voucher',sums:[amount('VOUCHER_AMOUNT','Net Day Book Amount (signed)')],
     fields:[f('DOCTYPE_NAME','Document Type'),amount('VOUCHER_AMOUNT','Signed Amount'),f('VOUCHER_NARRATION','Narration')],
     keys:`SELECT d.accountcode FROM cmpl.voucher v JOIN cmpl.voucherdetail d ON d.tno=v.tno WHERE ${range('v.voucherdate')}`,
-    sql:s=>`SELECT d.accountcode AS anchor,v.voucherno AS doc_no,${day('v.voucherdate')} AS doc_date,t.doctypename AS doctype_name,d.amount AS voucher_amount,COALESCE(d.narration,v.narration) AS voucher_narration FROM cmpl.voucher v JOIN cmpl.voucherdetail d ON d.tno=v.tno LEFT JOIN cmpl.doctype t ON t.doctypecode=v.doctypecode WHERE ${partyScoped('v.voucherdate','d.accountcode')(s)} ORDER BY v.voucherdate,v.tno,d.sno`},
-   {key:'tds-payable',title:'TDS Payable Summary',role:'many',docLabel:'TDS Voucher Nos',dateLabel:'Last TDS Deduction',sums:[amount('TDS_PAYABLE','TDS Deducted (Payable)')],
+    sql:s=>`SELECT d.accountcode AS anchor,v.voucherno AS doc_no,TO_CHAR(v.tno) AS voucher_tno,${day('v.voucherdate')} AS doc_date,t.doctypename AS doctype_name,d.amount AS voucher_amount,COALESCE(d.narration,v.narration) AS voucher_narration FROM cmpl.voucher v JOIN cmpl.voucherdetail d ON d.tno=v.tno LEFT JOIN cmpl.doctype t ON t.doctypecode=v.doctypecode WHERE ${partyScoped('v.voucherdate','d.accountcode')(s)} ORDER BY v.voucherdate,v.tno,d.sno`},
+   {key:'tds-payable',title:'TDS Payable Summary',role:'many',docLink:{chain:'voucher',keyField:'VOUCHER_TNO'},docLabel:'TDS Voucher Nos',dateLabel:'Last TDS Deduction',sums:[amount('TDS_PAYABLE','TDS Deducted (Payable)')],
     fields:[f('TAXSECTIONNAME','Tax Section'),amount('TDS_BASE','Deduction Base'),amount('TDS_PAYABLE','TDS Amount')],
     keys:`SELECT c.partycode FROM cmpl.tdsdetail c WHERE ${range('c.transactiondate')}`,
-    sql:s=>`SELECT c.partycode AS anchor,v.voucherno AS doc_no,${day('c.transactiondate')} AS doc_date,c.taxsectionname,c.amount AS tds_base,c.tdsamount AS tds_payable FROM cmpl.tdsdetail c JOIN cmpl.voucher v ON v.tno=c.vouchertno WHERE ${partyScoped('c.transactiondate','c.partycode')(s)} ORDER BY c.transactiondate,c.tno`},
+    sql:s=>`SELECT c.partycode AS anchor,v.voucherno AS doc_no,TO_CHAR(v.tno) AS voucher_tno,${day('c.transactiondate')} AS doc_date,c.taxsectionname,c.amount AS tds_base,c.tdsamount AS tds_payable FROM cmpl.tdsdetail c JOIN cmpl.voucher v ON v.tno=c.vouchertno WHERE ${partyScoped('c.transactiondate','c.partycode')(s)} ORDER BY c.transactiondate,c.tno`},
    {key:'tds-receivable',title:'TDS Receivable',role:'many',docLabel:'TDS Receipt Nos',dateLabel:'Last TDS Receipt',sums:[amount('TDS_RECEIVABLE','TDS Receivable')],
     fields:[f('BILLNO','Bill No'),amount('BILLAMOUNT','Bill Amount'),amount('TDS_RECEIVABLE','TDS Amount')],
     keys:`SELECT c.partycode FROM cmpl.dfreightbillreceiptfortdsr c WHERE ${range('c.dfreightbillreceiptdate')}`,
@@ -184,18 +185,18 @@ export const MERGE_CHAINS={
     fields:[date('FROM_DATE','Calculation From'),date('TO_DATE','Calculation To'),amount('INTEREST_BALANCE','Balance'),amount('LIMITAMOUNT','Limit Amount'),f('INTERESTRATE','Interest Rate'),amount('INTEREST_AMOUNT','Interest Amount'),amount('OD_INTEREST_AMOUNT','OD Interest Amount')],
     keys:`SELECT b.accountcode FROM cmpl.bankinterestreport b WHERE ${range('b.fordate')}`,
     sql:s=>`SELECT b.accountcode AS anchor,'Interest '||TO_CHAR(b.fordate,'DD-MM-YYYY') AS doc_no,${day('b.fordate')} AS doc_date,${day('b.fromdate')} AS from_date,${day('b.todate')} AS to_date,b.balance AS interest_balance,b.limitamount,b.interestrate,b.interestamount AS interest_amount,b.odinterestamount AS od_interest_amount FROM cmpl.bankinterestreport b WHERE ${partyScoped('b.fordate','b.accountcode')(s)} ORDER BY b.fordate,b.tno,b.sno`},
-   {key:'fd',title:'Fixed Deposit Register',role:'many',docLabel:'Fixed Deposit Nos',dateLabel:'Last Fixed Deposit',sums:[amount('DEPOSIT_AMOUNT','FDs Placed'),amount('MATURITY_AMOUNT','FD Maturity Value')],
+   {key:'fd',title:'Fixed Deposit Register',role:'many',docLink:{chain:'fixed-deposit',keyField:'RECORD_TNO'},docLabel:'Fixed Deposit Nos',dateLabel:'Last Fixed Deposit',sums:[amount('DEPOSIT_AMOUNT','FDs Placed'),amount('MATURITY_AMOUNT','FD Maturity Value')],
     fields:[f('CERTIFICATE_NO','Certificate No'),amount('DEPOSIT_AMOUNT','Deposit Amount'),f('INTEREST_RATE','Interest Rate'),date('MATURITY_DATE','Maturity Date'),amount('MATURITY_AMOUNT','Maturity Amount')],
     keys:`SELECT a.fixeddepositaccountcode FROM cmpl.fixeddeposit a WHERE ${range('a.fixeddepositdate')}`,
-    sql:s=>`SELECT a.fixeddepositaccountcode AS anchor,a.fixeddepositno AS doc_no,${day('a.fixeddepositdate')} AS doc_date,a.fixeddepositcertificateno AS certificate_no,a.fixeddepositamount AS deposit_amount,a.interestrate AS interest_rate,${day('a.maturitydate')} AS maturity_date,a.maturityamount AS maturity_amount FROM cmpl.fixeddeposit a WHERE ${partyScoped('a.fixeddepositdate','a.fixeddepositaccountcode')(s)} ORDER BY a.fixeddepositdate,a.tno`},
-   {key:'bg',title:'Bank Guaranty Report',role:'many',docLabel:'BG Register Nos',dateLabel:'Last BG Issued',sums:[amount('AMOUNT','BGs Issued'),amount('BALANCE','Recorded BG Balance')],
+    sql:s=>`SELECT a.fixeddepositaccountcode AS anchor,a.fixeddepositno AS doc_no,TO_CHAR(a.tno) AS record_tno,${day('a.fixeddepositdate')} AS doc_date,a.fixeddepositcertificateno AS certificate_no,a.fixeddepositamount AS deposit_amount,a.interestrate AS interest_rate,${day('a.maturitydate')} AS maturity_date,a.maturityamount AS maturity_amount FROM cmpl.fixeddeposit a WHERE ${partyScoped('a.fixeddepositdate','a.fixeddepositaccountcode')(s)} ORDER BY a.fixeddepositdate,a.tno`},
+   {key:'bg',title:'Bank Guaranty Report',role:'many',docLink:{chain:'bank-guarantee',keyField:'RECORD_TNO'},docLabel:'BG Register Nos',dateLabel:'Last BG Issued',sums:[amount('AMOUNT','BGs Issued'),amount('BALANCE','Recorded BG Balance')],
     fields:[f('BGNO','Bank Guarantee No'),f('BENEFICIARYNAME','Beneficiary'),date('EXPIRY_DATE','Expiry Date'),amount('AMOUNT','Guarantee Amount'),amount('BALANCE','BG Balance')],
     keys:`SELECT a.issueingbankcode FROM cmpl.bankgauranty a WHERE ${range('a.bankgaurantydate')}`,
-    sql:s=>`SELECT a.issueingbankcode AS anchor,a.bankgaurantyno AS doc_no,${day('a.bankgaurantydate')} AS doc_date,a.bgno,a.beneficiaryname,${day('a.expirydate')} AS expiry_date,a.bankgaurantyamount AS amount,a.bgbalance AS balance FROM cmpl.bankgauranty a WHERE ${partyScoped('a.bankgaurantydate','a.issueingbankcode')(s)} ORDER BY a.bankgaurantydate,a.tno`},
-   {key:'loan',title:'Emi Details',role:'many',docLabel:'Loan Nos',dateLabel:'Last Loan',sums:[amount('LOAN_AMOUNT','Loans Taken'),amount('BALANCE_AMOUNT','Recorded Loan Balance')],
+    sql:s=>`SELECT a.issueingbankcode AS anchor,a.bankgaurantyno AS doc_no,TO_CHAR(a.tno) AS record_tno,${day('a.bankgaurantydate')} AS doc_date,a.bgno,a.beneficiaryname,${day('a.expirydate')} AS expiry_date,a.bankgaurantyamount AS amount,a.bgbalance AS balance FROM cmpl.bankgauranty a WHERE ${partyScoped('a.bankgaurantydate','a.issueingbankcode')(s)} ORDER BY a.bankgaurantydate,a.tno`},
+   {key:'loan',title:'Emi Details',role:'many',docLink:{chain:'loan-emi',keyField:'RECORD_TNO'},docLabel:'Loan Nos',dateLabel:'Last Loan',sums:[amount('LOAN_AMOUNT','Loans Taken'),amount('BALANCE_AMOUNT','Recorded Loan Balance')],
     fields:[amount('LOAN_AMOUNT','Loan Amount'),f('ROI','Rate of Interest'),amount('EMI','EMI Amount'),f('NOOFEMI','Number of EMIs'),amount('BALANCE_AMOUNT','Recorded Balance')],
     keys:`SELECT a.partycode FROM cmpl.loan a WHERE ${range('a.loandate')}`,
-    sql:s=>`SELECT a.partycode AS anchor,a.loanno AS doc_no,${day('a.loandate')} AS doc_date,a.loanamount AS loan_amount,a.roi,a.emi,a.noofemi,a.balanceamount AS balance_amount FROM cmpl.loan a WHERE ${partyScoped('a.loandate','a.partycode')(s)} ORDER BY a.loandate,a.tno`}
+    sql:s=>`SELECT a.partycode AS anchor,a.loanno AS doc_no,TO_CHAR(a.tno) AS record_tno,${day('a.loandate')} AS doc_date,a.loanamount AS loan_amount,a.roi,a.emi,a.noofemi,a.balanceamount AS balance_amount FROM cmpl.loan a WHERE ${partyScoped('a.loandate','a.partycode')(s)} ORDER BY a.loandate,a.tno`}
   ],
   derived:[
    {key:'NET_BANK_INTEREST',label:'Net Interest (Bank − OD)',type:'amount',needs:['interest'],value:(row,groups)=>sum(groups.interest||[],'INTEREST_AMOUNT')-sum(groups.interest||[],'OD_INTEREST_AMOUNT')}
@@ -226,6 +227,20 @@ export const MERGE_CHAINS={
   derived:[
    {key:'EMIS_WITHOUT_ADVICE',label:'Past-due EMIs without Payment Advice',type:'number',needs:['emi'],value:(row,groups)=>(groups.emi||[]).filter(item=>!item.PAIDBYPAYMENTADVICENO&&item.DOC_DATE&&item.DOC_DATE<today()).length},
    {key:'VEHICLE_TOTAL_COST',label:'EMI + Expenses in Period',type:'amount',needs:['emi','expense'],value:(row,groups)=>sum(groups.emi||[],'TOTALEMI')+sum(groups.expense||[],'EXPENSE_AMOUNT')}
+  ]
+ },
+ // Drill-down only: opened from voucher numbers, not offered in the Report Merge picker.
+ voucher:{
+  title:'Voucher',drillOnly:true,
+  description:'Voucher header, ledger lines and TDS deducted on it.',
+  dateLabel:'Voucher date',
+  steps:[
+   {key:'voucher',title:'Voucher',role:'anchor',docLabel:'Voucher No',dateLabel:'Voucher Date',fields:[f('COMPANYCODE','Company Code'),f('LOCATION_NAME','Location'),f('DOCTYPE_NAME','Document Type'),f('NARRATION','Narration')],
+    sql:s=>`SELECT TO_CHAR(v.tno) AS anchor,v.voucherno AS doc_no,${day('v.voucherdate')} AS doc_date,v.companycode,l.locationname AS location_name,t.doctypename AS doctype_name,v.narration FROM cmpl.voucher v LEFT JOIN cmpl.location l ON l.locationcode=v.locationcode LEFT JOIN cmpl.doctype t ON t.doctypecode=v.doctypecode WHERE ${voucherScope(s)} ORDER BY v.voucherdate,v.tno`},
+   {key:'lines',title:'Voucher Lines',role:'many',docLabel:'Ledger Lines',fields:[f('ACCOUNT_CODE','Account Code','text',{link:'party-position'}),f('ACCOUNT_NAME','Account'),amount('LINE_AMOUNT','Signed Amount'),f('LINE_NARRATION','Line Narration')],
+    sql:s=>`SELECT TO_CHAR(d.tno) AS anchor,'Line '||TO_CHAR(d.sno)||' · '||NVL(p.partyname,d.accountcode) AS doc_no,d.accountcode AS account_code,p.partyname AS account_name,d.amount AS line_amount,d.narration AS line_narration FROM cmpl.voucherdetail d JOIN cmpl.voucher v ON v.tno=d.tno LEFT JOIN cmpl.party p ON p.partycode=d.accountcode WHERE ${voucherScope(s)} ORDER BY d.sno`},
+   {key:'tds',title:'TDS on this Voucher',role:'many',docLabel:'TDS Sections',fields:[f('PARTYCODE','Party Code','text',{link:'party-position'}),f('PARTYNAME','Party'),amount('TDS_BASE','Deduction Base'),amount('TDSAMOUNT','TDS Amount')],
+    sql:s=>`SELECT TO_CHAR(c.vouchertno) AS anchor,c.taxsectionname AS doc_no,${day('c.transactiondate')} AS doc_date,c.partycode,c.partyname,c.amount AS tds_base,c.tdsamount FROM cmpl.tdsdetail c JOIN cmpl.voucher v ON v.tno=c.vouchertno WHERE ${voucherScope(s)} ORDER BY c.tno`}
   ]
  }
 };
@@ -331,6 +346,10 @@ export function buildTrail(chainKey,rowsByStep){
  return chain.steps.map(step=>{
   const fields=[...(step.dateLabel&&step.role!=='lookup'?[{key:'DOC_DATE',label:step.role==='many'?'Date':step.dateLabel,type:'date'}]:[]),...step.fields];
   return {key:step.key,title:step.title,role:step.role,docLabel:step.docLabel,
-   documents:(rowsByStep[step.key]||[]).map(row=>({docNo:String(row.DOC_NO??''),docDate:row.DOC_DATE||'',details:fields.map(field=>({label:field.label,type:field.type,value:row[field.key]??''})).filter(item=>item.value!=='')}))};
+   documents:(rowsByStep[step.key]||[]).map(row=>{
+    const document={docNo:String(row.DOC_NO??''),docDate:row.DOC_DATE||'',details:fields.map(field=>({label:field.label,type:field.type,value:row[field.key]??'',...(field.link&&row[field.key]?{link:{chain:field.link,key:String(row[field.key])}}:{})})).filter(item=>item.value!=='')};
+    if(step.docLink&&row[step.docLink.keyField])document.link={chain:step.docLink.chain,key:String(row[step.docLink.keyField])};
+    return document;
+   })};
  });
 }
