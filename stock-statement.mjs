@@ -15,7 +15,7 @@ LEFT JOIN cmpl.itemspecification spec ON spec.tno = item.tno AND spec.itemspecif
 LEFT JOIN cmpl.itemmake make ON make.itemmakecode = spec.itemmakecode
 LEFT JOIN cmpl.dealsin deals ON deals.dealsincode = NVL(spec.dealsincode,item.dealsincode)
 LEFT JOIN cmpl.itemcategory category ON category.itemcategorycode = item.itemcategorycode
-ORDER BY location.locationname, itemgroup.itemname, item.itemname, item.itemcode, balance.itemspecificationcode`;
+ORDER BY location.locationname, item.itemname, item.itemcode, balance.itemspecificationcode`;
 
 export function stockStatementRow(row, index) {
   return {serialNo:index+1, location:row.LOCATION || '', itemGroup:row.ITEM_GROUP || '',
