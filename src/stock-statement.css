@@ -1,0 +1,6 @@
+.stock-statement h1 { display:flex; align-items:center; gap:12px; }
+.stock-statement-filters { display:flex; flex-wrap:wrap; gap:16px; align-items:end; margin:20px 0; }
+.stock-statement-filters label { display:grid; gap:6px; min-width:220px; }
+.stock-statement-filters :is(select,button) { min-height:42px; padding:8px 12px; border:1px solid var(--border,#d9dce6); border-radius:8px; background:var(--panel,#fff); color:var(--ink,#24334d); font:inherit; }
+.stock-statement-filters button { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.stock-statement .report-filter-table tbody tr:nth-child(odd) { background:rgba(112,66,161,.06); }

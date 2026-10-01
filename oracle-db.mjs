@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
 import { transferSyncDate } from "./transfer-sync-date.mjs";
 
 const user = String(process.env.ORACLE_DB_USER || "").trim();
@@ -8,6 +9,26 @@ const connectString = String(process.env.ORACLE_DB_CONNECT_STRING || "").trim();
 export const oracleConfigured = Boolean(user && password && connectString);
 
 let poolPromise;
+let stockStatementCache;
+let stockStatementPending;
+
+export async function oracleStockStatement() {
+  if(stockStatementCache && Date.now() < stockStatementCache.expiresAt) return stockStatementCache.data;
+  if(stockStatementPending) return stockStatementPending;
+  stockStatementPending=(async()=>{
+    const pool = await oraclePool();
+    const connection = await pool.getConnection();
+    try {
+      connection.callTimeout = 60000;
+      const result = await connection.execute(STOCK_STATEMENT_SQL, {}, {outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:1000});
+      const data={rows:result.rows.map(stockStatementRow),checkedAt:new Date().toISOString()};
+      stockStatementCache={data,expiresAt:Date.now()+60000};
+      return data;
+    } finally { await connection.close(); }
+  })();
+  try { return await stockStatementPending; }
+  finally { stockStatementPending=undefined; }
+}
 
 async function oraclePool() {
   if (!oracleConfigured) throw new Error("Oracle database settings are not configured.");

@@ -302,6 +302,7 @@ import "./ticket-status-tabs.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
+import StockStatement from './stock-statement.jsx';
 import { breakdownTrendExport, fleetSectionExport, requestLifecycleExport, throughputSectionExport } from "./dashboard-section-export.mjs";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
@@ -1179,6 +1180,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             })}
           </div>
         </div>}
+        {accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,"Stock Statement") && <div className="nav-config-row"><button type="button" className={`header-nav-item${active === "Stock Statement" ? " active" : ""}`} data-nav="stock-statement" onClick={()=>selectPage("Stock Statement")}><span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">Stock Statement</span></button></div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports" && name !== "CD").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}
@@ -11296,6 +11298,7 @@ function App() {
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
+    if (name === "Stock Statement") return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,"Stock Statement");
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -11606,6 +11609,8 @@ function App() {
   // renders so opening navigation cannot rebuild a large dashboard or table.
   const adminPageContent = useMemo(() => active === "Dashboard" ? (
     requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+  ) : active === "Stock Statement" ? (
+    <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
   ) : active === "Employee Tenure Report" ? (
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : active === "CD" ? (
