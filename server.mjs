@@ -1,5 +1,6 @@
+import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
-import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
+import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
 import {accountView} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
@@ -3902,6 +3903,24 @@ const accountsMergeFailed=(res,error)=>{
   console.error('IBOSS Report Merge failed:',error.code || 'Oracle error');
   res.status(502).json({error:'Could not load Report Merge data from Oracle. Please retry.'});
 };
+
+app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  try{purchaseOrderRange(req.query.from,req.query.to);}catch(error){return res.status(400).json({error:error.message});}
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to));}
+  catch(error){console.error('IBOSS dashboard failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load the dashboard from Oracle. Please retry.'});}
+});
+app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{
+  res.set('Cache-Control','no-store');
+  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  const input={from:req.query.from,to:req.query.to,page:Number(req.query.page||0)};
+  try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  try{res.json(await oracleAccountsDashboardMetric(req.params.metric,input));}
+  catch(error){console.error('IBOSS dashboard details failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load dashboard details from Oracle. Please retry.'});}
+});
 
 app.get('/api/reports/iboss-accounts-merge/:chain',requireSession,async(req,res)=>{
   if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});

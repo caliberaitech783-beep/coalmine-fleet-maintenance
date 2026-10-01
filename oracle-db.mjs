@@ -1,3 +1,4 @@
+import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
 import oracledb from "oracledb";
 import {accountView,accountRecord,mergeChain,mergeStatements,buildMergedReport,buildTrail} from './iboss-accounts.mjs';
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
@@ -9,6 +10,30 @@ import { transferSyncDate } from "./transfer-sync-date.mjs";
 const user = String(process.env.ORACLE_DB_USER || "").trim();
 const password = String(process.env.ORACLE_DB_PASSWORD || "");
 const connectString = String(process.env.ORACLE_DB_CONNECT_STRING || "").trim();
+
+export async function oracleAccountsDashboard(from,to){
+  const values=purchaseOrderRange(from,to),pool=await oraclePool(),connection=await pool.getConnection();
+  try{
+    connection.callTimeout=60000;await connection.execute('SET TRANSACTION READ ONLY');
+    const groups={};
+    for(const [key,{sql}] of Object.entries(DASHBOARD_QUERIES)){
+      const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
+      const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:50001,fetchArraySize:2000});
+      if(result.rows.length>50000)throw new Error('Dashboard source exceeds the supported grouping limit.');
+      groups[key]=result.rows;
+    }
+    return buildDashboard(groups,{from,to});
+  }finally{await connection.close();}
+}
+
+export async function oracleAccountsDashboardMetric(key,input){
+  const request=dashboardMetric(key,input),pool=await oraclePool(),connection=await pool.getConnection();
+  try{
+    connection.callTimeout=60000;
+    const result=await connection.execute(request.sql,request.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:DASHBOARD_PAGE_SIZE+1});
+    return {view:request.view,columns:request.columns,from:request.from,to:request.to,page:request.page,rows:result.rows.slice(0,DASHBOARD_PAGE_SIZE).map(accountRecord),hasMore:result.rows.length>DASHBOARD_PAGE_SIZE};
+  }finally{await connection.close();}
+}
 
 export const oracleConfigured = Boolean(user && password && connectString);
 

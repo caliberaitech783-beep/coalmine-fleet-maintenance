@@ -10,10 +10,10 @@ import './iboss-accounts.css';
 import './iboss-report-merge.css';
 import DrillPanel,{showValue as show} from './iboss-drill-panel.jsx';
 
-export default function IbossReportMerge({token,ReportSection,embedded=false}){
- const [chainKey,setChainKey]=useState('');
- const [picked,setPicked]=useState([]);
- const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-364*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
+export default function IbossReportMerge({token,ReportSection,embedded=false,initialChain='',initialRange=null}){
+ const [chainKey,setChainKey]=useState(initialChain);
+ const [picked,setPicked]=useState(MERGE_CHAINS[initialChain]?.defaults||[]);
+ const [range,setRange]=useState(()=>initialRange||({from:indiaDateTimeInputValue(new Date(Date.now()-364*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[validation,setValidation]=useState('');
  const [request,setRequest]=useState(null),[data,setData]=useState({rows:[],columns:[],loading:false,error:''});
  const [trail,setTrail]=useState(null);

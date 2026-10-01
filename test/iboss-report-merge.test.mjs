@@ -99,10 +99,10 @@ test('trail lists every report of the process in order, marking unrecorded steps
  assert.equal(trail[2].documents.length,0);
 });
 
-test('Report Merge is the third Accounts page tab, protected by Accounts permissions, with its own API',()=>{
+test('Report Merge remains an Accounts page tab alongside Dashboard, protected by Accounts permissions, with its own API',()=>{
  const accounts=fs.readFileSync(new URL('../src/iboss-accounts.jsx',import.meta.url),'utf8');
- assert.ok(accounts.includes("SECTIONS=[['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']]"));
- assert.ok(accounts.includes(`section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded/>`));
+ assert.ok(accounts.includes("SECTIONS=[['dashboard','Dashboard'],['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']]"));
+ assert.ok(accounts.includes(`section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded initialChain={mergeContext?.chain||''} initialRange={mergeContext?.range}/>`));
  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  assert.ok(server.includes("app.get('/api/reports/iboss-accounts-merge/:chain',requireSession"));
  assert.ok(server.includes("app.get('/api/reports/iboss-accounts-merge/:chain/trail',requireSession"));

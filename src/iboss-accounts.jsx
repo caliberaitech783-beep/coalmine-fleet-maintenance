@@ -7,18 +7,21 @@ import {formatDisplayDate} from '../date-time-format.mjs';
 import DateInput from './date-input.mjs';
 import './stock-statement.css';
 import './iboss-accounts.css';
+import IbossDashboard from './iboss-dashboard.jsx';
 import IbossReportMerge from './iboss-report-merge.jsx';
 import DrillPanel from './iboss-drill-panel.jsx';
 import {accountDrill,ACCOUNT_DRILLS} from '../iboss-drill.mjs';
-const SECTIONS=[['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']];
+const SECTIONS=[['dashboard','Dashboard'],['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']];
 const icons=[BookUser,Contact,Wallet,Landmark,Settings,Network,BookOpen,Percent];
-export default function IbossAccounts({token,ReportSection,initialSection='masters'}) {
+export default function IbossAccounts({token,ReportSection,initialSection='dashboard'}) {
  const [section,setSection]=useState(initialSection);
  const [view,setView]=useState('');
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
  const [drill,setDrill]=useState(null);
+ const [mergeContext,setMergeContext]=useState(null);
+ const dashboardOpen=(key,options={})=>{if(options.range){setRange(options.range);setDraft(options.range);}if(key==='merge'&&options.anchor){setDrill({chain:options.chain,key:options.anchor,focus:{step:'party',docNo:options.label}});return;}if(key==='merge'){setMergeContext(options);setSection('merge');setView('');return;}setSection(ACCOUNT_SECTIONS.masters.includes(key)?'masters':'transactions');open(key);};
  const definition=ACCOUNT_VIEWS[view];
  useEffect(()=>{setSection(initialSection);setView('');setValidation('');},[initialSection]);
  useEffect(()=>{
@@ -41,7 +44,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='maste
  return <section className="reports-workspace stock-statement iboss-accounts">
   <h1><Landmark aria-hidden="true"/> Accounts</h1>
   <div className="iboss-accounts-sections" role="tablist" aria-label="Accounts sections" onKeyDown={sectionKeyDown}>{SECTIONS.map(([key,label])=><button key={key} type="button" role="tab" id={`accounts-tab-${key}`} tabIndex={section===key?0:-1} aria-selected={section===key} aria-controls={`accounts-panel-${key}`} onClick={()=>changeSection(key)}>{label}</button>)}</div>
-  {section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded/></div>:<div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
+  {section==='dashboard'?<div role="tabpanel" id="accounts-panel-dashboard" aria-labelledby="accounts-tab-dashboard"><IbossDashboard token={token} ReportSection={ReportSection} onOpen={dashboardOpen}/></div>:section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded initialChain={mergeContext?.chain||''} initialRange={mergeContext?.range}/></div>:<div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
    <h2>{section==='transactions'?'Transactions':'Masters'}</h2>
    <div className="iboss-accounts-grid">{ACCOUNT_SECTIONS[section].map((key,index)=>{const entry=ACCOUNT_VIEWS[key],Icon=icons[index%icons.length];return <button type="button" key={key} aria-pressed={view===key} onClick={()=>open(key)}><span className={`iboss-account-icon tone-${index%icons.length}`}><Icon aria-hidden="true"/></span><span>{entry.title}</span></button>;})}</div>
   </div>}
