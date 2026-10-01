@@ -27,14 +27,14 @@ test('purchase order query binds dates, includes the full final day and joins ea
   assert.doesNotMatch(PURCHASE_ORDER_SQL,/\b(?:INSERT|UPDATE|DELETE|MERGE)\b/i);
 });
 
-test('purchase order uses authenticated Oracle data and sits alongside stock under IBOSS',()=>{
+test('purchase order retains authenticated Oracle data after its IBOSS link is removed',()=>{
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const oracle=fs.readFileSync(new URL('../oracle-db.mjs',import.meta.url),'utf8');
   const ui=fs.readFileSync(new URL('../src/purchase-order-report.jsx',import.meta.url),'utf8');
   assert.match(server,/app\.get\('\/api\/reports\/purchase-order',requireSession/);
   assert.match(server,/accessAllows\(permissions\.reportAccess,'Purchase Order'\)/);
-  assert.match(main,/const visibleIbossNav = \[\["Stock Statement"[^\n]+\["Purchase Order"/);
+  assert.doesNotMatch(main,/const visibleIbossNav = [^\n]+\["Purchase Order"/);
   assert.match(main,/className="masters-dropdown iboss-dropdown"/);
   assert.match(main,/renderedActive === "Purchase Order" \? \(\s*<PurchaseOrderReport/);
   assert.match(oracle,/maxRows:50001/);

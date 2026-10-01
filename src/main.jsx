@@ -1056,7 +1056,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
-  const visibleIbossNav = [["Stock Statement",FileBarChart,"report-stock-statement"],["Purchase Order",FileBarChart,"report-purchase-order"],["GRN Register",FileBarChart,"report-grn-register"],["PO-GRN Reconciliation",FileBarChart,"report-po-grn-reconciliation"],["Accounts",Landmark,"iboss-accounts"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
+  const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const canViewAdmin=session?.role==="super"&&["admin","super admin"].includes(String(permissions.adminLevel||"").trim().toLowerCase());
   const navigationHidden = collapsedNavigation && !open;

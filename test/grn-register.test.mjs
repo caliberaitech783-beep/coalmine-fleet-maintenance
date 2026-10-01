@@ -26,13 +26,13 @@ test('GRN register uses the latest receipt status without multiplying item lines
   assert.doesNotMatch(GRN_REGISTER_SQL,/\b(?:UPDATE|INSERT|DELETE|MERGE)\b/i);
 });
 
-test('GRN report is permission protected and opens under Admin IBOSS',()=>{
+test('GRN report retains its permission protection and page after its IBOSS link is removed',()=>{
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const ui=fs.readFileSync(new URL('../src/grn-register.jsx',import.meta.url),'utf8');
   assert.match(server,/app\.get\('\/api\/reports\/grn-register',requireSession/);
   assert.match(server,/accessAllows\(permissions\.reportAccess,'GRN Register'\)/);
-  assert.match(main,/const visibleIbossNav = [^\n]+\["GRN Register"/);
+  assert.doesNotMatch(main,/const visibleIbossNav = [^\n]+\["GRN Register"/);
   assert.match(main,/renderedActive === "GRN Register" \? \(\s*<GrnRegister/);
   assert.match(ui,/AbortController/);
   assert.match(ui,/purchaseOrderRange\(draft\.from,draft\.to\)/);
