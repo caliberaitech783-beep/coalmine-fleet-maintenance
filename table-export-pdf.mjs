@@ -4,7 +4,8 @@ import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingRep
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {withSerialColumn} from './serial-column.mjs';
 
-// Report tables match Excel's white/light styling in both application themes.
+// Report tables match Excel TableStyleLight15 in both application themes;
+// black cell outlines and existing red alert highlights remain explicit.
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#000000',soft:'#f2f2f2',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>reportPdfText(value).split(/\r?\n/).map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n')||fallback;
 

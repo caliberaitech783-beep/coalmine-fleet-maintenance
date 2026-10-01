@@ -88,7 +88,7 @@ test("grouped headers and empty-state colspan follow the displayed column order"
 
 test("every application table uses shared Actions or the existing Reports Actions", () => {
   const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  const jsx = main.split(/\r?\n/).filter(line => !line.includes("printDocument.write")).join("\n");
+  const jsx = main.split(/\r?\n/).filter(line => !line.includes("printDocument.write") && !line.includes('<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"')).join("\n");
   assert.equal((jsx.match(/<table(?=[ >])/g) || []).length, 1);
   assert.match(jsx, /<table className="report-filter-table">/);
   assert.ok((jsx.match(/<ActionsTable(?=[ >])/g) || []).length >= 17);
