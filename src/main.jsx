@@ -75,6 +75,7 @@ import {
   vehicleFleetRows,
 } from "./vehicle-repair-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
+import { dashboardMisQueue, misQueueDate } from "./dashboard-mis-queue.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
@@ -2027,7 +2028,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some((site) => recordBelongsToSite(record, site)));
     }
   }
-  const maintenanceClosedRows = requestLifecycleRows.closed.filter((record) => !requestEventDate(record, "verified"));
+  const maintenanceClosedRows = dashboardMisQueue(sourceRequests, {
+    from: safeTrendStartKey,
+    to: requestTrendEndKey,
+    inScope: (record) => equipmentLoaded
+      && (normalizedAllowedSites?.length ? normalizedAllowedSites.some(site => recordBelongsToSite(record, site)) : !restrictToScope)
+      && (!(selectedRegion || dashboardSite !== "all") || activeSites.some(site => recordBelongsToSite(record, site)))
+      && requestHasSelectedDashboardShift(record)
+      && requestMatchesLifecycleShift(record, "closed")
+      && (!(requestLifecycleRegion || requestLifecycleSite) || (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some(site => recordBelongsToSite(record, site))),
+  });
   const requestLifecycleAvailability = {
     maintenance: requestLifecycleRows.opened.length,
     mis: maintenanceClosedRows.length,
@@ -2035,7 +2045,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
     production: requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date).length,
-    mis: maintenanceClosedRows.filter((record) => requestEventDate(record, "closed") === date).length,
+    mis: maintenanceClosedRows.filter((record) => misQueueDate(record) === date).length,
     opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
     closed: requestLifecycleRows.closed.filter((record) => requestEventDate(record, "closed") === date).length,
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
@@ -2233,7 +2243,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
       // Daily bars count every closure; the undated Closed / Open in MIS cards count only pending verification.
       if (event === "production" && date) return requestAssetRows(requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date));
-      if (event === "mis") return requestAssetRows(date ? maintenanceClosedRows.filter((record) => requestEventDate(record, "closed") === date) : maintenanceClosedRows);
+      if (event === "mis") return requestAssetRows(date ? maintenanceClosedRows.filter((record) => misQueueDate(record) === date) : maintenanceClosedRows);
       const rows = requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
