@@ -3,13 +3,38 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {MERGE_CHAINS,MAX_MERGE_STEPS,mergeChain,resolveSelection,mergeStatements,buildMergedReport,buildTrail} from '../iboss-report-merge.mjs';
 
+import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
+
 const range={from:'2026-04-01',to:'2026-09-30'};
 
-test('every process has one anchor, at most 10 reports, and read-only SQL',()=>{
- assert.deepEqual(Object.keys(MERGE_CHAINS),['bank-guarantee','fixed-deposit','loan-emi','party-position']);
+test('selections above 10 reports are refused, and vehicles match on letters and digits only',()=>{
+ const party=MERGE_CHAINS['party-position'].steps.map(step=>step.key);
+ assert.throws(()=>resolveSelection('party-position',party.slice(0,11)),/at most 10/);
+ assert.equal(resolveSelection('party-position',party.slice(0,10)).steps.length,10);
+ const [anchor,emi]=mergeStatements('vehicle-cost',['vehicle','emi','expense'],range);
+ assert.match(anchor.sql,/SELECT k AS anchor,k AS doc_no FROM \(SELECT REGEXP_REPLACE\(UPPER\(NVL\(e\.doorno,''\)\),'\[\^A-Z0-9\]',''\) AS k .* UNION SELECT REGEXP_REPLACE\(UPPER\(NVL\(x\.vehicleno/);
+ assert.match(emi.sql,/REGEXP_REPLACE\(UPPER\(NVL\(e\.doorno,''\)\),'\[\^A-Z0-9\]',''\) AS anchor/);
+ const [bank,balance]=mergeStatements('bank-position',['bank','balance'],range);
+ assert.match(bank.sql,/p\.partytypecode='BANK' AND p\.partycode IN \(SELECT b\.accountcode FROM cmpl\.accountbalance b/);
+ assert.deepEqual(balance.binds,{to_date:range.to});
+ assert.match(balance.sql,/PARTITION BY b\.companycode,b\.accountcode ORDER BY b\.fordate DESC/);
+});
+
+test('only master lookups and the unlinked asset reports stay outside Report Merge',()=>{
+ const merged=new Set(Object.values(MERGE_CHAINS).flatMap(chain=>chain.steps.map(step=>step.title.replace(' (Banks)',''))));
+ const outside=Object.values(ACCOUNT_VIEWS).map(view=>view.title).filter(title=>!merged.has(title));
+ assert.deepEqual(outside.sort(),['Asset Details Report','Asset Register','Chart Of Accounts','Cost Centre Master','Work Centre Master']);
+});
+
+test('six processes each have one anchor, valid 10-report defaults and read-only SQL',()=>{
+ assert.deepEqual(Object.keys(MERGE_CHAINS),['bank-guarantee','fixed-deposit','loan-emi','party-position','bank-position','vehicle-cost']);
+ const titles=new Set(Object.values(MERGE_CHAINS).flatMap(chain=>chain.steps.map(step=>step.title)));
+ for(const title of ['Vendor Master','Account Opening Register','Day Book','Party Wise TCS Summary','Bill Outstanding More than 180 Days','Imprest Balance','Internal Balance Details','Bank Balance Details','Bank Interest','EMI Schedule','Expense Vehiclewise'])assert.ok(titles.has(title),title);
+ assert.equal(MERGE_CHAINS['party-position'].steps.length,16);
  for(const [key,chain] of Object.entries(MERGE_CHAINS)){
   assert.equal(chain.steps.filter(step=>step.role==='anchor').length,1,key);
-  assert.ok(chain.steps.length<=MAX_MERGE_STEPS,key);
+  assert.ok(chain.defaults.length<=MAX_MERGE_STEPS,key);
+  assert.deepEqual(resolveSelection(key,chain.defaults).steps.length,chain.defaults.length,`${key} defaults are complete and in range`);
   const all=chain.steps.map(step=>step.key);
   for(const mode of [{...range},{...range,anchorKey:'42'}])for(const statement of mergeStatements(key,all,mode)){
    assert.doesNotMatch(statement.sql,/\b(?:INSERT|UPDATE|DELETE|CREATE|DROP|MERGE|ALTER|GRANT)\b/i);

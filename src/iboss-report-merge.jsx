@@ -70,13 +70,14 @@ export default function IbossReportMerge({token,ReportSection,embedded=false}){
    .catch(error=>{if(!controller.signal.aborted)setData({rows:[],columns:[],loading:false,error:error.message});});
   return ()=>controller.abort();
  },[token,request]);
- const choose=key=>{setChainKey(key);setPicked(MERGE_CHAINS[key].steps.map(step=>step.key));setRequest(null);setValidation('');};
+ const choose=key=>{setChainKey(key);setPicked(MERGE_CHAINS[key].defaults);setRequest(null);setValidation('');};
  const toggle=step=>{
   if(step.key===chain.anchor)return;
-  setPicked(current=>{
-   if(current.includes(step.key))return current.filter(key=>key!==step.key&&!(chain.steps.find(item=>item.key===key)?.requires||[]).includes(step.key));
-   return current.length>=MAX_MERGE_STEPS?current:[...current,step.key];
-  });
+  setValidation('');
+  if(selection.steps.includes(step.key)){setPicked(picked.filter(key=>key!==step.key&&!(chain.steps.find(item=>item.key===key)?.requires||[]).includes(step.key)));return;}
+  const next=[...picked,step.key];
+  try{resolveSelection(chainKey,next);setPicked(next);}
+  catch{setValidation(`Select at most ${MAX_MERGE_STEPS} reports in one merge. Untick a report first.`);}
  };
  const generate=event=>{
   event.preventDefault();
@@ -99,7 +100,7 @@ export default function IbossReportMerge({token,ReportSection,embedded=false}){
   {chain&&<div className="iboss-accounts-panel" role="region" aria-labelledby="merge-steps-heading">
    <h2 id="merge-steps-heading">2. Select reports to merge <small>{selection.steps.length} / {MAX_MERGE_STEPS} selected</small></h2>
    <div className="merge-step-actions">
-    <button type="button" onClick={()=>setPicked(chain.steps.map(step=>step.key))}><CheckSquare/>Full process</button>
+    <button type="button" onClick={()=>setPicked(chain.defaults)}><CheckSquare/>{chain.steps.length>MAX_MERGE_STEPS?`Recommended ${chain.defaults.length}`:'Full process'}</button>
     <button type="button" onClick={()=>setPicked([chain.anchor])}><Lock/>Required only</button>
    </div>
    <ol className="merge-step-flow">{chain.steps.map(step=>{const required=step.key===chain.anchor,auto=selection.autoAdded.includes(step.key)&&!required,on=selection.steps.includes(step.key);
@@ -116,7 +117,7 @@ export default function IbossReportMerge({token,ReportSection,embedded=false}){
    {validation&&<p role="alert">{validation}</p>}
   </div>}
   {ran&&(data.loading?<p role="status">Merging {request.steps.length} reports from Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<>
-   <p>Click any document number to trace it back to its origin or forward to completion. Shared columns appear once; child reports are summarised per {ran.partyChain?'party':'main record'}.</p>
+   <p>Click any document number to trace it back to its origin or forward to completion. Shared columns appear once; child reports are summarised per {ran.rowLabel}.</p>
    <ReportSection key={`${request.chain}-${request.at}`} title={`${ran.title} · Merged`} category="iboss-accounts" description={`${formatDisplayDate(request.range.from)} to ${formatDisplayDate(request.range.to)} · ${request.steps.length} reports · ${(data.rows||[]).length.toLocaleString('en-IN')} rows${data.checkedAt?` · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`:''}`} rows={data.rows||[]} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this process and date range."/>
   </>)}
   {trail&&ran&&<Trail chainKey={request.chain} anchor={trail.anchor} focus={trail.focus} range={request.range} token={token} close={()=>setTrail(null)}/>}
