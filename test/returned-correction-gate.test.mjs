@@ -28,7 +28,8 @@ test('returned correction popup blocks Escape and has no close or timeout action
 });
 test('gate is mounted for both workspaces and fetches owner-only durable records',()=>{
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.equal((main.match(/<ReturnedCorrectionGate key=\{authToken\} token=\{authToken\} \/>/g)||[]).length,2);
+  assert.match(main,/<ReturnedCorrectionGate key=\{token\} token=\{token\} \/>/);
+  assert.equal((main.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g)||[]).length,2);
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const route=server.slice(server.indexOf("app.get('/api/request-corrections/returned'"),server.indexOf("app.patch('/api/request-corrections/:id/admin-decision'"));
   assert.match(route,/requireSession/);

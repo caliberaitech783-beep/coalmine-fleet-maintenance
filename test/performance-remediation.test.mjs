@@ -41,9 +41,24 @@ test('specialist browser features are emitted as lazy chunks',()=>{
     'request-corrections.jsx','organisation-chart.jsx','whatsapp-report-settings.jsx',
     'info-pulse-content.jsx','saved-reports.jsx','recovery-guide.jsx',
   ])assert.match(client,new RegExp(`createLazyFeature\\(\\(\\)=>import\\("\\./${module.replaceAll('.','\\.')}"\\)`));
-  assert.match(lazyFeature,/lazy\(\(\) => importer\(\)/);
+  assert.match(lazyFeature,/const load = \(\) => modulePromise \|\|= importer\(\)/);
+  assert.match(lazyFeature,/const LazyComponent = lazy\(load\)/);
+  assert.match(lazyFeature,/LazyFeature\.preload = load/);
   assert.match(lazyFeature,/<Suspense fallback=/);
   assert.match(client,/enabled:needsRequestFormMasters/);
+});
+
+test('navigation yields expensive page mounts and isolates unrelated root updates',()=>{
+  const app=client.slice(client.indexOf('function App()'),client.indexOf('createRoot('));
+  assert.match(client,/const \[, startNavigationTransition\] = useTransition\(\)/);
+  assert.match(client,/startNavigationTransition\(\(\) => setActive\(name\)\)/);
+  assert.match(client,/function NavigationLoadTimeToast/);
+  assert.match(client,/const AppBackgroundServices = React\.memo/);
+  assert.match(client,/const adminPageContent = useMemo/);
+  assert.match(client,/<div className="body">\s*\{adminPageContent\}/);
+  assert.match(client,/preloadNavigationFeature\(name\)/);
+  assert.match(client,/<nav onPointerOver=\{warmNavigationFeature\} onFocusCapture=\{warmNavigationFeature\}>/);
+  assert.doesNotMatch(app,/\[loadTime, setLoadTime\] = useState/);
 });
 
 test('lazy screens cannot replace the entire workspace with a blank page',()=>{

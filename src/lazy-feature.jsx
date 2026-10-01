@@ -71,7 +71,12 @@ export class ApplicationErrorBoundary extends Component {
 }
 
 export function createLazyFeature(importer, select = (module) => module.default, options = {}) {
-  const LazyComponent = lazy(() => importer().then((module) => ({ default: select(module) })));
+  // Reuse one import promise so navigation can warm a specialist screen before
+  // React starts rendering it. This also prevents rapid repeat clicks from
+  // starting duplicate chunk requests.
+  let modulePromise;
+  const load = () => modulePromise ||= importer().then((module) => ({ default: select(module) }));
+  const LazyComponent = lazy(load);
   const label = options.loadingLabel || "Loading screen…";
   function LazyFeature(props) {
     const fallback = options.silent
@@ -84,5 +89,6 @@ export function createLazyFeature(importer, select = (module) => module.default,
       <Suspense fallback={fallback}><LazyComponent {...props} /></Suspense>
     </ApplicationErrorBoundary>;
   }
+  LazyFeature.preload = load;
   return LazyFeature;
 }

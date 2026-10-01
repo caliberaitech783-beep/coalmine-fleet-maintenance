@@ -15,7 +15,7 @@ import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, par
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue, useTransition } from "react";
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -162,6 +162,26 @@ const RecoveryGuide=createLazyFeature(()=>import("./recovery-guide.jsx"),undefin
 const HelpTraining=createLazyFeature(()=>import("./help-training.jsx"),undefined,{compact:true,silent:true});
 const DashboardRecordBrowser=createLazyFeature(()=>import("./dashboard-record-browser.jsx"),undefined,{loadingLabel:"Loading records…"});
 const InfoPulseContent=createLazyFeature(()=>import("./info-pulse-content.jsx"),undefined,{loadingLabel:"Loading Info Pulse…"});
+
+const navigationFeaturePreloads = new Map([
+  ["Backup", BackupAdministration],
+  ["Export Backup", BackupAdministration],
+  ["Import Backup", BackupAdministration],
+  ["Backup Schedule", BackupAdministration],
+  ["Vehicle transfers", VehicleTransferWorkflow],
+  ["Request corrections", RequestCorrections],
+  ["Correction approvals", RequestCorrections],
+  ["Request correction", RequestCorrections],
+  ["Print helper", PrintHelperSetupPage],
+  ["Recovery guide", RecoveryGuide],
+  ...ORGANISATION_PAGE_NAMES.map((name) => [name, OrganisationChartView]),
+]);
+function preloadNavigationFeature(name) {
+  const pending = navigationFeaturePreloads.get(name)?.preload?.();
+  // Rendering still owns the recovery UI if a chunk is unavailable. Warming a
+  // route must never create an unhandled rejection before that render occurs.
+  pending?.catch?.(() => {});
+}
 import InfoPulseBirthday from './info-pulse-birthday.jsx';
 import {
   LayoutDashboard,
@@ -998,6 +1018,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     event.currentTarget.blur();
     setActive({ page: "Reports", reportCategory: category.id });
   };
+  const warmNavigationFeature = (event) => {
+    const label = event.target.closest?.("button")?.querySelector?.(".nav-label")?.textContent?.trim();
+    if (label) preloadNavigationFeature(label);
+  };
   useEffect(() => {
     closeMenus();
   }, [active]);
@@ -1029,7 +1053,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   return (
     <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
       <CaliberBrand className="logo" />
-      <nav>
+      <nav onPointerOver={warmNavigationFeature} onFocusCapture={warmNavigationFeature}>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}
@@ -11130,6 +11154,44 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => {setArrivalFlagging(null);setArrivalFlagNextAction(null);}} onSave={saveArrivalFlag} />}
   </div>;
 }
+
+function NavigationLoadTimeToast({ active, startedAt }) {
+  const [loadTime, setLoadTime] = useState(null);
+  useEffect(() => {
+    const handleLoaded = (event) => {
+      if (event.detail?.name === active) setLoadTime(Math.max(0.1, event.detail.seconds));
+    };
+    window.addEventListener("menu-data-loaded", handleLoaded);
+    const timer = window.setTimeout(() => {
+      setLoadTime((current) => current ?? Math.max(0.1, (performance.now() - startedAt.current) / 1000));
+    }, 120);
+    return () => {
+      window.removeEventListener("menu-data-loaded", handleLoaded);
+      window.clearTimeout(timer);
+    };
+  }, [active, startedAt]);
+  useEffect(() => {
+    if (loadTime === null) return undefined;
+    const timer = window.setTimeout(() => setLoadTime(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [loadTime]);
+  if (loadTime === null) return null;
+  return <div className="load-time-toast" role="status">
+    <b>Data loaded. Time taken: {loadTime.toFixed(1)} sec.</b>
+  </div>;
+}
+
+const AppBackgroundServices = React.memo(function AppBackgroundServices({ session, logout }) {
+  const token = session?.token || authToken;
+  return <>
+    <SessionMessageInbox session={session} />
+    <TelegramGate token={token} logout={logout} />
+    <ReturnedCorrectionGate key={token} token={token} />
+    <TicketResolutionNotices key={token} token={token} />
+    <RemoteAssistanceAgent session={session} />
+  </>;
+}, (previous, next) => previous.session === next.session);
+
 function App() {
   const [session, setSession] = useState(storedSession?.token ? storedSession : null),
     [active, setActive] = useState(LOGIN_LANDING_PAGE),
@@ -11143,7 +11205,6 @@ function App() {
     [requests, setRequests] = useState([]),
     [requestState, setRequestState] = useState({ token: "", loaded: false, error: "", updatedAt: 0 }),
     [menu, setMenu] = useState(false),
-    [loadTime, setLoadTime] = useState(null),
     [canGoBack, setCanGoBack] = useState(false),
     [theme, setTheme] = useState(() => {
       const saved = localStorage.getItem("nerveCenterTheme");
@@ -11155,6 +11216,7 @@ function App() {
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
   const requestResponseCache = useRef({token: "", etag: ""});
+  const [, startNavigationTransition] = useTransition();
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
@@ -11297,11 +11359,11 @@ function App() {
     if (session?.role === "super" && !canOpenAdminPage(name)) return;
     if (name === "Dashboard") window.dispatchEvent(new CustomEvent("nerve-center:dashboard-home"));
     if (name === active) return;
+    preloadNavigationFeature(name);
     pageHistory.current.push(name);
     setCanGoBack(pageHistory.current.length > 1);
     menuLoadStartedAt.current = performance.now();
-    setLoadTime(null);
-    setActive(name);
+    startNavigationTransition(() => setActive(name));
   };
   useEffect(() => {
     if (session?.role !== "super" || canOpenAdminPage(active)) return;
@@ -11320,31 +11382,12 @@ function App() {
     if (pageHistory.current.length <= 1) return;
     pageHistory.current.pop();
     const previousPage = pageHistory.current.at(-1) || "Dashboard";
+    preloadNavigationFeature(previousPage);
     setCanGoBack(pageHistory.current.length > 1);
     menuLoadStartedAt.current = performance.now();
-    setLoadTime(null);
     setMenu(false);
-    setActive(previousPage);
+    startNavigationTransition(() => setActive(previousPage));
   };
-  useEffect(() => {
-    const handleLoaded = (event) => {
-      if (event.detail?.name === active)
-        setLoadTime(Math.max(0.1, event.detail.seconds));
-    };
-    window.addEventListener("menu-data-loaded", handleLoaded);
-    return () => window.removeEventListener("menu-data-loaded", handleLoaded);
-  }, [active]);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadTime((current) => current ?? Math.max(0.1, (performance.now() - menuLoadStartedAt.current) / 1000));
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [active]);
-  useEffect(() => {
-    if (loadTime === null) return undefined;
-    const timer = setTimeout(() => setLoadTime(null), 3000);
-    return () => clearTimeout(timer);
-  }, [loadTime]);
   const loadRequests = async () => {
     const responseCache = typeof requestResponseCache === "undefined"
       ? (loadRequests.responseCache ||= {token: "", etag: ""})
@@ -11542,7 +11585,6 @@ function App() {
     pageHistory.current = [LOGIN_LANDING_PAGE];
     setCanGoBack(false);
     setMenu(false);
-    setLoadTime(null);
     setEquipmentFilter("all");
     setEquipmentLocation("");
     setEquipmentCategory("all");
@@ -11559,6 +11601,69 @@ function App() {
     className="vehicle-history-modal"
     overlayClassName="vehicle-history-overlay"
   ><VehicleRepairHistoryPage vehicle={globalVehicleHistoryTarget} rows={requests} backLabel="Close history" onBack={() => setGlobalVehicleHistoryTarget(null)} /></Modal> : null;
+  // Menu visibility, the back-button flag, and background service updates do
+  // not change the current page. Preserve the page element across those root
+  // renders so opening navigation cannot rebuild a large dashboard or table.
+  const adminPageContent = useMemo(() => active === "Dashboard" ? (
+    requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+  ) : active === "Employee Tenure Report" ? (
+    <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : active === "CD" ? (
+    <CaliberDirectoryPage />
+  ) : active === "Manager Profile" ? (
+    <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
+  ) : active === "Tickets" ? (
+    <TicketPage session={session} />
+  ) : active === "Admin locks" ? (
+    <AdminLockManagement session={session} />
+  ) : active === "Request corrections" || active === "Correction approvals" || active === "Request correction" ? (
+    <RequestCorrections session={session} requests={requests} Dialog={Modal} />
+  ) : active === "User Sessions" ? (
+    <UserSessionsPage session={session} />
+  ) : active === "Recovery guide" ? (
+    <RecoveryGuide onNavigate={selectMenu} />
+  ) : active === "Diagnostics" ? (
+    <DiagnosticsPage token={authToken} />
+  ) : active === "Storage management" ? (
+    <StorageManagementPage token={authToken} onNavigate={selectMenu} />
+  ) : active === "Retention rules" ? (
+    <RetentionRulesPage token={authToken} />
+  ) : active === "Purge data" ? (
+    <PurgeDataPage token={authToken} />
+  ) : backupAdminPages.has(active) ? (
+    <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
+  ) : active === "Vehicle transfers" ? (
+    <VehicleTransferWorkflow session={session} Dialog={Modal} />
+  ) : active === "Equipment master" ? (
+    <Equipment initialFilter={equipmentFilter} initialLocation={equipmentLocation} initialCategory={equipmentCategory} allowedLocations={equipmentLocations} statusRequests={requests} />
+  ) : active === "Breakdown master" ? (
+    breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
+  ) : active === "Region master" ? (
+    <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
+  ) : ORGANISATION_PAGE_NAMES.includes(active) ? (
+    <OrganisationChartPage view={Object.keys(ORGANISATION_PAGES).find((key) => ORGANISATION_PAGES[key] === active)} />
+  ) : active === "Meta API setup" ? (
+    <MetaWhatsAppSetup />
+  ) : active === "WhatsApp alert history" ? (
+    <WhatsAppAlertHistory />
+  ) : active === "Reports" ? (
+    <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
+  ) : active === "Print helper" ? (
+    <PrintHelperSetupPage session={session} />
+  ) : active === "Audit Trail" ? (
+    <AuditTrailPage session={session} />
+  ) : operationalSession ? (
+    <Normal embedded requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onCreate={addRequest} onUpdateRequest={updateRequest} onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk} onAddDailyRemark={addDailyRemark} onRefreshRequests={loadRequests} session={operationalSession} logout={logout} theme={theme} toggleTheme={toggleTheme} />
+  ) : whatsappNav.some(([name]) => name === active) ? (
+    <WhatsAppReport type={active} requests={requests} />
+  ) : (
+    <Generic name={active} requests={requests} session={session} onOpenReportSettings={() => selectMenu("Reports")} />
+  ), [
+    active, activeReportCategory, adminPermissions, breakdownFleetFilter, breakdownFleetSites,
+    equipmentCategory, equipmentFilter, equipmentLocation, equipmentLocations, profileDesignationKey,
+    profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, responsiveMobile,
+    session, theme,
+  ]);
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
     return (
@@ -11578,11 +11683,7 @@ function App() {
           theme={theme}
           toggleTheme={toggleTheme}
         />
-        <SessionMessageInbox session={session} />
-        <TelegramGate token={authToken} logout={logout} />
-        <ReturnedCorrectionGate key={authToken} token={authToken} />
-        <TicketResolutionNotices key={authToken} token={authToken} />
-        <RemoteAssistanceAgent session={session} />
+        <AppBackgroundServices session={session} logout={logout} />
         {globalVehicleHistoryDialog}
       </>
     );
@@ -11640,94 +11741,11 @@ function App() {
           </div>
         </div>
         <div className="body">
-          {active === "Dashboard" ? (
-            requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
-          ) : active === "Employee Tenure Report" ? (
-            <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
-          ) : active === "CD" ? (
-            <CaliberDirectoryPage />
-          ) : active === "Manager Profile" ? (
-            <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
-          ) : active === "Tickets" ? (
-            <TicketPage session={session} />
-          ) : active === "Admin locks" ? (
-            <AdminLockManagement session={session} />
-          ) : active === "Request corrections" || active === "Correction approvals" || active === "Request correction" ? (
-            <RequestCorrections session={session} requests={requests} Dialog={Modal} />
-          ) : active === "User Sessions" ? (
-            <UserSessionsPage session={session} />
-          ) : active === "Recovery guide" ? (
-            <RecoveryGuide onNavigate={selectMenu} />
-          ) : active === "Diagnostics" ? (
-            <DiagnosticsPage token={authToken} />
-          ) : active === "Storage management" ? (
-            <StorageManagementPage token={authToken} onNavigate={selectMenu} />
-          ) : active === "Retention rules" ? (
-            <RetentionRulesPage token={authToken} />
-          ) : active === "Purge data" ? (
-            <PurgeDataPage token={authToken} />
-          ) : backupAdminPages.has(active) ? (
-            <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
-          ) : active === "Vehicle transfers" ? (
-            <VehicleTransferWorkflow session={session} Dialog={Modal} />
-          ) : active === "Equipment master" ? (
-            <Equipment
-              initialFilter={equipmentFilter}
-              initialLocation={equipmentLocation}
-              initialCategory={equipmentCategory}
-              allowedLocations={equipmentLocations}
-              statusRequests={requests}
-            />
-          ) : active === "Breakdown master" ? (
-            breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
-          ) : active === "Region master" ? (
-            <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
-          ) : ORGANISATION_PAGE_NAMES.includes(active) ? (
-            <OrganisationChartPage view={Object.keys(ORGANISATION_PAGES).find((key) => ORGANISATION_PAGES[key] === active)} />
-          ) : active === "Meta API setup" ? (
-            <MetaWhatsAppSetup />
-          ) : active === "WhatsApp alert history" ? (
-            <WhatsAppAlertHistory />
-              ) : active === "Reports" ? (
-                <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
-              ) : active === "Print helper" ? (
-                <PrintHelperSetupPage session={session} />
-              ) : active === "Audit Trail" ? (
-                <AuditTrailPage session={session} />
-              ) : operationalSession ? (
-              <Normal
-                  embedded
-              requests={requests}
-              requestsLoaded={requestsLoaded}
-              requestsError={requestsError}
-              requestsUpdatedAt={requestState.updatedAt}
-              onCreate={addRequest}
-              onUpdateRequest={updateRequest}
-                  onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk}
-                  onAddDailyRemark={addDailyRemark}
-              onRefreshRequests={loadRequests}
-              session={operationalSession}
-              logout={logout}
-              theme={theme}
-              toggleTheme={toggleTheme}
-            />
-          ) : whatsappNav.some(([name]) => name === active) ? (
-            <WhatsAppReport type={active} requests={requests} />
-          ) : (
-            <Generic name={active} requests={requests} session={session} onOpenReportSettings={() => selectMenu("Reports")} />
-          )}
+          {adminPageContent}
         </div>
       </main>
-      {loadTime !== null && (
-        <div className="load-time-toast" role="status">
-          <b>Data loaded. Time taken: {loadTime.toFixed(1)} sec.</b>
-        </div>
-      )}
-      <SessionMessageInbox session={session} />
-      <TelegramGate token={authToken} logout={logout} />
-      <ReturnedCorrectionGate key={authToken} token={authToken} />
-        <TicketResolutionNotices key={authToken} token={authToken} />
-      <RemoteAssistanceAgent session={session} />
+      <NavigationLoadTimeToast key={active} active={active} startedAt={menuLoadStartedAt} />
+      <AppBackgroundServices session={session} logout={logout} />
       {globalVehicleHistoryDialog}
     </div>
   );

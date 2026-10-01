@@ -48,5 +48,5 @@ test("Diagnostics is an Admin-only page in the Database clock", () => {
   for (const key of ["app", "database", "backups", "oracle", "telegram", "whatsapp", "email"]) assert.ok(server.includes(`{key:'${key}',label:`), key);
   assert.ok(source.includes('const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope], ["Storage management", HardDrive], ["Retention rules", CalendarClock], ["Purge data", Eraser]];'));
   assert.ok(source.includes('if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;'));
-  assert.ok(source.includes('active === "Diagnostics" ? (\n            <DiagnosticsPage token={authToken} />') || source.includes('active === "Diagnostics" ? (\r\n            <DiagnosticsPage token={authToken} />'));
+  assert.match(source, /active === "Diagnostics" \? \(\s*<DiagnosticsPage token=\{authToken\} \/>/);
 });

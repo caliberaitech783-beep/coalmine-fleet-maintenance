@@ -49,5 +49,6 @@ test('notice persists until successful manual close and late polling cannot rest
   await poll();assert.equal(render(),null,'stale polling cannot resurrect a successfully closed notice');
   assert.doesNotMatch(source,/setTimeout|onMouseLeave|onKeyDown/);
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.equal((main.match(/<TicketResolutionNotices key=\{authToken\} token=\{authToken\} \/>/g)||[]).length,2);
+  assert.match(main,/<TicketResolutionNotices key=\{token\} token=\{token\} \/>/);
+  assert.equal((main.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g)||[]).length,2);
 });
