@@ -136,7 +136,7 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
   assert.ok(clock.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}'), "opens on hover");
   assert.ok(clock.includes("data-label={labelFor(name)}") && clock.includes("aria-label={labelFor(name)}"), "icons carry the full page name");
   assert.ok(clock.includes('<span className="workspace-menu-item cdir-clock-badge" data-workspace={keyFor(name, menuKey)} aria-hidden="true"><span className="workspace-icon"><Icon /><i className="workspace-icon-glow" /></span></span>'), "icons only, in the same coloured badges as the plain menus");
-  assert.ok(clock.includes("const [openState, setOpen] = useState(() => items.some(([name]) => name === active));"), "opens by itself on one of its pages");
+  assert.ok(clock.includes("const [openState, setOpen] = useState(false);"), "starts closed even on one of its pages");
   assert.ok(clock.includes("if (rect && rect.right > window.innerWidth - 8) setInside(true);"), "a half clock that would leave the screen opens inside the menu");
   assert.ok(source.includes("[...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)"), "C-Dir master pages stay reachable");
   const css = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");

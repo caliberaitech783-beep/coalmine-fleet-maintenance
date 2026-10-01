@@ -12,7 +12,7 @@ const Null = () => null;
 
 function harness(initialWidth) {
   let width = initialWidth, cursor = 0;
-  const slots = [], queries = new Map(), effects = [];
+  const slots = [], queries = new Map(), effects = [], listeners = new Map();
   const useState = initial => {
     const i = cursor++;
     if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
@@ -26,7 +26,7 @@ function harness(initialWidth) {
     }
     return queries.get(query);
   };
-  const scope = {React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
+  const scope = {document: {addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
     masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true,
@@ -37,6 +37,7 @@ function harness(initialWidth) {
   return {
     render(open) {cursor = 0; return Side({active: "Dashboard", open, session: {name: "Fixture"}, setActive() {}, logout() {}});},
     mountEffects() {const current = effects.splice(0); current.forEach(effect => effect());},
+    dispatch(type, event) {listeners.get(type)?.(event);},
     resize(nextWidth) {width = nextWidth; for (const query of queries.values()) [...query.callbacks].forEach(callback => callback());},
   };
 }
@@ -83,4 +84,26 @@ test("hamburger announces its action, expansion state and controlled navigation"
   assert.match(toggle, /aria-expanded=\{menu\}/);
   assert.match(toggle, /aria-controls="admin-primary-navigation"/);
   assert.match(source, /<aside id="admin-primary-navigation"/);
+});
+
+
+test("navigation closes peers, selected destinations, outside clicks and Escape", () => {
+  const app = harness(1920);
+  const all = node => !node || typeof node !== 'object' ? [] : [node, ...React.Children.toArray(node.props?.children).flatMap(all)];
+  const button = name => all(app.render(true)).find(node => node.props?.['data-nav'] === name);
+  app.render(true); app.mountEffects();
+  button('masters').props.onClick();
+  assert.equal(button('masters').props['aria-expanded'], true);
+  button('cd').props.onClick();
+  assert.equal(button('masters').props['aria-expanded'], false);
+  assert.equal(button('cd').props['aria-expanded'], true);
+  app.dispatch('keydown', {key:'Escape'});
+  assert.equal(button('cd').props['aria-expanded'], false);
+  button('masters').props.onClick();
+  const destination = all(app.render(true)).find(node => node.props?.role === 'menuitem');
+  destination.props.onClick({currentTarget:{blur(){}}});
+  assert.equal(button('masters').props['aria-expanded'], false);
+  button('masters').props.onClick();
+  app.dispatch('pointerdown', {target:{closest:()=>null}});
+  assert.equal(button('masters').props['aria-expanded'], false);
 });

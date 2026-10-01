@@ -69,8 +69,7 @@
   transition: transform 0.18s ease;
 }
 
-.masters-menu.open > .nav-config-row > button .masters-chevron,
-.masters-menu:not(.selection-closed):hover > .nav-config-row > button .masters-chevron {
+.masters-menu.open > .nav-config-row > button .masters-chevron {
   transform: rotate(180deg);
 }
 
@@ -91,9 +90,7 @@
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
 }
 
-.masters-menu.open .masters-dropdown,
-.masters-menu:not(.selection-closed):hover .masters-dropdown,
-.masters-menu:not(.selection-closed):focus-within .masters-dropdown {
+.masters-menu.open > .masters-dropdown {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -462,8 +459,7 @@
     transform: none;
   }
 
-  .masters-menu.open .masters-dropdown,
-  .masters-menu:not(.selection-closed):focus-within .masters-dropdown {
+  .masters-menu.open > .masters-dropdown {
     display: block;
   }
 

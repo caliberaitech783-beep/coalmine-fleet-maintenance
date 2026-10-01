@@ -872,7 +872,7 @@ function Login({ onLogin, theme, toggleTheme }) {
 // instead. "alwaysOpen" shows only the clock (the menu itself is the entry), and
 // "down" puts the centre at the top with the icons fanning out below it.
 function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null, alwaysOpen = false, down = false, labelFor = (name) => name, keyFor = (name, key) => key || "master" }) {
-  const [openState, setOpen] = useState(() => items.some(([name]) => name === active));
+  const [openState, setOpen] = useState(false);
   const [inside, setInside] = useState(alwaysOpen);
   const clockRef = useRef(null);
   const open = alwaysOpen || openState;
@@ -897,7 +897,7 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
         style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}
         data-label={labelFor(name)}
         aria-label={labelFor(name)}
-        onClick={(event) => onSelect(name, event)}
+        onClick={(event) => { setOpen(false); onSelect(name, event); }}
       >
         {/* The same coloured badge the page has in the plain menu list. */}
         <span className="workspace-menu-item cdir-clock-badge" data-workspace={keyFor(name, menuKey)} aria-hidden="true"><span className="workspace-icon"><Icon /><i className="workspace-icon-glow" /></span></span>
@@ -962,6 +962,18 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setAdminOpen(false);
     setCdirOpen(false);
   };
+  useEffect(() => {
+    const outside = event => {
+      if (!event.target.closest?.('#admin-primary-navigation nav')) closeMenus();
+    };
+    const escape = event => { if (event.key === 'Escape') closeMenus(); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
   const selectPage = (page) => {
     closeMenus();
     setActive(page);
@@ -980,7 +992,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setActive(page);
   };
   const selectReport = (category, event) => {
-    setReportsOpen(false);
+    closeMenus();
     setReportsSelectionClosed(true);
     event.currentTarget.blur();
     setActive({ page: "Reports", reportCategory: category.id });
@@ -1041,7 +1053,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             aria-expanded={mastersOpen}
             onClick={() => {
               setMastersSelectionClosed(false);
-              setMastersOpen((value) => !value);
+              closeMenus(); setMastersOpen(!mastersOpen);
             }}
           >
             <span className="header-nav-icon" aria-hidden="true"><Menu /></span>
@@ -1073,7 +1085,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             aria-expanded={whatsappOpen}
             onClick={() => {
               setWhatsappSelectionClosed(false);
-              setWhatsappOpen((value) => !value);
+              closeMenus(); setWhatsappOpen(!whatsappOpen);
             }}
           >
             <span className="header-nav-icon" aria-hidden="true"><MessageCircle /></span>
@@ -1096,7 +1108,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             aria-expanded={workspacesOpen}
             onClick={() => {
               setWorkspacesSelectionClosed(false);
-              setWorkspacesOpen((value) => !value);
+              closeMenus(); setWorkspacesOpen(!workspacesOpen);
             }}
           >
             <span className="header-nav-icon" aria-hidden="true"><Users /></span>
@@ -1120,7 +1132,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             aria-expanded={reportsOpen}
             onClick={() => {
               setReportsSelectionClosed(false);
-              setReportsOpen((value) => !value);
+              closeMenus(); setReportsOpen(!reportsOpen);
             }}
           >
             <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span>
@@ -1157,7 +1169,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
@@ -1169,7 +1181,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu cdir-menu${cdirOpen ? " open" : ""}${cdirSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setCdirSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);setCdirOpen(value => !value);}}>
+          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);closeMenus(); setCdirOpen(!cdirOpen);}}>
             <span className="header-nav-icon" aria-hidden="true"><BookUser /></span><span className="nav-label">C-Dir</span><ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown cdir-dropdown" role="menu">
