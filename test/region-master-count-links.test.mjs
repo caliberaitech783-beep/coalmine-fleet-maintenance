@@ -52,6 +52,6 @@ test("region totals open the entire region, site totals retain only the chosen s
     assert.equal(equipment.filter((record) => recordBelongsToSite(record, opened[1]) && (opened[0] === "all" || liveEquipmentRoadStatus(record, requests) === opened[0])).length, count);
   }
   assert.match(source, /setEquipmentLocations\(locations\)/);
-  assert.match(source, /allowedLocations=\{equipmentLocations\}/);
+  assert.match(source, /allowedLocations=\{renderedEquipmentLocations\}/);
   assert.match(source, /!allowedLocations\.length \|\| allowedLocations\.some\(\(site\) => recordBelongsToSite\(v, site\)\)/);
 });

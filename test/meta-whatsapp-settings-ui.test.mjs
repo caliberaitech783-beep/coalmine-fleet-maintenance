@@ -10,7 +10,7 @@ const css = readFileSync(new URL("../src/meta-whatsapp-setup.css", import.meta.u
 test("Meta API setup is an administrator-only WhatsApp workspace", () => {
   assert.match(source, /\["Meta API setup", Settings\]/);
   assert.match(source, /name !== "Meta API setup" \|\| permissions\.adminLevel !== "Manager"/);
-  assert.match(source, /active === "Meta API setup"[\s\S]*<MetaWhatsAppSetup \/>/);
+  assert.match(source, /renderedActive === "Meta API setup"[\s\S]*<MetaWhatsAppSetup \/>/);
   assert.match(access, /options: \["Meta API setup", "Daily site-wise report"/);
 });
 

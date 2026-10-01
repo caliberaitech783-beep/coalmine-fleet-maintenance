@@ -33,7 +33,7 @@ test('GRN report is permission protected and opens under Admin IBOSS',()=>{
   assert.match(server,/app\.get\('\/api\/reports\/grn-register',requireSession/);
   assert.match(server,/accessAllows\(permissions\.reportAccess,'GRN Register'\)/);
   assert.match(main,/const visibleIbossNav = [^\n]+\["GRN Register"/);
-  assert.match(main,/active === "GRN Register" \? \(\s*<GrnRegister/);
+  assert.match(main,/renderedActive === "GRN Register" \? \(\s*<GrnRegister/);
   assert.match(ui,/AbortController/);
   assert.match(ui,/purchaseOrderRange\(draft\.from,draft\.to\)/);
   assert.equal((ui.match(/key:'[a-zA-Z]+'/g)||[]).length,10);

@@ -100,7 +100,7 @@ test("selected read-only organisation pages sit in the Administration menu for A
   assert.doesNotMatch(adminNavSource, /Hierarchy levels|People by designation/, "hidden organisation pages are removed from the Administration dropdown");
   assert.doesNotMatch(main, /\["Hierarchy master", Network\],\n  \["Access structure"/, "and no longer in Masters");
   assert.match(main, /if\(ORGANISATION_PAGE_NAMES\.includes\(name\)\)return isAdministrator;/);
-  assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(active\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === active\)\} \/>/);
+  assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(renderedActive\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === renderedActive\)\} \/>/);
   assert.match(main, /useMasterRecords\("Users & employees"\);\n\s+const \[privileges, , privilegesLoaded, , , , privilegesError, refreshPrivileges\] = useMasterRecords\("Privilege"\);\n\s+const \[hierarchy, , hierarchyLoaded, , , , hierarchyError, refreshHierarchy\] = useMasterRecords\("Hierarchy master"\);/, "all three masters feed the pages and revalidate on their own");
   assert.match(main, /\{canViewAdmin && <div/, "the Administration dropdown itself is limited to Admin and Super Admin");
   assert.equal(masterAccessAllows({ adminLevel: "Manager", masterAccess: ["Equipment master"] }, "Reporting structure"), false, "no Masters-menu exception remains for these pages");

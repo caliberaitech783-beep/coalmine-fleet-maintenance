@@ -69,7 +69,7 @@ test("each Manager receives a role-specific dashboard", () => {
   assert.match(source, /Maintenance Manager[\s\S]*Received for maintenance[\s\S]*Remaining/);
   assert.match(source, /MIS Manager[\s\S]*Pending verification[\s\S]*Verified/);
   assert.match(source, /if\(name==="Manager Profile"\)return adminPermissions\.adminLevel==="Manager"/);
-  assert.match(source, /active === "Manager Profile" \? \(\s*<ManagerDashboard/);
+  assert.match(source, /renderedActive === "Manager Profile" \? \(\s*<ManagerDashboard/);
 });
 
 test("Admin receives every default menu except the optional Directory", () => {

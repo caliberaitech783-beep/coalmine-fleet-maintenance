@@ -206,7 +206,7 @@ test('the Print helper page is for administrators; the key is created once and n
   assert.deepEqual([...routes.matchAll(/\.(?:json|send)\(([^;]*)\);?/g)].map((match)=>match[1]).filter((sent)=>/privateKey/.test(sent)&&!/signPrintRequest\(/.test(sent)),[],'the key is only ever used to sign');
   assert.match(main,/\["Reporting structure", Building2\],\n  \["Print helper", Printer\],/);
   assert.match(main,/if\(name==="Print helper"\)return isAdministrator;/);
-  assert.match(main,/active === "Print helper" \? \(\n\s+<PrintHelperSetupPage session=\{session\} \/>/);
+  assert.match(main,/renderedActive === "Print helper" \? \(\n\s+<PrintHelperSetupPage session=\{session\} \/>/);
   const page=read('../src/print-helper-setup.jsx');
   assert.match(page,/fetch\("\/api\/print-helper\/setup", \{ method: "POST"/);
   assert.match(page,/link\.download = "override\.crt";/);

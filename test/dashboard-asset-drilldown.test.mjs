@@ -12,7 +12,7 @@ test("dashboard equipment and vehicle totals drill down from region to site and 
   assert.match(source, /const fleetSiteTabRows = showFleetSiteTabs \? oemDetailReportRows\(groupOemRecordsBySite\(assetDrilldownRows, assetDrilldownRegions\), true\) : assetDrilldownRows;/);
   assert.match(source, /const assetDrilldownRegions = availableRegions\.map/);
   assert.doesNotMatch(source, /Step 1 · Select region|Step 5 · Full details/);
-  assert.match(source, /initialCategory=\{equipmentCategory\}/);
+  assert.match(source, /initialCategory=\{renderedEquipmentCategory\}/);
   assert.match(source, /assetCategory === "all" \|\| String\(v\.category \|\| ""\)\.trim\(\)\.toLowerCase\(\) === assetCategory/);
   assert.match(source, /<option value="equipment">Equipment<\/option>[\s\S]*<option value="vehicle">Vehicles<\/option>/);
 });

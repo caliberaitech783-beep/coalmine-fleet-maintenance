@@ -17,7 +17,7 @@ test('lists every protected backup page in the Administration menu',()=>{
   const adminNavSource=main.slice(main.indexOf("const adminNav = ["),main.indexOf("const backupAdminPages"));
   for(const page of ['Backup','Export Backup','Import Backup','Backup Schedule'])assert.ok(adminNavSource.includes(`["${page}", `),page);
   assert.match(main,/const backupAdminPages = new Set\(\["Backup", "Export Backup", "Import Backup", "Backup Schedule"\]\)/);
-  assert.match(main,/<BackupAdministration section=\{active\} session=\{session\} onNavigate=\{selectMenu\}/);
+  assert.match(main,/<BackupAdministration section=\{renderedActive\} session=\{session\} onNavigate=\{selectMenu\}/);
 });
 
 test('requires Super Admin inspection and exact confirmation before restore',()=>{

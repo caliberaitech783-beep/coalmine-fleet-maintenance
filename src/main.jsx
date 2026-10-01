@@ -15,7 +15,7 @@ import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, par
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { useState, useRef, useEffect, useMemo, useDeferredValue, useTransition } from "react";
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -1057,7 +1057,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   return (
     <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
       <CaliberBrand className="logo" />
-      <nav onPointerOver={warmNavigationFeature} onFocusCapture={warmNavigationFeature}>
+      <nav onPointerOver={warmNavigationFeature} onPointerDownCapture={warmNavigationFeature} onFocusCapture={warmNavigationFeature}>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}
@@ -11232,7 +11232,17 @@ function App() {
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
   const requestResponseCache = useRef({token: "", etag: ""});
-  const [, startNavigationTransition] = useTransition();
+  // Commit the selected navigation item immediately. Only the expensive page
+  // body follows at deferred priority, so a click always paints before a large
+  // dashboard or table starts rendering.
+  const renderedActive = useDeferredValue(active);
+  const renderedReportCategory = useDeferredValue(activeReportCategory);
+  const renderedEquipmentFilter = useDeferredValue(equipmentFilter);
+  const renderedEquipmentLocation = useDeferredValue(equipmentLocation);
+  const renderedEquipmentLocations = useDeferredValue(equipmentLocations);
+  const renderedEquipmentCategory = useDeferredValue(equipmentCategory);
+  const renderedBreakdownFleetFilter = useDeferredValue(breakdownFleetFilter);
+  const renderedBreakdownFleetSites = useDeferredValue(breakdownFleetSites);
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
@@ -11277,13 +11287,25 @@ function App() {
         if(response.status===401)closeInvalidSession();
       }catch{}
     };
-    const markActivity=()=>{void heartbeat();};
+    let activityHeartbeatHandle=null,activityHeartbeatUsesIdle=false;
+    const markActivity=()=>{
+      if(closed||activityHeartbeatHandle!==null||Date.now()-lastHeartbeatAt<30000)return;
+      const run=()=>{activityHeartbeatHandle=null;activityHeartbeatUsesIdle=false;void heartbeat();};
+      if(typeof window.requestIdleCallback==="function"){
+        activityHeartbeatUsesIdle=true;
+        activityHeartbeatHandle=window.requestIdleCallback(run,{timeout:1000});
+      }else activityHeartbeatHandle=window.setTimeout(run,0);
+    };
     const activityEvents=['pointerdown','keydown','touchstart','wheel'];
     activityEvents.forEach((name)=>window.addEventListener(name,markActivity,{passive:true,capture:true}));
     void heartbeat(true);
     return()=>{
       closed=true;
       activityEvents.forEach((name)=>window.removeEventListener(name,markActivity,{capture:true}));
+      if(activityHeartbeatHandle!==null){
+        if(activityHeartbeatUsesIdle)window.cancelIdleCallback(activityHeartbeatHandle);
+        else window.clearTimeout(activityHeartbeatHandle);
+      }
     };
   },[session?.token]);
   const isAdministrator=session?.role==='super'&&['admin','super admin'].includes(String(adminPermissions.adminLevel||'').trim().toLowerCase());
@@ -11324,7 +11346,7 @@ function App() {
     if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
-  const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
+  const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === renderedActive)?.[2];
   const operationalSession = selectedOperationalRole ? {
     ...session,
     assignedRole: selectedOperationalRole,
@@ -11380,7 +11402,7 @@ function App() {
     pageHistory.current.push(name);
     setCanGoBack(pageHistory.current.length > 1);
     menuLoadStartedAt.current = performance.now();
-    startNavigationTransition(() => setActive(name));
+    setActive(name);
   };
   useEffect(() => {
     if (session?.role !== "super" || canOpenAdminPage(active)) return;
@@ -11403,7 +11425,7 @@ function App() {
     setCanGoBack(pageHistory.current.length > 1);
     menuLoadStartedAt.current = performance.now();
     setMenu(false);
-    startNavigationTransition(() => setActive(previousPage));
+    setActive(previousPage);
   };
   const loadRequests = async () => {
     const responseCache = typeof requestResponseCache === "undefined"
@@ -11621,69 +11643,69 @@ function App() {
   // Menu visibility, the back-button flag, and background service updates do
   // not change the current page. Preserve the page element across those root
   // renders so opening navigation cannot rebuild a large dashboard or table.
-  const adminPageContent = useMemo(() => active === "Dashboard" ? (
+  const adminPageContent = useMemo(() => renderedActive === "Dashboard" ? (
     requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
-  ) : active === "Stock Statement" ? (
+  ) : renderedActive === "Stock Statement" ? (
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
-  ) : active === "Purchase Order" ? (
+  ) : renderedActive === "Purchase Order" ? (
     <PurchaseOrderReport token={session?.token || authToken} ReportSection={ReportSection} />
-  ) : active === "GRN Register" ? (
+  ) : renderedActive === "GRN Register" ? (
     <GrnRegister token={session?.token || authToken} ReportSection={ReportSection} />
-  ) : active === "Employee Tenure Report" ? (
+  ) : renderedActive === "Employee Tenure Report" ? (
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
-  ) : active === "CD" ? (
+  ) : renderedActive === "CD" ? (
     <CaliberDirectoryPage />
-  ) : active === "Manager Profile" ? (
+  ) : renderedActive === "Manager Profile" ? (
     <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
-  ) : active === "Tickets" ? (
+  ) : renderedActive === "Tickets" ? (
     <TicketPage session={session} />
-  ) : active === "Admin locks" ? (
+  ) : renderedActive === "Admin locks" ? (
     <AdminLockManagement session={session} />
-  ) : active === "Request corrections" || active === "Correction approvals" || active === "Request correction" ? (
+  ) : renderedActive === "Request corrections" || renderedActive === "Correction approvals" || renderedActive === "Request correction" ? (
     <RequestCorrections session={session} requests={requests} Dialog={Modal} />
-  ) : active === "User Sessions" ? (
+  ) : renderedActive === "User Sessions" ? (
     <UserSessionsPage session={session} />
-  ) : active === "Recovery guide" ? (
+  ) : renderedActive === "Recovery guide" ? (
     <RecoveryGuide onNavigate={selectMenu} />
-  ) : active === "Diagnostics" ? (
+  ) : renderedActive === "Diagnostics" ? (
     <DiagnosticsPage token={authToken} />
-  ) : active === "Storage management" ? (
+  ) : renderedActive === "Storage management" ? (
     <StorageManagementPage token={authToken} onNavigate={selectMenu} />
-  ) : active === "Retention rules" ? (
+  ) : renderedActive === "Retention rules" ? (
     <RetentionRulesPage token={authToken} />
-  ) : active === "Purge data" ? (
+  ) : renderedActive === "Purge data" ? (
     <PurgeDataPage token={authToken} />
-  ) : backupAdminPages.has(active) ? (
-    <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
-  ) : active === "Vehicle transfers" ? (
+  ) : backupAdminPages.has(renderedActive) ? (
+    <BackupAdministration section={renderedActive} session={session} onNavigate={selectMenu} />
+  ) : renderedActive === "Vehicle transfers" ? (
     <VehicleTransferWorkflow session={session} Dialog={Modal} />
-  ) : active === "Equipment master" ? (
-    <Equipment initialFilter={equipmentFilter} initialLocation={equipmentLocation} initialCategory={equipmentCategory} allowedLocations={equipmentLocations} statusRequests={requests} />
-  ) : active === "Breakdown master" ? (
-    breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
-  ) : active === "Region master" ? (
+  ) : renderedActive === "Equipment master" ? (
+    <Equipment initialFilter={renderedEquipmentFilter} initialLocation={renderedEquipmentLocation} initialCategory={renderedEquipmentCategory} allowedLocations={renderedEquipmentLocations} statusRequests={requests} />
+  ) : renderedActive === "Breakdown master" ? (
+    renderedBreakdownFleetFilter ? <Equipment initialFilter={renderedBreakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={renderedBreakdownFleetSites} /> : <Breakdown requests={requests} />
+  ) : renderedActive === "Region master" ? (
     <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
-  ) : ORGANISATION_PAGE_NAMES.includes(active) ? (
-    <OrganisationChartPage view={Object.keys(ORGANISATION_PAGES).find((key) => ORGANISATION_PAGES[key] === active)} />
-  ) : active === "Meta API setup" ? (
+  ) : ORGANISATION_PAGE_NAMES.includes(renderedActive) ? (
+    <OrganisationChartPage view={Object.keys(ORGANISATION_PAGES).find((key) => ORGANISATION_PAGES[key] === renderedActive)} />
+  ) : renderedActive === "Meta API setup" ? (
     <MetaWhatsAppSetup />
-  ) : active === "WhatsApp alert history" ? (
+  ) : renderedActive === "WhatsApp alert history" ? (
     <WhatsAppAlertHistory />
-  ) : active === "Reports" ? (
-    <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
-  ) : active === "Print helper" ? (
+  ) : renderedActive === "Reports" ? (
+    <ReportsPage requests={requests} activeReportCategory={renderedReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
+  ) : renderedActive === "Print helper" ? (
     <PrintHelperSetupPage session={session} />
-  ) : active === "Audit Trail" ? (
+  ) : renderedActive === "Audit Trail" ? (
     <AuditTrailPage session={session} />
   ) : operationalSession ? (
     <Normal embedded requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onCreate={addRequest} onUpdateRequest={updateRequest} onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk} onAddDailyRemark={addDailyRemark} onRefreshRequests={loadRequests} session={operationalSession} logout={logout} theme={theme} toggleTheme={toggleTheme} />
-  ) : whatsappNav.some(([name]) => name === active) ? (
-    <WhatsAppReport type={active} requests={requests} />
+  ) : whatsappNav.some(([name]) => name === renderedActive) ? (
+    <WhatsAppReport type={renderedActive} requests={requests} />
   ) : (
-    <Generic name={active} requests={requests} session={session} onOpenReportSettings={() => selectMenu("Reports")} />
+    <Generic name={renderedActive} requests={requests} session={session} onOpenReportSettings={() => selectMenu("Reports")} />
   ), [
-    active, activeReportCategory, adminPermissions, breakdownFleetFilter, breakdownFleetSites,
-    equipmentCategory, equipmentFilter, equipmentLocation, equipmentLocations, profileDesignationKey,
+    renderedActive, renderedReportCategory, adminPermissions, renderedBreakdownFleetFilter, renderedBreakdownFleetSites,
+    renderedEquipmentCategory, renderedEquipmentFilter, renderedEquipmentLocation, renderedEquipmentLocations, profileDesignationKey,
     profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, responsiveMobile,
     session, theme,
   ]);

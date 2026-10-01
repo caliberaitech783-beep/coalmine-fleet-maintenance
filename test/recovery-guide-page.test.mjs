@@ -12,7 +12,7 @@ test('Recovery guide is an Administration page before Audit Trail, for Admin and
   assert.match(main,/\["Backup Schedule", CalendarDays\],\n  \["Audit Trail", History\],\n\];/);
   assert.match(main,/"Recovery guide": "recovery"/);
   assert.match(main,/if\(name==="Recovery guide"\)return isAdministrator;/);
-  assert.match(main,/active === "Recovery guide" \? \(\s*<RecoveryGuide onNavigate=\{selectMenu\} \/>/);
+  assert.match(main,/renderedActive === "Recovery guide" \? \(\s*<RecoveryGuide onNavigate=\{selectMenu\} \/>/);
   assert.match(topbar,/\.workspace-menu-item\[data-workspace="recovery"\] \.workspace-icon \{ --ws-a: #fb923c; --ws-b: #dc2626;/);
 });
 

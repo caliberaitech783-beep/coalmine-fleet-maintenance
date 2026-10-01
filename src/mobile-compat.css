@@ -152,6 +152,18 @@ button {
   }
 }
 
+/* Eliminate legacy double-tap click deferral on every interactive control,
+   including hybrid touch devices that do not match the coarse-pointer query. */
+button,
+a,
+[role="button"],
+summary,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  touch-action: manipulation;
+}
+
 @media (max-width: 900px) {
   .normal > header {
     padding-top: max(10px, env(safe-area-inset-top));

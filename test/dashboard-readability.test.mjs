@@ -20,8 +20,8 @@ test('dashboard readability loads before the final dashboard spacing overrides f
   const normal=client.slice(client.indexOf('function Normal('),client.indexOf('function App('));
   assert.match(normal,/section===?"dashboard"[\s\S]*?<Dashboard/);
   const app=client.slice(client.indexOf('function App('));
-  assert.match(app,/active === "Dashboard"[\s\S]*?<Dashboard/);
-  assert.match(app,/active === "Manager Profile"[\s\S]*?<ManagerDashboard/);
+  assert.match(app,/renderedActive === "Dashboard"[\s\S]*?<Dashboard/);
+  assert.match(app,/renderedActive === "Manager Profile"[\s\S]*?<ManagerDashboard/);
 });
 
 test('shared and manager dashboards use a readable base with larger KPI labels and values',()=>{

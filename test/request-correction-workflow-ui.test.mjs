@@ -32,7 +32,7 @@ test('department manager, PM, and Admin receive their dedicated correction step'
   assert.match(main,/\{correctionRequestAccess && <div className="nav-config-row"><button className=\{`header-nav-item\$\{active === "Request correction" \? " active" : ""\}`\} data-nav="correction"/,'department managers get the Request correction menu');
   assert.match(main,/activeManagerRoles\.some\(\(role\)=>REQUEST_CORRECTION_MANAGER_ROLES\.includes\(role\)\)/);
   assert.match(main,/if\(name==="Request correction"\)return correctionRequestAccess;/);
-  assert.match(main,/active === "Correction approvals" \|\| active === "Request correction" \? \(/);
+  assert.match(main,/renderedActive === "Correction approvals" \|\| renderedActive === "Request correction" \? \(/);
   assert.doesNotMatch(main,/canRequestCorrection/,'Production, Maintenance and MIS users no longer have the menu');
   assert.doesNotMatch(main,/section==="corrections"/);
   assert.match(main,/Correction approvals/);

@@ -36,7 +36,7 @@ test('purchase order uses authenticated Oracle data and sits alongside stock und
   assert.match(server,/accessAllows\(permissions\.reportAccess,'Purchase Order'\)/);
   assert.match(main,/const visibleIbossNav = \[\["Stock Statement"[^\n]+\["Purchase Order"/);
   assert.match(main,/<ClockMenu label="IBOSS"[^\n]+items=\{visibleIbossNav\}/);
-  assert.match(main,/active === "Purchase Order" \? \(\s*<PurchaseOrderReport/);
+  assert.match(main,/renderedActive === "Purchase Order" \? \(\s*<PurchaseOrderReport/);
   assert.match(oracle,/maxRows:50001/);
   assert.match(oracle,/result\.rows\.length>50000/);
   assert.match(ui,/AbortController/);

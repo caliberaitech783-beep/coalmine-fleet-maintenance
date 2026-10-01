@@ -15,6 +15,6 @@ test("Idle is available throughout fleet KPIs, filters, status editing and site 
   assert.match(source,/<option value="Idle">Idle<\/option>/);
   assert.match(source,/\*Idle:\* \$\{r\.idle\}/);
   assert.match(source,/\["Site","Total equipment","On road","Off road","Idle","Open breakdowns"\]/);
-  assert.match(source,/<Equipment[\s\S]*initialFilter=\{equipmentFilter\}[\s\S]*initialLocation=\{equipmentLocation\}/);
+  assert.match(source,/<Equipment[\s\S]*initialFilter=\{renderedEquipmentFilter\}[\s\S]*initialLocation=\{renderedEquipmentLocation\}/);
   assert.doesNotMatch(source,/function Equipment\([\s\S]{0,120}requests = \[\]/);
 });

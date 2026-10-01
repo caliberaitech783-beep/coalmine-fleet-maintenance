@@ -50,14 +50,16 @@ test('specialist browser features are emitted as lazy chunks',()=>{
 
 test('navigation yields expensive page mounts and isolates unrelated root updates',()=>{
   const app=client.slice(client.indexOf('function App()'),client.indexOf('createRoot('));
-  assert.match(client,/const \[, startNavigationTransition\] = useTransition\(\)/);
-  assert.match(client,/startNavigationTransition\(\(\) => setActive\(name\)\)/);
+  assert.match(client,/const renderedActive = useDeferredValue\(active\)/);
+  assert.match(client,/setActive\(name\)/);
+  assert.doesNotMatch(app,/startNavigationTransition|useTransition/);
   assert.match(client,/function NavigationLoadTimeToast/);
   assert.match(client,/const AppBackgroundServices = React\.memo/);
   assert.match(client,/const adminPageContent = useMemo/);
   assert.match(client,/<div className="body">\s*\{adminPageContent\}/);
   assert.match(client,/preloadNavigationFeature\(name\)/);
-  assert.match(client,/<nav onPointerOver=\{warmNavigationFeature\} onFocusCapture=\{warmNavigationFeature\}>/);
+  assert.match(client,/<nav onPointerOver=\{warmNavigationFeature\} onPointerDownCapture=\{warmNavigationFeature\} onFocusCapture=\{warmNavigationFeature\}>/);
+  assert.match(client,/window\.requestIdleCallback\(run,\{timeout:1000\}\)/);
   assert.doesNotMatch(app,/\[loadTime, setLoadTime\] = useState/);
 });
 
