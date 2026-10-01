@@ -1,0 +1,11 @@
+.po-grn-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:16px 0; }
+.po-grn-summary button { padding:16px; text-align:left; background:var(--panel,#fff); color:var(--ink,#24334d); border:1px solid var(--line,#d9dce6); border-radius:10px; cursor:pointer; }
+.po-grn-summary strong,.po-grn-summary span { display:block; }
+.po-grn-summary strong { font-size:27px; color:#7042a1; }
+.po-grn-summary span { margin-top:6px; font-size:13px; }
+.po-grn-tabs { display:flex; flex-wrap:wrap; gap:8px; }
+.po-grn-tabs button { padding:10px 16px; border:1px solid #7042a1; border-radius:8px; background:var(--panel,#fff); color:var(--ink,#24334d); cursor:pointer; }
+.po-grn-tabs button[aria-pressed="true"] { background:#7042a1; color:#fff; }
+.po-grn-explanation { line-height:1.6; font-size:14px; }
+.po-grn-overdue td { background:rgba(220,38,38,.1) !important; }
+.po-grn-rejected td { background:rgba(245,158,11,.12) !important; }

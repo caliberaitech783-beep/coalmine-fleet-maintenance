@@ -34,6 +34,7 @@ export const ADMIN_REPORT_OPTIONS = [
   "Stock Statement",
   "Purchase Order",
   "GRN Register",
+  "PO-GRN Reconciliation",
 ];
 
 export const ADMIN_SUBMENU_OPTIONS = {

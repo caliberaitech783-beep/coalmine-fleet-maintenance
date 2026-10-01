@@ -2,6 +2,7 @@ import oracledb from "oracledb";
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
 import {PURCHASE_ORDER_SQL,purchaseOrderRange,purchaseOrderRow} from './purchase-order-report.mjs';
 import {GRN_REGISTER_SQL,grnRegisterRow} from './grn-register.mjs';
+import {RECONCILIATION_PO_SQL,RECONCILIATION_GRN_SQL,buildPoGrnReconciliation} from './po-grn-reconciliation.mjs';
 import { transferSyncDate } from "./transfer-sync-date.mjs";
 
 const user = String(process.env.ORACLE_DB_USER || "").trim();
@@ -13,6 +14,21 @@ export const oracleConfigured = Boolean(user && password && connectString);
 let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
+
+export async function oraclePoGrnReconciliation(from,to) {
+  const binds=purchaseOrderRange(from,to);
+  const pool=await oraclePool();const connection=await pool.getConnection();
+  try {
+    connection.callTimeout=60000;
+    await connection.execute('SET TRANSACTION READ ONLY');
+    const options={outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:1000,maxRows:50001};
+    const orders=await connection.execute(RECONCILIATION_PO_SQL,binds,options);
+    if(orders.rows.length>50000){const error=new Error('More than 50,000 PO lines match this range. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
+    const receipts=await connection.execute(RECONCILIATION_GRN_SQL,binds,options);
+    if(receipts.rows.length>50000){const error=new Error('More than 50,000 GRN lines match this range. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
+    return {...buildPoGrnReconciliation(orders.rows,receipts.rows,{from,to}),checkedAt:new Date().toISOString()};
+  } finally {await connection.close();}
+}
 
 export async function oracleGrnRegister(from,to) {
   const binds=purchaseOrderRange(from,to);
