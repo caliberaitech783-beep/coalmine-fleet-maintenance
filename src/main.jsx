@@ -1180,7 +1180,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             })}
           </div>
         </div>}
-        {accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,"Stock Statement") && <div className="nav-config-row"><button type="button" className={`header-nav-item${active === "Stock Statement" ? " active" : ""}`} data-nav="stock-statement" onClick={()=>selectPage("Stock Statement")}><span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">Stock Statement</span></button></div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports" && name !== "CD").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}
@@ -1196,10 +1195,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks","Stock Statement"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
+            {accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,"Stock Statement") && <ClockMenu label="IBOSS" icon={FileBarChart} items={[["Stock Statement", FileBarChart, "report-stock-statement"]]} hours={[3]} active={active} workspace="report-stock-statement" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />}
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
             <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>

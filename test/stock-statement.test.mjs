@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {STOCK_STATEMENT_SQL,stockStatementRow} from '../stock-statement.mjs';
 
+test('stock statement opens from Admin through the IBOSS submenu',()=>{
+  const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const adminMenu=source.slice(source.indexOf('{canViewAdmin && <div'),source.indexOf('{(canViewDirectory ||'));
+  assert.match(adminMenu,/<ClockMenu label="IBOSS"[^\n]+items=\{\[\["Stock Statement"/);
+  assert.match(adminMenu,/selectDropdownPage\(page, event, setAdminSelectionClosed\)/);
+  assert.match(adminMenu,/"Admin locks","Stock Statement"\]\.includes\(active\)/);
+  assert.doesNotMatch(source,/data-nav="stock-statement"/);
+});
+
 test('stock statement preserves item codes and optional metadata with only visible columns',()=>{
   const row=stockStatementRow({LOCATION:'AMRAPALI',ITEM_CODE:'0012'},4);
   assert.equal(row.serialNo,5);
