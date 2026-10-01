@@ -15,7 +15,7 @@ import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, par
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -1266,7 +1266,10 @@ function useDashboardEquipment() {
       })
       .then((data) => {
         if (data?.notModified) {
-          if (activeRequest) { setLoaded(true); setLoadError(""); setUpdatedAt(Date.now()); }
+          // A 304 is deliberately a no-op: updating the timestamp here forced
+          // every dashboard chart and fleet aggregate to render again even
+          // though no fleet data had changed.
+          if (activeRequest) { setLoaded(true); setLoadError(""); }
           return;
         }
         if (!Array.isArray(data.records)) throw new Error("Fleet data response was invalid. Please retry.");
@@ -1589,6 +1592,19 @@ function oemChartPlotSpace(article) {
   }
   return Math.round(room - axisChrome - below - OEM_CHART_VIEWPORT_GAP);
 }
+
+function DashboardCardSearch({ cards, onSelect, close }) {
+  const [query, setQuery] = useState("");
+  const matchingCards = cards.filter((card) => matchesSmartSearch(query, card.title));
+  return <Modal title="Search dashboard cards" close={close}>
+    <div className="dashboard-card-search">
+      <label>Card name<input autoFocus type="search" aria-label="Search dashboard cards" placeholder="e.g. Daily BD Balance" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="dashboard-card-search-results">{matchingCards.map((card) => <button type="button" key={card.title} onClick={() => onSelect(card)}>{card.title}<ChevronRight /></button>)}</div>
+      {!matchingCards.length && <p role="status">No matching dashboard cards.</p>}
+    </div>
+  </Modal>;
+}
+
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
   const [dashboardRepairTypes] = useMasterRecords("Repair type master");
@@ -1617,7 +1633,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [cardSearchOpen, setCardSearchOpen] = useState(false);
-  const [cardSearchQuery, setCardSearchQuery] = useState("");
   const dashboardSearchCards = [
     {title: "Total Fleet", selector: ".mine-fleet-region-chart"},
     {title: "Daily BD Balance", selector: ".daily-bd-balance"},
@@ -1641,7 +1656,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }));
   };
   useEffect(() => {
-    const openSearch = () => { setCardSearchQuery(""); setCardSearchOpen(true); };
+    const openSearch = () => setCardSearchOpen(true);
     window.addEventListener("dashboard-smart-search", openSearch);
     return () => window.removeEventListener("dashboard-smart-search", openSearch);
   }, []);
@@ -2278,7 +2293,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix)) || key.startsWith("entered-today:");
   const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
-  const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
+  // Building fleetAssetRequestDetails links every visible asset to its active
+  // request. Do it only while a drilldown is open; the closed dashboard does
+  // not consume these rows at all.
+  const assetDrilldownRows = !assetDrilldown ? [] : requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
   const assetDrilldownRegions = availableRegions.map((region) => ({
     ...region,
     sites: region.sites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))),
@@ -2398,13 +2416,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
-      {cardSearchOpen && <Modal title="Search dashboard cards" close={() => setCardSearchOpen(false)}>
-        <div className="dashboard-card-search">
-          <label>Card name<input autoFocus type="search" aria-label="Search dashboard cards" placeholder="e.g. Daily BD Balance" value={cardSearchQuery} onChange={(event) => setCardSearchQuery(event.target.value)} /></label>
-          <div className="dashboard-card-search-results">{dashboardSearchCards.filter((card) => matchesSmartSearch(cardSearchQuery, card.title)).map((card) => <button type="button" key={card.title} onClick={() => showDashboardCard(card)}>{card.title}<ChevronRight /></button>)}</div>
-          {!dashboardSearchCards.some((card) => matchesSmartSearch(cardSearchQuery, card.title)) && <p role="status">No matching dashboard cards.</p>}
-        </div>
-      </Modal>}
+      {cardSearchOpen && <DashboardCardSearch cards={dashboardSearchCards} onSelect={showDashboardCard} close={() => setCardSearchOpen(false)} />}
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} ref={fleetChartRef} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
@@ -2727,6 +2739,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   const mobileControlsId = React.useId();
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
+  const deferredQuery = useDeferredValue(query);
   const [openFilter, setOpenFilter] = useState(null);
   const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   useEffect(() => {
@@ -2772,7 +2785,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         return row[key];
       },
     })),
-    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model, row.expectedCompletionAt, showUserRole ? row.requesterRole : "") && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
+    searchedRows = displayRows.filter((row) => matchesSmartSearch(deferredQuery, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model, row.expectedCompletionAt, showUserRole ? row.requesterRole : "") && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
@@ -3990,6 +4003,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [pageSize, setPageSize] = useState(() => mobileTablePageSize() || 50);
   const [page, setPage] = useState(0);
+  const deferredQuery = useDeferredValue(query);
   const columnValue = (row, column) => tableFilterText(column.value?.(row));
   const allColumnKeys = columns.map((column) => column.key);
   const displayedColumnKeys = ensureJobReferenceVisibleKeys(visibleColumnKeys.length ? visibleColumnKeys : allColumnKeys, columns);
@@ -3997,7 +4011,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const activeFilterColumn = openFilter ? columns.find((column) => column.key === openFilter) : null;
   const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
   const filteredRows = rows.filter((row) =>
-    matchesSmartSearch(query, row) &&
+    matchesSmartSearch(deferredQuery, row) &&
     tableRowMatchesFilters(row, columns, columnFilters),
   );
   const [sortedRows, sort, changeSort] = useSortableRows(
@@ -9561,6 +9575,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
+  const deferredQuery = useDeferredValue(query);
   const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [openFilter, setOpenFilter] = useState(null);
   useEffect(() => {
@@ -9643,14 +9658,14 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   // Exports and prints follow the on-screen layout: the closing time sits beside Started when the table asks for it.
   if (closedTimeAfterStarted) closedTimeAfterStartedColumns(filterColumns);
   const filteredRows = (idleDateFilter ? filterRecordsByDate(rows, idleDateRange, row => row.idealRequestedAt || row.idleRequestedAt) : rows).filter((row) => {
-    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.expectedCompletionAt, showUserRole ? row.requesterRole : "", row.acceptedBy, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
+    const matchesText = matchesSmartSearch(deferredQuery, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.expectedCompletionAt, showUserRole ? row.requesterRole : "", row.acceptedBy, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "productionPerson" ? row.owner || row.requesterLogin : key === "maintenanceAcceptedBy" ? row.acceptedBy : key === "maintenanceClosedBy" ? row.closedBy : key === "etc" ? etcSortValue(row) : key === "etcRemaining" ? etcRemainingSortValue(row, now) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const [visibleRowLimit, setVisibleRowLimit] = useState(WORKFLOW_INITIAL_RENDER_ROWS);
   useEffect(() => {
     setVisibleRowLimit(WORKFLOW_INITIAL_RENDER_ROWS);
-  }, [query, statusFilter, idleDateRange, parameterFilters, rows, sort.key, sort.direction]);
+  }, [deferredQuery, statusFilter, idleDateRange, parameterFilters, rows, sort.key, sort.direction]);
   const visibleWorkflowRows = sortedRows.slice(0, visibleRowLimit);
   const remainingWorkflowRows = Math.max(0, sortedRows.length - visibleWorkflowRows.length);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
@@ -11355,10 +11370,9 @@ function App() {
       });
       if (response.status === 304) {
         if (loadSequence === requestLoadSequence.current) setRequestState((current) => {
-          // A no-change response used to rebuild every row in the active phone
-          // workflow. Keep its stable state; dashboards still update their live
-          // timestamp and manual/focus refresh continues to work normally.
-          if (responsiveMobile && selectedOperationalRole && current.token === session.token && current.loaded && !current.error) return current;
+          // Preserve the same state object when nothing changed. Replacing it
+          // used to rebuild the complete desktop dashboard every 30 seconds.
+          if (current.token === session.token && current.loaded && !current.error) return current;
           return {...current, token: session.token, loaded: true, error: "", updatedAt: Date.now()};
         });
         return requests;

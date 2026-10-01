@@ -75,7 +75,7 @@ const Null = () => null;
 async function harness(source, component, bindings) {
   let cursor = 0;
   const slots = [];
-  const scope = { React, useEffect() {}, useMemo: fn => fn(), useRef: () => ({ current: null }),
+  const scope = { React, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], next => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, ...bindings };
   const { code } = await transformWithOxc(source, "table-layout-test.jsx", { jsx: { runtime: "classic" } });
   const Component = new Function(...Object.keys(scope), `${code}; return ${component};`)(...Object.values(scope));

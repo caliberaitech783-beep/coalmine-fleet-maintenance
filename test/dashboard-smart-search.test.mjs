@@ -9,7 +9,7 @@ test('dashboard icon searches cards rather than opening fleet records', () => {
   assert.ok(main.includes('window.dispatchEvent(new Event("dashboard-smart-search"))'));
   assert.ok(main.includes('window.addEventListener("dashboard-smart-search", openSearch)'));
   assert.ok(main.includes('window.removeEventListener("dashboard-smart-search", openSearch)'));
-  const handler = main.match(/const openSearch = \(\) => \{([^}]+)\}/)[1];
+  const handler = main.match(/const openSearch = \(\) => ([^;]+);/)[1];
   assert.match(handler, /setCardSearchOpen\(true\)/);
   assert.doesNotMatch(handler, /setAssetDrilldown/);
   const cards = new Function(`return ${main.match(/const dashboardSearchCards = (\[[\s\S]*?\]);/)[1]}`)();

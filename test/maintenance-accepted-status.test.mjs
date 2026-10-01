@@ -49,7 +49,7 @@ function harness(name = 'MobileWorkflowTable') {
   const scope = { isIdleVehicleRequest,
     isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes, dailyUpdatesExportText,
     requestMeterReadings, requestMeterReadingLabel, breakdownMeterValue,
-    React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
+    React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(), useDeferredValue: value => value,
     ...acceptance, requestStatusLabel, requestStatusSortRank, durationLabelMinutes: () => -1, elapsedMilliseconds: () => null, parseDateRange: () => null, matchesDateRange: () => false, cellMatchesFilterValues: (text, selected) => !selected || String(text || "") === selected, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
     ActionsTable: ({ children }) => React.createElement('table', {}, children), MaintenanceRemarks: Null, Modal: Null,
     RequestTimelineButton: ({ reference }) => React.createElement('b', {}, reference), authToken: 'fixture',

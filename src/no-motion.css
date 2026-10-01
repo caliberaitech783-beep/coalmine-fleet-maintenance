@@ -13,3 +13,11 @@
   transition-delay: 0s !important;
   transition-duration: 0s !important;
 }
+
+/* Skip layout and paint for the dashboard cards that are outside the viewport.
+   The browser keeps their space and renders the identical card before it enters view. */
+.mine-dashboard > .mine-dashboard-feature-row > :is(.mine-panel, .daily-bd-balance),
+.mine-dashboard > .mine-dashboard-lower-grid > .mine-panel {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 520px;
+}

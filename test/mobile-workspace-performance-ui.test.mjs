@@ -66,5 +66,5 @@ test("phone alerts are bounded and unchanged feeds avoid expensive workflow rere
   assert.match(phoneCss, /\.incoming-notification \.notification-message\.compact \.notification-details\s*\{[^}]*-webkit-line-clamp:\s*2/);
   assert.match(phoneCss, /\.incoming-notification-close\s*\{[^}]*min-width:\s*40px[^}]*min-height:\s*40px/);
   assert.match(main, /setInterval\(checkVersion, adaptiveRefreshInterval\(window, 5 \* 60_000\)\)/);
-  assert.match(main, /if \(responsiveMobile && selectedOperationalRole && current\.token === session\.token && current\.loaded && !current\.error\) return current/);
+  assert.match(main, /if \(current\.token === session\.token && current\.loaded && !current\.error\) return current/);
 });

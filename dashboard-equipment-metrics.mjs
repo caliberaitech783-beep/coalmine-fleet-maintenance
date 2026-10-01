@@ -215,8 +215,8 @@ export function liveEquipmentMetrics(records = [], requests = [], statuses = liv
 }
 
 export function fleetChartCounts(records = [], requests = []) {
-  const matches=fleetAssetMatcher();
-  const activeBreakdownRecords = records.filter((record) => matchingRoadStatus(record, requests, matches) === "offroad");
+  const statuses = liveEquipmentRoadStatuses(records, requests);
+  const activeBreakdownRecords = records.filter((_, index) => statuses[index] === "offroad");
   return {
     ...fleetAssetCounts(records),
     breakdown: fleetAssetCounts(activeBreakdownRecords),
@@ -240,15 +240,23 @@ export function fleetBreakdownCaseCounts(records = [], requests = []) {
 // or its live road status when it has none.
 const ROAD_STATUS_LABELS = { onroad: "On road", offroad: "Off road", idle: "Idle", unknown: "Status not set" };
 export function fleetAssetRequestDetails(records = [], requests = []) {
-  const matches = fleetAssetMatcher();
   const active = requests.filter((request) => normalize(request.status) !== "closed" || isIdleVehicleRequest(request));
-  return records.map((record) => {
-    const current = active.filter((request) => matches(request, record))
-      .sort((left, right) => String(left.start || "").localeCompare(String(right.start || "")))[0];
+  const resolve = createFleetAssetResolver(records);
+  const currentByIndex = new Map();
+  for (const request of active) {
+    const match = resolve(request);
+    if (!["matched", "ambiguous"].includes(match.reason)) continue;
+    for (const index of match.candidateIndexes) {
+      const previous = currentByIndex.get(index);
+      if (!previous || String(request.start || "").localeCompare(String(previous.start || "")) < 0) currentByIndex.set(index, request);
+    }
+  }
+  return records.map((record, index) => {
+    const current = currentByIndex.get(index);
     const openingReadings = current ? requestMeterReadings(current, "opening", [record]) : {};
     const requestStatus = current
       ? isIdleVehicleRequest(current) ? "Idle" : requestStatusLabel(current)
-      : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
+      : ROAD_STATUS_LABELS[["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus) ? record.dashboardRoadStatus : "onroad"] || ROAD_STATUS_LABELS.unknown;
     return {
       ...record,
       door: equipmentDoorNumber(record) || record.door || '',

@@ -16,6 +16,8 @@ test('the application permanently resolves CSS motion without changing component
   assert.match(noMotion,/animation-iteration-count: 1 !important;/);
   assert.match(noMotion,/transition-duration: 0s !important;/);
   assert.match(noMotion,/scroll-behavior: auto !important;/);
+  assert.match(noMotion,/content-visibility: auto;/);
+  assert.match(noMotion,/contain-intrinsic-block-size: auto 520px;/);
 });
 
 test('programmatic scrolling and SVG icons contain no independent animation',()=>{
