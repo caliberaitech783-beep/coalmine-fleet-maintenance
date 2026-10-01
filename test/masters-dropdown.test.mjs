@@ -41,7 +41,7 @@ test("reports opens as a graphical dropdown of report sub types", async () => {
 
 test("switching any top-level menu closes its peers and selecting a report closes all menus", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
-  const names = ["Masters", "Whatsapp", "Workspaces", "Reports", "Admin", "Cdir"];
+  const names = ["Masters", "Whatsapp", "Workspaces", "Reports", "Admin", "Cdir", "Iboss"];
   const state = Object.fromEntries(names.map(name => [name, false]));
   const setters = names.map(name => value => {state[name] = typeof value === 'function' ? value(state[name]) : value;});
   const closeBody = source.match(/const closeMenus = \(\) => \{([\s\S]*?)\n  \};/)[1];

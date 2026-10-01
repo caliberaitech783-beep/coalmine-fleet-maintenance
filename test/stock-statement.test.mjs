@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {STOCK_STATEMENT_SQL,stockStatementRow} from '../stock-statement.mjs';
 
-test('stock statement opens from Admin through the IBOSS submenu',()=>{
+test('stock statement opens through the top-level IBOSS dropdown',()=>{
   const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const adminMenu=source.slice(source.indexOf('{canViewAdmin && <div'),source.indexOf('{(canViewDirectory ||'));
-  assert.match(adminMenu,/<ClockMenu label="IBOSS"[^\n]+items=\{visibleIbossNav\}/);
+  assert.doesNotMatch(adminMenu,/IBOSS|visibleIbossNav/);
+  assert.match(source,/className="masters-dropdown iboss-dropdown"/);
   assert.match(source,/const visibleIbossNav = \[\["Stock Statement"/);
-  assert.match(adminMenu,/selectDropdownPage\(page, event, setAdminSelectionClosed\)/);
-  assert.match(adminMenu,/visibleIbossNav\.map\(\(\[name\]\)=>name\)\]\.includes\(active\)/);
+  assert.match(source,/selectDropdownPage\(name,event,setIbossSelectionClosed\)/);
+  assert.match(source,/visibleIbossNav\.some\(\(\[name\]\) => name === active\)/);
   assert.doesNotMatch(source,/data-nav="stock-statement"/);
 });
 

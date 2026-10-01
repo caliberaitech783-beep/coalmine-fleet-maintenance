@@ -964,6 +964,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [cdirSelectionClosed, setCdirSelectionClosed] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSelectionClosed, setAdminSelectionClosed] = useState(false);
+  const [ibossOpen, setIbossOpen] = useState(false);
+  const [ibossSelectionClosed, setIbossSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -986,6 +988,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setReportsOpen(false);
     setAdminOpen(false);
     setCdirOpen(false);
+    setIbossOpen(false);
   };
   useEffect(() => {
     const outside = event => {
@@ -1199,11 +1202,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks",...visibleIbossNav.map(([name])=>name)].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
-            <ClockMenu label="IBOSS" icon={FileBarChart} items={visibleIbossNav} hours={visibleIbossNav.map((_,index)=>2+index*2)} active={active} workspace="report-stock-statement" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
             <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
@@ -1219,6 +1221,17 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "CD" ? " active" : ""}`} data-workspace="directory" onClick={event => selectDropdownPage("CD", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span><span className="nav-label">Directory</span></button></div>}
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Tenure Report" ? " active" : ""}`} data-workspace="report-employee-tenure" onClick={event => selectDropdownPage("Employee Tenure Report", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Tenure Report</span></button></div>}
             <ClockMenu down label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} hours={cdirMasterNav.map((_, index, all) => 3.4 + index * 5.2 / Math.max(1, all.length - 1))} active={active} onSelect={selectMaster} />
+          </div>
+        </div>}
+        {session?.role === "super" && visibleIbossNav.length > 0 && <div
+          className={`masters-menu iboss-menu${ibossOpen ? " open" : ""}${ibossSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setIbossSelectionClosed(false)}
+        >
+          <div className="nav-config-row"><button className={`header-nav-item${visibleIbossNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="iboss" aria-haspopup="menu" aria-expanded={ibossOpen} onClick={() => {setIbossSelectionClosed(false);closeMenus(); setIbossOpen(!ibossOpen);}}>
+            <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">IBOSS</span><ChevronDown className="masters-chevron" />
+          </button></div>
+          <div className="masters-dropdown iboss-dropdown" role="menu">
+            {visibleIbossNav.map(([name,Icon,workspace]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
           </div>
         </div>}
       </nav>
