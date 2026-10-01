@@ -42,7 +42,7 @@ test('current outstanding reports retain native settlement semantics and disting
  assert.match(TRANSACTION_VIEWS['tds-payable'].sql,/GROUP BY v\.companycode,a\.partycode,a\.partyname,a\.taxsectionname/);
  assert.match(TRANSACTION_VIEWS['party-tcs'].sql,/GROUP BY a\.companycode,a\.partycode,a\.partyname,a\.type/);
 });
-test('the real Accounts component renders separate selectable grids and accessible section tabs',async()=>{
+test('the real Accounts component renders the menu-selected grid without duplicate section tabs',async()=>{
  const source=fs.readFileSync(new URL('../src/iboss-accounts.jsx',import.meta.url),'utf8').replace(/^import .*;\r?$/gm,'').replace('export default function','function');
  const {code}=await transformWithOxc(source,'accounts.jsx',{jsx:{runtime:'classic'}});
  const Null=()=>null;
@@ -53,7 +53,9 @@ test('the real Accounts component renders separate selectable grids and accessib
  assert.match(master,/>Account Master</);assert.doesNotMatch(master,/>Payment Advice Register</);
  for(const title of titles)assert.ok(transactions.includes(`>${title}<`),title);
  assert.doesNotMatch(transactions,/>Account Master</);
- assert.match(transactions,/id="accounts-tab-transactions" tabindex="0" aria-selected="true"/);
+ assert.match(transactions,/<h2 id="accounts-section-heading">Transactions<\/h2>/);
+ assert.match(master,/<h2 id="accounts-section-heading">Masters<\/h2>/);
+ assert.doesNotMatch(master+transactions,/role="tab(?:list|panel)?"|accounts-tab-|iboss-accounts-sections/);
 });
 test('both navigation children retain Accounts permissions and the correct initial section',()=>{
  const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');

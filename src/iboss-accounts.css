@@ -1,7 +1,4 @@
-.iboss-accounts-sections {display:flex;gap:10px;margin-top:20px;}
 .iboss-accounts-submenus {margin-left:20px;padding-left:10px;border-left:1px solid #ffffff45;}
-.iboss-accounts-sections button {border:1px solid var(--border,#dde3ec);border-radius:8px;padding:10px 20px;background:var(--panel,#fff);color:var(--ink,#24334d);font:inherit;cursor:pointer;}
-.iboss-accounts-sections button[aria-selected="true"] {background:#2677d3;color:#fff;border-color:#2677d3;}
 .iboss-accounts-panel { background:var(--panel,#fff);border:1px solid var(--border,#dde3ec);border-radius:18px;box-shadow:0 2px 5px #20334c12;margin:20px 0;overflow:hidden; }
 .iboss-accounts-panel h2 { margin:0;padding:28px 32px;border-bottom:1px solid var(--border,#dde3ec);font-size:16px; }
 .iboss-accounts-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:16px; }

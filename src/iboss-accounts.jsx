@@ -9,13 +9,13 @@ import './stock-statement.css';
 import './iboss-accounts.css';
 const icons=[BookUser,Contact,Wallet,Landmark,Settings,Network,BookOpen,Percent];
 export default function IbossAccounts({token,ReportSection,initialSection='masters'}) {
- const [section,setSection]=useState(initialSection);
+ const section=initialSection;
  const [view,setView]=useState('');
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
  const definition=ACCOUNT_VIEWS[view];
- useEffect(()=>{setSection(initialSection);setView('');setValidation('');},[initialSection]);
+ useEffect(()=>{setView('');setValidation('');},[initialSection]);
  useEffect(()=>{
   if(!view)return;
   const controller=new AbortController();setData({rows:[],loading:true,error:''});
@@ -31,16 +31,12 @@ export default function IbossAccounts({token,ReportSection,initialSection='maste
   setData({rows:[],loading:true,error:''});setValidation('');setView(key);
  };
  const refresh=event=>{event.preventDefault();try{if(definition.dated)purchaseOrderRange(draft.from,draft.to);if(definition.asOf)purchaseOrderRange(draft.to,draft.to);setValidation('');setRange({...draft});setAttempt(value=>value+1);}catch(error){setValidation(error.message);}};
- const changeSection=(next,focus=false)=>{setSection(next);setView('');setValidation('');if(focus)queueMicrotask(()=>document.getElementById(`accounts-tab-${next}`)?.focus());};
- const sectionKeyDown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();changeSection(event.key==='Home'?'masters':event.key==='End'?'transactions':section==='masters'?'transactions':'masters',true);};
  return <section className="reports-workspace stock-statement iboss-accounts">
   <h1><Landmark aria-hidden="true"/> Accounts</h1>
-  <div className="iboss-accounts-sections" role="tablist" aria-label="Accounts sections" onKeyDown={sectionKeyDown}>{[['masters','Masters'],['transactions','Transactions']].map(([key,label])=><button key={key} type="button" role="tab" id={`accounts-tab-${key}`} tabIndex={section===key?0:-1} aria-selected={section===key} aria-controls={`accounts-panel-${key}`} onClick={()=>changeSection(key)}>{label}</button>)}</div>
-  <div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
-   <h2>{section==='transactions'?'Transactions':'Masters'}</h2>
+  <div className="iboss-accounts-panel" role="region" aria-labelledby="accounts-section-heading">
+   <h2 id="accounts-section-heading">{section==='transactions'?'Transactions':'Masters'}</h2>
    <div className="iboss-accounts-grid">{ACCOUNT_SECTIONS[section].map((key,index)=>{const entry=ACCOUNT_VIEWS[key],Icon=icons[index%icons.length];return <button type="button" key={key} aria-pressed={view===key} onClick={()=>open(key)}><span className={`iboss-account-icon tone-${index%icons.length}`}><Icon aria-hidden="true"/></span><span>{entry.title}</span></button>;})}</div>
   </div>
-  <div hidden role="tabpanel" id={`accounts-panel-${section==='masters'?'transactions':'masters'}`} aria-labelledby={`accounts-tab-${section==='masters'?'transactions':'masters'}`}/>
   {definition&&<>
    <form className="stock-statement-filters" onSubmit={refresh}>
     <button type="button" onClick={()=>{setView('');setValidation('');}}><ArrowLeft/>All Accounts menus</button>
