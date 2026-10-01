@@ -33,6 +33,7 @@ export const ADMIN_REPORT_OPTIONS = [
   "Vehicle History Report",
   "Stock Statement",
   "Purchase Order",
+  "GRN Register",
 ];
 
 export const ADMIN_SUBMENU_OPTIONS = {
