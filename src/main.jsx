@@ -1229,11 +1229,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu iboss-menu${ibossOpen ? " open" : ""}${ibossSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setIbossSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${visibleIbossNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="iboss" aria-haspopup="menu" aria-expanded={ibossOpen} onClick={() => {setIbossSelectionClosed(false);closeMenus(); setIbossOpen(!ibossOpen);}}>
+          <div className="nav-config-row"><button className={`header-nav-item${visibleIbossNav.some(([name]) => name === active) || ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-nav="iboss" aria-haspopup="menu" aria-expanded={ibossOpen} onClick={() => {setIbossSelectionClosed(false);closeMenus(); setIbossOpen(!ibossOpen);}}>
             <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">IBOSS</span><ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown iboss-dropdown" role="menu">
-            {visibleIbossNav.map(([name,Icon,workspace]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
+            {visibleIbossNav.map(([name,Icon,workspace]) => <React.Fragment key={name}><div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === name || name === "Accounts" && ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>{name === "Accounts" && <div className="iboss-accounts-submenus" role="group" aria-label="Accounts menus">{[["Accounts Masters","Masters"],["Accounts Transactions","Transactions"]].map(([page,label])=><div className="nav-config-row" key={page}><button role="menuitem" className={`workspace-menu-item${active===page?" active":""}`} data-workspace="iboss-accounts" onClick={event=>selectDropdownPage(page,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><FileBarChart/><i className="workspace-icon-glow"/></span><span className="nav-label">{label}</span></button></div>)}</div>}</React.Fragment>)}
           </div>
         </div>}
       </nav>
@@ -11351,6 +11351,7 @@ function App() {
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
     if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation","Accounts"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
+    if (["Accounts Masters","Accounts Transactions"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,"Accounts");
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -11665,6 +11666,10 @@ function App() {
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Purchase Order" ? (
     <PurchaseOrderReport token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : renderedActive === "Accounts Transactions" ? (
+    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} initialSection="transactions" />
+  ) : renderedActive === "Accounts Masters" ? (
+    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} initialSection="masters" />
   ) : renderedActive === "Accounts" ? (
     <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "PO-GRN Reconciliation" ? (

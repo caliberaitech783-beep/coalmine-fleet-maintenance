@@ -3879,7 +3879,7 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
   if(req.session.role!=='super'||!accessAllows(permissions.tabAccess,'Reports')||
     !(accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Accounts')))
     return res.status(403).json({error:'You do not have access to Accounts.'});
-  try {const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);}
+  try {const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
   catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
