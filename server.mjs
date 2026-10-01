@@ -5552,6 +5552,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   closing_meter_file_name AS "closingMeterFileName"`;
 
 const infoPulseProjection=`reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
+  (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
   registration_number AS reg,site,category,complaint,owner_name AS owner,requester_login AS "requesterLogin",
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,status,idle_reason AS "idleReason",
