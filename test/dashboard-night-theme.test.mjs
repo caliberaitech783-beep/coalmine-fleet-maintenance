@@ -64,7 +64,7 @@ test("Smart Print is readable in Night mode and keeps a white paper preview", as
   assert.match(css, /:root\[data-theme="dark"\] \.smart-print-dialog :is\(button, select\) \{[^}]*background: #2d2331;/);
   // The dark theme lightens every table cell, so the paper preview pins its own ink.
   assert.match(css, /:root\[data-theme="dark"\] \.smart-print-sheet td \{ background: #fff; color: #17233c; \}/);
-  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-sheet th \{ background: #10284c; color: #fff; \}/);
+  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-sheet th \{ background: #fff; color: #000; \}/);
 });
 
 test("Dashboard list dialogs use dark panels in Night mode", async () => {
