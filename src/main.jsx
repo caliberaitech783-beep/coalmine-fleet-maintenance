@@ -2028,6 +2028,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some((site) => recordBelongsToSite(record, site)));
     }
   }
+  // Pending MIS work uses workspace eligibility, not dashboard history exclusions.
   const maintenanceClosedRows = dashboardMisQueue(sourceRequests, {
     from: safeTrendStartKey,
     to: requestTrendEndKey,
