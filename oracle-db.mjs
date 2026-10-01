@@ -1,5 +1,5 @@
 import oracledb from "oracledb";
-import {accountView,accountRecord} from './iboss-accounts.mjs';
+import {accountView,accountRecord,mergeChain,mergeStatements,buildMergedReport,buildTrail} from './iboss-accounts.mjs';
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
 import {PURCHASE_ORDER_SQL,purchaseOrderRange,purchaseOrderRow} from './purchase-order-report.mjs';
 import {GRN_REGISTER_SQL,grnRegisterRow} from './grn-register.mjs';
@@ -26,6 +26,32 @@ export async function oracleAccounts(view,from,to) {
     if(result.rows.length>50000){const error=new Error(definition.dated?'More than 50,000 records match. Choose a shorter date range.':'More than 50,000 records match this Accounts view.');error.code='REPORT_TOO_LARGE';throw error;}
     return {rows:result.rows.map(accountRecord),checkedAt:new Date().toISOString()};
   } finally {await connection.close();}
+}
+
+async function runMergeStatements(statements) {
+  const pool=await oraclePool();const connection=await pool.getConnection();
+  try {
+    connection.callTimeout=90000;
+    await connection.execute('SET TRANSACTION READ ONLY');
+    const rowsByStep={};
+    for(const statement of statements){
+      const result=await connection.execute(statement.sql,statement.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:5000,maxRows:50001});
+      if(result.rows.length>50000){const error=new Error('More than 50,000 records match one of the selected reports. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
+      rowsByStep[statement.step]=result.rows;
+    }
+    return rowsByStep;
+  } finally {await connection.close();}
+}
+
+export async function oracleReportMerge(chain,steps,from,to) {
+  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to}));
+  return {...buildMergedReport(chain,steps,rowsByStep),checkedAt:new Date().toISOString()};
+}
+
+export async function oracleReportMergeTrail(chain,anchorKey,from,to) {
+  const steps=mergeChain(chain).steps.map(step=>step.key);
+  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to,anchorKey}));
+  return {steps:buildTrail(chain,rowsByStep),checkedAt:new Date().toISOString()};
 }
 
 export async function oraclePoGrnReconciliation(from,to) {

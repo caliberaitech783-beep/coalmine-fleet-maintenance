@@ -1,5 +1,6 @@
 import express from 'express';
-import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts} from './oracle-db.mjs';
+import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
+import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
 import {accountView} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
 import {fleetErpUpdates} from './fleet-erp-sync.mjs';
@@ -3889,6 +3890,44 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
     console.error('IBOSS Accounts failed:',error.code || 'Oracle error');
     res.status(502).json({error:'Could not load Accounts data from Oracle. Please retry.'});
   }
+});
+
+const accountsMergeAllowed=req=>{
+  const permissions=req.session.permissions || {};
+  return req.session.role==='super'&&accessAllows(permissions.tabAccess,'Reports')&&
+    (accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Accounts'));
+};
+const accountsMergeFailed=(res,error)=>{
+  if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
+  console.error('IBOSS Report Merge failed:',error.code || 'Oracle error');
+  res.status(502).json({error:'Could not load Report Merge data from Oracle. Please retry.'});
+};
+
+app.get('/api/reports/iboss-accounts-merge/:chain',requireSession,async(req,res)=>{
+  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  let selection;
+  try {
+    purchaseOrderRange(req.query.from,req.query.to);
+    const requested=String(req.query.steps||'').split(',').map(step=>step.trim()).filter(Boolean);
+    selection=resolveSelection(req.params.chain,requested);
+  } catch(error){return res.status(400).json({error:error.message});}
+  res.set('Cache-Control','no-store');
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  try {res.json({...await oracleReportMerge(req.params.chain,selection.steps,req.query.from,req.query.to),...selection});}
+  catch(error){accountsMergeFailed(res,error);}
+});
+
+app.get('/api/reports/iboss-accounts-merge/:chain/trail',requireSession,async(req,res)=>{
+  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  const key=String(req.query.key||'');
+  try {
+    mergeChain(req.params.chain);purchaseOrderRange(req.query.from,req.query.to);
+    if(!key||key.length>100)throw new Error('Choose a document to trace.');
+  } catch(error){return res.status(400).json({error:error.message});}
+  res.set('Cache-Control','no-store');
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  try {res.json(await oracleReportMergeTrail(req.params.chain,key,req.query.from,req.query.to));}
+  catch(error){accountsMergeFailed(res,error);}
 });
 
 app.get('/api/reports/po-grn-reconciliation',requireSession,async(req,res)=>{

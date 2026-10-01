@@ -1,4 +1,5 @@
 import {TRANSACTION_VIEWS} from './iboss-account-transactions.mjs';
+export {mergeChain,mergeStatements,buildMergedReport,buildTrail} from './iboss-report-merge.mjs';
 const col=(key,label)=>({key,label});
 const accountSql=`SELECT p.tno AS id,p.partycode AS account_code,p.partyname AS account_name,
  t.partytypename AS account_type,p.parentcode AS parent_code,parent.partyname AS parent_account,
