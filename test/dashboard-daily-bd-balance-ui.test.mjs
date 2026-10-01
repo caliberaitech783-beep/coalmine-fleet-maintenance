@@ -28,15 +28,14 @@ const find = (tree, predicate) => {
 const label = (tree, value) => find(tree, node => node.props['aria-label'] === value)[0];
 const text = node => Array.isArray(node) ? node.map(text).join('') : React.isValidElement(node) ? text(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
 const button = (tree, value) => find(tree, node => node.type === 'button' && text(node) === value)[0];
-function harness(simple=false) {
+function harness() {
   const slots = [], calls = []; let cursor = 0;
   const bindings = {
-    useSimpleMobile:()=>simple,
     React, ...ledger, dashboardCountScale, recordedBreakdownRangeLength, recordBelongsToSite, formatDisplayDate, dailyBdBalanceExport, timestampMatchesShift,
     useMemo: fn => fn(),
     useState(initial) {const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => {slots[i] = value;}];},
     ...Object.fromEntries(['ArrowDown', 'ArrowRight', 'ArrowUp', 'Info', 'MapPin', 'RotateCcw'].map(name => [name, () => null])),
-};
+  };
   const Chart = new Function("DateInput", ...Object.keys(bindings), `${code}; return DailyBdBalanceChart;`)(DateInput, ...Object.values(bindings));
   const props = {today: '2026-09-11', sites: ['Sasti OB', 'Majri OB'], records: [
     {ref: 'OLD', site: 'Sasti OB', start: '2026-09-01', status: 'Open'},
@@ -45,17 +44,6 @@ function harness(simple=false) {
   ], onInspect: (...args) => calls.push(args)};
   return {calls, render(overrides = {}) {cursor = 0; return Chart({...props, ...overrides});}};
 }
-
-test('mobile BD table keeps daily counts and detail clicks without plotting bars',()=>{
-  const view=harness(true),tree=view.render();
-  assert.ok(find(tree,node=>node.type==='table').length);
-  assert.equal(find(tree,node=>node.props.className==='bd-site-graphs').length,0);
-  const count=find(tree,node=>node.type==='button'&&node.props['aria-label']?.includes('2026-09-11, Closing'))[0];
-  assert.ok(count,'Closing balance remains a detail button');
-  count.props.onClick();
-  assert.equal(view.calls[0][0],'active-balance');
-  assert.deepEqual(view.calls[0].slice(1,3),['2026-09-11','2026-09-11']);
-});
 
 test('today is selected and applied by default to all counts and exact date drill-down', () => {
   const view = harness(), tree = view.render();

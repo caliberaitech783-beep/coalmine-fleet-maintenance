@@ -1,14 +1,11 @@
 import React, {useEffect, useState} from 'react';
-import {useSimpleMobile} from './mobile-display.jsx';
 import {Pause, Play} from 'lucide-react';
 import {infoPulseDate} from '../info-pulse-data.mjs';
 import './info-pulse-birthday.css';
 
 export function BirthdayMarquee({names = []}) {
   const [paused, setPaused] = useState(false);
-  const simple=useSimpleMobile();
   if (!names.length) return null;
-  if(simple)return <section className="pulse-birthday"><strong>Today's birthdays:</strong> {names.join(', ')}</section>;
   const message = <><span className="pulse-birthday-greeting">Happy Birthday!</span>{names.map((name,index) => <React.Fragment key={`${index}-${name}`}><strong>{name}</strong><span className="pulse-birthday-star">✦</span></React.Fragment>)}<span>Have a wonderful day!</span><span>🎉</span></>;
   return <section className="pulse-birthday" data-paused={paused} aria-label={`Today's birthdays: ${names.join(', ')}. Happy Birthday!`} style={{'--birthday-duration':`${Math.max(22, names.join('').length / 4)}s`}}>
     <div className="pulse-birthday-confetti" aria-hidden="true">{Array.from({length:6},(_,index)=><i key={index} />)}</div>

@@ -80,16 +80,6 @@ const clickOem = (control) => {
   assert.ok(stopped, "the chart action stops propagation");
 };
 
-test('simple mobile dashboard replaces plot DOM with scoped export-backed tables',()=>{
-  const tree=harness({simple:true,initialMode:null}).render();
-  assert.equal(tree.props.className,'simple-dashboard');
-  assert.equal(byLabel(tree,'Fleet chart view'),undefined);
-  const tables=findAll(tree,node=>Array.isArray(node.props.columns)&&Array.isArray(node.props.rows));
-  assert.ok(tables.length>=4);
-  assert.ok(tables.every(table=>table.props.columns.every(column=>typeof column.value==='function')));
-  assert.ok(byLabel(tree,'Region'));
-});
-
 const assets = Object.freeze([1, 2, 3].map((id) => Object.freeze({id, door: `V${id}`, chassisNo: `C${id}`, category: "Vehicle", group: "TIPPER", currentLocation: "Sasti OB", status: "Operational"})));
 const requests = Object.freeze([
   Object.freeze({ref: "OLD-OPEN", door: "V1", chassis: "C1", site: "Sasti OB", category: "Breakdown", status: "Open", start: "2026-09-01 09:00:00"}),
@@ -204,7 +194,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.equal(button(tree, "Reset dates").props.disabled, true);
 });
 
-function harness({simple=false,equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = []} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = []} = {}) {
   const slots = [];
   let cursor = 0;
   let initialized = false;
@@ -214,7 +204,6 @@ function harness({simple=false,equipment = assets, regions = [{code: "WCL", site
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
-    useSimpleMobile:()=>simple,
     activeTodayBreakdowns,
     useMasterRecords: () => [repairTypes],
     requestEquipmentDetails,

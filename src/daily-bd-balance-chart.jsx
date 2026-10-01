@@ -1,5 +1,4 @@
 import React, {useMemo, useState} from 'react';
-import {useSimpleMobile} from './mobile-display.jsx';
 import {ArrowDown, ArrowRight, ArrowUp, Info, MapPin, RotateCcw} from 'lucide-react';
 import {DAILY_BD_METRICS, buildDailyBdBalance, shiftBdDate} from './daily-bd-balance.mjs';
 import {recordedBreakdownRangeLength} from './dashboard-breakdown-forecast.mjs';
@@ -30,7 +29,6 @@ function BalanceChange({row}) {
 }
 
 export default function DailyBdBalanceChart({records = [], sites = [], scopeLabel = 'All regions', today, ready = true, error = '', stale = false, shift = DAILY_BD_ALL_SHIFTS, shiftOptions = [], onShiftChange, shiftRecords = [], onRefresh, onInspect, ExportMenu = null, exportRef = null}) {
-  const simple=useSimpleMobile();
   const [site, setSite] = useState('');
   const [range, setRange] = useState({days: 1, from: '', to: ''});
   const [rangeError, setRangeError] = useState('');
@@ -89,7 +87,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
       <div className="bd-balance-context"><span>{activeSite || scopeLabel} · {activeShiftLabel} · {formatDisplayDate(from)} to {formatDisplayDate(to)}{stale ? ' · Last checked data' : to === today ? ' · Today so far' : ''}</span><span className="bd-balance-context-change">Net change <b>{signedCount(ledger.totals.delta)} open</b><BalanceChange row={ledger.totals}/><span className="bd-balance-help" tabIndex={0} title="Opening includes all earlier requests still open at the start of the selected period. Closing balance excludes current Idle/Ideal cases, which are shown separately. Closing plus idle carries into the next day's opening. Change = (closing − opening) ÷ opening × 100. Red means more open BD; green means fewer. Each request is counted once; BD Out uses its actual maintenance closing date. Today's figures are live, not final." aria-label="How BD balance and percentage change are calculated"><Info aria-hidden="true"/></span></span></div>
       {rangeError && <p className="bd-balance-range-error" role="alert">{rangeError}</p>}
       <div className="bd-balance-summary" aria-label="BD movement totals for selected period">{[...DAILY_BD_METRICS, {key: 'idle', label: 'Idle Vehicles'}].map(({key,label}) => <button type="button" className={key} key={key} onClick={() => inspect(key)} aria-label={`${label}: ${ledger.totals[key]} requests in selected period`}><span><i/>{label}</span><strong>{ledger.totals[key].toLocaleString()}</strong></button>)}</div>
-      {simple ? <div className="simple-data-section simple-data-scroll"><table><thead><tr><th scope="col">Site</th><th scope="col">Date</th>{[...DAILY_BD_METRICS,{key:'idle',label:'Idle vehicles'}].map(metric=><th scope="col" key={metric.key}>{metric.label}</th>)}</tr></thead><tbody>{(view==='sites'?siteLedgers:[{name:activeSite||scopeLabel,ledger}]).flatMap(({name,ledger:siteLedger})=>siteLedger.days.map(day=><tr key={`${name}-${day.date}`}><td>{name}</td><td>{formatDisplayDate(day.date)}</td>{[...DAILY_BD_METRICS,{key:'idle',label:'Idle vehicles'}].map(metric=><td key={metric.key}><button type="button" aria-label={`${name}, ${day.date}, ${metric.label}: ${day[metric.key]}`} onClick={()=>inspect(metric.key,day.date,day.date,view==='sites'?name:activeSite)}>{day[metric.key]}</button></td>)}</tr>))}</tbody></table></div> : view === 'sites' ? <div className="bd-site-graphs" role="region" aria-label="Every site BD balance by date">
+      {view === 'sites' ? <div className="bd-site-graphs" role="region" aria-label="Every site BD balance by date">
         <p className="bd-site-hint">Daily closing BD · Idle excluded · Click a bar to view requests. All sites use the same scale (0–{siteMaximum}).</p>
         <div className="bd-site-grid">{siteLedgers.map(({name, ledger: siteLedger}) => <section className="bd-site-card" key={name} aria-label={`${name} BD balance graph`}>
           <header><h3>{name}</h3><BalanceChange row={siteLedger.totals}/></header>

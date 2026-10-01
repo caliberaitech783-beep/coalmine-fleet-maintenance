@@ -138,7 +138,6 @@ import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace, requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
-import {MobileDisplayProvider,useSimpleMobile,SimpleDataTable} from './mobile-display.jsx';
 import {startVisiblePoll} from "./visible-poll.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
@@ -478,16 +477,15 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
   );
 }
 function HeaderClock({ className = "" }) {
-  const simple=useSimpleMobile();
   // All pages share the same time-first presentation and live clock.
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   useEffect(() => {
-    const updateClock = () => {if(document.visibilityState!=='hidden')setCurrentDateTime(new Date());};
-    const timer = window.setInterval(updateClock, simple ? 60000 : 1000);
+    const updateClock = () => setCurrentDateTime(new Date());
+    const timer = window.setInterval(updateClock, 1000);
     return () => window.clearInterval(timer);
-  }, [simple]);
+  }, []);
   const date = formatDisplayDate(currentDateTime);
-  const time = simple ? currentDateTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : formatDisplayTime(currentDateTime);
+  const time = formatDisplayTime(currentDateTime);
   return (
     <time className={`header-clock ${className}`.trim()} dateTime={currentDateTime.toISOString()} aria-label={`Current date and time ${date} ${time}`}>
       <span className="header-clock-time">{time}</span>
@@ -874,22 +872,21 @@ function Login({ onLogin, theme, toggleTheme }) {
 // instead. "alwaysOpen" shows only the clock (the menu itself is the entry), and
 // "down" puts the centre at the top with the icons fanning out below it.
 function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], active, onSelect, workspace = "users", hours = null, alwaysOpen = false, down = false, labelFor = (name) => name, keyFor = (name, key) => key || "master" }) {
-  const simple=useSimpleMobile();
   const [openState, setOpen] = useState(() => items.some(([name]) => name === active));
   const [inside, setInside] = useState(alwaysOpen);
   const clockRef = useRef(null);
   const open = alwaysOpen || openState;
   useEffect(() => {
-    if (simple || !open || !hours) return;
+    if (!open || !hours) return;
     if (!alwaysOpen) {
       const rect = clockRef.current?.getBoundingClientRect?.();
       if (rect && rect.right > window.innerWidth - 8) setInside(true);
     }
     if (inside) clockRef.current?.scrollIntoView?.({block: "nearest"});
-  }, [simple, open, hours, inside, alwaysOpen]);
+  }, [open, hours, inside, alwaysOpen]);
   useEffect(() => { if (!open && !alwaysOpen) setInside(false); }, [open, alwaysOpen]);
   if (!items.length) return null;
-  const clock = open && (simple ? <div className="simple-nav-menu" role="menu" aria-label={label}>{items.map(([name,Icon])=><button type="button" role="menuitem" key={name} className={active===name?'active':''} onClick={event=>onSelect(name,event)}><Icon aria-hidden="true"/>{labelFor(name)}</button>)}</div> : <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>
+  const clock = open && <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>
     <span className="cdir-clock-center" aria-hidden="true">{centerLabel}</span>
     {items.map(([name, Icon, menuKey], index) => (
       <button
@@ -906,7 +903,7 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
         <span className="workspace-menu-item cdir-clock-badge" data-workspace={keyFor(name, menuKey)} aria-hidden="true"><span className="workspace-icon"><Icon /><i className="workspace-icon-glow" /></span></span>
       </button>
     ))}
-  </div>);
+  </div>;
   if (alwaysOpen) return clock;
   return <div
     className={`cdir-masters-hub${hours ? " half" : ""}${inside ? " inside" : ""}${open ? " open" : ""}`}
@@ -1580,7 +1577,6 @@ function oemChartPlotSpace(article) {
   return Math.round(room - axisChrome - below - OEM_CHART_VIEWPORT_GAP);
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
-  const simple=useSimpleMobile();
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
   const [dashboardRepairTypes] = useMasterRecords("Repair type master");
   const throughputFiltersRef = useRef(null);
@@ -2352,15 +2348,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // The whole dashboard: PDF and Smart Print capture it as it is on screen; Excel has every section.
   const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Print/Export" dashboardPdf />;
   const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-shift-filter"><span>Shift Master</span><select aria-label="Shift Master" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label><label className="mine-date-filter"><span>From</span><DateInput aria-label="Dashboard from date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><DateInput aria-label="Dashboard to date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => filterOemChart(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}{dashboardShift !== "all" ? ` · ${dashboardShiftLabel}` : ""}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
-  if(simple)return <div className="simple-dashboard">
-    {renderDashboardHeader()}
-    {!equipmentLoaded ? <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad}/> : <>
-      <div className="simple-dashboard-actions"><button type="button" onClick={()=>{retryEquipmentLoad();onRefreshRequests?.();}}>Refresh</button>{['onroad','idle','unavailable'].map(key=><button type="button" key={key} {...listAction(key,`${key} fleet records`)}>{key==='onroad'?'On road':key==='idle'?'Idle':'Unavailable'} details</button>)}</div>
-      <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} today={todayKey} ready={equipmentLoaded} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onInspect={(metric,from,to,site)=>openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef}/>
-      {dashboardExcelSheets().filter(sheet=>sheet.name!=='Daily BD balance').map((sheet,index)=><SimpleDataTable key={index} title={sheet.name} columns={sheet.columns} rows={sheet.rows}/>)}
-    </>}
-    {assetDrilldown&&<Modal title={assetDrilldownTitle} close={closeAssetDrilldown}><DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks}/></Modal>}
-  </div>;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
@@ -9710,12 +9697,11 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   );
 }
 function CaliberDirectoryPage() {
-  const simple=useSimpleMobile();
   return (
     <section className="caliber-directory-page" aria-label="Caliber Directory">
       <iframe
         title="Caliber Directory"
-        src={simple ? '/cd/caliber-directory.html?simple=1' : '/cd/caliber-directory.html'}
+        src="/cd/caliber-directory.html"
         loading="eager"
       />
     </section>
@@ -11514,7 +11500,7 @@ function App() {
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
     return (
-      <MobileDisplayProvider session={session} mobile={responsiveMobile}>
+      <>
         <Normal
           requests={requests}
           requestsLoaded={requestsLoaded}
@@ -11536,10 +11522,10 @@ function App() {
         <TicketResolutionNotices key={authToken} token={authToken} />
         <RemoteAssistanceAgent session={session} />
         {globalVehicleHistoryDialog}
-      </MobileDisplayProvider>
+      </>
     );
   return (
-    <MobileDisplayProvider session={session} mobile={responsiveMobile}><div className="app">
+    <div className="app">
       <Side
         active={active}
         setActive={(x) => {
@@ -11681,7 +11667,7 @@ function App() {
         <TicketResolutionNotices key={authToken} token={authToken} />
       <RemoteAssistanceAgent session={session} />
       {globalVehicleHistoryDialog}
-    </div></MobileDisplayProvider>
+    </div>
   );
 }
 createRoot(document.getElementById("root")).render(

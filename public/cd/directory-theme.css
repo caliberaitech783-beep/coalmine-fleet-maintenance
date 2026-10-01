@@ -22,10 +22,3 @@
   [data-theme="dark"] :is(.tb-toolbar .tbtn-add, .sidebar .tbtn-add, .sidebar-pin.pinned, .redact-on .tb-toolbar #btnRedact) { color: var(--ink); border-color: var(--line); }
   [data-theme="dark"] .sr-item mark { background: #70591f; color: #fff1be; }
 }
-
-html[data-simple-mobile="true"] *,html[data-simple-mobile="true"] *::before,html[data-simple-mobile="true"] *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; box-shadow:none !important; text-shadow:none !important; backdrop-filter:none !important; filter:none !important; font-family:system-ui,sans-serif !important; }
-html[data-simple-mobile="true"] :is(.hero-band,.topbar,.sidebar,.btn,.tag,.kpi) { background-image:none !important; }
-html[data-simple-mobile="true"] .hero-band { background:var(--panel,#fff) !important; color:var(--ink,#17263c) !important; }
-html[data-simple-mobile="true"] :is(.hero-collage,.hero-art,.bday-confetti) { display:none !important; }
-html[data-simple-mobile="true"] th { font-weight:800 !important; }
-html[data-simple-mobile="true"] .reveal { opacity:1 !important; transform:none !important; }

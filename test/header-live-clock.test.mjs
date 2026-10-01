@@ -7,10 +7,10 @@ test("signed-in headers render a bold live date and time clock", () => {
   const styles = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
 
   assert.match(source, /function HeaderClock\(/);
-  assert.match(source, /window\.setInterval\(updateClock, simple \? 60000 : 1000\)/);
+  assert.match(source, /window\.setInterval\(updateClock, 1000\)/);
   assert.match(source, /window\.clearInterval\(timer\)/);
   assert.match(source, /const date = formatDisplayDate\(currentDateTime\)/);
-  assert.match(source, /const time = simple \?.* : formatDisplayTime\(currentDateTime\)/);
+  assert.match(source, /const time = formatDisplayTime\(currentDateTime\)/);
   assert.match(source, /<HeaderClock \/>/);
   assert.match(source, /<span className="header-clock-time">\{time\}<\/span>\s*<CalendarDays aria-hidden="true" \/>\s*<span className="header-clock-date">\{date\}<\/span>/);
   assert.doesNotMatch(source, /timeFirst/);

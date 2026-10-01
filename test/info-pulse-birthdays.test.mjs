@@ -24,7 +24,7 @@ const stripped=source.replace(/^import .*;\r?\n/gm,'').replace(/export default /
 const {code}=await transformWithOxc(stripped,'birthday.jsx',{jsx:{runtime:'classic'}});
 test('birthday banner hides empty state, escapes names and supports pause',()=>{
   let paused=false;
-  const Component=new Function('React','useState','Pause','Play','useSimpleMobile',code+';return BirthdayMarquee;')(React,()=>[paused,value=>{paused=value(paused);}],()=>null,()=>null,()=>false);
+  const Component=new Function('React','useState','Pause','Play',code+';return BirthdayMarquee;')(React,()=>[paused,value=>{paused=value(paused);}],()=>null,()=>null);
   assert.equal(Component({names:[]}),null);
   const tree=Component({names:['A < B','Second Person']});
   const html=renderToStaticMarkup(tree);
@@ -35,13 +35,6 @@ test('birthday banner hides empty state, escapes names and supports pause',()=>{
   button.props.onClick();
   assert.equal(Component({names:['Person']}).props['data-paused'],true);
 });
-test('mobile birthdays keep all names as plain text without duplicate marquees',()=>{
-  const Component=new Function('React','useState','useSimpleMobile',code+';return BirthdayMarquee;')(React,()=>[false,()=>{}],()=>true);
-  const html=renderToStaticMarkup(Component({names:['One','Two']}));
-  assert.match(html,/One, Two/);
-  assert.doesNotMatch(html,/confetti|pulse-birthday-track|button/);
-});
-
 test('birthday endpoint is authenticated and animations honor reduced motion',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/app.get\('\/api\/info-pulse\/birthdays',requireSession/);

@@ -131,7 +131,7 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
   assert.ok(source.includes('<ClockMenu down label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} hours={cdirMasterNav.map((_, index, all) => 3.4 + index * 5.2 / Math.max(1, all.length - 1))} active={active} onSelect={selectMaster} />'));
   const clock = source.slice(source.indexOf("function ClockMenu("), source.indexOf("function Side("));
   assert.ok(clock.includes("aria-expanded={open}"));
-  assert.ok(clock.includes('<div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>'));
+  assert.ok(clock.includes('const clock = open && <div ref={clockRef} className={`cdir-clock${hours ? ` half ${inside ? "inside" : "beside"}` : ""}${down ? " down" : ""}`} role="menu" aria-label={label}>'));
   assert.ok(clock.includes('style={{"--angle": `${hours ? hours[index] * 30 : index * 360 / items.length}deg`}}'), "icons on a full clock or on given hours");
   assert.ok(clock.includes('onPointerEnter={(event) => { if (event.pointerType === "mouse") setOpen(true); }}'), "opens on hover");
   assert.ok(clock.includes("data-label={labelFor(name)}") && clock.includes("aria-label={labelFor(name)}"), "icons carry the full page name");
