@@ -83,5 +83,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .import-dropzone { transition: none; }
-  .import-progress span { animation-duration: 2.5s; }
+  .import-progress span { animation: none; }
 }

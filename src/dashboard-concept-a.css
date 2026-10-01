@@ -406,6 +406,7 @@
 }
 .mine-primary-kpi-grid[data-arranging="true"] .mine-primary-kpi-card:active { cursor: grabbing; }
 @keyframes mine-kpi-ready { from { transform: scale(.985); opacity: .78; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mine-primary-kpi-grid[data-arranging="true"] .mine-primary-kpi-card { animation: none; } }
 .mine-kpi-move-controls {
   position: absolute;
   z-index: 3;

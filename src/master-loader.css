@@ -172,5 +172,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .caliber-activity-ring,
-  .master-loader-lines i { animation-duration: 3s; }
+  .master-loader-lines i { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .caliber-activity-overlay { backdrop-filter: none; }
 }

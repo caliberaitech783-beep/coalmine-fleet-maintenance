@@ -62,7 +62,10 @@ export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAft
 function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}${tableProps["data-oem-column-layout"] ? ":oem-reasons-meters-v1" : ""}`;
-  const allColumnKeys = columns.map((column) => column.key);
+  const allColumnKeys = useMemo(() => {
+    const allColumnKeys = columns.map((column) => column.key);
+    return allColumnKeys;
+  }, [columns]);
   const [visible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
   const setVisible = (keys) => {
     const next = ensureJobReferenceVisibleKeys(keys, columns);
@@ -93,13 +96,13 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
     document.addEventListener("pointerdown", closeFilter);
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
-  const indices = visible.map((key) => columns.find((column) => column.key === key)?.index).filter((index) => index !== undefined);
-  const rows = sections.filter((section) => section.type === "tbody").flatMap((section) => tableElements(section.props.children));
-  const dataRows = rows.filter(isDataRow);
-  const dateColumn = primaryRecordDateColumn(columns);
+  const indices = useMemo(() => visible.map((key) => columns.find((column) => column.key === key)?.index).filter((index) => index !== undefined), [visible, columns]);
+  const rows = useMemo(() => sections.filter((section) => section.type === "tbody").flatMap((section) => tableElements(section.props.children)), [sections]);
+  const dataRows = useMemo(() => rows.filter(isDataRow), [rows]);
+  const dateColumn = useMemo(() => primaryRecordDateColumn(columns), [columns]);
   const disabledDateKey = disableDateColumnFilter ? dateColumn?.key : undefined;
-  const filterableColumns = columns.filter((column) => column.key !== disabledDateKey);
-  const effectiveFilters = Object.fromEntries(filterableColumns.map((column) => [column.key, column.header.props.onFilterChange ? column.header.props.filterValue || "" : filters[column.key] || ""]));
+  const filterableColumns = useMemo(() => columns.filter((column) => column.key !== disabledDateKey), [columns, disabledDateKey]);
+  const effectiveFilters = useMemo(() => Object.fromEntries(filterableColumns.map((column) => [column.key, column.header.props.onFilterChange ? column.header.props.filterValue || "" : filters[column.key] || ""])), [filterableColumns, filters]);
   const updateFilter = (key, value) => {
     if (key === disabledDateKey) return;
     const column = columns.find((item) => item.key === key);
@@ -193,8 +196,8 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
   }
   if (groupBySite) for (const data of new Set([exportData, printData, smartPrintData])) if (data) data.rows = selectedRows;
   // Include the existing header's complete value list, not only currently filtered rows.
-  const filterRows = filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
-  const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
+  const filterRows = useMemo(() => filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } }))), [filterableColumns]);
+  const filterColumns = useMemo(() => filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) })), [filterableColumns]);
   const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(allColumnKeys); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} defaultToday={defaultDateToday} />;

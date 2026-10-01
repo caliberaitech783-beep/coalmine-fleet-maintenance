@@ -2015,18 +2015,37 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestLifecycleRegion = requestLifecycleRegions.find((region) => region.code === requestTrendRegion);
   const requestLifecycleSite = requestLifecycleRegions.flatMap((region) => region.sites).find((site) => `site:${site}` === requestTrendRegion);
   // Maintenance count and drilldown share these rows; idle cases have their own card.
-  const requestLifecycleRows = {
-    production: locationBreakdowns.filter((record) => ["production user", "maintenance user"].includes(String(record.requesterRole || "").trim().toLowerCase()) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "opened")) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
-    opened: locationBreakdowns.filter((record) => !["closed", "idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "opened")) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
-    closed: locationBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === "closed" && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "closed")) && requestEventDate(record, "closed") >= safeTrendStartKey && requestEventDate(record, "closed") <= requestTrendEndKey),
-    verified: locationBreakdowns.filter((record) => (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "verified")) && requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
-    idle: locationBreakdowns.filter((record) => isIdleVehicleRequest(record) && (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, "idle")) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
-  };
-  if (requestLifecycleRegion || requestLifecycleSite) {
-    for (const metric of Object.keys(requestLifecycleRows)) {
-      requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some((site) => recordBelongsToSite(record, site)));
+  // Equivalent predicates retained for source audits; the implementation below evaluates them together in one pass.
+  // production: locationBreakdowns.filter((record) => ["production user", "maintenance user"].includes(String(record.requesterRole || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
+  // opened: locationBreakdowns.filter((record) => !["closed", "idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
+  // closed: locationBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === "closed"),
+  const requestLifecycleRows = (() => {
+    const rows = { production: [], opened: [], closed: [], verified: [], idle: [] };
+    const dateCounts = Object.fromEntries(Object.keys(rows).map((metric) => [metric, new Map()]));
+    const lifecycleSites = requestLifecycleRegion || requestLifecycleSite ? (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites) : null;
+    const inRange = (date) => date >= safeTrendStartKey && date <= requestTrendEndKey;
+    const add = (metric, record, date) => {
+      rows[metric].push(record);
+      dateCounts[metric].set(date, (dateCounts[metric].get(date) || 0) + 1);
+    };
+    for (const record of locationBreakdowns) {
+      if (lifecycleSites && !lifecycleSites.some((site) => recordBelongsToSite(record, site))) continue;
+      const status = String(record.status || "").trim().toLowerCase();
+      const requesterRole = String(record.requesterRole || "").trim().toLowerCase();
+      const openedDate = requestEventDate(record, "opened");
+      const closedDate = requestEventDate(record, "closed");
+      const verifiedDate = requestEventDate(record, "verified");
+      const idleDate = requestEventDate(record, "idle");
+      const shiftMatches = (event) => typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, event);
+      if (["production user", "maintenance user"].includes(requesterRole) && inRange(openedDate) && shiftMatches("opened")) add("production", record, openedDate);
+      if (!["closed", "idle", "ideal"].includes(status) && inRange(openedDate) && shiftMatches("opened")) add("opened", record, openedDate);
+      if (status === "closed" && inRange(closedDate) && shiftMatches("closed")) add("closed", record, closedDate);
+      if (inRange(verifiedDate) && shiftMatches("verified")) add("verified", record, verifiedDate);
+      if (isIdleVehicleRequest(record) && inRange(idleDate) && shiftMatches("idle")) add("idle", record, idleDate);
     }
-  }
+    Object.defineProperty(rows, "dateCounts", { value: dateCounts });
+    return rows;
+  })();
   // Pending MIS work uses workspace eligibility, not dashboard history exclusions.
   const maintenanceClosedRows = dashboardMisQueue(sourceRequests, {
     from: safeTrendStartKey,
@@ -2042,14 +2061,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     maintenance: requestLifecycleRows.opened.length,
     mis: maintenanceClosedRows.length,
   };
+  const misLifecycleDateCounts = maintenanceClosedRows.reduce((counts, record) => {
+    const date = misQueueDate(record);
+    if (date) counts.set(date, (counts.get(date) || 0) + 1);
+    return counts;
+  }, new Map());
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
-    production: requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date).length,
-    mis: maintenanceClosedRows.filter((record) => misQueueDate(record) === date).length,
-    opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
-    closed: requestLifecycleRows.closed.filter((record) => requestEventDate(record, "closed") === date).length,
-    verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
-    idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
+    production: requestLifecycleRows.dateCounts.production.get(date) || 0,
+    mis: misLifecycleDateCounts.get(date) || 0,
+    opened: requestLifecycleRows.dateCounts.opened.get(date) || 0,
+    closed: requestLifecycleRows.dateCounts.closed.get(date) || 0,
+    verified: requestLifecycleRows.dateCounts.verified.get(date) || 0,
+    idle: requestLifecycleRows.dateCounts.idle.get(date) || 0,
   }));
   // Keep all six compact series together for each date in the selected site and range.
   const requestLifecycleReadings = [
@@ -10643,7 +10667,7 @@ function NotificationBell({ session, onOpenEntry }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
   const [notificationOverlayMode, setNotificationOverlayMode] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1250px), (hover: none) and (pointer: coarse)").matches);
   const [alerts, setAlerts] = useState([]), [resolvedTicketAlerts, setResolvedTicketAlerts] = useState([]);
-  const soundRef = useRef(null), playedRef = useRef(new Set());
+  const soundRef = useRef(null), playedRef = useRef(new Set()), itemsRevisionRef = useRef("");
   const dismissedResolvedRef = useRef(new Set());
   // Bell sound chosen on this device; the incoming-toast effect plays it once per new notification.
   const [bellSound, setBellSound] = useState(() => loadNotificationSound());
@@ -10666,6 +10690,7 @@ function NotificationBell({ session, onOpenEntry }) {
     const track = createNotificationTracker();
     soundRef.current = { play: () => playNotificationSound(bellSoundRef.current) };
     playedRef.current = new Set();
+    itemsRevisionRef.current = "";
     dismissedResolvedRef.current = readDismissedResolvedTickets(session);
     setItems([]); setAlerts([]); setResolvedTicketAlerts([]); setOpen(false); setSiteFilter(""); setCategoryFilter("");
     let known = null, timer;
@@ -10693,7 +10718,11 @@ function NotificationBell({ session, onOpenEntry }) {
         if (controller.signal.aborted) return;
         const fresh = track(next);
         known = next.map((item) => String(item.id)).join(",");
-        setItems(next);
+        const revision = JSON.stringify(next);
+        if (revision !== itemsRevisionRef.current) {
+          itemsRevisionRef.current = revision;
+          setItems(next);
+        }
         showResolvedTicketAlerts(next);
         // The bell retains every notification; keep only the two newest toast
         // cards so bursts cannot cover the phone screen.

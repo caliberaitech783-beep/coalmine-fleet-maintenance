@@ -471,6 +471,10 @@
 .report-zip-modal > footer .primary { box-shadow: 0 8px 18px #9e276b27; }
 
 @media (max-width: 650px) {
+  .director-timing-modal > header,
+  .director-timing-modal > footer,
+  .report-zip-modal > header,
+  .report-zip-modal > footer { backdrop-filter: none; }
   .report-zip-modal > header { padding: 14px !important; }
   .report-zip-title h3 { font-size: 15px; }
   .report-zip-toolbar { align-items: stretch; flex-direction: column; margin: 11px 12px 0; }
