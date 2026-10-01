@@ -42,7 +42,7 @@ test('current outstanding reports retain native settlement semantics and disting
  assert.match(TRANSACTION_VIEWS['tds-payable'].sql,/GROUP BY v\.companycode,a\.partycode,a\.partyname,a\.taxsectionname/);
  assert.match(TRANSACTION_VIEWS['party-tcs'].sql,/GROUP BY a\.companycode,a\.partycode,a\.partyname,a\.type/);
 });
-test('the real Accounts component renders the menu-selected grid without duplicate section tabs',async()=>{
+test('the real Accounts component renders Masters and Transactions tabs inside the page',async()=>{
  const source=fs.readFileSync(new URL('../src/iboss-accounts.jsx',import.meta.url),'utf8').replace(/^import .*;\r?$/gm,'').replace('export default function','function');
  const {code}=await transformWithOxc(source,'accounts.jsx',{jsx:{runtime:'classic'}});
  const Null=()=>null;
@@ -53,13 +53,13 @@ test('the real Accounts component renders the menu-selected grid without duplica
  assert.match(master,/>Account Master</);assert.doesNotMatch(master,/>Payment Advice Register</);
  for(const title of titles)assert.ok(transactions.includes(`>${title}<`),title);
  assert.doesNotMatch(transactions,/>Account Master</);
- assert.match(transactions,/<h2 id="accounts-section-heading">Transactions<\/h2>/);
- assert.match(master,/<h2 id="accounts-section-heading">Masters<\/h2>/);
- assert.doesNotMatch(master+transactions,/role="tab(?:list|panel)?"|accounts-tab-|iboss-accounts-sections/);
+ assert.match(transactions,/id="accounts-tab-transactions" tabindex="0" aria-selected="true"/);
+ assert.match(master,/id="accounts-tab-masters" tabindex="0" aria-selected="true"/);
+ assert.match(master+transactions,/role="tablist"/);
 });
-test('both navigation children retain Accounts permissions and the correct initial section',()=>{
+test('IBOSS opens Accounts directly without Masters and Transactions submenu entries',()=>{
  const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- assert.match(source,/\["Accounts Masters","Masters"\],\["Accounts Transactions","Transactions"\]/);
- assert.match(source,/\["Accounts Masters","Accounts Transactions"\]\.includes\(name\).*reportAccessAllows\(activeNavigationPermissions\.reportAccess,"Accounts"\)/);
- assert.match(source,/renderedActive === "Accounts Transactions" \? \(\s*<IbossAccounts[^\n]+initialSection="transactions"/);
+ assert.doesNotMatch(source,/iboss-accounts-submenus|\["Accounts Masters","Masters"\]|\["Accounts Transactions","Transactions"\]/);
+ assert.match(source,/\["Accounts",Landmark,"iboss-accounts"\]/);
+ assert.match(source,/renderedActive === "Accounts" \? \(\s*<IbossAccounts/);
 });
