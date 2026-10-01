@@ -16,9 +16,10 @@ const PERIODS = [1, 7, 14, 30];
 const DAY = 86_400_000;
 const INITIAL_VISIBLE_ROWS = 24;
 
-function productionInfoPulseAccess(session = {}) {
+function firstTripInfoPulseAccess(session = {}) {
   if (session?.assignedRole === 'Production User') return true;
   const permissions = session?.permissions || {};
+  if (session?.role === 'super' && permissions.adminLevel !== 'Manager') return true;
   const rawRoles = Array.isArray(permissions.managerRoles) ? permissions.managerRoles : String(permissions.managerRole || '').split(/\s*[|,]\s*/);
   return session?.role === 'super' && permissions.adminLevel === 'Manager' && rawRoles.map(role => String(role).trim()).includes('Production Manager');
 }
@@ -57,7 +58,7 @@ export default function InfoPulseContent({breakdowns = [], firstTripPending = []
   }, []);
   const [rowLimit, setRowLimit] = useState(INITIAL_VISIBLE_ROWS);
   const regions = infoPulseRegions(scope?.sites);
-  const canSeeFirstTripPulse = productionInfoPulseAccess(session);
+  const canSeeFirstTripPulse = firstTripInfoPulseAccess(session);
   const pulseOptions = canSeeFirstTripPulse ? [...PULSE_TIERS, FIRST_TRIP_PULSE] : PULSE_TIERS;
   const selected = pulseOptions.find(option => option.key === tier) || PULSE_TIERS[0];
   const firstTripSelected = selected.key === FIRST_TRIP_PULSE.key;

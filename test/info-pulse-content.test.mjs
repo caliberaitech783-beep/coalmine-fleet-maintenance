@@ -172,12 +172,15 @@ test('clicking a KPI card narrows the list to that tier, renumbers it, and BD ba
   assert.match(html(tree), /No breakdowns match this selection\./);
 });
 
-test('production users and production managers see the first-trip pending Info Pulse tab only for their queue', () => {
+test('production users, production managers and administrators see the first-trip pending Info Pulse tab', () => {
   const production = render({session: {role: 'normal', assignedRole: 'Production User'}, now: ROLLOUT_NOW});
   assert.equal(byLabel(production, 'First trip pending: 1').props['aria-pressed'], false);
   assert.equal(byLabel(render({now: ROLLOUT_NOW}), 'First trip pending: 1'), undefined);
   assert.equal(byLabel(render({session: {role: 'normal', assignedRole: 'Maintenance User'}, now: ROLLOUT_NOW}), 'First trip pending: 1'), undefined);
+  assert.equal(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Manager', managerRoles: ['Maintenance Manager']}}, now: ROLLOUT_NOW}), 'First trip pending: 1'), undefined);
   assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Manager', managerRoles: ['Production Manager']}}, now: ROLLOUT_NOW}), 'First trip pending: 1'));
+  assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Admin'}}, now: ROLLOUT_NOW}), 'First trip pending: 1'));
+  assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Super Admin'}}, now: ROLLOUT_NOW}), 'First trip pending: 1'));
   const app = harness();
   let tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}, now: ROLLOUT_NOW});
   byLabel(tree, 'First trip pending: 1').props.onClick();
