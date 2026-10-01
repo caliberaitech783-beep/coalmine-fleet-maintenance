@@ -4,7 +4,7 @@ import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingRep
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {withSerialColumn} from './serial-column.mjs';
 
-const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
+const COLORS={navy:'#10284c',muted:'#65758b',line:'#000000',soft:'#f2f2f2',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>reportPdfText(value).split(/\r?\n/).map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n')||fallback;
 
 function collect(doc){
@@ -44,8 +44,9 @@ function drawColumnHeader(doc,columns,widths,fontSize=6.6){
   const height=Math.max(25,...columns.map((column,index)=>doc.font(fontFor(column.label,true)).heightOfString(clean(column.label,'Field'),{width:widths[index]-8,lineGap:1})+9));
   let x=left;
   columns.forEach((column,index)=>{
-    doc.rect(x,y,widths[index],height).fill(COLORS.navy);
-    doc.fillColor(COLORS.white).font(fontFor(column.label,true)).fontSize(headerSize).text(clean(column.label,'Field'),x+4,y+4,{width:widths[index]-8,height:height-8,lineGap:1});
+    doc.rect(x,y,widths[index],height).fill(COLORS.white);
+    doc.strokeColor(COLORS.line).lineWidth(.45).rect(x,y,widths[index],height).stroke();
+    doc.fillColor('#000000').font(fontFor(column.label,true)).fontSize(headerSize).text(clean(column.label,'Field'),x+4,y+4,{width:widths[index]-8,height:height-8,lineGap:1});
     x+=widths[index];
   });
   doc.y=y+height;

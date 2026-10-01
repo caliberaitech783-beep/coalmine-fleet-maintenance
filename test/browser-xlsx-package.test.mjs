@@ -41,7 +41,7 @@ test("browser XLSX worksheets use Excel's required element order and safe Spread
     { name: "Daily Updates", title: "Daily Updates", columns: [{ label: "Daily update" }], rows: [["Line one\nLine two"], ["Control\u0001text"], ["literal _x0001_"]] },
   ]);
   const files = storedFiles(Buffer.from(await blob.arrayBuffer()));
-  assert.deepEqual([...files.keys()].filter((name) => name.startsWith("xl/worksheets/")), [
+  assert.deepEqual([...files.keys()].filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)), [
     "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml",
   ]);
   for (const name of ["xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"]) {
@@ -52,4 +52,8 @@ test("browser XLSX worksheets use Excel's required element order and safe Spread
   assert.match(files.get("xl/worksheets/sheet2.xml"), /Control_x0001_text/);
   assert.match(files.get("xl/worksheets/sheet2.xml"), /literal _x005F_x0001_/);
   assert.match(files.get("docProps/core.xml"), /BD &amp; Balance/);
+  assert.match(files.get("xl/tables/table1.xml"), /tableStyleInfo name="TableStyleLight15"/);
+  assert.match(files.get("xl/styles.xml"), /left style="thin"><color rgb="FF000000"/);
+  assert.match(files.get("xl/styles.xml"), /wrapText="1"/);
+  assert.match(files.get("xl/worksheets/sheet1.xml"), /tableParts count="1"/);
 });
