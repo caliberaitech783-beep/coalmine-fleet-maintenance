@@ -54,13 +54,13 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   return <div className="dashboard-record-level" data-level={name}>
     <span className="dashboard-record-level-label">{label}</span>
     {options.length ? <div className="dashboard-record-level-navigation" data-scrollable={scrollable.left || scrollable.right}>
-      <button type="button" className="dashboard-record-tab-scroll" aria-label={`Scroll ${label} choices left`} disabled={!scrollable.left} onClick={() => stripRef.current?.scrollBy({ left: -320, behavior: "smooth" })}><ChevronLeft size={16} /></button>
+      <button type="button" className="dashboard-record-tab-scroll" aria-label={`Scroll ${label} choices left`} disabled={!scrollable.left} onClick={() => stripRef.current?.scrollBy({ left: -320, behavior: "auto" })}><ChevronLeft size={16} /></button>
       <div className="dashboard-record-level-tabs" role="group" aria-label={`${label} choices`} ref={stripRef} onScroll={updateScroll}>
         {tabs.map((tab, index) => <button type="button" key={tab.value} aria-pressed={value === tab.value} aria-controls={resultsId} tabIndex={value === tab.value ? 0 : -1}
           onClick={() => choose(name, tab.value)} onKeyDown={(event) => moveBetweenTabs(event, index, tabs, (next) => choose(name, next), "button")}
           className={tab.value ? "" : "dashboard-record-all-tab"}><span>{tab.label || (name === "category" ? categoryName(tab.value) : tab.value)}</span><b>{tab.count.toLocaleString()}</b></button>)}
       </div>
-      <button type="button" className="dashboard-record-tab-scroll" aria-label={`Scroll ${label} choices right`} disabled={!scrollable.right} onClick={() => stripRef.current?.scrollBy({ left: 320, behavior: "smooth" })}><ChevronRight size={16} /></button>
+      <button type="button" className="dashboard-record-tab-scroll" aria-label={`Scroll ${label} choices right`} disabled={!scrollable.right} onClick={() => stripRef.current?.scrollBy({ left: 320, behavior: "auto" })}><ChevronRight size={16} /></button>
     </div> : <span className="dashboard-record-level-empty">No choices in this selection</span>}
   </div>;
 }

@@ -10,7 +10,7 @@ test("Night mode gives the Fleet control dashboard its dark palette", async () =
   // brand-theme.css paints every .mine-dashboard with the Day palette, so the
   // Night sheet has to load after it and every later dashboard sheet.
   const cssImports = [...main.matchAll(/^import "\.\/([\w-]+\.css)";/gm)].map((match) => match[1]);
-  assert.equal(cssImports.at(-1), "dashboard-night.css");
+  assert.deepEqual(cssImports.slice(-2), ["dashboard-night.css", "no-motion.css"]);
 
   const palette = night.match(/\.mine-dashboard\.mine-dashboard-night \{[^}]*\}/);
   assert.ok(palette, "expected the night palette rule");

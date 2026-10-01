@@ -5,12 +5,12 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const css=readFileSync(new URL('../src/dashboard-bar-motion.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 
-test('the dashboard filter bar motion stylesheet loads after the bar styles and before the pinned last five',()=>{
+test('the dashboard filter bar stylesheet loads before readability and the final no-motion policy',()=>{
   const imports=[...source.matchAll(/import ["'](.+\.css)["'];/g)].map(m=>m[1]);
   const at=imports.indexOf('./dashboard-bar-motion.css');
   assert.ok(at>imports.indexOf('./dashboard-concept-a.css')&&at>imports.indexOf('./brand-theme.css')&&at>imports.indexOf('./nav-motion.css'));
   assert.ok(at<imports.indexOf('./workspace-readability.css'));
-  assert.deepEqual(imports.slice(-5),['./workspace-readability.css','./dashboard-readability.css','./dashboard-spacing.css','./mobile-phone-optimization.css','./dashboard-night.css']);
+  assert.deepEqual(imports.slice(-6),['./workspace-readability.css','./dashboard-readability.css','./dashboard-spacing.css','./mobile-phone-optimization.css','./dashboard-night.css','./no-motion.css']);
 });
 
 test('the bar keeps its size and brand mark: only decoration, hover and motion are added',()=>{

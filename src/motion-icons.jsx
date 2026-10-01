@@ -1,19 +1,16 @@
 import React from "react";
 import "./motion-icons.css";
 
-// Animated header icons shared by every login. Motion lives in motion-icons.css
-// (and is switched off under prefers-reduced-motion); the moving dot of the
-// pulse uses SVG animateMotion so it follows the trace exactly.
+// Header icons shared by every login. Their existing visual treatments remain,
+// while the application-wide no-motion layer keeps them stationary.
 
 export const PULSE_PATH = "M2 12h4.5l2.5-9 6 18 2.5-9H22";
 
-/** Heartbeat trace that runs left to right with a round dot travelling along it. */
+/** Heartbeat trace with a stationary dot at the end of the path. */
 export function PulseIcon({ className = "" }) {
   return <svg className={`pulse-icon ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
     <path className="pulse-icon-trace" d={PULSE_PATH} />
-    <circle className="pulse-icon-dot" r="1.9" fill="currentColor" stroke="none">
-      <animateMotion dur="1.6s" repeatCount="indefinite" path={PULSE_PATH} />
-    </circle>
+    <circle className="pulse-icon-dot" cx="22" cy="12" r="1.9" fill="currentColor" stroke="none" />
   </svg>;
 }
 

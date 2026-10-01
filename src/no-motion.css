@@ -1,0 +1,15 @@
+/* Keep every visual style intact while making all UI motion instantaneous. */
+:root {
+  scroll-behavior: auto !important;
+}
+
+:root *,
+:root *::before,
+:root *::after {
+  animation-delay: 0s !important;
+  animation-duration: 0s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-delay: 0s !important;
+  transition-duration: 0s !important;
+}

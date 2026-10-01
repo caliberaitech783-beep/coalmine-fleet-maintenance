@@ -20,7 +20,7 @@ test('operational readability loads after old compact styles but before the isol
   const imports=[...client.matchAll(/import ["'](.+\.css)["'];/g)].map(match=>match[1]);
   assert.equal(imports.filter(path=>path==='./workspace-readability.css').length,1);
   assert.ok(imports.indexOf('./workspace-readability.css')>imports.indexOf('./maintenance-mobile-compact.css'));
-  assert.deepEqual(imports.slice(-5),['./workspace-readability.css','./dashboard-readability.css','./dashboard-spacing.css','./mobile-phone-optimization.css','./dashboard-night.css']);
+  assert.deepEqual(imports.slice(-6),['./workspace-readability.css','./dashboard-readability.css','./dashboard-spacing.css','./mobile-phone-optimization.css','./dashboard-night.css','./no-motion.css']);
   for(const root of ['mobile-workspace','pagepanel','ticket-page','admin-lock-page']){
     assert.ok(client.includes(root),`Missing actual screen root: ${root}`);
     assert.ok(css.includes(`.${root}`),`Missing readable screen scope: ${root}`);

@@ -288,6 +288,7 @@ import "./dashboard-readability.css";
 import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
 import "./dashboard-night.css";
+import "./no-motion.css";
 import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
@@ -1636,7 +1637,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       if (!target) return;
       target.setAttribute("tabindex", "-1");
       target.focus({preventScroll: true});
-      target.scrollIntoView({behavior: "smooth", block: "center"});
+      target.scrollIntoView({behavior: "auto", block: "center"});
     }));
   };
   useEffect(() => {
