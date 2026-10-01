@@ -1,17 +1,13 @@
 const DEFAULT_SESSION_MAX_AGE_DAYS = 30;
-export const DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = 30;
 
 export function createSessionStore(pool, {
   maxAgeDays = DEFAULT_SESSION_MAX_AGE_DAYS,
-  idleTimeoutMinutes = DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 } = {}) {
   const boundedMaxAgeDays = Math.max(1, Math.floor(Number(maxAgeDays) || DEFAULT_SESSION_MAX_AGE_DAYS));
-  const boundedIdleTimeoutMinutes = Math.max(1, Math.floor(Number(idleTimeoutMinutes) || DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES));
   const pruneExpired = () => pool.query(
     `DELETE FROM auth_sessions
-     WHERE created_at <= NOW() - make_interval(days => $1::int)
-        OR last_seen_at <= NOW() - make_interval(mins => $2::int)`,
-    [boundedMaxAgeDays, boundedIdleTimeoutMinutes]
+     WHERE created_at <= NOW() - make_interval(days => $1::int)`,
+    [boundedMaxAgeDays]
   );
   return {
     async create({token, role, name, login = "", userType = "", assignedRole = "", permissions = {}}) {
@@ -35,9 +31,8 @@ export function createSessionStore(pool, {
                 session_public_id AS "sessionId"
          FROM auth_sessions
          WHERE token = $1
-           AND created_at > NOW() - make_interval(days => $2::int)
-           AND last_seen_at > NOW() - make_interval(mins => $3::int)`,
-        [token, boundedMaxAgeDays, boundedIdleTimeoutMinutes]
+           AND created_at > NOW() - make_interval(days => $2::int)`,
+        [token, boundedMaxAgeDays]
       );
       return rows[0] || null;
     },
@@ -48,12 +43,11 @@ export function createSessionStore(pool, {
         `UPDATE auth_sessions
          SET last_seen_at = NOW(), ip_address = $2, device_id = $3, user_agent = $4
          WHERE token = $1
-           AND last_seen_at > NOW() - make_interval(mins => $5::int)
            AND (last_seen_at <= NOW() - INTERVAL '30 seconds'
              OR ip_address IS DISTINCT FROM $2
              OR device_id IS DISTINCT FROM $3
              OR user_agent IS DISTINCT FROM $4)`,
-        [token, ipAddress, deviceId, userAgent, boundedIdleTimeoutMinutes]
+        [token, ipAddress, deviceId, userAgent]
       );
     },
 

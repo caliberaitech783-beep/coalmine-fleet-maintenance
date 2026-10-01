@@ -7787,7 +7787,7 @@ async function initializeDatabase(){
       .then(result=>result.registered&&console.log(`Telegram webhook ready at ${result.url}.`))
       .catch(error=>console.error('Telegram webhook registration failed.',error.message));
     const expiredSessions=await sessionStore.pruneExpired();
-    if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 30 minutes.`);
+    if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} past their maximum lifetime.`);
     await applyOwnerLogRetention().then(async(result)=>{
       if(result.skipped)return;
       await appendBackendProcessAudit({module:'Audit Trail',action:'Update automatic log clean-up',targetReference:'Audit Trail 2 days · WhatsApp delivery history 10 days · In-app notifications 10 days',
@@ -7890,7 +7890,7 @@ const backupImportCleanupTimer=setStaggeredInterval(()=>{
 backupImportCleanupTimer.unref?.();
 const expiredSessionCleanupTimer=setStaggeredInterval(()=>{
   if(databaseReady){
-    void sessionStore.pruneExpired().catch(error=>console.error('Idle session cleanup failed.',error));
+    void sessionStore.pruneExpired().catch(error=>console.error('Session cleanup failed.',error));
     void expireRemoteAssistanceSessions().catch(error=>console.error('Remote assistance cleanup failed.',error));
   }
 },60*1000,47_000);

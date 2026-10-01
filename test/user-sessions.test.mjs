@@ -28,7 +28,7 @@ test("the admin UI exposes live status and a protected force-close control", () 
   assert.match(client, /Current session/);
   assert.match(client, /Force close/);
   assert.match(client, /\/api\/session-heartbeat/);
-  assert.match(client, /SESSION_IDLE_TIMEOUT_MS = 30 \* 60 \* 1000/);
+  assert.doesNotMatch(client, /SESSION_IDLE_TIMEOUT_MS|lastActivityAt|closeIdleSession/);
   assert.match(client, /activityEvents=\['pointerdown','keydown','touchstart','wheel'\]/);
   assert.match(client, /<th>Location<\/th>/);
   assert.match(client, /<th>User<\/th><th>Status<\/th><th>Message<\/th><th>Action<\/th><th>Role<\/th><th>Location<\/th>/);

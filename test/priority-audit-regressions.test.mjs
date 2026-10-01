@@ -1,3 +1,4 @@
+import {dashboardMisQueue, misQueueDate} from '../src/dashboard-mis-queue.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -41,14 +42,14 @@ test('report keys are unique even for assets sharing location or duplicate ident
 
 test('Closed summary and daily chart use identical scoped rows, including verified closures', () => {
   const code = main.slice(main.indexOf('  const requestLifecycleRows ='),main.indexOf('  // Keep all six compact series'));
-  const calculate = new Function('locationBreakdowns','requestEventDate','safeTrendStartKey','requestTrendEndKey','requestTrendDateKeys','requestLifecycleRegion','requestLifecycleSite','isIdleVehicleRequest',`${code}; return {requestLifecycleRows,requestLifecycleTrend};`);
+  const calculate = new Function('locationBreakdowns','requestEventDate','safeTrendStartKey','requestTrendEndKey','requestTrendDateKeys','requestLifecycleRegion','requestLifecycleSite','isIdleVehicleRequest','dashboardMisQueue','sourceRequests','equipmentLoaded','misQueueDate',`${code}; return {requestLifecycleRows,requestLifecycleTrend};`);
   const rows = [
     {ref:'closed',status:'Closed',closedAt:'2026-09-24 10:00:00'},
     {ref:'verified',status:'Closed',closedAt:'2026-09-24 11:00:00',verifiedAt:'2026-09-25 12:00:00'},
     {ref:'outside',status:'Closed',closedAt:'2026-09-23 11:00:00'},
     {ref:'active',status:'Accepted'},
   ];
-  const result=calculate(rows,requestEventDate,'2026-09-24','2026-09-24',['2026-09-24'],null,null,()=>false);
+  const result=calculate(rows,requestEventDate,'2026-09-24','2026-09-24',['2026-09-24'],null,null,()=>false,dashboardMisQueue,rows,false,misQueueDate);
   assert.equal(result.requestLifecycleRows.closed.length,2);
   assert.equal(result.requestLifecycleTrend[0].closed,2);
   assert.match(main,/key: "closed", label: "Closed"[^\n]+value: requestLifecycleRows.closed.length/);
