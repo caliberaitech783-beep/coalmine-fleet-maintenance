@@ -1,0 +1,12 @@
+.iboss-accounts-panel { background:var(--panel,#fff);border:1px solid var(--border,#dde3ec);border-radius:18px;box-shadow:0 2px 5px #20334c12;margin:20px 0;overflow:hidden; }
+.iboss-accounts-panel h2 { margin:0;padding:28px 32px;border-bottom:1px solid var(--border,#dde3ec);font-size:16px; }
+.iboss-accounts-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:16px; }
+.iboss-accounts-grid button { display:flex;gap:20px;align-items:center;min-height:82px;padding:18px 20px;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--border,#dde3ec);color:var(--accent,#2577d4);font:inherit;font-weight:600;cursor:pointer; }
+.iboss-accounts-grid button:not(:nth-child(3n)) { border-right:1px solid var(--border,#dde3ec); }
+.iboss-accounts-grid button:hover,.iboss-accounts-grid button[aria-pressed="true"] { background:#2878dc10; }
+.iboss-accounts-grid button:focus-visible { outline:2px solid #2878dc;outline-offset:-3px; }
+.iboss-account-icon { display:grid;place-items:center;width:40px;height:40px;flex-shrink:0;border-radius:5px;background:#18799f;color:#fff; }
+.iboss-account-icon svg { width:22px;height:22px; }
+.iboss-account-icon.tone-1 { background:#0db1c8; }.iboss-account-icon.tone-2 { background:#22bbbb; }.iboss-account-icon.tone-4 { background:#7db850; }.iboss-account-icon.tone-5 { background:#a1a900; }.iboss-account-icon.tone-6 { background:#b99000; }.iboss-account-icon.tone-7 { background:#ed8136; }
+@media(max-width:900px) { .iboss-accounts-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.iboss-accounts-grid button:not(:nth-child(3n)) {border-right:0;}.iboss-accounts-grid button:nth-child(odd) {border-right:1px solid var(--border,#dde3ec);} }
+@media(max-width:560px) { .iboss-accounts-grid {grid-template-columns:1fr;}.iboss-accounts-grid button:nth-child(odd) {border-right:0;} }

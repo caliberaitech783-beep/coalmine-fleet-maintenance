@@ -306,6 +306,8 @@ import StockStatement from './stock-statement.jsx';
 import PurchaseOrderReport from './purchase-order-report.jsx';
 import GrnRegister from './grn-register.jsx';
 import PoGrnReconciliation from './po-grn-reconciliation.jsx';
+import IbossAccounts from './iboss-accounts.jsx';
+import {Landmark} from 'lucide-react';
 import { breakdownTrendExport, fleetSectionExport, requestLifecycleExport, throughputSectionExport } from "./dashboard-section-export.mjs";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
@@ -1054,7 +1056,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
-  const visibleIbossNav = [["Stock Statement",FileBarChart,"report-stock-statement"],["Purchase Order",FileBarChart,"report-purchase-order"],["GRN Register",FileBarChart,"report-grn-register"],["PO-GRN Reconciliation",FileBarChart,"report-po-grn-reconciliation"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
+  const visibleIbossNav = [["Stock Statement",FileBarChart,"report-stock-statement"],["Purchase Order",FileBarChart,"report-purchase-order"],["GRN Register",FileBarChart,"report-grn-register"],["PO-GRN Reconciliation",FileBarChart,"report-po-grn-reconciliation"],["Accounts",Landmark,"iboss-accounts"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const canViewAdmin=session?.role==="super"&&["admin","super admin"].includes(String(permissions.adminLevel||"").trim().toLowerCase());
   const navigationHidden = collapsedNavigation && !open;
@@ -11348,7 +11350,7 @@ function App() {
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
-    if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
+    if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation","Accounts"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -11663,6 +11665,8 @@ function App() {
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Purchase Order" ? (
     <PurchaseOrderReport token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : renderedActive === "Accounts" ? (
+    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "PO-GRN Reconciliation" ? (
     <PoGrnReconciliation token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "GRN Register" ? (

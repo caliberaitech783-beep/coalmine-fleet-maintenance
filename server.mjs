@@ -1,5 +1,6 @@
 import express from 'express';
-import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation} from './oracle-db.mjs';
+import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts} from './oracle-db.mjs';
+import {accountView} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
 import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
@@ -3871,6 +3872,23 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
     res.set('Cache-Control','no-store');
     res.json(await runDiagnostics(diagnosticChecks()));
   }catch(error){next(error)}
+});
+
+app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
+  const permissions=req.session.permissions || {};
+  if(req.session.role!=='super'||!accessAllows(permissions.tabAccess,'Reports')||
+    !(accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Accounts')))
+    return res.status(403).json({error:'You do not have access to Accounts.'});
+  try {const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);}
+  catch(error){return res.status(400).json({error:error.message});}
+  res.set('Cache-Control','no-store');
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  try {res.json(await oracleAccounts(req.params.view,req.query.from,req.query.to));}
+  catch(error){
+    if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
+    console.error('IBOSS Accounts failed:',error.code || 'Oracle error');
+    res.status(502).json({error:'Could not load Accounts data from Oracle. Please retry.'});
+  }
 });
 
 app.get('/api/reports/po-grn-reconciliation',requireSession,async(req,res)=>{

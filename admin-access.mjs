@@ -35,6 +35,7 @@ export const ADMIN_REPORT_OPTIONS = [
   "Purchase Order",
   "GRN Register",
   "PO-GRN Reconciliation",
+  "Accounts",
 ];
 
 export const ADMIN_SUBMENU_OPTIONS = {

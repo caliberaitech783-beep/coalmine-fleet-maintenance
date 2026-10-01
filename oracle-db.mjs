@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import {accountView,accountRecord} from './iboss-accounts.mjs';
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
 import {PURCHASE_ORDER_SQL,purchaseOrderRange,purchaseOrderRow} from './purchase-order-report.mjs';
 import {GRN_REGISTER_SQL,grnRegisterRow} from './grn-register.mjs';
@@ -14,6 +15,18 @@ export const oracleConfigured = Boolean(user && password && connectString);
 let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
+
+export async function oracleAccounts(view,from,to) {
+  const definition=accountView(view);
+  const binds=definition.dated?purchaseOrderRange(from,to):{};
+  const pool=await oraclePool();const connection=await pool.getConnection();
+  try {
+    connection.callTimeout=60000;
+    const result=await connection.execute(definition.sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:10000,maxRows:50001});
+    if(result.rows.length>50000){const error=new Error('More than 50,000 records match. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
+    return {rows:result.rows.map(accountRecord),checkedAt:new Date().toISOString()};
+  } finally {await connection.close();}
+}
 
 export async function oraclePoGrnReconciliation(from,to) {
   const binds=purchaseOrderRange(from,to);
