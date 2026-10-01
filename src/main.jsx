@@ -303,6 +303,7 @@ import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
 import StockStatement from './stock-statement.jsx';
+import PurchaseOrderReport from './purchase-order-report.jsx';
 import { breakdownTrendExport, fleetSectionExport, requestLifecycleExport, throughputSectionExport } from "./dashboard-section-export.mjs";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
@@ -1048,6 +1049,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
+  const visibleIbossNav = [["Stock Statement",FileBarChart,"report-stock-statement"],["Purchase Order",FileBarChart,"report-purchase-order"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const canViewAdmin=session?.role==="super"&&["admin","super admin"].includes(String(permissions.adminLevel||"").trim().toLowerCase());
   const navigationHidden = collapsedNavigation && !open;
@@ -1195,11 +1197,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks","Stock Statement"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks",...visibleIbossNav.map(([name])=>name)].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
-            {accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,"Stock Statement") && <ClockMenu label="IBOSS" icon={FileBarChart} items={[["Stock Statement", FileBarChart, "report-stock-statement"]]} hours={[3]} active={active} workspace="report-stock-statement" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />}
+            <ClockMenu label="IBOSS" icon={FileBarChart} items={visibleIbossNav} hours={visibleIbossNav.map((_,index)=>2+index*2)} active={active} workspace="report-stock-statement" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
             <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
           </div>
@@ -11298,7 +11300,7 @@ function App() {
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
-    if (name === "Stock Statement") return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,"Stock Statement");
+    if (["Stock Statement","Purchase Order"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -11611,6 +11613,8 @@ function App() {
     requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
   ) : active === "Stock Statement" ? (
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : active === "Purchase Order" ? (
+    <PurchaseOrderReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : active === "Employee Tenure Report" ? (
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : active === "CD" ? (

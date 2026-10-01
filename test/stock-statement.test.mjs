@@ -6,9 +6,10 @@ import {STOCK_STATEMENT_SQL,stockStatementRow} from '../stock-statement.mjs';
 test('stock statement opens from Admin through the IBOSS submenu',()=>{
   const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const adminMenu=source.slice(source.indexOf('{canViewAdmin && <div'),source.indexOf('{(canViewDirectory ||'));
-  assert.match(adminMenu,/<ClockMenu label="IBOSS"[^\n]+items=\{\[\["Stock Statement"/);
+  assert.match(adminMenu,/<ClockMenu label="IBOSS"[^\n]+items=\{visibleIbossNav\}/);
+  assert.match(source,/const visibleIbossNav = \[\["Stock Statement"/);
   assert.match(adminMenu,/selectDropdownPage\(page, event, setAdminSelectionClosed\)/);
-  assert.match(adminMenu,/"Admin locks","Stock Statement"\]\.includes\(active\)/);
+  assert.match(adminMenu,/visibleIbossNav\.map\(\(\[name\]\)=>name\)\]\.includes\(active\)/);
   assert.doesNotMatch(source,/data-nav="stock-statement"/);
 });
 

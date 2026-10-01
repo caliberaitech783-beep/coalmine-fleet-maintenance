@@ -1,5 +1,6 @@
 import oracledb from "oracledb";
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
+import {PURCHASE_ORDER_SQL,purchaseOrderRange,purchaseOrderRow} from './purchase-order-report.mjs';
 import { transferSyncDate } from "./transfer-sync-date.mjs";
 
 const user = String(process.env.ORACLE_DB_USER || "").trim();
@@ -11,6 +12,18 @@ export const oracleConfigured = Boolean(user && password && connectString);
 let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
+
+export async function oraclePurchaseOrderReport(from,to) {
+  const binds=purchaseOrderRange(from,to);
+  const pool=await oraclePool();
+  const connection=await pool.getConnection();
+  try {
+    connection.callTimeout=60000;
+    const result=await connection.execute(PURCHASE_ORDER_SQL,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:1000,maxRows:50001});
+    if(result.rows.length>50000){const error=new Error('More than 50,000 order items match this range. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
+    return {rows:result.rows.map(purchaseOrderRow),checkedAt:new Date().toISOString()};
+  } finally {await connection.close();}
+}
 
 export async function oracleStockStatement() {
   if(stockStatementCache && Date.now() < stockStatementCache.expiresAt) return stockStatementCache.data;

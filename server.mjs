@@ -1,5 +1,6 @@
 import express from 'express';
-import {oracleStockStatement} from './oracle-db.mjs';
+import {oracleStockStatement,oraclePurchaseOrderReport} from './oracle-db.mjs';
+import {purchaseOrderRange} from './purchase-order-report.mjs';
 import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
 import {currentBirthdayNames} from './info-pulse-birthdays.mjs';
@@ -3870,6 +3871,23 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
     res.set('Cache-Control','no-store');
     res.json(await runDiagnostics(diagnosticChecks()));
   }catch(error){next(error)}
+});
+
+app.get('/api/reports/purchase-order',requireSession,async(req,res)=>{
+  const permissions=req.session.permissions || {};
+  if(req.session.role!=='super'||!accessAllows(permissions.tabAccess,'Reports')||
+    !(accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Purchase Order')))
+    return res.status(403).json({error:'You do not have access to Purchase Order.'});
+  try {purchaseOrderRange(req.query.from,req.query.to);}
+  catch(error){return res.status(400).json({error:error.message});}
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+  res.set('Cache-Control','no-store');
+  try {res.json(await oraclePurchaseOrderReport(req.query.from,req.query.to));}
+  catch(error){
+    if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
+    console.error('Purchase order query failed:',error.code || 'Oracle error');
+    res.status(502).json({error:'Could not load purchase orders from Oracle. Please retry.'});
+  }
 });
 
 app.get('/api/reports/stock-statement',requireSession,async(req,res,next)=>{

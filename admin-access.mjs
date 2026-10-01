@@ -32,6 +32,7 @@ export const ADMIN_REPORT_OPTIONS = [
   "MIS Report",
   "Vehicle History Report",
   "Stock Statement",
+  "Purchase Order",
 ];
 
 export const ADMIN_SUBMENU_OPTIONS = {
