@@ -27,11 +27,11 @@
 .smart-print-dialog button.smart-print-export { border-color: #522e90; color: #522e90; font-weight: 700; }
 .smart-print-sheet { padding: 14px; border: 1px solid #d7dfeb; border-radius: 7px; background: #fff; color: #17233c; }
 .smart-print-sheet h4 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
-.smart-print-sheet table { border-collapse: collapse; table-layout: fixed; width: 100%; }
-.smart-print-sheet :is(th, td) { border: 1px solid #000; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
+.smart-print-sheet table { border-collapse: collapse; table-layout: auto; width: 100%; }
+.smart-print-sheet :is(th, td) { border: 1px solid #000; vertical-align: top; }
 .smart-print-sheet p { margin: 0 0 12px; color: #65758b; font-size: 12px; }
 .smart-print-sheet th { background: #fff; color: #000; font-size: 11px; text-transform: uppercase; }
-.smart-print-header-check { display: inline-flex; align-items: center; gap: 7px; min-width: 0; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.smart-print-header-check { display: inline-flex; align-items: center; gap: 7px; min-width: max-content; cursor: pointer; }
 .smart-print-header-check input { width: 15px; height: 15px; margin: 0; accent-color: #522e90; flex: 0 0 auto; }
 .smart-print-header-check input:disabled { cursor: not-allowed; }
 .smart-print-column-off { opacity: .42; text-decoration: line-through; }
