@@ -55,5 +55,8 @@ test("browser XLSX worksheets use Excel's required element order and safe Spread
   assert.match(files.get("xl/tables/table1.xml"), /tableStyleInfo name="TableStyleLight15"/);
   assert.match(files.get("xl/styles.xml"), /left style="thin"><color rgb="FF000000"/);
   assert.match(files.get("xl/styles.xml"), /wrapText="1"/);
+  assert.match(files.get("xl/styles.xml"), /fgColor rgb="FFF2F2F2"/);
+  assert.match(files.get("xl/styles.xml"), /borderId="1" applyBorder="1"/);
+  assert.match(files.get("xl/worksheets/sheet1.xml"), /r="A4" s="6"/);
   assert.match(files.get("xl/worksheets/sheet1.xml"), /tableParts count="1"/);
 });

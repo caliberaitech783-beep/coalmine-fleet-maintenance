@@ -25,7 +25,19 @@ const sheetNames=files=>[...files.get('xl/workbook.xml').matchAll(/<sheet name="
   assert.equal(match[2],match[3]);
   return unescapeXml(match[1]).replace(/_x([0-9a-f]{4})_/gi,(_,code)=>String.fromCharCode(parseInt(code,16)));
 });
-const cells=xml=>[...xml.matchAll(/<c r="([A-Z]+\d+)" t="inlineStr"><is><t(?: xml:space="preserve")?>([\s\S]*?)<\/t><\/is><\/c>/g)].map((match)=>({reference:match[1],value:unescapeXml(match[2])}));
+const cells=xml=>[...xml.matchAll(/<c r="([A-Z]+\d+)"(?: s="\d+")? t="inlineStr"><is><t(?: xml:space="preserve")?>([\s\S]*?)<\/t><\/is><\/c>/g)].map((match)=>({reference:match[1],value:unescapeXml(match[2])}));
+
+test('every server workbook carries Light 15 tables, explicit grey banding and black borders',()=>{
+  for(const buffer of [buildXlsxWorkbookBuffer('Report',[{label:'Door'}],[['V1'],['V2']]),buildXlsxReportBundleBuffer({tables:[{title:'Report',columns:[{label:'Door'}],rows:[['V1'],['V2']]}]})]){
+    const files=storedFiles(buffer);
+    assert.match(files.get('xl/tables/table1.xml'),/name="TableStyleLight15"/);
+    assert.match(files.get('xl/styles.xml'),/fgColor rgb="FFF2F2F2"/);
+    assert.match(files.get('xl/styles.xml'),/color rgb="FF000000"/);
+    assert.match(files.get('xl/worksheets/sheet1.xml'),/r="A4" s="6"/);
+    assert.match(files.get('xl/worksheets/sheet1.xml'),/r="A5" s="1"/);
+    assert.match(files.get('xl/_rels/workbook.xml.rels'),/Target="styles.xml"/);
+  }
+});
 
 test('XLSX bundle has one ordered worksheet per selected report with complete relationships',()=>{
   const tables=Object.freeze([
@@ -42,7 +54,7 @@ test('XLSX bundle has one ordered worksheet per selected report with complete re
     const xml=files.get(`xl/worksheets/sheet${number}.xml`);
     // Title row, record-count row, heading row, then one row per record.
     assert.equal([...xml.matchAll(/<row r=/g)].length,table.rows.length+3);
-    assert.match(xml,new RegExp(`<row r="2"><c r="A2" t="inlineStr"><is><t xml:space="preserve">${table.rows.length} record${table.rows.length===1?'':'s'} · Generated `));
+    assert.match(xml,new RegExp(`<row r="2"><c r="A2" s="4" t="inlineStr"><is><t xml:space="preserve">${table.rows.length} record${table.rows.length===1?'':'s'} · Generated `));
     const widths=[...xml.matchAll(/<col min="(\d+)" max="(\d+)" width="([\d.]+)" customWidth="1"\/>/g)];
     assert.equal(widths.length,table.columns.length+1);
     widths.forEach((match)=>{assert.equal(match[1],match[2]);assert.ok(Number(match[3])>=12&&Number(match[3])<=48);});
@@ -61,7 +73,7 @@ test('XLSX bundle retains empty selected tables and supplies a valid worksheet w
   assert.deepEqual(sheetNames(files),['Site activity','Empty optional report','No columns or rows']);
   assert.deepEqual(cells(files.get('xl/worksheets/sheet1.xml')).slice(2),[{reference:'A3',value:'Sr. No.'},{reference:'B3',value:'User'}]);
   assert.deepEqual(cells(files.get('xl/worksheets/sheet2.xml')).slice(2),[{reference:'A3',value:'Sr. No.'},{reference:'B3',value:'Reference'}]);
-  assert.match(files.get('xl/worksheets/sheet3.xml'),/<row r="3"><c r="A3" t="inlineStr"><is><t xml:space="preserve">Sr\. No\.<\/t><\/is><\/c><\/row><\/sheetData>/);
+  assert.match(files.get('xl/worksheets/sheet3.xml'),/<row r="3"><c r="A3" s="5" t="inlineStr"><is><t xml:space="preserve">Sr\. No\.<\/t><\/is><\/c><\/row><\/sheetData>/);
   for(const options of [undefined,{title:'Empty',tables:[]}]){
     const empty=storedFiles(buildXlsxReportBundleBuffer(options));
     assert.deepEqual(sheetNames(empty),['Report']);

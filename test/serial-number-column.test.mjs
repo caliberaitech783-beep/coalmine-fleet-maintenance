@@ -58,12 +58,12 @@ test("PDF and Excel attachments start with a serial column, state the record cou
   assert.match(text, /2 records exported/);
   const decorated = await buildTableExportPdf({ title: "Fleet list", columns: [{ label: "Sr. No." }, { label: "Door no." }], rows: [["1", "S1"]] });
   assert.equal(pdfText(decorated).match(/Sr\. No\./g)?.length, 1);
-  const workbook = buildXlsxWorkbookBuffer("Fleet list", [{ label: "Door no." }], [["S1"], ["S2"]]).toString("utf8");
+  const workbook = buildXlsxWorkbookBuffer("Fleet list", [{ label: "Door no." }], [["S1"], ["S2"]]).toString("utf8").replace(/ s="\d+"/g, "");
   assert.match(workbook, /<row r="1"><c r="A1" t="inlineStr"><is><t>Fleet list<\/t>/);
   assert.match(workbook, /<row r="2"><c r="A2" t="inlineStr"><is><t>2 records · Generated /);
   assert.match(workbook, /<row r="3"><c r="A3" t="inlineStr"><is><t>Sr\. No\.<\/t><\/is><\/c><c r="B3" t="inlineStr"><is><t>Door no\.<\/t>/);
   assert.match(workbook, /<row r="4"><c r="A4" t="inlineStr"><is><t>1<\/t><\/is><\/c><c r="B4" t="inlineStr"><is><t>S1<\/t>/);
   assert.match(workbook, /<row r="5"><c r="A5" t="inlineStr"><is><t>2<\/t>/);
   const already = buildXlsxWorkbookBuffer("Fleet list", [{ label: "Sr. No." }, { label: "Door no." }], [["1", "S1"]]).toString("utf8");
-  assert.equal(already.match(/Sr\. No\./g)?.length, 1);
+  assert.equal(already.match(/<t>Sr\. No\.<\/t>/g)?.length, 1);
 });
