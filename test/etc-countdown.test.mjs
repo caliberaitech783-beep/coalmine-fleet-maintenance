@@ -155,6 +155,7 @@ function renderTable(props) {
   const exports = {};
   const FilterableHeader = ({label}) => React.createElement('th', {}, label);
   const scope = {
+    ResponsibilityHistoryCell: Null, responsibilityHistoryText: row => row.oemResponsibility || 'Not assigned',
     React: {...React, useId: () => 'etc-controls'}, useState, useEffect: () => {}, useDeferredValue: value => value, Date: class extends Date { static now() { return now; } },
     ...equipment, ...requestAcceptance, normalizeEquipmentGroup, requestStatusLabel, defaultDurationSort, isIdleVehicleRequest,
     TranslatedText: ({text: value}) => React.createElement('span', {}, String(value ?? '')),

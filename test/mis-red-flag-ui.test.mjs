@@ -56,6 +56,7 @@ function harness(){
     FilterableHeader:({label})=>React.createElement('th',{},label),
     Status:({children})=>React.createElement('span',{},children),
     ExportMenu,PrintButton,TableParameterFilter:Null,MaintenanceRemarks:Null,MeterFileCell:Null,TripCardCell:Null,MaintenanceEtcInput:Null,
+    ResponsibilityHistoryCell:Null,responsibilityHistoryText:row=>row.oemResponsibility||'Not assigned',
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
     sortCollator:new Intl.Collator(),defaultDurationSort,useSortableRows:rows=>[rows,{},()=>{}],

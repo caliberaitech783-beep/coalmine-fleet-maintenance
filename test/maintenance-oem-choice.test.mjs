@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {filterOemDelayedRows} from '../src/oem-delay-filter.mjs';
 
-test('responsibility locks immediately and disabled choice is submitted through a hidden field', () => {
+test('unsaved responsibility can be switched; saved responsibility stays locked in the general edit form', () => {
   const ui=readFileSync(new URL('../src/maintenance-oem-choice.jsx',import.meta.url),'utf8');
-  assert.ok(ui.includes('disabled={Boolean(selected)}'));
-  assert.ok(ui.includes('setSelected(current => current || value)'));
+  assert.ok(ui.includes('disabled={Boolean(request.oemResponsibility)}'));
+  assert.ok(ui.includes('setSelected(value)'));
   assert.ok(ui.includes('type="hidden" name="oemResponsibility" value={selected}'));
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.ok(server.includes('SELECT site,oem_responsibility AS "oemResponsibility"'));

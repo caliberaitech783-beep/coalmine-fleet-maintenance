@@ -47,6 +47,7 @@ function harness(name = 'MobileWorkflowTable') {
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
   const scope = { isIdleVehicleRequest,
+    ResponsibilityHistoryCell: Null, responsibilityHistoryText: row => row.oemResponsibility || 'Not assigned',
     isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes, dailyUpdatesExportText,
     requestMeterReadings, requestMeterReadingLabel, breakdownMeterValue,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(), useDeferredValue: value => value,

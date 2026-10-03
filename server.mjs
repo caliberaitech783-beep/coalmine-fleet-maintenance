@@ -1,3 +1,4 @@
+import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed} from './iboss-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
@@ -531,6 +532,7 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility_history JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -5689,7 +5691,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
-  oem_responsibility AS "oemResponsibility", closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", (expected_completion_changed_at IS NOT NULL) AS "expectedCompletionChangeUsed", verification_status AS "verificationStatus",
+  oem_responsibility_history AS "oemResponsibilityHistory", oem_responsibility AS "oemResponsibility", closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", (expected_completion_changed_at IS NOT NULL) AS "expectedCompletionChangeUsed", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
@@ -6384,6 +6386,17 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
     const result=await write(client,rows[0]);
+    // Audit only an actual persisted change; never trust a client-supplied history.
+    if(req.body?.oemResponsibility!==undefined){
+      const saved=await client.query('SELECT oem_responsibility FROM maintenance_requests WHERE reference=$1',[reference]);
+      const next=saved.rows[0]?.oem_responsibility;
+      if(next!==undefined&&next!==rows[0].oemResponsibility){
+        await client.query(`UPDATE maintenance_requests SET oem_responsibility_history=oem_responsibility_history || jsonb_build_array(jsonb_build_object(
+          'from',$1::text,'to',$2::text,'changedBy',$3::text,'login',$4::text,'changedAt',NOW())) WHERE reference=$5`,
+          [rows[0].oemResponsibility||'',next,req.session.name||req.session.login||'',req.session.login||'',reference]);
+        if(result.rows)result.rows=(await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference])).rows;
+      }
+    }
     if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
     await client.query('COMMIT');
     return result;
@@ -6582,6 +6595,25 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
   }
 });
 
+
+// Narrow manager action; the existing edit/daily-update permission and locks stay unchanged.
+function registerBreakdownResponsibilityRoute(){
+app.patch('/api/requests/:reference/breakdown-responsibility',requireSession,async(req,res,next)=>{
+  try{
+    if(!canEditBreakdownResponsibility(req.session))return res.status(403).json({error:'Only Maintenance Managers and Project Managers can change saved breakdown responsibility.'});
+    if(!['OEM','NON OEM'].includes(req.body?.oemResponsibility))return res.status(400).json({error:'Choose OEM or NON OEM.'});
+    const reference=String(req.params.reference||'').trim();
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+      if(!userManagesSite(await currentUserRecord(req.session,client),before.site))throw Object.assign(new Error('This vehicle is outside your assigned sites.'),{status:403});
+      if(!before.acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
+      if(req.body.previousResponsibility!==before.oemResponsibility)throw Object.assign(new Error('Breakdown responsibility has changed. Refresh and review before saving.'),{status:409});
+      return client.query(`UPDATE maintenance_requests SET oem_responsibility=$1 WHERE reference=$2 RETURNING ${requestProjection}`,[req.body.oemResponsibility,reference]);
+    });
+    res.json(rows[0]);
+  }catch(error){maintenanceWriteFailure(error,res,next)}
+});
+
+}
 
 app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePermission('editRequests'),async(req,res,next)=>{
   try{
@@ -7856,6 +7888,7 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
 
 // Vite fingerprints every file under /app-assets, so a deploy changes the URL and
 // browsers may keep these for a year. index.html is still revalidated.
+registerBreakdownResponsibilityRoute();
 app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutable:true,maxAge:'1y'}));
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
