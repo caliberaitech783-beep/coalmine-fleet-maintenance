@@ -1,4 +1,3 @@
-import {fixtureErpEvidence,fixtureErpDependencies} from './erp-first-trip-fixture.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestsWithDoorNumbers} from '../equipment-door.mjs';
 import test from 'node:test';
@@ -27,8 +26,7 @@ const maintenance={role:'normal',assignedRole:'Maintenance User',name:'Fixture m
 const mis={role:'normal',assignedRole:'MIS User',name:'Fixture MIS',login:'mis',permissions:{verifyRequests:true}};
 const current=row=>({...structuredClone(row),timelineRecordedAt:now});
 
-function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={site:'Sasti OB'},auditFailure=false,history=[],remarks=[],noAccount=false,changedErp=false,evidenceReadings=null}={}){
-  let erpFixture;
+function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={site:'Sasti OB'},auditFailure=false,history=[],remarks=[],noAccount=false}={}){
   let saved=structuredClone(row),audits=structuredClone(history),snapshot,registered,tx=false,released=false;
   const queries=[];
   const client={async query(sql,args=[]){
@@ -58,7 +56,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     if(sql.startsWith('SELECT ')){
       if(!saved)return {rows:[]};
       if(sql.includes('FOR UPDATE'))assert.equal(tx,true);
-      return {rows:[{...current(saved),erpFirstTripEvidence:erpFixture,erpImage:"fixture",arrival_flag_ready:true}]};
+      return {rows:[{...current(saved),arrival_flag_ready:true}]};
     }
     if(sql.startsWith('INSERT INTO master_records'))return {rows:[],rowCount:1};
     assert.ok(sql.startsWith('UPDATE maintenance_requests'),`Unexpected SQL: ${sql}`);
@@ -75,7 +73,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     else saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={ ...fixtureErpDependencies,oracleFirstTripLog:async()=>changedErp?{...erpFixture,sourceHash:"changed"}:erpFixture,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={ isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
@@ -88,7 +86,6 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   runInNewContext(`${remarksHelper}\n${common}\n${routes[kind]||''}`,context);
   return {queries,get saved(){return saved;},get audits(){return audits;},get released(){return released;},async call(body={}){
     const req={session,params:{reference:'REQ-TIMELINE'},body:{complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
-    if(kind==='verify'&&saved){erpFixture=fixtureErpEvidence(saved,req.body);if(evidenceReadings)erpFixture.record.closingReadings=evidenceReadings;req.body.erpReviewed=req.body.erpReviewed??true;req.body.erpSourceHash=req.body.erpSourceHash??'fixture-source';}
     const res={statusCode:200,headers:{},set(key,value){this.headers[key]=value;},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
     for(const handler of registered){let next=false,error;await handler(req,res,value=>{next=true;error=value;});if(error)throw error;if(!next)break;}
     return {status:res.statusCode,body:res.body,headers:res.headers};
@@ -272,18 +269,4 @@ test('timeline includes saved creator and scoped maintenance remarks without cha
   assert.equal(result.body.history.length,0);
   assert.deepEqual(app.saved,row);
   assert.equal(app.queries.every(({sql})=>sql.startsWith('SELECT ')),true);
-});
-
-test('MIS cannot bypass ERP review or supply a stale source fingerprint',async()=>{
- for(const body of [{erpReviewed:false},{erpSourceHash:'forged'}]){
-  const app=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
-  assert.equal((await app.call(body)).status,409);assert.equal(app.queries.some(q=>q.sql.startsWith('UPDATE')),false);
- }
-});
-
-test('MIS blocks changed Oracle evidence and uses server-saved readings rather than forged client values',async()=>{
- const row={...active,status:'Closed',meterType:'HMR',closedAt:new Date('2026-09-08T10:00:00Z')};
- const changed=harness('verify',{row,changedErp:true});assert.equal((await changed.call()).status,409);assert.equal(changed.queries.some(q=>q.sql.startsWith('UPDATE')),false);
- const safe=harness('verify',{row,evidenceReadings:{HMR:'321'}});assert.equal((await safe.call({closingMeterReading:'999'})).status,200);
- const write=safe.queries.find(q=>q.sql.startsWith('UPDATE maintenance_requests SET verification_status'));assert.equal(write.args[5],'321');assert.equal(write.args[4],'fixture');
 });

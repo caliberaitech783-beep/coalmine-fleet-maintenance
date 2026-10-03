@@ -3,8 +3,6 @@ import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from '
 import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
-import {oracleFirstTripLog} from './oracle-db.mjs';
-import {erpTripImage,erpTripFingerprint} from './erp-first-trip.mjs';
 import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
 import {accountView,ACCOUNT_SECTIONS} from './iboss-accounts.mjs';
@@ -564,7 +562,6 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT '';
-    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS erp_first_trip_evidence JSONB;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_readings JSONB NOT NULL DEFAULT '{}';
@@ -5711,7 +5708,6 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
   first_trip_remark AS "firstTripRemark",
-  erp_first_trip_evidence AS "erpFirstTripEvidence",
   (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
   COALESCE((SELECT pfta.production_first_trip_by FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripBy",
   COALESCE((SELECT pfta.production_first_trip_login FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripLogin",
@@ -7003,46 +6999,16 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
   }finally{client.release()}
 });
 
-app.post('/api/requests/:reference/erp-first-trip',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{
-  try{
-    res.set('Cache-Control','no-store');
-    const reference=String(req.params.reference||'').trim();
-    const scope=userSiteScope(await currentUserRecord(req.session));
-    const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
-    const request=rows[0];
-    if(!request)return res.status(404).json({error:'Request not found.'});
-    if(!scope.sites.length||!reportScopeIncludesSite(scope,request.site))return res.status(403).json({error:'This request belongs to a different location.'});
-    if(request.status!=='Closed'||request.verifiedAt||isIdleVehicleRequest(request))return res.status(409).json({error:'ERP evidence is available only for unverified closed requests released on road.'});
-    if(req.body?.firstTripDate&&req.body?.firstTripTime){
-      const tripAt=parseRequestTimelineTimestamp(req.body.firstTripDate+'T'+req.body.firstTripTime);
-      if(!tripAt||tripAt.getTime()>Date.now()||tripAt.getTime()<parseRequestTimelineTimestamp(request.closedAt).getTime())return res.status(400).json({error:'Enter an actual first-trip time after repair closure and not in the future.'});
-      request.erpLookupAt=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(tripAt);
-    }
-    const evidence=await oracleFirstTripLog(request);
-    evidence.fetchedBy=req.session.login;
-    if(evidence.status!=='ready')return res.json(evidence);
-    const image=await erpTripImage(evidence,request);
-    await withRequestTimelineTransaction(req,reference,async(client)=>{
-      const {rows:current}=await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
-      if(current[0]?.verifiedAt||current[0]?.status!=='Closed'||isIdleVehicleRequest(current[0])||erpTripFingerprint(current[0])!==evidence.requestHash)throw Object.assign(new Error('Request changed while reading ERP. Refresh and try again.'),{status:409});
-      await client.query(`INSERT INTO audit_events (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields)
-        VALUES ('ERP evidence','Success',$1,$2,$3,'Maintenance Requests','Attach ERP shift log','Maintenance request',$4,'Generated ERP evidence; MIS confirmation pending',$5::jsonb)`,[req.session.login||'',req.session.name||'',req.session.assignedRole||req.session.role||'',reference,JSON.stringify([{source:evidence.record.source,documentNo:evidence.record.documentNo,sourceHash:evidence.sourceHash,previousSourceHash:current[0].erpFirstTripEvidence?.sourceHash||null}])]);
-      return client.query(`UPDATE maintenance_requests SET erp_first_trip_evidence=$2::jsonb,first_trip_card_image=$3 WHERE reference=$1 RETURNING reference`,[reference,JSON.stringify(evidence),image]);
-    });
-    res.json({...evidence,image});
-  }catch(error){maintenanceWriteFailure(error,res,next)}
-});
-
 app.patch('/api/requests/:reference/verify',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
-    let firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
-    let firstTripCardImage=String(req.body?.firstTripCardImage||'');
+    const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
+    const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     const firstTripRemark=String(req.body?.firstTripRemark||'').trim();
     if(firstTripRemark.length>2000)return res.status(400).json({error:'Trip-card update remark must be 2000 characters or fewer.'});
-    let closingMeterReading=String(req.body?.closingMeterReading||'').trim();
-    let closingMeterReadings=req.body?.closingMeterReadings ?? {};
+    const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
+    const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and 12-hour time with AM/PM.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
@@ -7060,20 +7026,9 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
     if(!firstTripDone)return res.status(400).json({error:'MIS first-trip confirmation is mandatory before completing verification.'});
-    const evidence=existing.erpFirstTripEvidence;
-    if(req.body?.erpReviewed!==true||evidence?.status!=='ready'||req.body?.erpSourceHash!==evidence.sourceHash||evidence.requestHash!==erpTripFingerprint(existing))return res.status(409).json({error:'Fetch and review the current ERP shift-log evidence before verification.'});
-    const latest=await oracleFirstTripLog({...existing,erpLookupAt:evidence.lookupAt});
-    if(latest.status!=='ready'||latest.sourceHash!==evidence.sourceHash)return res.status(409).json({error:'ERP log-book data changed or is no longer eligible. Fetch it again and review the updated evidence.'});
-    if(firstTripAt<new Date(evidence.record.shiftStart)||firstTripAt>=new Date(evidence.record.shiftEnd))return res.status(409).json({error:'First-trip time is outside the fetched ERP shift. Recheck ERP log book with the entered time.'});
-    closingMeterReadings=evidence.record.closingReadings;
-    closingMeterReading=closingMeterReadings[existing.meterType||'HMR'];
     const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
     if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
-    const {rows:locked}=await client.query(`SELECT ${requestProjection},first_trip_card_image AS "erpImage" FROM maintenance_requests WHERE reference=$1`,[reference]);
-    if(locked[0]?.erpFirstTripEvidence?.sourceHash!==evidence.sourceHash||erpTripFingerprint(locked[0])!==evidence.requestHash)throw Object.assign(new Error('ERP evidence or request changed. Fetch and review again.'),{status:409});
-    firstTripCardImage=locked[0].erpImage;
-    if(!validTripCardImageDataUrl(firstTripCardImage))throw Object.assign(new Error('Generated ERP attachment is missing. Fetch ERP evidence again.'),{status:409});
     if(isIdleVehicleRequest(before))throw Object.assign(new Error('Release the Idle vehicle on road before verifying its first trip.'),{status:409});
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});

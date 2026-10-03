@@ -370,6 +370,34 @@ for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name} retain
   assert.equal(button(app.render(), "Cancel").props.disabled, false);
 });
 
+test("MIS first-trip time field uses the shared 12-hour control and is mandatory", () => {
+  assert.match(main, /TwelveHourTimeInput name="firstTripTime" includeSeconds required/);
+  const app = harness("VerifyRequestForm");
+  let tree = app.render({request: {...request, meterType: "HMR"}, close() {}, onSave: async () => {}});
+  assert.equal(field(tree, "firstTripTime").props.includeSeconds, true);
+  assert.equal(field(tree, "firstTripTime").props.required, true);
+  assert.equal(field(tree, "firstTripDate").props.required, true);
+  assert.equal(all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.checked, true);
+});
+
+test("MIS verification attachment validation and API rejection remain inline and preserve entered first-trip data", async () => {
+  const app = harness("VerifyRequestForm");
+  const props = {request: {...request, meterType: "KMR"}, close() {}, onSave: async () => {throw new Error("First trip cannot be before closure.");}};
+  let tree = app.render(props);
+  await submit(tree, {});
+  assert.match(alerts(app.render()), /Upload the first-trip card/);
+  field(app.render(), "firstTripCardImage").props.onChange({target: {files: [{type: "image/svg+xml", size: 50}]}});
+  await submit(app.render(), {});
+  assert.match(alerts(app.render()), /JPEG, PNG, or WebP/);
+  field(app.render(), "firstTripCardImage").props.onChange({target: {files: [{type: "image/png", size: 50}]}});
+  tree = app.render();
+  await submit(tree, {firstTripDate: "2026-09-08", firstTripTime: "10:00:00", closingMeterReading: "10"});
+  assert.match(alerts(app.render()), /First trip cannot be before closure/);
+  assert.ok(field(app.render(), "firstTripDate"));
+  assert.equal(all(app.render(), node => node.type === "input" && node.props.type === "checkbox")[0].props.checked, true);
+  assert.equal(button(app.render(), "Cancel").props.disabled, false);
+});
+
 test("the time breakdown shows the equipment group and door number with the request number", async () => {
   const {requestTimelineIdentity} = await import("../src/request-timeline.jsx").catch(() => ({}));
   const identified = {...request, equipmentGroup: "SCANIA TIPPERS", door: "S56-MH34BZ0561", site: "Dhoptala OB (2nd)"};

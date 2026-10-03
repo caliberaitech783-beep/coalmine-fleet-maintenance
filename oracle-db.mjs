@@ -1,20 +1,5 @@
 import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
 import {dashboardCache} from './iboss-dashboard-cache.mjs';
-import {logbookSql,tripLookupBinds,chooseShiftLog} from './erp-first-trip.mjs';
-
-export async function oracleFirstTripLog(request){
- const binds=tripLookupBinds(request),pool=await oraclePool(),connection=await pool.getConnection();
- try{
-  connection.callTimeout=20000;
-  const rows=[];
-  for(const kind of ['vehicle','equipment']){
-   const result=await connection.execute(logbookSql(kind),binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:251});
-   if(result.rows.length>250)return {status:'review',message:'Too many matching ERP shift logs. Review the door/site mapping.'};
-   rows.push(...result.rows.map(row=>({...row,source:kind==='vehicle'?'Vehicle Log Book':'Equipment Log Book'})));
-  }
-  return chooseShiftLog(request,rows);
- }finally{await connection.close();}
-}
 import oracledb from "oracledb";
 import {accountView,accountRecord,mergeChain,mergeStatements,buildMergedReport,buildTrail} from './iboss-accounts.mjs';
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';

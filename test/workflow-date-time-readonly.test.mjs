@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 test("workflow date and time fields are read only except MIS and Production first-trip entry", () => {
-  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8") + fs.readFileSync(new URL("../src/erp-first-trip-verification.jsx", import.meta.url), "utf8");
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const fieldNames = ["date", "time", "closingDate", "closingTime"];
 
   for (const name of fieldNames) {

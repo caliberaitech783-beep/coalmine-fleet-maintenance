@@ -1,4 +1,3 @@
-import {fixtureErpEvidence,fixtureErpDependencies} from './erp-first-trip-fixture.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
 import assert from "node:assert/strict";
@@ -73,12 +72,10 @@ test("edit and close submissions send both readings and keep the legacy primary 
 async function runRoute(action, body) {
   let handler, status = 200, result;
   const writes = [];
-  const evidence=fixtureErpEvidence(tipper,body);
-  if(action==="/verify")Object.assign(body,{erpReviewed:true,erpSourceHash:evidence.sourceHash});
   const start = `app.patch('/api/requests/:reference${action}'`;
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
   evaluate(route, {
-    ...workflow,...fixtureErpDependencies,oracleFirstTripLog:async()=>evidence,
+    ...workflow,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {
@@ -86,7 +83,6 @@ async function runRoute(action, body) {
       return {rows: [{...tipper, meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};
     }}, tipper),
     withRequestTimelineTransaction: async (_req, _ref, callback) => callback({query: async (sql, values) => {
-      if(sql.startsWith("SELECT"))return {rows:[{...tipper,erpFirstTripEvidence:evidence,erpImage:body.firstTripCardImage}]};
       writes.push({sql, values}); return {rows: [{...tipper, status: "Closed", verifiedAt: "2026-09-09 12:00:00"}]};
     }}, {...tipper, status: "Closed", productionFirstTripAt: "2026-09-09 11:30:00"}),
     requestExpectedCompletionValue: (_before, next) => next, validateRequestTimelineChange: () => {}, buildRequestTimelineChanges: () => {},
@@ -99,7 +95,7 @@ async function runRoute(action, body) {
     ...siteAccess,currentUserRecord: async () => ({site: tipper.site}), canonicalSiteName: value => value,
     pool: {query: async (sql, values) => {
       if (/^UPDATE/.test(sql)) { writes.push({sql, values}); return {rows: [tipper]}; }
-      return {rows: [{...tipper, erpFirstTripEvidence:evidence,status: action === "/verify" ? "Closed" : tipper.status, productionFirstTripAt: action === "/verify" ? "2026-09-09 11:30:00" : "", meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};
+      return {rows: [{...tipper, status: action === "/verify" ? "Closed" : tipper.status, productionFirstTripAt: action === "/verify" ? "2026-09-09 11:30:00" : "", meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};
     }},
     sendRequestEventReports: async () => {}, requestStakeholderLogins: async () => [], addTicketNotifications: async () => {},
   });
