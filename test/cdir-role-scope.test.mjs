@@ -64,6 +64,7 @@ test('C-Dir expanded filters stay in document flow and use responsive grids',()=
 
 test('C-Dir is a native application page and does not render the legacy iframe',()=>{
   const component=fs.readFileSync(new URL('../src/caliber-directory-page.jsx',import.meta.url),'utf8');
+  const css=fs.readFileSync(new URL('../src/caliber-directory-page.css',import.meta.url),'utf8');
   assert.doesNotMatch(client,/src="\/cd\/caliber-directory\.html/);
   assert.doesNotMatch(component,/<iframe\b/);
   assert.match(client,/import CaliberDirectoryPage from "\.\/caliber-directory-page\.jsx"/);
@@ -74,4 +75,13 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/label:'My access'/);
   assert.match(component,/viewer\.allAccess\|\|viewer\.profile==='project-manager'/);
   assert.match(component,/Project Manager Site Coverage/);
+  assert.match(component,/head office/);
+  assert.match(component,/corporate office/);
+  assert.match(component,/browseRegions=\['WCL','NCL'\]/);
+  assert.match(component,/expandedBrowseRegion[\s\S]*?cdir-region-sites/);
+  assert.match(component,/SITE_LEADERSHIP/);
+  assert.match(component,/Site Overview/);
+  assert.match(component,/Site leadership roster/);
+  assert.match(css,/\.cdir-site-chips,\.cdir-category-chips\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
+  assert.match(css,/\.cdir-view-nav\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
 });
