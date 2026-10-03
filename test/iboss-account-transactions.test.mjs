@@ -62,6 +62,7 @@ test('the real Accounts component renders Masters and Transactions tabs inside t
  assert.match(transactions,/id="accounts-tab-transactions" tabindex="0" aria-selected="true"/);
  assert.match(master,/id="accounts-tab-masters" tabindex="0" aria-selected="true"/);
  assert.match(master+transactions,/role="tablist"/);
+ assert.match(master,/id="accounts-tab-merge"[\s\S]*id="accounts-tab-chat"/);
 });
 test('IBOSS opens Accounts directly without Masters and Transactions submenu entries',()=>{
  const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');

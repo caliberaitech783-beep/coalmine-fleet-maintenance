@@ -13,3 +13,8 @@
 .iboss-account-icon.tone-1 { background:#0db1c8; }.iboss-account-icon.tone-2 { background:#22bbbb; }.iboss-account-icon.tone-4 { background:#7db850; }.iboss-account-icon.tone-5 { background:#a1a900; }.iboss-account-icon.tone-6 { background:#b99000; }.iboss-account-icon.tone-7 { background:#ed8136; }
 @media(max-width:900px) { .iboss-accounts-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.iboss-accounts-grid button:not(:nth-child(3n)) {border-right:0;}.iboss-accounts-grid button:nth-child(odd) {border-right:1px solid var(--border,#dde3ec);} }
 @media(max-width:560px) { .iboss-accounts-grid {grid-template-columns:1fr;}.iboss-accounts-grid button:nth-child(odd) {border-right:0;} }
+.iboss-chat { margin-top:24px;padding:24px;background:var(--panel,#fff);border:1px solid var(--border,#dde3ec);border-radius:18px; }
+.iboss-chat-question { flex:1;min-width:240px; }
+.iboss-chat-question input { width:100%;padding:12px;border:1px solid var(--border,#dde3ec);border-radius:8px;font:inherit; }
+.iboss-chat-suggestions { display:flex;flex-wrap:wrap;gap:10px;margin:20px 0; }
+.iboss-chat-answer { border-top:1px solid var(--border,#dde3ec);padding-top:20px; }

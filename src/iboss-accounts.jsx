@@ -10,14 +10,15 @@ import DateInput from './date-input.mjs';
 import './stock-statement.css';
 import './iboss-accounts.css';
 import IbossDashboard from './iboss-dashboard.jsx';
+import IbossChat from './iboss-chat.jsx';
 import IbossReportMerge from './iboss-report-merge.jsx';
 import DrillPanel from './iboss-drill-panel.jsx';
 import {accountDrill,ACCOUNT_DRILLS} from '../iboss-drill.mjs';
-const SECTIONS=[['dashboard','Dashboard'],['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']];
+const SECTIONS=[['dashboard','Dashboard'],['masters','Masters'],['transactions','Transactions'],['merge','Report Merge'],['chat','Chat Bot']];
 const icons=[BookUser,Contact,Wallet,Landmark,Settings,Network,BookOpen,Percent];
 export default function IbossAccounts({token,ReportSection,initialSection='dashboard',permissions={}}) {
  const allowed=accountPrivileges(permissions);
- const visibleSections=SECTIONS.filter(([,label])=>allowed.includes(label));
+ const visibleSections=SECTIONS.filter(([key,label])=>key==='chat'?allowed.some(value=>['Masters','Transactions'].includes(value)):allowed.includes(label));
  const accessKey=allowed.join('|');
  const [requestedSection,setSection]=useState(initialSection);
  const section=visibleSections.some(([key])=>key===requestedSection)?requestedSection:visibleSections[0]?.[0];
@@ -50,7 +51,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
  return <section className="reports-workspace stock-statement iboss-accounts">
   <h1><Landmark aria-hidden="true"/> Accounts</h1>
   <div className="iboss-accounts-sections" role="tablist" aria-label="Accounts sections" onKeyDown={sectionKeyDown}>{visibleSections.map(([key,label])=><button key={key} type="button" role="tab" id={`accounts-tab-${key}`} tabIndex={section===key?0:-1} aria-selected={section===key} aria-controls={`accounts-panel-${key}`} onClick={()=>changeSection(key)}>{label}</button>)}</div>
-  {section==='dashboard'?<div role="tabpanel" id="accounts-panel-dashboard" aria-labelledby="accounts-tab-dashboard"><IbossDashboard token={token} ReportSection={ReportSection} onOpen={dashboardOpen}/></div>:section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded initialChain={mergeContext?.chain||''} initialRange={mergeContext?.range}/></div>:<div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
+  {section==='chat'?<div role="tabpanel" id="accounts-panel-chat" aria-labelledby="accounts-tab-chat"><IbossChat token={token} allowed={allowed} ReportSection={ReportSection}/></div>:section==='dashboard'?<div role="tabpanel" id="accounts-panel-dashboard" aria-labelledby="accounts-tab-dashboard"><IbossDashboard token={token} ReportSection={ReportSection} onOpen={dashboardOpen}/></div>:section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded initialChain={mergeContext?.chain||''} initialRange={mergeContext?.range}/></div>:<div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
    <h2>{section==='transactions'?'Transactions':'Masters'}</h2>
    <div className="iboss-accounts-grid">{ACCOUNT_SECTIONS[section].map((key,index)=>{const entry=ACCOUNT_VIEWS[key],Icon=icons[index%icons.length];return <button type="button" key={key} aria-pressed={view===key} onClick={()=>open(key)}><span className={`iboss-account-icon tone-${index%icons.length}`}><Icon aria-hidden="true"/></span><span>{entry.title}</span></button>;})}</div>
   </div>}
