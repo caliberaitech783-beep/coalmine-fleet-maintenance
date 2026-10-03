@@ -3,6 +3,7 @@
 export function ibossAccountsEligible(user = {}) {
   const clean = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
   if (clean(user.adminLevel) === 'manager') return false;
+  if (clean(user.userType) === 'account user') return true;
   if (['admin', 'super admin'].includes(clean(user.adminLevel))) return true;
   if (['admin', 'admin user', 'super admin'].includes(clean(user.userType))) return true;
   const assignments = [user.designation, user.department, user.userGroup, user.assignedRole, user.managerRole];

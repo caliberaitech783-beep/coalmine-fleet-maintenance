@@ -3,13 +3,14 @@ import {Landmark,Wallet,BookOpen,Clock,FileText,Shield,Users,ArrowUpRight,Refres
 import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
 import {purchaseOrderRange} from '../purchase-order-report.mjs';
 import {dashboardFinancialYearRange,DASHBOARD_REFRESH_MS} from './iboss-dashboard-refresh.mjs';
+import {mergeDashboardSection} from './iboss-dashboard-sections.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
 import DateInput from './date-input.mjs';
 import DrillPanel from './iboss-drill-panel.jsx';
 import {accountDrill} from '../iboss-drill.mjs';
 import './iboss-dashboard.css';
 
-export const dashboardAmount=value=>{const number=Number(value);if(!Number.isFinite(number))return '—';const sign=number<0?'−':'';const absolute=Math.abs(number);return sign+(absolute>=1e7?`${(absolute/1e7).toFixed(2)} Cr`:absolute>=1e5?`${(absolute/1e5).toFixed(2)} L`:absolute.toLocaleString('en-IN',{maximumFractionDigits:2}));};
+export const dashboardAmount=value=>{if(value==null)return '—';const number=Number(value);if(!Number.isFinite(number))return '—';const sign=number<0?'−':'';const absolute=Math.abs(number);return sign+(absolute>=1e7?`${(absolute/1e7).toFixed(2)} Cr`:absolute>=1e5?`${(absolute/1e5).toFixed(2)} L`:absolute.toLocaleString('en-IN',{maximumFractionDigits:2}));};
 const iconByKind={bank:Landmark,payable:Wallet,receivable:BookOpen,risk:AlertTriangle,loan:Building2,calendar:Calendar,advice:FileText};
 const units={bank:'accounts',loan:'loans','overdue-emi':'instalments','upcoming-emi':'instalments','pending-advice':'advice records'};
 const linkedReports=[['payment-advice','Payment Advice'],['emi-schedule','EMI Schedule'],['payable-receivable','Party Balances'],['bank-balance','Bank Balances'],['fixed-deposit','Fixed Deposits'],['bank-guarantee','Bank Guarantees']];
@@ -48,36 +49,51 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState(''),[selected,setSelected]=useState(null);
  const [data,setData]=useState(preview?{...preview,loading:false}:{loading:true});
  useEffect(()=>{
-  if(preview||data.loading)return;
+  if(preview||data.loading||data.refreshing)return;
   const timer=setInterval(()=>setAttempt(value=>value+1),DASHBOARD_REFRESH_MS);
   return ()=>clearInterval(timer);
- },[preview,data.loading,attempt]);
+ },[preview,data.loading,data.refreshing,attempt]);
  useEffect(()=>{
   if(preview)return;
-  const controller=new AbortController();setData({loading:true});
-  fetch(`/api/reports/iboss-accounts-dashboard?${new URLSearchParams(range)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load the Accounts dashboard.');return body;})
-   .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false});})
-   .catch(error=>{if(!controller.signal.aborted)setData({loading:false,error:error.message});});
+  const controller=new AbortController();
+  setData(old=>old.cards&&old.from===range.from&&old.to===range.to?{...old,refreshing:true,error:null}:{loading:true,refreshing:true});
+  const load=async section=>{
+   const response=await fetch(`/api/reports/iboss-accounts-dashboard?${new URLSearchParams({...range,section})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal});
+   const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load the Accounts dashboard.');return body;
+  };
+  (async()=>{
+   try{
+    const core=await load('core');if(controller.signal.aborted)return;
+    setData(old=>({...mergeDashboardSection(old,core,'core'),refreshing:true}));
+    await Promise.all(['receivable','tax'].map(async section=>{
+     try{const body=await load(section);if(!controller.signal.aborted)setData(old=>mergeDashboardSection(old,body,section));}
+     catch(error){if(!controller.signal.aborted)setData(old=>({...old,sectionPending:{...old.sectionPending,[section]:false},sectionErrors:{...old.sectionErrors,[section]:error.message}}));}
+    }));
+   }catch(error){if(!controller.signal.aborted)setData(old=>({...old,loading:false,error:error.message}));}
+   finally{if(!controller.signal.aborted)setData(old=>({...old,refreshing:false}));}
+  })();
   return ()=>controller.abort();
  },[token,range,attempt,preview]);
  const refresh=event=>{event.preventDefault();try{purchaseOrderRange(draft.from,draft.to);setValidation('');setRange({...draft});setAttempt(value=>value+1);}catch(error){setValidation(error.message);}};
  const select=(key,title)=>setSelected({key,title:title||data.cards.find(card=>card.key===key)?.title||data.tasks.find(task=>task.key===key)?.title});
  const maxAge=Math.max(1,...(data.aging||[]).flatMap(item=>[Math.abs(item.payable),Math.abs(item.receivable)]));
  const taskCount=(data.tasks||[]).filter(task=>task.count>0).length;
- const renderParties=side=><section className="iboss-dash-panel"><div className="iboss-dash-panel-heading"><div><small>Current signed balances</small><h3>{side==='receivable'?'Largest customer balances':'Largest vendor balances'}</h3></div><button type="button" onClick={()=>select(side)}>View all <ChevronRight/></button></div><table className="iboss-dash-party-table"><thead><tr><th>Party</th><th>Bills</th><th>Balance</th></tr></thead><tbody>{data.parties[side].length?data.parties[side].map(party=><tr key={party.code}><td><button type="button" onClick={()=>onOpen('merge',{range,chain:'party-position',anchor:party.code,label:party.name})}>{party.name}<small>{party.code}</small></button></td><td>{party.bills.toLocaleString('en-IN')}</td><td>{dashboardAmount(party.balance)}</td></tr>):<tr><td colSpan="3">No open balances.</td></tr>}</tbody></table></section>;
+ const renderParties=side=><section className="iboss-dash-panel"><div className="iboss-dash-panel-heading"><div><small>Current signed balances</small><h3>{side==='receivable'?'Largest customer balances':'Largest vendor balances'}</h3></div><button type="button" onClick={()=>select(side)}>View all <ChevronRight/></button></div><table className="iboss-dash-party-table"><thead><tr><th>Party</th><th>Bills</th><th>Balance</th></tr></thead><tbody>{data.parties[side].length?data.parties[side].map(party=><tr key={party.code}><td><button type="button" onClick={()=>onOpen('merge',{range,chain:'party-position',anchor:party.code,label:party.name})}>{party.name}<small>{party.code}</small></button></td><td>{party.bills.toLocaleString('en-IN')}</td><td>{dashboardAmount(party.balance)}</td></tr>):<tr><td colSpan="3">{side==='receivable'&&(data.sectionPending?.receivable||data.sectionErrors?.receivable)?'Customer balances loading or unavailable—see status above.':'No open balances.'}</td></tr>}</tbody></table></section>;
  return <div className="iboss-dashboard">
   {preview&&<div className="iboss-dash-preview"><Shield/> DESIGN PREVIEW · Illustrative figures for review · Not deployed</div>}
   <div className="iboss-dash-title"><div><small>IBOSS / ACCOUNTS</small><h2>Finance at a glance</h2><p>Balances, commitments and follow-up — one place to start your day.</p></div><div className="iboss-dash-mode" role="group" aria-label="Dashboard focus"><button type="button" aria-pressed={mode==='management'} onClick={()=>setMode('management')}>Management</button><button type="button" aria-pressed={mode==='accounts'} onClick={()=>setMode('accounts')}>Accounts team</button></div></div>
-  <form className="iboss-dash-controls" onSubmit={refresh}><label>Activity from<DateInput value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To / planning date<DateInput value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label><button type="submit" disabled={data.loading}><RefreshCw/>{data.loading?'Loading…':preview?'Apply preview dates':'Refresh'}</button><span><i className="iboss-dash-status"/>{preview?'Example data':data.checkedAt?`Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})}`:'Connecting to Oracle'}</span></form>
+  <form className="iboss-dash-controls" onSubmit={refresh}><label>Activity from<DateInput value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To / planning date<DateInput value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label><button type="submit" disabled={data.loading||data.refreshing}><RefreshCw/>{data.refreshing?'Refreshing…':data.loading?'Loading…':preview?'Apply preview dates':'Refresh'}</button><span><i className="iboss-dash-status"/>{preview?'Example data':data.checkedAt?`Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})}`:'Connecting to Oracle'}</span></form>
   {validation&&<p role="alert">{validation}</p>}
   {!preview&&<p className="iboss-dash-note">Automatically refreshes from Oracle every 10 minutes while this dashboard is open. Your selected date range is retained.</p>}
-  {data.loading?<div className="iboss-dash-loading" role="status">Loading balances, commitments and source reports from Oracle…</div>:data.error?<div className="iboss-dash-loading" role="alert">{data.error}<button type="button" onClick={()=>setAttempt(value=>value+1)}>Retry</button></div>:<>
+  {data.cards&&data.error&&<p role="alert">Refresh failed: {data.error}. Showing the last successful figures.</p>}
+  {Object.entries(data.sectionPending||{}).filter(([,pending])=>pending).map(([section])=><p role="status" key={section}>Updating {section==='receivable'?'receivables':'tax totals'} from Oracle… Previously loaded figures remain visible; missing figures show —.</p>)}
+  {Object.entries(data.sectionErrors||{}).map(([section,error])=><p role="alert" key={section}>{section==='receivable'?'Receivables':'Tax totals'} could not refresh: {error}. Previously loaded figures may be out of date. Use Refresh to retry.</p>)}
+  {data.loading?<div className="iboss-dash-loading" role="status">Loading balances, commitments and source reports from Oracle…</div>:data.error&&!data.cards?<div className="iboss-dash-loading" role="alert">{data.error}<button type="button" onClick={()=>setAttempt(value=>value+1)}>Retry</button></div>:<>
    <div className="iboss-dash-scope"><span>Current balances + activity from {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)}</span><span>Amounts in ERP reporting units · L = lakh · Cr = crore</span></div>
-   <div className="iboss-dash-kpis">{data.cards.map(card=>{const Icon=iconByKind[card.kind]||Wallet;return <button type="button" className={`iboss-dash-kpi ${card.kind}`} key={card.key} onClick={()=>select(card.key)} aria-label={`Open ${card.title} records`}><span className="iboss-dash-kpi-top"><span>{card.title}</span><Icon/></span><strong>{dashboardAmount(card.amount)}</strong><span className="iboss-dash-kpi-count">{card.count.toLocaleString('en-IN')} {units[card.key]||'bills'}<ArrowUpRight/></span><small>{card.note}</small></button>;})}</div>
+   <div className="iboss-dash-kpis">{data.cards.map(card=>{const Icon=iconByKind[card.kind]||Wallet;return <button type="button" className={`iboss-dash-kpi ${card.kind}`} key={card.key} onClick={()=>select(card.key)} aria-label={`Open ${card.title} records`}><span className="iboss-dash-kpi-top"><span>{card.title}</span><Icon/></span><strong>{dashboardAmount(card.amount)}</strong><span className="iboss-dash-kpi-count">{card.count?.toLocaleString('en-IN')} {units[card.key]||'bills'}<ArrowUpRight/></span><small>{card.note}</small></button>;})}</div>
    <div className={`iboss-dash-main ${mode}`}>
     <section className="iboss-dash-panel iboss-dash-aging"><div className="iboss-dash-panel-heading"><div><small>Current balances · age of bill</small><h3>Where money is waiting</h3></div><span className="iboss-dash-legend"><i className="payable"/>Payables <i className="receivable"/>Receivables</span></div><p>Bill age, not days past due. Signed credit balances remain visible.</p><div className="iboss-dash-aging-grid">{data.aging.map(item=><div key={item.band}><span>{item.band} days</span><div className="iboss-dash-age-pair">{['payable','receivable'].map(side=><button type="button" key={side} onClick={()=>select(side)} aria-label={`Open ${side} report; ${item.band} day bill-age total ${dashboardAmount(item[side])}`}><span className="iboss-dash-track"><i className={side} style={{width:`${Math.abs(item[side])/maxAge*100}%`}}/></span><b>{dashboardAmount(item[side])}</b></button>)}</div></div>)}</div></section>
-    <section className="iboss-dash-panel iboss-dash-actions"><div className="iboss-dash-panel-heading"><div><small>Accounts worklist</small><h3>Needs attention <span>{taskCount}</span></h3></div><Clock/></div><p>Open a task to see the records behind it.</p><div>{data.tasks.map(task=><button type="button" key={task.key} onClick={()=>select(task.key,task.title)} className={!task.count?'clear':''}><span className={`iboss-dash-task-icon ${task.tone}`}>{task.tone==='urgent'?<AlertTriangle/>:<Calendar/>}</span><span><b>{task.title}</b><small>{task.count.toLocaleString('en-IN')} records · {dashboardAmount(task.amount)}</small></span><ChevronRight/></button>)}</div></section>
+    <section className="iboss-dash-panel iboss-dash-actions"><div className="iboss-dash-panel-heading"><div><small>Accounts worklist</small><h3>Needs attention <span>{taskCount}</span></h3></div><Clock/></div><p>Open a task to see the records behind it.</p><div>{data.tasks.map(task=><button type="button" key={task.key} onClick={()=>select(task.key,task.title)} className={!task.count?'clear':''}><span className={`iboss-dash-task-icon ${task.tone}`}>{task.tone==='urgent'?<AlertTriangle/>:<Calendar/>}</span><span><b>{task.title}</b><small>{task.count?.toLocaleString('en-IN')} records · {dashboardAmount(task.amount)}</small></span><ChevronRight/></button>)}</div></section>
    </div>
    <div className="iboss-dash-party-grid">{renderParties('receivable')}{renderParties('payable')}</div>
    <div className="iboss-dash-bottom-grid">

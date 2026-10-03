@@ -26,6 +26,9 @@ test('C-Dir gives Project Managers and General Users a site-scoped profile witho
   assert.equal(general.profile,'general-user');
   assert.equal('login' in general,false);
   assert.equal('permissions' in general,false);
+
+  const mis=cdirViewerContext({session:{role:'normal',assignedRole:'MIS User'},user:{userGroup:'MIS User',site:'Sasti OC'},sites});
+  assert.deepEqual(mis,{profile:'site-user',label:'MIS User',mySitesEnabled:true,siteIds:['sasti-oc'],sites:['Sasti OC']});
 });
 
 test('C-Dir region-first filters, All/My Sites tabs and Project Manager leaderboard are present',()=>{
@@ -42,4 +45,15 @@ test('C-Dir expanded filters stay in document flow and use responsive grids',()=
   assert.match(html,/@media \(max-width:1180px\)\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(html,/@media \(max-width:760px\)\{[\s\S]*?grid-template-columns:minmax\(0,1fr\)/);
   assert.match(html,/overflow-x:hidden/);
+});
+
+test('C-Dir is a native application page and does not render the legacy iframe',()=>{
+  const component=fs.readFileSync(new URL('../src/caliber-directory-page.jsx',import.meta.url),'utf8');
+  assert.doesNotMatch(client,/src="\/cd\/caliber-directory\.html/);
+  assert.doesNotMatch(component,/<iframe\b/);
+  assert.match(client,/import CaliberDirectoryPage from "\.\/caliber-directory-page\.jsx"/);
+  assert.match(client,/<CaliberDirectoryPage token=\{session\?\.token \|\| authToken\}/);
+  assert.match(component,/All regions[\s\S]*?WCL[\s\S]*?NCL/);
+  assert.match(component,/My Site\(s\)/);
+  assert.match(component,/Project Manager Site Coverage/);
 });

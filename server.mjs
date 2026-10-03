@@ -2211,7 +2211,8 @@ app.post('/api/login',async(req,res,next)=>{
       targetReference:login,
       changedFields:[],
     };
-    if(req.body.portal==='accounts'&&!ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions}))return res.status(403).json({error:'This login is not authorised for Accounts. Ask an administrator to create an Account User.'});
+    if(req.body.portal==='accounts'&&(profile.userType!=='Account User'||!ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions})))return res.status(403).json({error:'This ID is not an Account User. Select Fleet operations to sign in with your fleet ID.'});
+    if(req.body.portal!=='accounts'&&profile.userType==='Account User')return res.status(403).json({error:'This is an Account User ID. Select Accounts before signing in.'});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, MIS User, or General User in Users & employees.'});
     if(!ADMIN_LOCK_POLICY_PAUSED&&profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
@@ -3926,7 +3927,9 @@ app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   try{purchaseOrderRange(req.query.from,req.query.to);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to));}
+  const section=req.query.section||'all';
+  if(!['all','core','receivable','tax'].includes(section))return res.status(400).json({error:'Invalid dashboard section.'});
+  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to,section));}
   catch(error){console.error('IBOSS dashboard failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load the dashboard from Oracle. Please retry.'});}
 });
 app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{

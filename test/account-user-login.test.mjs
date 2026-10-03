@@ -2,8 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
-import {ibossAccountsAllowed} from '../iboss-access.mjs';
+import {ibossAccountsAllowed,ibossAccountsEligible} from '../iboss-access.mjs';
 import {ADMIN_SUBMENU_OPTIONS} from '../admin-access.mjs';
+test('Account User retains Accounts access after the profile refresh',()=>{
+  const user={userType:'Account User',userGroup:'Account User',adminLevel:''};
+  const profile=resolveMobileAccess({user});
+  const session={...profile,role:profile.sessionRole};
+  assert.equal(ibossAccountsEligible(user),true);
+  assert.equal(ibossAccountsAllowed({...session,permissions:{...session.permissions,ibossAccounts:ibossAccountsEligible(user)}}),true);
+  assert.equal(ibossAccountsEligible({userType:'Mobile User',userGroup:'General User'}),false);
+  assert.equal(ibossAccountsEligible({...user,adminLevel:'Manager'}),false);
+});
 test('Account User has only Accounts authority, never administrator or fleet write access',()=>{
   const profile=resolveMobileAccess({user:{userType:'Account User',adminLevel:'Super Admin',tabAccess:'Masters',userGroup:'Account User'}});
   const session={...profile,role:profile.sessionRole};
@@ -27,6 +36,22 @@ test('Accounts login checks server authority before issuing a session or passwor
   assert.match(client,/MOBILE_USER_ROLES,"Account User"/);
   assert.match(client,/if \(session.userType === "Account User"\) return/);
   assert.match(client,/ibossAccountsAllowed\(session\)\?<IbossAccounts/);
+});
+test('selected login portal rejects cross-portal IDs before login, including missing portal',()=>{
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const start=server.indexOf("    if(req.body.portal==='accounts'");
+  const end=server.indexOf('    if(!profile.userType)',start);
+  const guard=new Function('req','profile','res','ibossAccountsAllowed',server.slice(start,end)+';return null;');
+  const account=resolveMobileAccess({user:{userType:'Account User'}});
+  const fleetProfiles=[resolveMobileAccess({user:{userType:'Super Admin',adminLevel:'Admin'}}),...['Production User','Maintenance User','MIS User','General User'].map(userGroup=>resolveMobileAccess({user:{userType:'Mobile User',userGroup}}))];
+  const check=(profile,portal)=>guard({body:{portal}},profile,{status(code){return {json(body){return {code,...body};}};}},ibossAccountsAllowed);
+  assert.equal(check(account,'accounts'),null);
+  for(const portal of ['operations',undefined,'fleet','invalid'])assert.equal(check(account,portal).code,403);
+  for(const profile of fleetProfiles){
+    assert.equal(check(profile,'accounts').code,403);
+    assert.equal(check(profile,'operations'),null);
+    assert.equal(check(profile,undefined),null);
+  }
 });
 test('saving Account User clears inherited administrative and operational selections',()=>{
   const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');

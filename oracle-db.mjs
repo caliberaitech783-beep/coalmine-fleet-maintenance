@@ -1,4 +1,5 @@
 import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
+import {dashboardCache} from './iboss-dashboard-cache.mjs';
 import oracledb from "oracledb";
 import {accountView,accountRecord,mergeChain,mergeStatements,buildMergedReport,buildTrail} from './iboss-accounts.mjs';
 import {STOCK_STATEMENT_SQL, stockStatementRow} from './stock-statement.mjs';
@@ -11,12 +12,20 @@ const user = String(process.env.ORACLE_DB_USER || "").trim();
 const password = String(process.env.ORACLE_DB_PASSWORD || "");
 const connectString = String(process.env.ORACLE_DB_CONNECT_STRING || "").trim();
 
-export async function oracleAccountsDashboard(from,to){
+const cachedDashboard=dashboardCache();
+export async function oracleAccountsDashboard(from,to,section='all'){
+  purchaseOrderRange(from,to);
+  if(!['all','core','receivable','tax'].includes(section))throw new Error('Invalid dashboard section.');
+  return cachedDashboard(JSON.stringify([from,to,section]),()=>loadAccountsDashboard(from,to,section));
+}
+async function loadAccountsDashboard(from,to,section){
   const values=purchaseOrderRange(from,to),pool=await oraclePool(),connection=await pool.getConnection();
   try{
     connection.callTimeout=60000;await connection.execute('SET TRANSACTION READ ONLY');
     const groups={};
     for(const [key,{sql}] of Object.entries(DASHBOARD_QUERIES)){
+      if(section==='core'&&['receivable','tax'].includes(key))continue;
+      if(['receivable','tax'].includes(section)&&key!==section)continue;
       const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
       const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:50001,fetchArraySize:2000});
       if(result.rows.length>50000)throw new Error('Dashboard source exceeds the supported grouping limit.');

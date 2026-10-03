@@ -10,8 +10,11 @@ function directorySiteIds(sites,assignedSites){
 export function cdirViewerContext({session={},user={},sites=[]}={}){
   const managerRoles=managerRoleSelection(user.managerRole||session.permissions?.managerRoles||session.permissions?.managerRole);
   const isProjectManager=session.role==='super'&&normalizeAdminLevel(user.adminLevel||session.permissions?.adminLevel)==='Manager'&&managerRoles.includes('Project Manager');
-  const isGeneralUser=session.assignedRole==='General User'||String(user.userGroup||user.assignedRole||'').trim()==='General User';
-  if(!isProjectManager&&!isGeneralUser)return {profile:'all-user',label:'All directory',mySitesEnabled:false,siteIds:[],sites:[]};
+  const assignedRole=String(session.assignedRole||user.userGroup||user.assignedRole||'').trim();
+  const userSites=userSiteSelection(user).map(displaySiteName);
+  const isGeneralUser=assignedRole==='General User';
+  const isSiteUser=session.role!=='super'&&userSites.length>0;
+  if(!isProjectManager&&!isSiteUser)return {profile:'all-user',label:assignedRole||'All directory',mySitesEnabled:false,siteIds:[],sites:[]};
 
   let assignedSites=[];
   if(isProjectManager){
@@ -21,11 +24,11 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
       : displaySiteSelection(user.managerSites).length
         ? displaySiteSelection(user.managerSites)
         : (scope.sites||[]).map(displaySiteName);
-  }else assignedSites=userSiteSelection(user).map(displaySiteName);
+  }else assignedSites=userSites;
 
   return {
-    profile:isProjectManager?'project-manager':'general-user',
-    label:isProjectManager?'Project Manager':'General User',
+    profile:isProjectManager?'project-manager':isGeneralUser?'general-user':'site-user',
+    label:isProjectManager?'Project Manager':assignedRole||'Site User',
     mySitesEnabled:true,
     siteIds:directorySiteIds(sites,assignedSites),
     sites:assignedSites,

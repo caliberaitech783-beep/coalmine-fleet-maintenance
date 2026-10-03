@@ -15,10 +15,10 @@ test('Accounts defaults to April financial year through today in India',()=>{
 test('live dashboard refresh uses ten minutes, skips in-flight requests and cleans up its timer',()=>{
  assert.equal(DASHBOARD_REFRESH_MS,600000);
  const source=fs.readFileSync(new URL('../src/iboss-dashboard.jsx',import.meta.url),'utf8');
- assert.match(source,/if\(preview\|\|data.loading\)return/);
+ assert.match(source,/if\(preview\|\|data.loading\|\|data.refreshing\)return/);
  assert.match(source,/setInterval\(\(\)=>setAttempt\(value=>value\+1\),DASHBOARD_REFRESH_MS\)/);
  assert.match(source,/return \(\)=>clearInterval\(timer\)/);
- assert.match(source,/\[preview,data.loading,attempt\]/);
- assert.match(source,/new URLSearchParams\(range\)/);
+ assert.match(source,/\[preview,data.loading,data.refreshing,attempt\]/);
+ assert.match(source,/new URLSearchParams\(\{\.\.\.range,section\}\)/);
  assert.match(source,/cache:'no-store'/);
 });

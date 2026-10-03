@@ -627,6 +627,44 @@
   .nav-dock-row .nav-dock-bar{flex:1;width:auto;}
   .back-btn.disabled{opacity:.45;pointer-events:none;}
 
+  /* ---- native BDMS embed ----
+     The standalone file keeps its complete branded header when opened directly.
+     Inside BDMS it becomes a seamless workspace instead of a page within a page. */
+  html[data-embedded="true"] body{background:transparent;}
+  html[data-embedded="true"] .topbar{
+    min-height:58px;padding:10px 18px;gap:10px;background:var(--surface,#fff);color:var(--ink);
+    border-bottom:1px solid var(--line);box-shadow:none;justify-content:flex-start;
+  }
+  html[data-embedded="true"] .topbar-left{flex:1;min-width:0;gap:10px;}
+  html[data-embedded="true"] .tb-logo,
+  html[data-embedded="true"] .tb-clock{display:none;}
+  html[data-embedded="true"] .sidebar-toggle{
+    width:38px;height:38px;background:var(--accent3);border-color:var(--accent3);color:#fff;
+  }
+  html[data-embedded="true"] .sidebar-toggle:hover{background:var(--accent2-solid);}
+  html[data-embedded="true"] .tb-search{width:min(380px,100%);}
+  html[data-embedded="true"] .tb-search input{
+    background:var(--panel);border-color:var(--line);color:var(--ink);box-shadow:none;
+  }
+  html[data-embedded="true"] .tb-search input::placeholder{color:var(--ink-soft);}
+  html[data-embedded="true"] .notif-bell{
+    background:var(--panel);border-color:var(--line);color:var(--accent3);
+  }
+  html[data-embedded="true"] .notif-bell:hover{background:#f0ecf7;border-color:var(--accent3);}
+  html[data-embedded="true"] .notif-badge{border-color:var(--surface,#fff);}
+  html[data-embedded="true"] .wrap{max-width:none;padding:14px 18px 56px;}
+  html[data-embedded="true"] .wrap > hr.sep:first-of-type{display:none;}
+  html[data-embedded="true"] .hero-band{
+    width:100%;left:auto;right:auto;margin-left:0;margin-right:0;border-radius:14px;overflow:hidden;
+  }
+  html[data-embedded="true"] .hero-band-inner{max-width:none;}
+  @media (max-width:640px){
+    html[data-embedded="true"] .topbar{padding:10px 14px;}
+    html[data-embedded="true"] .topbar-left{flex-wrap:wrap;}
+    html[data-embedded="true"] .topbar-left .tb-search{order:2;flex:1 1 calc(100% - 48px);}
+    html[data-embedded="true"] .wrap{padding:12px 14px 44px;}
+  }
+
   /* ---- scroll-triggered reveal (Tata Motors style: fades/slides in on scroll, replays every pass) ---- */
   .reveal{
     opacity:0;
