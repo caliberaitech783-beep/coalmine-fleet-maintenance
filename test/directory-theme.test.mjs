@@ -6,8 +6,8 @@ const script=readFileSync(new URL('../public/cd/directory-theme.js',import.meta.
 test('directory follows host theme live without navigation or data changes',()=>{
   const root={dataset:{},style:{}}, host={dataset:{theme:'dark'}};
   let changed, options;
-  const window={parent:{document:{documentElement:host}},addEventListener(){}};
-  vm.runInNewContext(script,{document:{documentElement:root},window,localStorage:{getItem:()=> 'light'},MutationObserver:class {constructor(fn){changed=fn} observe(_,config){options=config}}});
+  const window={location:{search:''},parent:{document:{documentElement:host}},addEventListener(){}};
+  vm.runInNewContext(script,{URLSearchParams,document:{documentElement:root,readyState:'loading',addEventListener(){}},window,localStorage:{getItem:()=> 'light'},MutationObserver:class {constructor(fn){changed=fn} observe(_,config){options=config}}});
   assert.equal(root.dataset.theme,'dark');
   host.dataset.theme='light'; changed();
   assert.equal(root.dataset.theme,'light');
