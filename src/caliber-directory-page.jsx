@@ -124,21 +124,24 @@ export default function CaliberDirectoryPage({token}){
   const openFiltered=(next)=>{setFilters(current=>({...current,...next}));setView('people');};
   if(state.loading)return <section className="caliber-directory-page"><div className="cdir-state"><RefreshCw className="spin"/><h2>Loading Caliber Directory</h2><p>Reading the current roster from Masters…</p></div></section>;
   if(state.error)return <section className="caliber-directory-page"><div className="cdir-state error"><TriangleAlert/><h2>Directory unavailable</h2><p>{state.error}</p><button type="button" onClick={()=>setAttempt(value=>value+1)}>Try again</button></div></section>;
-  const scopeRegion=scope.startsWith('region:')?scope.slice(7):scope.startsWith('site:')?(directory.sites||[]).find(site=>site.id===scope.slice(5))?.group:'';
-  const scopeOptions=viewer.allAccess
-    ? [{key:'all',label:'All',detail:'Every region and site',icon:Building2}]
-    : (directory.sites||[]).length===1
-      ? (directory.sites||[]).map(site=>({key:`site:${site.id}`,label:site.label,detail:site.group||'Assigned site',icon:Building2}))
-      : [
-          {key:'assigned',label:'My access',detail:`${(viewer.regions||[]).length} region${(viewer.regions||[]).length===1?'':'s'} · ${(directory.sites||[]).length} site${(directory.sites||[]).length===1?'':'s'}`,icon:UsersRound},
-          ...(viewer.regions||[]).map(region=>({key:`region:${region}`,label:region,detail:`${(directory.sites||[]).filter(site=>site.group===region).length} assigned sites`,icon:Building2})),
-          ...(directory.sites||[]).filter(site=>site.group===scopeRegion).map(site=>({key:`site:${site.id}`,label:site.label,detail:`${site.group} assigned site`,icon:Building2})),
-        ];
+  const allSites=directory.sites||[];
+  const scopeRegion=scope.startsWith('region:')?scope.slice(7):scope.startsWith('site:')?allSites.find(site=>site.id===scope.slice(5))?.group:'';
+  const headOffice=allSites.find(site=>/\bhead office\b/i.test(site.label));
+  const corporateOffice=allSites.find(site=>/\bcorporate office\b/i.test(site.label));
+  const accessRegions=['WCL','NCL'].filter(region=>allSites.some(site=>site.group===region));
+  const rootScope={key:viewer.allAccess?'all':'assigned',label:viewer.allAccess?'All':allSites.length===1?'My site':'My access',detail:viewer.allAccess?'Every region and site':`${accessRegions.length} assigned region${accessRegions.length===1?'':'s'} · ${allSites.length} assigned site${allSites.length===1?'':'s'}`,icon:viewer.allAccess?Building2:UsersRound};
+  const scopeOptions=[
+    rootScope,
+    ...(headOffice?[{key:`site:${headOffice.id}`,label:headOffice.label,detail:'Head Office',icon:Building2}]:[]),
+    ...(corporateOffice?[{key:`site:${corporateOffice.id}`,label:corporateOffice.label,detail:'Corporate Office',icon:Building2}]:[]),
+    ...accessRegions.map(region=>({key:`region:${region}`,label:region,detail:`${allSites.filter(site=>site.group===region).length} assigned site${allSites.filter(site=>site.group===region).length===1?'':'s'}`,icon:Building2})),
+    ...(accessRegions.includes(scopeRegion)?allSites.filter(site=>site.group===scopeRegion).map(site=>({key:`site:${site.id}`,label:site.label,detail:`${site.group} assigned site`,icon:Building2})):[]),
+  ];
   const activeScope=scopeOptions.find(option=>option.key===scope)||scopeOptions[0];
   const scopeLabel=activeScope?.detail||'No sites assigned';
   const regionOptions=unique(scopedSites.map(site=>site.group));
-  const headOffice=scopedSites.find(site=>/\bhead office\b/i.test(site.label));
-  const corporateOffice=scopedSites.find(site=>/\bcorporate office\b/i.test(site.label));
+  const browseHeadOffice=scopedSites.find(site=>/\bhead office\b/i.test(site.label));
+  const browseCorporateOffice=scopedSites.find(site=>/\bcorporate office\b/i.test(site.label));
   const browseRegions=['WCL','NCL'].filter(region=>scopedSites.some(site=>site.group===region));
   const expandedBrowseRegion=browseRegions.includes(filters.region)?filters.region:'';
   const browseSiteRows=expandedBrowseRegion?scopedSites.filter(site=>site.group===expandedBrowseRegion):[];
@@ -160,7 +163,7 @@ export default function CaliberDirectoryPage({token}){
       ['dashboard','Overview',LayoutDashboard],['people','Directory',UsersRound],['vacancies','Vacancies',TriangleAlert],['matrix','Category matrix',TableProperties],['organisation','Organisation chart',Network],
     ].map(([key,label,Icon])=><button type="button" key={key} className={view===key?'active':''} onClick={()=>setView(key)}><Icon/>{label}{key==='people'&&<span>{filteredRows.length}</span>}{key==='vacancies'&&<span>{vacancies.length}</span>}</button>)}</nav>
 
-    <div className="cdir-browse"><div className="cdir-site-chips"><b>Browse:</b><button type="button" className={filters.region===ALL&&filters.site===ALL?'active':''} onClick={()=>browseTo()}>{viewer.allAccess?'All sites':'All assigned sites'} <span>{scopeRows.length}</span></button>{headOffice&&<button type="button" className={filters.site===headOffice.id?'active':''} onClick={()=>browseTo(headOffice.group||ALL,headOffice.id)}>{headOffice.label} <span>{scopeRows.filter(row=>row.siteId===headOffice.id).length}</span></button>}{corporateOffice&&<button type="button" className={filters.site===corporateOffice.id?'active':''} onClick={()=>browseTo(corporateOffice.group||ALL,corporateOffice.id)}>{corporateOffice.label} <span>{scopeRows.filter(row=>row.siteId===corporateOffice.id).length}</span></button>}{browseRegions.map(region=><button type="button" className={filters.region===region?'active':''} key={region} onClick={()=>browseTo(region,ALL)}>{region} <span>{scopeRows.filter(row=>row.region===region).length}</span></button>)}</div>{expandedBrowseRegion&&<div className="cdir-site-chips cdir-region-sites"><b>{expandedBrowseRegion} sites:</b>{browseSiteRows.map(site=><button type="button" className={filters.site===site.id?'active':''} key={site.id} onClick={()=>browseTo(expandedBrowseRegion,site.id)}>{site.label} <span>{scopeRows.filter(row=>row.siteId===site.id).length}</span></button>)}</div>}</div>
+    <div className="cdir-browse"><div className="cdir-site-chips"><b>Browse:</b><button type="button" className={filters.region===ALL&&filters.site===ALL?'active':''} onClick={()=>browseTo()}>{viewer.allAccess?'All sites':'All assigned sites'} <span>{scopeRows.length}</span></button>{browseHeadOffice&&<button type="button" className={filters.site===browseHeadOffice.id?'active':''} onClick={()=>browseTo(browseHeadOffice.group||ALL,browseHeadOffice.id)}>{browseHeadOffice.label} <span>{scopeRows.filter(row=>row.siteId===browseHeadOffice.id).length}</span></button>}{browseCorporateOffice&&<button type="button" className={filters.site===browseCorporateOffice.id?'active':''} onClick={()=>browseTo(browseCorporateOffice.group||ALL,browseCorporateOffice.id)}>{browseCorporateOffice.label} <span>{scopeRows.filter(row=>row.siteId===browseCorporateOffice.id).length}</span></button>}{browseRegions.map(region=><button type="button" className={filters.region===region?'active':''} key={region} onClick={()=>browseTo(region,ALL)}>{region} <span>{scopeRows.filter(row=>row.region===region).length}</span></button>)}</div>{expandedBrowseRegion&&<div className="cdir-site-chips cdir-region-sites"><b>{expandedBrowseRegion} sites:</b>{browseSiteRows.map(site=><button type="button" className={filters.site===site.id?'active':''} key={site.id} onClick={()=>browseTo(expandedBrowseRegion,site.id)}>{site.label} <span>{scopeRows.filter(row=>row.siteId===site.id).length}</span></button>)}</div>}</div>
     <div className="cdir-category-chips"><b>Category:</b><button type="button" className={filters.category===ALL?'active':''} onClick={()=>setFilter('category',ALL)}>All</button>{(directory.categories||[]).map(category=><button type="button" className={filters.category===category?'active':''} key={category} onClick={()=>{setFilter('category',category);setView('people');}}>{category} <span>{scopeRows.filter(row=>row.cat===category).length}</span></button>)}</div>
 
     {view==='dashboard'&&<><SummaryHero meta={directory.meta||{}} rows={filteredRows} leadershipCount={leadership.length} scopeLabel={scopeLabel} mode={overviewMode}/><section className="cdir-section"><div className="cdir-section-head"><div><h2>{overviewMode==='corporate'?'Leadership roster':'Site leadership roster'}</h2><p>{leadership.length} {overviewMode==='corporate'?'leadership':'senior site'} profile{leadership.length===1?'':'s'} in the selected scope.</p></div></div><DirectoryTable rows={leadership} redacted={redacted} onSelect={setSelected} empty="No active employee profiles match these filters."/></section>{(viewer.allAccess||viewer.profile==='project-manager')&&<ProjectManagerLeaderboard rows={filteredRows}/>}</>}

@@ -11467,9 +11467,9 @@ function App() {
       }
     };
     checkVersion();
-    // Deploy checks do not need to wake every signed-in browser every ten
-    // seconds. Focus/pageshow refreshes already catch returning users quickly.
-    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 5 * 60_000));
+    // Version checks are tiny and uncached. A one-minute ceiling keeps every
+    // signed-in role on the same deployed interface without ending its session.
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
     window.addEventListener("focus",checkVersion);
     window.addEventListener("pageshow",checkVersion);
     return () => {

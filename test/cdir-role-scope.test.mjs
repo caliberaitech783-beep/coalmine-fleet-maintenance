@@ -72,12 +72,16 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(client,/className="cdir-module-tabs"[\s\S]*?<BookUser \/>Directory[\s\S]*?<Users \/>Employee Tenure Report/);
   assert.doesNotMatch(client,/<UsersRound \/>/);
   assert.match(component,/viewer\.allAccess\?'All regions':'All assigned regions'/);
-  assert.match(component,/label:'My access'/);
+  assert.match(component,/allSites\.length===1\?'My site':'My access'/);
   assert.match(component,/viewer\.allAccess\|\|viewer\.profile==='project-manager'/);
   assert.match(component,/Project Manager Site Coverage/);
   assert.match(component,/head office/);
   assert.match(component,/corporate office/);
   assert.match(component,/browseRegions=\['WCL','NCL'\]/);
+  assert.match(component,/accessRegions=\['WCL','NCL'\]/);
+  assert.match(component,/rootScope[\s\S]*?viewer\.allAccess\?'All'/);
+  assert.match(component,/headOffice[\s\S]*?corporateOffice[\s\S]*?accessRegions\.map/);
+  assert.match(component,/accessRegions\.includes\(scopeRegion\)[\s\S]*?site\.group===scopeRegion/);
   assert.match(component,/expandedBrowseRegion[\s\S]*?cdir-region-sites/);
   assert.match(component,/SITE_LEADERSHIP/);
   assert.match(component,/Site Overview/);
