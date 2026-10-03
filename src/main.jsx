@@ -1,3 +1,4 @@
+import {ErpFirstTripVerification} from "./erp-first-trip-verification.jsx";
 import {ibossAccountsAllowed} from "../iboss-access.mjs";
 import {assignedUserRoles,ACCOUNT_PRIVILEGES,accountPrivileges} from "../account-role-access.mjs";
 import { siteReportHtml } from "./site-report.mjs";
@@ -10115,89 +10116,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   </Modal>;
 }
 
-function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
-  const displayDateTime = (value) => {
-    if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
-    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (!match) return value || "—";
-    const hour = Number(match[4]);
-    return `${match[3]}-${match[2]}-${match[1].slice(-2)} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
-  };
-  const [formError,setFormError] = useState("");
-  const today = requestStartParts("");
-  const [firstTripDone] = useState(true);
-  const [tripCardFile, setTripCardFile] = useState(null);
-  const [tripCardPreview, setTripCardPreview] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const submitLock = useRef(false);
-  const closeDialog = () => { if (!submitLock.current) close(); };
-  useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
-  const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read the trip-card image."));
-    reader.readAsDataURL(file);
-  });
-  return <Modal title={`Verify closed request ${request.ref}`} close={closeDialog}>
-    <form className="form" onSubmit={async (event) => {
-      event.preventDefault();
-      if (submitLock.current) return;
-      const form = new FormData(event.currentTarget);
-      if (!tripCardFile) return setFormError("Upload the first-trip card image.");
-      if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
-        return setFormError("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
-      }
-      setFormError("");
-      submitLock.current = true;
-      setSubmitting(true);
-      try {
-        const firstTripCardImage = await fileAsDataUrl(tripCardFile);
-        const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        const meterType = requestMeterTypeForRequest(request, equipmentRecords);
-        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripRemark: String(form.get("firstTripRemark") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
-      } catch (error) {
-        setFormError(error?.message || "Could not verify this request. Please try again.");
-      } finally {
-        submitLock.current = false;
-        setSubmitting(false);
-      }
-    }}>
-      <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
-        <div><span>Door number</span><b>{request.door || "—"}</b></div>
-        <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
-        <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
-        <div><span>Closed at</span><b>{displayDateTime(request.closedAt)}</b></div>
-        <div><span>Maintenance work</span><b><TranslatedText text={request.maintenanceWork} language={request.maintenanceWorkLanguage} /></b></div>
-        <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
-      </div>
-      <div className="formgrid"><VerificationTimeField /></div>
-      <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} readOnly disabled /> First trip done by MIS</label>
-      <div className="formgrid">
-        {firstTripDone && <>
-          <label>First trip date *<DateInput name="firstTripDate" required defaultValue={today.date} /><small>Enter the actual trip date. It must not be earlier than closure or in the future.</small></label>
-          <label>First trip time (12-hour with seconds) *<TwelveHourTimeInput name="firstTripTime" includeSeconds required defaultValue={today.time} /></label>
-        </>}
-        <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required />
-        {request.firstTripAt && <label className="full">Reason for correcting the recorded first-trip time *<textarea name="correctionReason" required maxLength={500} /><small>This unverified entry already has a first-trip time: {request.firstTripAt}. Any replacement or removal will retain the original value.</small></label>}
-        <label className="full">First trip card image *
-          <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
-            const file = event.target.files?.[0] || null;
-            if (tripCardPreview) URL.revokeObjectURL(tripCardPreview);
-            setTripCardFile(file);
-            setTripCardPreview(file ? URL.createObjectURL(file) : "");
-          }} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button>
-          <small>JPEG, PNG or WebP · maximum 5 MB</small>
-          {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
-        </label>
-        <label className="full">Trip-card update remark (optional)
-          <textarea name="firstTripRemark" rows={3} maxLength={2000} defaultValue={request.firstTripRemark || ""} placeholder="Add a remark about any delay in updating the trip card." />
-        </label>
-      </div>
-      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
-    </form>
-  </Modal>;
+function VerifyRequestForm({ request, close, onSave }) {
+  return <ErpFirstTripVerification request={request} close={close} onSave={onSave} Modal={Modal} token={authToken} DateInput={DateInput} TwelveHourTimeInput={TwelveHourTimeInput} maintenanceText={<b><TranslatedText text={request.maintenanceWork} language={request.maintenanceWorkLanguage} /></b>} />;
 }
 
 function ProductionFirstTripForm({ request, close, onSave }) {

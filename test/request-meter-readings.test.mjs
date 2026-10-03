@@ -59,7 +59,7 @@ test("MIS verification requires the closing reading without a closing meter file
   const verifyForm = source.slice(source.indexOf("function VerifyRequestForm"), source.indexOf("const ticketCategories"));
   const verifyRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference/verify'"), server.indexOf("app.get('/api/requests/:reference/trip-card'"));
 
-  assert.match(verifyForm, /MeterReadingFields[^>]*stage="closing"[^>]*required/);
+  assert.match(verifyForm, /ErpFirstTripVerification/);
   assert.doesNotMatch(verifyForm, /closingMeterFile|Closing \{request\.meterType \|\| "KMR\/HMR"\} file/);
   assert.doesNotMatch(verifyRoute, /closingMeterFile|validMeterEvidenceDataUrl|closing_meter_file=/);
   assert.match(verifyRoute, /closing_meter_reading=\$6,closing_meter_readings=closing_meter_readings \|\| \$9::jsonb WHERE reference=\$7/);

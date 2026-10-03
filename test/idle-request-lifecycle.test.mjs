@@ -1,3 +1,4 @@
+import {fixtureErpEvidence,fixtureErpDependencies} from './erp-first-trip-fixture.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
 import assert from 'node:assert/strict';
@@ -43,7 +44,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
   const queries=[],logs=[],notifications=[];
   const eligible=value=>value&&!value.verifiedAt&&(kind==='verify'?value.status==='Closed':isIdleVehicleRequest(value));
   const context={
-    isIdleVehicleRequest,...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
+    ...fixtureErpDependencies,oracleFirstTripLog:async()=>saved.erpFirstTripEvidence,isIdleVehicleRequest,...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
     ...siteAccess,currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
@@ -55,7 +56,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
       if(sql==='ROLLBACK'){saved=snapshot;return {rows:[]};}
       if(sql.startsWith('SELECT site,status,'))return {rows:saved?[{...saved,timelineRecordedAt:new Date(now)}]:[]};
       if(sql.startsWith('SELECT site FROM maintenance_requests'))return {rows:eligible(saved)?[{site:saved.site}]:[]};
-      if(sql.startsWith('SELECT * FROM maintenance_requests'))return {rows:saved?[structuredClone(saved)]:[]};
+      if(sql.startsWith('SELECT * FROM maintenance_requests')||sql.startsWith('SELECT *,first_trip_card_image'))return {rows:saved?[structuredClone(saved)]:[]};
       assert.ok(sql.startsWith('UPDATE maintenance_requests'),`Unexpected query: ${sql}`);
       beforeUpdate?.(saved);
       const sitePosition=Number(sql.match(/AND site=\$(\d+)/)?.[1]);
@@ -82,6 +83,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
     get saved(){return saved;},get mutations(){return mutations;},queries,logs,notifications,
     async call({session=kind==='verify'?misSession:maintenanceManager,body={}}={}){
       const req={params:{reference:pending.ref},testSession:session,body:{firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:30:00',firstTripCardImage:'data:image/png;base64,iVBORw==',closingMeterReading:'1234',...body}};
+      if(kind==='verify'&&saved){saved.erpFirstTripEvidence=fixtureErpEvidence(saved,req.body);saved.erpImage=req.body.firstTripCardImage;req.body.erpReviewed=true;req.body.erpSourceHash='fixture-source';}
       const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
       for(const handler of chain){
         let advanced=false,error;
@@ -110,12 +112,10 @@ test('MIS verification saves optional trip-card remarks and rejects oversized re
 });
 
 test('MIS trip-card remark is optional and below the upload in the shared verification form',()=>{
-  const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  const form=client.slice(client.indexOf('function VerifyRequestForm('),client.indexOf('function ProductionFirstTripForm('));
-  assert.ok(form.indexOf('name="firstTripRemark"')>form.indexOf('name="firstTripCardImage"'));
+  const form=readFileSync(new URL('../src/erp-first-trip-verification.jsx',import.meta.url),'utf8');
+  assert.ok(form.indexOf('name="firstTripRemark"')>form.indexOf('className="trip-card-preview"'));
   assert.match(form,/<textarea name="firstTripRemark"[^>]*maxLength=\{2000\}/);
   assert.doesNotMatch(form,/<textarea name="firstTripRemark"[^>]*required/);
-  assert.match(form,/firstTripRemark: String\(form.get\("firstTripRemark"\)/);
   assert.match(source,/ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT ''/);
   assert.match(source,/first_trip_remark AS "firstTripRemark"/);
 });

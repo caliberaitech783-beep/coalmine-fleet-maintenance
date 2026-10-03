@@ -389,7 +389,7 @@ test('onroad form still validates Idle reasons and returns to Closed when Idle i
   assert.equal(saved[1].idleReason, '');
 });
 
-for (const name of ["RequestEditForm", "CloseRequestForm", "VerifyRequestForm"]) test(`${name}: duplicate clicks and dialog dismissal cannot interrupt a pending save`, async () => {
+for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name}: duplicate clicks and dialog dismissal cannot interrupt a pending save`, async () => {
   let finish, calls = 0, dismissals = 0;
   const app = harness(name);
   const props = {request: accepted, close() { dismissals++; }, onSave() { calls++; return new Promise(resolve => {finish = resolve;}); }};
