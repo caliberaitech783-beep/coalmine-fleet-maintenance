@@ -2511,6 +2511,20 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
 // Announcements: an Admin or Super Admin broadcasts a short text to every user.
 // Each user sees it as a blocking popup until they close it; closing is stored
 // per user (login), so it does not come back on another device.
+// Reading the archive never acknowledges a popup or grants announcement management rights.
+app.get('/api/announcements/history',requireSession,async(req,res,next)=>{
+  try{
+    const before=req.query.before===undefined?null:Number(req.query.before);
+    if(before!==null&&(!Number.isSafeInteger(before)||before<1))return res.status(400).json({error:'Invalid announcement cursor.'});
+    const {rows}=await pool.query(`SELECT id,message,sender_name AS "senderName",created_at AS "createdAt",(image_data<>'') AS "hasImage"
+      FROM announcements WHERE withdrawn_at IS NULL AND ($1::bigint IS NULL OR id<$1)
+      ORDER BY id DESC LIMIT 51`,[before]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({announcements:rows.slice(0,50),nextCursor:rows.length>50?String(rows[49].id):null});
+  }catch(error){next(error)}
+});
+
 app.get('/api/announcements/pending',requireSession,async(req,res,next)=>{
   try{
     // The image itself is fetched once from /image; this list is polled every few seconds.

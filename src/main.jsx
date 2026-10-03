@@ -1237,6 +1237,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {visibleIbossNav.map(([name,Icon,workspace]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name || name === "Accounts" && ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
           </div>
         </div>}
+        <AnnouncementHistoryButton token={authToken} />
       </nav>
       <div className="user">
         <span className="header-user-copy">
@@ -1251,6 +1252,41 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     </aside>
   );
 }
+function AnnouncementHistoryButton({token}) {
+  const [open,setOpen]=useState(false);
+  const [rows,setRows]=useState([]);
+  const [cursor,setCursor]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  useEffect(()=>{
+    if(!open)return;
+    const controller=new AbortController();
+    setRows([]);setCursor(null);setLoading(true);setError('');
+    fetch('/api/announcements/history',{cache:'no-store',signal:controller.signal,headers:{Authorization:`Bearer ${token}`}})
+      .then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not load announcements.');return result;})
+      .then(result=>{setRows(result.announcements||[]);setCursor(result.nextCursor);})
+      .catch(error=>{if(!controller.signal.aborted)setError(error.message);})
+      .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    return ()=>controller.abort();
+  },[open,token]);
+  const loadMore=async()=>{
+    setLoading(true);setError('');
+    try{
+      const response=await fetch(`/api/announcements/history?before=${encodeURIComponent(cursor)}`,{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});
+      const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not load announcements.');
+      setRows(previous=>[...previous,...(result.announcements||[])]);setCursor(result.nextCursor);
+    }catch(error){setError(error.message);}finally{setLoading(false);}
+  };
+  return <><button type="button" data-nav="announcements" onClick={()=>setOpen(true)}><MessageCircle /><span className="nav-label">Announcements</span></button>{open&&<Modal title="Announcements" close={()=>setOpen(false)}>
+    <section className="announcement-history"><p>Previously sent announcements remain available here after you close their popup.</p>
+      {error&&<p role="alert">{error}</p>}{loading&&<p role="status">Loading announcements...</p>}
+      {!loading&&!error&&!rows.length&&<p>No announcements yet.</p>}
+      <ul>{rows.map(row=><li key={row.id}>{row.message&&<p style={{whiteSpace:'pre-wrap'}}>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} className="announcement-image thumbnail" />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||'Administrator'}</small></li>)}</ul>
+      {cursor&&<button type="button" disabled={loading} onClick={loadMore}>Load older announcements</button>}
+    </section>
+  </Modal>}</>;
+}
+
 function formatTwelveHourDateTime(value) {
   if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
   const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
@@ -11141,7 +11177,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
       {!embedded&&section==="directory"&&showDirectoryMenu&&<><div className="report-category-tabs"><button type="button" onClick={() => setDirectoryView("directory")}>Directory</button><button type="button" onClick={() => setDirectoryView("tenure")}>Employee Tenure Report</button></div>{directoryView === "tenure" ? <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} /> : <CaliberDirectoryPage />}</>}
