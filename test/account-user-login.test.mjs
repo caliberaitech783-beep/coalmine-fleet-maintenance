@@ -37,6 +37,22 @@ test('Accounts login checks server authority before issuing a session or passwor
   assert.match(client,/if \(session.userType === "Account User"\) return/);
   assert.match(client,/ibossAccountsAllowed\(session\)\?<IbossAccounts/);
 });
+test('selected login portal rejects cross-portal IDs before login, including missing portal',()=>{
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const start=server.indexOf("    if(req.body.portal==='accounts'");
+  const end=server.indexOf('    if(!profile.userType)',start);
+  const guard=new Function('req','profile','res','ibossAccountsAllowed',server.slice(start,end)+';return null;');
+  const account=resolveMobileAccess({user:{userType:'Account User'}});
+  const fleetProfiles=[resolveMobileAccess({user:{userType:'Super Admin',adminLevel:'Admin'}}),...['Production User','Maintenance User','MIS User','General User'].map(userGroup=>resolveMobileAccess({user:{userType:'Mobile User',userGroup}}))];
+  const check=(profile,portal)=>guard({body:{portal}},profile,{status(code){return {json(body){return {code,...body};}};}},ibossAccountsAllowed);
+  assert.equal(check(account,'accounts'),null);
+  for(const portal of ['operations',undefined,'fleet','invalid'])assert.equal(check(account,portal).code,403);
+  for(const profile of fleetProfiles){
+    assert.equal(check(profile,'accounts').code,403);
+    assert.equal(check(profile,'operations'),null);
+    assert.equal(check(profile,undefined),null);
+  }
+});
 test('saving Account User clears inherited administrative and operational selections',()=>{
   const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const source=client.match(/function applyUserRoleDefaults\(record\) \{[\s\S]*?\n\}/)[0];
