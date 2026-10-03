@@ -6637,7 +6637,8 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(oemResponsibility!==undefined&&!before.acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
-    if(oemResponsibility!==undefined&&before.oemResponsibility&&before.oemResponsibility!==oemResponsibility)throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
+    if(oemResponsibility!==undefined&&before.oemResponsibility&&before.oemResponsibility!==oemResponsibility&&!canEditBreakdownResponsibility(req.session))throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
+    if(oemResponsibility!==undefined&&(req.body.previousResponsibility!==undefined||(before.oemResponsibility&&before.oemResponsibility!==oemResponsibility))&&req.body.previousResponsibility!==(before.oemResponsibility||''))throw Object.assign(new Error('Breakdown responsibility has changed. Refresh and review before saving.'),{status:409});
     const previousExpectedAt=parseRequestTimelineTimestamp(before.expectedCompletionAt);
     const nextExpectedAt=parseRequestTimelineTimestamp(expectedAt);
     const revisingEtc=Boolean(previousExpectedAt&&nextExpectedAt&&previousExpectedAt.getTime()!==nextExpectedAt.getTime());

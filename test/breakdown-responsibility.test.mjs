@@ -71,13 +71,27 @@ test('audit failure rolls back the responsibility change',async()=>{
   const f=fixture({failAudit:true});assert.equal((await f.run()).status,500);
   assert.equal(f.responsibility,'NON OEM');assert.deepEqual(f.history,[]);assert.ok(f.queries.includes('ROLLBACK'));
 });
+
+test('general edit keeps saved responsibility locked except authorized managers and rejects stale changes',()=>{
+  const start=server.indexOf('    if(oemResponsibility!==undefined&&before.oemResponsibility&&');
+  const checks=server.slice(start).split('\n').slice(0,2).join('\n');
+  const validate=new Function('req','before','oemResponsibility','canEditBreakdownResponsibility',checks);
+  const before={oemResponsibility:'NON OEM'};
+  assert.doesNotThrow(()=>validate({session:manager('Maintenance Manager'),body:{previousResponsibility:'NON OEM'}},before,'OEM',canEditBreakdownResponsibility));
+  for(const session of [manager('MIS Manager'),manager('Production Manager'),{role:'normal'},{role:'super',permissions:{adminLevel:'Admin'}}]){
+    assert.throws(()=>validate({session,body:{previousResponsibility:'NON OEM'}},before,'OEM',canEditBreakdownResponsibility),/locked/);
+  }
+  for(const previousResponsibility of ['OEM',undefined]){
+    assert.throws(()=>validate({session:manager('Maintenance Manager'),body:{previousResponsibility}},before,'OEM',canEditBreakdownResponsibility),/Refresh and review/);
+  }
+});
 test('history column is present in both shared tables and UI writes only on submit',()=>{
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const ui=readFileSync(new URL('../src/breakdown-responsibility-history.jsx',import.meta.url),'utf8');
   assert.ok(main.includes('<ResponsibilityHistoryCell request={r} />'));
   assert.ok(main.includes('<ResponsibilityHistoryCell request={row} />'));
-  assert.match(ui,/onChange=\{event => setSelected\(event.target.value\)\}/);
-  assert.ok(ui.indexOf('fetch(')>ui.indexOf('onSubmit='));
-  assert.match(ui,/previousResponsibility:previous/);
-  assert.match(ui,/disabled=\{busy \|\| !selected \|\| selected === saved.oemResponsibility\}/);
+  assert.doesNotMatch(ui, /fetch\(|onSubmit|<select|<button/);
+  assert.match(ui, /responsibilityHistoryText\(request, formatDate\)/);
+  assert.match(main, /<RequestEditForm canEditResponsibility/);
+  assert.match(main, /canEdit=\{canEditResponsibility\}/);
 });

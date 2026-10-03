@@ -5,7 +5,7 @@ import {filterOemDelayedRows} from '../src/oem-delay-filter.mjs';
 
 test('unsaved responsibility can be switched; saved responsibility stays locked in the general edit form', () => {
   const ui=readFileSync(new URL('../src/maintenance-oem-choice.jsx',import.meta.url),'utf8');
-  assert.ok(ui.includes('disabled={Boolean(request.oemResponsibility)}'));
+  assert.ok(ui.includes('disabled={Boolean(request.oemResponsibility) && !canEdit}'));
   assert.ok(ui.includes('setSelected(value)'));
   assert.ok(ui.includes('type="hidden" name="oemResponsibility" value={selected}'));
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');

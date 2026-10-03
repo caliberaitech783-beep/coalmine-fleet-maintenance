@@ -11,6 +11,7 @@ const compile=async(file,name)=>{
 };
 const historyCode=await compile('../src/breakdown-responsibility-history.jsx','BreakdownResponsibilityHistory');
 const choiceCode=await compile('../src/maintenance-oem-choice.jsx','MaintenanceOemChoice');
+const editCode=await compile('../src/responsibility-request-edit-form.jsx','ResponsibilityRequestEditForm');
 function nodes(tree,predicate){
   const out=[];
   const visit=n=>{if(Array.isArray(n))return n.forEach(visit);if(!React.isValidElement(n))return;if(predicate(n))out.push(n);visit(n.props.children);};visit(tree);return out;
@@ -19,48 +20,60 @@ const text=node=>Array.isArray(node)?node.map(text).join(''):React.isValidElemen
 function harness(code,props,response={ok:true,json:async()=>({...props.request,oemResponsibility:'OEM',oemResponsibilityHistory:[]})}){
   let cursor=0;const slots=[],calls=[];
   const useState=initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];};
-  const component=new Function('React','useState','useEffect','useRef','canEditBreakdownResponsibility','fetch',code)(React,useState,()=>{},value=>useState(()=>({current:value}))[0],canEditBreakdownResponsibility,async(url,options)=>{calls.push({url,...options});return response;});
+  const component=new Function('React','useState','useEffect','useRef','canEditBreakdownResponsibility','fetch','FormData','MaintenanceOemChoice',code)(React,useState,()=>{},value=>useState(()=>({current:value}))[0],canEditBreakdownResponsibility,async(url,options)=>{calls.push({url,...options});return response;},class {constructor(target){this.target=target;}get(key){return this.target[key];}},()=>null);
   return {calls,render(){cursor=0;return component(props);}};
 }
 const request={ref:'REQ-1',acceptedAt:'2026-10-03',status:'Accepted',oemResponsibility:'NON OEM'};
 const session={role:'super',token:'fixture',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}};
 const props={request,session,Dialog:()=>null,formatDate:v=>v};
-test('manager can switch repeatedly, cancel without a write, then explicitly save once',async()=>{
-  const h=harness(historyCode,props);
-  const button=(tree,label)=>nodes(tree,n=>n.type==='button'&&text(n).includes(label))[0];
-  button(h.render(),'History').props.onClick();
-  let select=()=>nodes(h.render(),n=>n.type==='select')[0];
-  select().props.onChange({target:{value:'OEM'}});
-  select().props.onChange({target:{value:'NON OEM'}});
-  select().props.onChange({target:{value:'OEM'}});
-  assert.equal(select().props.value,'OEM');assert.equal(h.calls.length,0);
-  button(h.render(),'Cancel').props.onClick();
-  assert.equal(nodes(h.render(),n=>n.type==='form').length,0);assert.equal(h.calls.length,0);
-  button(h.render(),'History').props.onClick();assert.equal(select().props.value,'NON OEM');
-  select().props.onChange({target:{value:'OEM'}});
-  const submit=nodes(h.render(),n=>n.type==='form')[0].props.onSubmit;
-  await Promise.all([submit({preventDefault(){}}),submit({preventDefault(){}})]);
-  assert.equal(h.calls.length,1);
-  assert.deepEqual(JSON.parse(h.calls[0].body),{oemResponsibility:'OEM',previousResponsibility:'NON OEM'});
-});
-test('failed save retains the draft and displays an error',async()=>{
-  const h=harness(historyCode,props,{ok:false,json:async()=>({error:'Refresh and review'})});
-  nodes(h.render(),n=>n.type==='button')[0].props.onClick();
-  nodes(h.render(),n=>n.type==='select')[0].props.onChange({target:{value:'OEM'}});
-  await nodes(h.render(),n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
-  assert.equal(nodes(h.render(),n=>n.type==='select')[0].props.value,'OEM');
-  assert.equal(text(nodes(h.render(),n=>n.props.role==='alert')[0]),'Refresh and review');
-});
-test('non-managers and closed/verified/Idle requests have history but no editor',()=>{
-  for(const override of [{session:{role:'normal'}},{request:{...request,status:'Closed'}},{request:{...request,status:'Idle'}},{request:{...request,verifiedAt:'2026-10-03'}}]){
-    const h=harness(historyCode,{...props,...override});nodes(h.render(),n=>n.type==='button')[0].props.onClick();
-    assert.equal(nodes(h.render(),n=>n.type==='select').length,0);
+test('history renders old/new values, author and date directly with no editor for any role',()=>{
+  for(const role of ['Project Manager','Maintenance Manager','MIS Manager']){
+    const h=harness(historyCode,{...props,session:{...session,permissions:{adminLevel:'Manager',managerRoles:[role]}},request:{...request,oemResponsibilityHistory:[{from:'NON OEM',to:'OEM',changedBy:'Manager',changedAt:'03-10-26'}]}});
+    const tree=h.render();
+    assert.match(text(tree),/NON OEM → OEM · Manager · 03-10-26/);
+    assert.equal(nodes(tree,n=>['form','select','button','input'].includes(n.type)).length,0);
+    assert.equal(h.calls.length,0);
   }
 });
+
+test('saved responsibility is switchable only when edit form grants manager permission',()=>{
+  for(const canEdit of [false,true]){
+    const h=harness(choiceCode,{request,canEdit});
+    const choices=()=>nodes(h.render(),n=>n.type==='input'&&n.props.type==='checkbox');
+    assert.equal(choices()[0].props.disabled,!canEdit);
+    if(canEdit){
+      choices()[0].props.onChange();choices()[1].props.onChange();choices()[0].props.onChange();
+      assert.equal(choices()[0].props.checked,true);
+      assert.equal(choices()[1].props.checked,false);
+      assert.equal(h.calls.length,0);
+    }
+  }
+});
+
 test('initial unsaved choice remains exclusive and switchable until form submission',()=>{
   const h=harness(choiceCode,{request:{...request,oemResponsibility:''}});
   const choices=()=>nodes(h.render(),n=>n.type==='input'&&n.props.type==='checkbox');
   choices()[0].props.onChange();assert.equal(choices()[1].props.disabled,false);
   choices()[1].props.onChange();assert.equal(choices()[0].props.checked,false);assert.equal(choices()[1].props.checked,true);
   assert.equal(nodes(h.render(),n=>n.props.name==='oemResponsibility')[0].props.value,'NON OEM');
+});
+
+test('Project Manager edit form cancels without saving and submits once with the original value',async()=>{
+  const saves=[];let closed=0;
+  const h=harness(editCode,{request,Dialog:()=>null,close:()=>closed++,onSave:async value=>saves.push(value)});
+  nodes(h.render(),n=>n.type==='button'&&text(n)==='Cancel')[0].props.onClick();
+  assert.equal(closed,1);assert.equal(saves.length,0);
+  const submit=nodes(h.render(),n=>n.type==='form')[0].props.onSubmit;
+  const event={preventDefault(){},currentTarget:{oemResponsibility:'OEM'}};
+  await Promise.all([submit(event),submit(event)]);
+  assert.deepEqual(saves,[{ref:'REQ-1',oemResponsibility:'OEM',previousResponsibility:'NON OEM'}]);
+  assert.equal(nodes(h.render(),n=>n.type==='input'&&!n.props.readOnly).length,0);
+});
+
+test('Project Manager edit form displays save failure and remains open',async()=>{
+  let closed=false;
+  const h=harness(editCode,{request,Dialog:()=>null,close:()=>closed=true,onSave:async()=>{throw new Error('Refresh and review');}});
+  await nodes(h.render(),n=>n.type==='form')[0].props.onSubmit({preventDefault(){},currentTarget:{oemResponsibility:'OEM'}});
+  assert.equal(text(nodes(h.render(),n=>n.props.role==='alert')[0]),'Refresh and review');
+  assert.equal(closed,false);
 });

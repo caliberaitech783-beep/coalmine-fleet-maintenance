@@ -54,6 +54,7 @@ import { oemFiltersForSelection, oemRowsForLocation, groupOemRecordsBySite, oemD
 import { buildOemBreakdownRows, buildOemBreakdownChart, createOemBreakdownSelection, oemLabel } from "./oem-breakdown-model.mjs";
 import { filterOemDelayedRows } from "./oem-delay-filter.mjs";
 import MaintenanceOemChoice from "./maintenance-oem-choice.jsx";
+import ResponsibilityRequestEditForm from "./responsibility-request-edit-form.jsx";
 import BreakdownResponsibilityHistory, {responsibilityHistoryText} from "./breakdown-responsibility-history.jsx";
 import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
@@ -1562,6 +1563,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
   const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
   const canUpdateRequests=activeManagerRole==="Maintenance Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest&&onAddDailyRemark);
+  const canUpdateResponsibility=activeManagerRole==="Project Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest);
   const saveManagerProductionFirstTrip = async (payload) => {
     await onUpdateRequest(productionFirstTrip.ref, payload, "production-first-trip");
     setProductionFirstTrip(null);
@@ -1625,7 +1627,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </Modal>}
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button data-nav="active" className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button data-nav="idle" className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}{productionManagerView&&<button data-nav="productionFirstTrip" className={`${queueTab==="firstTrip"?"active":""}${productionFirstTripRows.length?" first-trip-pending-tab first-trip-pending-alert":""}`} onClick={()=>setQueueTab("firstTrip")}>First trip entry ({managerDataReady?productionFirstTripRows.length:"—"})</button>}<button data-nav="history" className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     {managerDataReady && <>
-<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":queueTab==="firstTrip"?"Production first-trip entries":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length} record{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length === 1 ? "" : "s"} in this view</p></div></header>{queueTab==="firstTrip"?<><MobileWorkflowTable rows={productionFirstTripRows} exportTitle="Production First Trip Entry" showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></>:<BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} stableToolbar />}</article>
+<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":queueTab==="firstTrip"?"Production first-trip entries":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length} record{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length === 1 ? "" : "s"} in this view</p></div></header>{queueTab==="firstTrip"?<><MobileWorkflowTable rows={productionFirstTripRows} exportTitle="Production First Trip Entry" showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></>:<BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):canUpdateResponsibility?(row)=>{if(row.acceptedAt) setRequestUpdate({kind:"responsibility",request:row});else alert("Maintenance must accept this vehicle before breakdown responsibility can be edited.");}:null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} stableToolbar />}</article>
     </>}
     {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
     {productionFirstTrip && <ProductionFirstTripForm request={requestRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveManagerProductionFirstTrip} />}
@@ -1642,8 +1644,8 @@ function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange
     return true;
   };
   const saveEdit = async (payload) => {
-    try { await onUpdateRequest(payload.ref, payload); close(); }
-    catch (error) { if (!requireArrival(error, "edit")) throw error; }
+    try { await onUpdateRequest(payload.ref, payload, update.kind === "responsibility" ? "breakdown-responsibility" : "edit"); close(); }
+    catch (error) { if (update.kind === "responsibility" || !requireArrival(error, "edit")) throw error; }
   };
   const saveRemark = async (payload) => {
     try { await onAddDailyRemark(request.ref, payload); close(); }
@@ -1653,7 +1655,8 @@ function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange
     const saved = await onUpdateRequest(request.ref, payload, "arrival-flag");
     onChange(update.next ? { kind: update.next, request: saved } : null);
   };
-  if (update.kind === "edit") return <RequestEditForm onAddDailyRemark={onAddDailyRemark} request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
+  if (update.kind === "responsibility") return <ResponsibilityRequestEditForm request={request} close={close} onSave={saveEdit} Dialog={Modal} />;
+  if (update.kind === "edit") return <RequestEditForm canEditResponsibility onAddDailyRemark={onAddDailyRemark} request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
   if (update.kind === "remark") return <DailyRemarkForm request={request} close={close} onSave={saveRemark} />;
   return <RequestRedFlagForm flagKind="arrival" request={request} close={close} onSave={saveArrivalFlag} />;
 }
@@ -2766,9 +2769,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 }
 const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "openingHmr", "openingKmr", "start", "expectedCompletionAt", "status", "dailyRemarks", "ref", "createdBy", "requesterRole"];
 function ResponsibilityHistoryCell({request}) {
-  let session = null;
-  try { session = JSON.parse(localStorage.getItem("nerveCenterSession") || sessionStorage.getItem("nerveCenterSession") || "null"); } catch {}
-  return <BreakdownResponsibilityHistory request={request} session={session} Dialog={Modal} formatDate={formatTwelveHourDateTime} onSaved={() => notifyRequestChange(window)} />;
+  return <BreakdownResponsibilityHistory request={request} formatDate={formatTwelveHourDateTime} />;
 }
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal, requestActions = null } = {}) {
   switch (key) {
@@ -9894,7 +9895,7 @@ function meterReadingsFromForm(form, request, stage, equipmentRecords = []) {
     .map(([type, reading]) => [type, String(form.get(`${stage}${type}Reading`) ?? reading).trim()]));
 }
 
-function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, onAddDailyRemark, repairTypeRecords = [], repairTypesLoaded = false }) {
+function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, onAddDailyRemark, canEditResponsibility = false, repairTypeRecords = [], repairTypesLoaded = false }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const displayDateTime = (value) => {
     if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
@@ -9911,6 +9912,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const displayedInitialEtc = Number.isFinite(effectiveEtcTimestamp) ? indiaDateTimeInputValue(effectiveEtcTimestamp) : initialEtc;
   const displayedInitialEtcLabel = Number.isFinite(effectiveEtcTimestamp) ? new Date(effectiveEtcTimestamp).toISOString() : request.expectedCompletionAt;
   const [expectedCompletionAt,setExpectedCompletionAt] = useState(initialEtc);
+  const [previousResponsibility] = useState(request.oemResponsibility || "");
   const [formError,setFormError] = useState("");
   const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
   const etcDelayed = etcChanged && expectedCompletionAt.slice(0,16) > initialEtc;
@@ -9943,7 +9945,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: editCategory, ...(request.acceptedAt && form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility")} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: editCategory, ...(request.acceptedAt && form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -9967,7 +9969,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<DateInput name="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (12-hour with seconds)<input name="time" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
-        {request.acceptedAt && onAddDailyRemark && <MaintenanceOemChoice key={request.ref} request={request} />}
+        {request.acceptedAt && onAddDailyRemark && <MaintenanceOemChoice key={request.ref} request={request} canEdit={canEditResponsibility} />}
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
         <MaintenanceEtcInput value={expectedCompletionAt} displayValue={displayedInitialEtc} onChange={setExpectedCompletionAt} changeUsed={request.expectedCompletionChangeUsed === true} />
         {etcDelayed && <label className="full">Delayed reason *<select name="delayedReason" required defaultValue={etcDelayedReasonOptions.includes(request.delayedReason) ? request.delayedReason : ""} key={editCategory}><option value="">Select delayed reason</option>{etcDelayedReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><small>The ETC is being pushed later. Reasons shown are for breakdown type {editCategory || "Breakdown"}.</small></label>}
@@ -11612,7 +11614,7 @@ function App() {
       return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {
-      const endpoint = action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "production-first-trip" ? `/api/requests/${encodeURIComponent(reference)}/production-first-trip` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
+      const endpoint = action === "breakdown-responsibility" ? `/api/requests/${encodeURIComponent(reference)}/breakdown-responsibility` : action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "production-first-trip" ? `/api/requests/${encodeURIComponent(reference)}/production-first-trip` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
       const before = requests.find((row) => row.ref === reference) || {ref: reference};
       const confirmUncertainWrite = async () => {
         try {
