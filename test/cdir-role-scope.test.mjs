@@ -35,3 +35,11 @@ test('C-Dir region-first filters, All/My Sites tabs and Project Manager leaderbo
   assert.match(html,/Project Manager Site Coverage/);
   assert.match(client,/activeManagerRoles\.includes\("Project Manager"\) \|\| accessAllows\(viewPermissions\.tabAccess, "CD"\)/);
 });
+
+test('C-Dir expanded filters stay in document flow and use responsive grids',()=>{
+  assert.match(html,/\.nav-dock\.open\{position:relative;top:auto;\}/);
+  assert.match(html,/\.filter-row\.filter-strip\{[\s\S]*?display:grid;grid-template-columns:/);
+  assert.match(html,/@media \(max-width:1180px\)\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(html,/@media \(max-width:760px\)\{[\s\S]*?grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(html,/overflow-x:hidden/);
+});
