@@ -89,7 +89,10 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/const scopedSites=directory\?\.sites\|\|\[\]/);
   assert.match(component,/filters\.region===ALL\?officeSite\(site\):site\.group===filters\.region/);
   assert.match(component,/const categoryBaseRows=useMemo/);
-  assert.match(component,/categoryBaseRows\.filter\(row=>row\.cat===category\)/);
+  assert.match(component,/const browseCountRows=[\s\S]*?filteredRows/);
+  assert.match(component,/const categoryCountRows=[\s\S]*?categoryBaseRows/);
+  assert.match(component,/browseCountRows\.filter\(row=>row\.siteId===browseHeadOffice\.id\)/);
+  assert.match(component,/categoryCountRows\.filter\(row=>row\.cat===category\)/);
   assert.match(component,/if\(key==='region'\)setScope/);
   assert.match(component,/if\(key==='site'\)setScope/);
   assert.match(component,/onClick=\{\(\)=>selectScope\(option\)\}/);
@@ -108,6 +111,8 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/const employeeRows=useMemo\(\(\)=>filteredRows\.filter\(activePerson\)/);
   assert.match(component,/view==='people'[\s\S]*?DirectoryTable rows=\{employeeRows\}/);
   assert.match(component,/view==='vacancies'[\s\S]*?DirectoryTable rows=\{vacancies\}/);
+  assert.match(component,/onOrganisation=\{openOrganisation\}[\s\S]*?organisationManagers=\{organisation\.managerIds\}/);
+  assert.match(component,/rootPerson=\{organisationRoot\}[\s\S]*?onShowAll=\{\(\)=>setOrganisationRoot\(null\)\}/);
   assert.match(component,/exportRows\(currentExportRows,redacted\)/);
   assert.match(css,/\.cdir-site-chips,\.cdir-category-chips\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
   assert.match(css,/\.cdir-view-nav\{flex-wrap:wrap;[\s\S]*?overflow:visible/);

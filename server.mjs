@@ -43,6 +43,7 @@ import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
 import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
+import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -3793,9 +3794,13 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
     res.set('Cache-Control','no-store');
-    const [directory,user]=await Promise.all([cdirDirectory(),currentUserRecord(req.session)]);
-    const viewer=cdirViewerContext({session:req.session,user,sites:directory.sites});
-    res.json({...cdirDirectoryForViewer(directory,viewer),viewer});
+    const [directory,user,{rows:userRows}]=await Promise.all([
+      cdirDirectory(),currentUserRecord(req.session),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
+    ]);
+    const directoryWithSuperiors=mergeCdirReportingSuperiors(directory,userRows.map((row)=>row.record_data||{}));
+    const viewer=cdirViewerContext({session:req.session,user,sites:directoryWithSuperiors.sites});
+    res.json({...cdirDirectoryForViewer(directoryWithSuperiors,viewer),viewer});
   }catch(error){next(error)}
 });
 
