@@ -82,6 +82,18 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/rootScope[\s\S]*?viewer\.allAccess\?'All'/);
   assert.match(component,/headOffice[\s\S]*?corporateOffice[\s\S]*?accessRegions\.map/);
   assert.match(component,/accessRegions\.includes\(scopeRegion\)[\s\S]*?site\.group===scopeRegion/);
+  assert.match(component,/const scopeRows=allRows/);
+  assert.match(component,/const scopedSites=directory\?\.sites\|\|\[\]/);
+  assert.match(component,/filters\.region===ALL\?officeSite\(site\):site\.group===filters\.region/);
+  assert.match(component,/const categoryBaseRows=useMemo/);
+  assert.match(component,/categoryBaseRows\.filter\(row=>row\.cat===category\)/);
+  assert.match(component,/if\(key==='region'\)setScope/);
+  assert.match(component,/if\(key==='site'\)setScope/);
+  assert.match(component,/onClick=\{\(\)=>selectScope\(option\)\}/);
+  assert.match(component,/browseTo[\s\S]*?setScope/);
+  assert.match(component,/browseTo\(ALL,browseHeadOffice\.id\)/);
+  assert.match(component,/browseTo\(ALL,browseCorporateOffice\.id\)/);
+  assert.match(component,/openFiltered[\s\S]*?targetSite[\s\S]*?setScope\(`site:\$\{targetSite\.id\}`\)/);
   assert.match(component,/expandedBrowseRegion[\s\S]*?cdir-region-sites/);
   assert.match(component,/SITE_LEADERSHIP/);
   assert.match(component,/Site Overview/);
