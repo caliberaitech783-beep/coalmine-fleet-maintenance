@@ -1,3 +1,4 @@
+import {accountPageNumber} from './iboss-account-pages.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
 import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
@@ -3907,11 +3908,11 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
 
 app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
-  try {const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
+  try {accountPageNumber(req.query.page??0);const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
   catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try {res.json(await oracleAccounts(req.params.view,req.query.from,req.query.to));}
+  try {res.json(await oracleAccounts(req.params.view,req.query.from,req.query.to,req.query.page??0));}
   catch(error){
     if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
     console.error('IBOSS Accounts failed:',error.code || 'Oracle error');

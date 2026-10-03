@@ -1,3 +1,4 @@
+import {accountPageQuery,accountPageResult,ACCOUNT_PAGE_SIZE} from './iboss-account-pages.mjs';
 import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
 import {dashboardCache} from './iboss-dashboard-cache.mjs';
 import oracledb from "oracledb";
@@ -50,15 +51,13 @@ let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
 
-export async function oracleAccounts(view,from,to) {
-  const definition=accountView(view);
-  const binds=definition.asOf?{to_date:purchaseOrderRange(to,to).to_date}:definition.dated?purchaseOrderRange(from,to):{};
+export async function oracleAccounts(view,from,to,page=0) {
+  const query=accountPageQuery(view,from,to,page);
   const pool=await oraclePool();const connection=await pool.getConnection();
   try {
     connection.callTimeout=60000;
-    const result=await connection.execute(definition.sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:10000,maxRows:50001});
-    if(result.rows.length>50000){const error=new Error(definition.dated?'More than 50,000 records match. Choose a shorter date range.':'More than 50,000 records match this Accounts view.');error.code='REPORT_TOO_LARGE';throw error;}
-    return {rows:result.rows.map(accountRecord),checkedAt:new Date().toISOString()};
+    const result=await connection.execute(query.sql,query.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:ACCOUNT_PAGE_SIZE+1,maxRows:ACCOUNT_PAGE_SIZE+1});
+    return accountPageResult(result.rows,query.page);
   } finally {await connection.close();}
 }
 

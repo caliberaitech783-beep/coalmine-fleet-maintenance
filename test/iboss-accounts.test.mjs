@@ -24,7 +24,7 @@ test('Accounts endpoint is session and report permission protected; UI loads liv
  assert.match(server,/app\.get\('\/api\/reports\/iboss-accounts\/:view',requireSession/);
  assert.match(server,/if\(!await accountsMergeAllowed\(req\)\)/);
  assert.match(server,/accountView\(req\.params\.view\)/);
- assert.match(ui,/AbortController/);assert.match(ui,/purchaseOrderRange\(draft\.from,draft\.to\)/);
+ assert.match(ui,/loader.dispose\(\)/);assert.match(ui,/purchaseOrderRange\(draft\.from,draft\.to\)/);
  assert.match(ui,/key==='day-book'.*currentDay=\{from:today,to:today\}/);
  assert.match(main,/renderedActive === "Accounts" \? \(\s*<IbossAccounts/);
  assert.doesNotMatch(ui,/CMPLAI|13\.206|oracledb/);

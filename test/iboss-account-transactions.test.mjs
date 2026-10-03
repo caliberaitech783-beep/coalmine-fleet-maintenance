@@ -47,7 +47,7 @@ test('the real Accounts component renders Masters and Transactions tabs inside t
  const source=fs.readFileSync(new URL('../src/iboss-accounts.jsx',import.meta.url),'utf8').replace(/^import .*;\r?$/gm,'').replace('export default function','function');
  const {code}=await transformWithOxc(source,'accounts.jsx',{jsx:{runtime:'classic'}});
  const Null=()=>null;
- const scope={accountPrivileges,React,useEffect:React.useEffect,useMemo:React.useMemo,useState:React.useState,ACCOUNT_VIEWS,ACCOUNT_SECTIONS,indiaDateTimeInputValue,...Object.fromEntries(['BookUser','Contact','Wallet','Landmark','Network','Settings','BookOpen','Percent','ArrowLeft','RefreshCw'].map(name=>[name,Null]))};
+ const scope={accountPrivileges,React,useEffect:React.useEffect,useMemo:React.useMemo,useState:React.useState,useRef:React.useRef,ACCOUNT_VIEWS,ACCOUNT_SECTIONS,indiaDateTimeInputValue,...Object.fromEntries(['BookUser','Contact','Wallet','Landmark','Network','Settings','BookOpen','Percent','ArrowLeft','RefreshCw'].map(name=>[name,Null]))};
  const Component=new Function(...Object.keys(scope),`${code};return IbossAccounts;`)(...Object.values(scope));
  const master=renderToStaticMarkup(React.createElement(Component,{initialSection:'masters'}));
  const transactions=renderToStaticMarkup(React.createElement(Component,{initialSection:'transactions'}));

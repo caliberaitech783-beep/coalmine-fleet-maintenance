@@ -1,4 +1,5 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import {createAccountPageLoader} from './iboss-account-loader.mjs';
+import React,{useEffect,useMemo,useState,useRef} from 'react';
 import {accountPrivileges} from '../account-role-access.mjs';
 import {BookUser,Contact,Wallet,Landmark,Network,Settings,BookOpen,Percent,ArrowLeft,RefreshCw} from 'lucide-react';
 import {ACCOUNT_VIEWS,ACCOUNT_SECTIONS} from '../iboss-accounts.mjs';
@@ -24,6 +25,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
+ const pageLoader=useRef(null);
  const [drill,setDrill]=useState(null);
  const [mergeContext,setMergeContext]=useState(null);
  const dashboardOpen=(key,options={})=>{const target=key==='merge'?'merge':ACCOUNT_SECTIONS.masters.includes(key)?'masters':'transactions';if(!visibleSections.some(([section])=>section===target))return;if(options.range){setRange(options.range);setDraft(options.range);}if(key==='merge'&&options.anchor){setDrill({chain:options.chain,key:options.anchor,focus:{step:'party',docNo:options.label}});return;}if(key==='merge'){setMergeContext(options);setSection('merge');setView('');return;}setSection(target);open(key);};
@@ -31,12 +33,10 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
  useEffect(()=>{setSection(initialSection);setView('');setDrill(null);setValidation('');},[initialSection,accessKey]);
  useEffect(()=>{
   if(!view)return;
-  const controller=new AbortController();setData({rows:[],loading:true,error:''});
-  fetch(`/api/reports/iboss-accounts/${view}?${new URLSearchParams(range)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load Accounts data.');return body;})
-   .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false,error:''});})
-   .catch(error=>{if(!controller.signal.aborted)setData({rows:[],loading:false,error:error.message});});
-  return ()=>controller.abort();
+  setData({rows:[],loading:true,error:''});
+  const loader=createAccountPageLoader({url:`/api/reports/iboss-accounts/${view}?${new URLSearchParams(range)}`,token,onChange:setData});
+  pageLoader.current=loader;void loader.loadMore();
+  return ()=>{loader.dispose();if(pageLoader.current===loader)pageLoader.current=null;};
  },[token,view,range,attempt]);
  const columns=useMemo(()=>definition?.columns.map(column=>({...column,value:row=>(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key]??'',sortValue:row=>row[column.key],...(ACCOUNT_DRILLS[view]?.[column.key]?{render:row=>{const target=accountDrill(view,column.key,row);const text=(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key];if(!target)return text===''||text===null||text===undefined?'—':text;return <button type="button" className="merge-doc-link" title="Drill down" onClick={()=>setDrill(target)}>{text}</button>;}}:{})}))||[],[definition,view]);
  const open=key=>{
@@ -63,9 +63,12 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
     <button type="submit" disabled={data.loading}><RefreshCw/>{data.loading?'Loading…':'Refresh'}</button>
    </form>
    {validation&&<p role="alert">{validation}</p>}
-   {data.loading?<p role="status">Loading {definition.title} from Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<>
+   {data.loading?<p role="status">Loading {definition.title} from Oracle…</p>:data.error&&!data.rows.length?<p role="alert">{data.error}<button type="button" onClick={()=>pageLoader.current?.loadMore()}>Retry</button></p>:<>
     <p>{definition.note||'Current records from the connected Oracle database.'}</p>
-    <ReportSection key={view} title={definition.title} category="iboss-accounts" description={`${definition.asOf?`Stored on / before ${formatDisplayDate(range.to)} · `:definition.dated?`${formatDisplayDate(range.from)} to ${formatDisplayDate(range.to)} · `:''}${data.rows.length.toLocaleString('en-IN')} records · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this report and date range."/>
+    <p role="status">{data.hasMore?`${data.rows.length.toLocaleString('en-IN')} records loaded. More records are available.`:'All matching records loaded.'} Search, filters, sorting and Generate apply to the loaded records.</p>
+    <ReportSection key={`${view}-${attempt}-${range.from}-${range.to}`} exportLabel={data.hasMore?"Generate (loaded rows)":"Generate"} title={definition.title} category="iboss-accounts" description={`${definition.asOf?`Stored on / before ${formatDisplayDate(range.to)} · `:definition.dated?`${formatDisplayDate(range.from)} to ${formatDisplayDate(range.to)} · `:''}${data.rows.length.toLocaleString('en-IN')} loaded records · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this report and date range."/>
+    {data.error&&<p role="alert">{data.error}</p>}
+    {data.hasMore&&<button type="button" className="secondary" disabled={data.loadingMore} onClick={()=>pageLoader.current?.loadMore()}>{data.loadingMore?'Loading more…':data.error?'Retry loading more':'Load 500 more records'}</button>}
    </>}
   </>}
   {drill&&<DrillPanel target={drill} range={definition?.dated||definition?.asOf?range:{from:indiaDateTimeInputValue(new Date(Date.now()-364*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}} token={token} close={()=>setDrill(null)}/>}

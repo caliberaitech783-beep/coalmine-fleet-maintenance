@@ -51,7 +51,7 @@ test("reports include a dedicated vehicle history category with three downloadab
   assert.match(source, /column\.key === "door"/);
   assert.match(source, /setReportVehicleHistoryTarget\(record\)/);
   assert.match(source, /backLabel="Back to reports"/);
-  assert.match(source, /label="Generate"/);
+  assert.match(source, /label=\{exportLabel\}/);
   assert.match(source, /label="Download history"/);
   assert.match(source, /label: "Work completed"/);
   assert.match(source, /label: "Time since previous BD"/);

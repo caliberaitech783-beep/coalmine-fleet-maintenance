@@ -25,7 +25,7 @@ test("report Rows and Actions controls render to the left of Generate", () => {
   const reportSection = source.slice(source.indexOf("function ReportSection("), source.indexOf("function ReportsPage("));
   const reportTable = source.slice(source.indexOf("function ReportTable("), source.indexOf("function MasterField("));
 
-  assert.match(reportSection, /className="report-heading-table-actions"[\s\S]*label="Generate"/);
+  assert.match(reportSection, /className="report-heading-table-actions"[\s\S]*label=\{exportLabel\}/);
   assert.match(reportSection, /toolbarTarget=\{tableToolbarTarget\}/);
   assert.match(reportSection, /toolbarTarget=\{tableToolbarTarget\}[\s\S]*toolbarPortal/);
   assert.match(reportTable, /className="report-row-limit"[\s\S]*<ReportActionsMenu/);

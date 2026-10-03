@@ -7208,7 +7208,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
     </div>
   </section>;
 }
-function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [searchQuery, setSearchQuery] = useState(query);
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
@@ -7226,7 +7226,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         <div className="generated-report-heading-actions">
           {headingControl}
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
-          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} smartLabels={category === "employee-tenure"} className="secondary" label="Generate" />
+          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} smartLabels={category === "employee-tenure"} className="secondary" label={exportLabel} />
         </div>
       </div>
       {controls}
