@@ -64,9 +64,9 @@ test('Project Manager edit form cancels without saving and submits once with the
   nodes(h.render(),n=>n.type==='button'&&text(n)==='Cancel')[0].props.onClick();
   assert.equal(closed,1);assert.equal(saves.length,0);
   const submit=nodes(h.render(),n=>n.type==='form')[0].props.onSubmit;
-  const event={preventDefault(){},currentTarget:{oemResponsibility:'OEM'}};
+  const event={preventDefault(){},currentTarget:{oemResponsibility:'OEM',responsibilityChangeReason:'  Warranty confirmed  '}};
   await Promise.all([submit(event),submit(event)]);
-  assert.deepEqual(saves,[{ref:'REQ-1',oemResponsibility:'OEM',previousResponsibility:'NON OEM'}]);
+  assert.deepEqual(saves,[{ref:'REQ-1',oemResponsibility:'OEM',previousResponsibility:'NON OEM',responsibilityChangeReason:'Warranty confirmed'}]);
   assert.equal(nodes(h.render(),n=>n.type==='input'&&!n.props.readOnly).length,0);
 });
 
@@ -76,4 +76,30 @@ test('Project Manager edit form displays save failure and remains open',async()=
   await nodes(h.render(),n=>n.type==='form')[0].props.onSubmit({preventDefault(){},currentTarget:{oemResponsibility:'OEM'}});
   assert.equal(text(nodes(h.render(),n=>n.props.role==='alert')[0]),'Refresh and review');
   assert.equal(closed,false);
+});
+
+test('reason field appears only for a manager changing a saved choice and retains the draft when switching',()=>{
+  const h=harness(choiceCode,{request,canEdit:true});
+  const choices=()=>nodes(h.render(),n=>n.type==='input'&&n.props.type==='checkbox');
+  assert.equal(nodes(h.render(),n=>n.type==='textarea').length,0);
+  choices()[0].props.onChange();
+  let reason=nodes(h.render(),n=>n.type==='textarea')[0];
+  assert.equal(reason.props.name,'responsibilityChangeReason');
+  assert.equal(reason.props.maxLength,1000);
+  reason.props.onChange({target:{value:'Warranty confirmed'}});
+  choices()[1].props.onChange();
+  assert.equal(nodes(h.render(),n=>n.type==='textarea').length,0);
+  choices()[0].props.onChange();
+  assert.equal(nodes(h.render(),n=>n.type==='textarea')[0].props.value,'Warranty confirmed');
+  assert.equal(h.calls.length,0);
+});
+
+test('history displays reason and timestamp while older history without a reason still renders',()=>{
+  const h=harness(historyCode,{...props,request:{...request,oemResponsibilityHistory:[
+    {from:'OEM',to:'NON OEM',changedBy:'Manager',changedAt:'03-10-26 02:00 PM',reason:'Warranty expired'},
+    {from:'NON OEM',to:'OEM',changedBy:'Manager',changedAt:'02-10-26 02:00 PM'}
+  ]}});
+  assert.match(text(h.render()),/03-10-26 02:00 PM\nReason: Warranty expired/);
+  assert.match(text(h.render()),/02-10-26 02:00 PM/);
+  assert.doesNotMatch(text(h.render()),/undefined/);
 });

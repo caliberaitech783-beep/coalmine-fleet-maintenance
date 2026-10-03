@@ -6389,6 +6389,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       throw Object.assign(new Error('This vehicle is outside your assigned sites.'),{status:403});
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
+    const responsibilityChangeReason=req.body?.responsibilityChangeReason ?? '';
+    if(typeof responsibilityChangeReason!=='string'||responsibilityChangeReason.length>1000)throw Object.assign(new Error('Responsibility change reason must be text up to 1000 characters.'),{status:400});
     const result=await write(client,rows[0]);
     // Audit only an actual persisted change; never trust a client-supplied history.
     if(req.body?.oemResponsibility!==undefined){
@@ -6396,8 +6398,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       const next=saved.rows[0]?.oem_responsibility;
       if(next!==undefined&&next!==rows[0].oemResponsibility){
         await client.query(`UPDATE maintenance_requests SET oem_responsibility_history=oem_responsibility_history || jsonb_build_array(jsonb_build_object(
-          'from',$1::text,'to',$2::text,'changedBy',$3::text,'login',$4::text,'changedAt',NOW())) WHERE reference=$5`,
-          [rows[0].oemResponsibility||'',next,req.session.name||req.session.login||'',req.session.login||'',reference]);
+          'from',$1::text,'to',$2::text,'changedBy',$3::text,'login',$4::text,'changedAt',NOW(),'reason',$6::text)) WHERE reference=$5`,
+          [rows[0].oemResponsibility||'',next,req.session.name||req.session.login||'',req.session.login||'',reference,responsibilityChangeReason.trim()]);
         if(result.rows)result.rows=(await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference])).rows;
       }
     }

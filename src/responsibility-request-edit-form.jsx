@@ -12,10 +12,11 @@ export default function ResponsibilityRequestEditForm({request, close, onSave, D
     <form className="form" onSubmit={async event => {
       event.preventDefault();
       if (lock.current) return;
-      const value = new FormData(event.currentTarget).get('oemResponsibility');
+      const form = new FormData(event.currentTarget);
+      const value = form.get('oemResponsibility');
       if (!value) {setError('Choose OEM or NON OEM.'); return;}
       lock.current = true; setBusy(true); setError('');
-      try {await onSave({ref:request.ref,oemResponsibility:value,previousResponsibility:previous});}
+      try {await onSave({ref:request.ref,oemResponsibility:value,previousResponsibility:previous,responsibilityChangeReason:String(form.get('responsibilityChangeReason') || '').trim()});}
       catch (failure) {setError(failure.message || 'Could not save responsibility.');}
       finally {lock.current = false; setBusy(false);}
     }}>

@@ -24,7 +24,7 @@ function fixture({scope=true,accepted=true,active=true,arrival=true,failAudit=fa
     if(sql.startsWith('SELECT oem_responsibility FROM'))return {rows:[{oem_responsibility:responsibility}]};
     if(sql.startsWith('UPDATE maintenance_requests SET oem_responsibility_history')){
       if(failAudit)throw new Error('audit unavailable');
-      history.push({from:args[0],to:args[1],changedBy:args[2],login:args[3]});return {};
+      history.push({from:args[0],to:args[1],changedBy:args[2],login:args[3],reason:args[5]});return {};
     }
     if(sql.startsWith('UPDATE maintenance_requests SET oem_responsibility=$1'))responsibility=args[0];
     return {rows:[{ref:'REQ-1',oemResponsibility:responsibility,oemResponsibilityHistory:[...history]}]};
@@ -47,7 +47,7 @@ test('manager save is site scoped and atomically records real old/new values',as
   for(const role of ['Maintenance Manager','Project Manager']){
     const f=fixture();const result=await f.run(manager(role));
     assert.equal(result.status,200);assert.equal(f.responsibility,'OEM');
-    assert.deepEqual(f.history,[{from:'NON OEM',to:'OEM',changedBy:'Manager',login:'manager'}]);
+    assert.deepEqual(f.history,[{from:'NON OEM',to:'OEM',changedBy:'Manager',login:'manager',reason:''}]);
     assert.equal(result.data.oemResponsibilityHistory.length,1);
     assert.ok(f.queries.indexOf('COMMIT')>f.queries.findIndex(q=>q.includes('SET oem_responsibility_history')));
   }
@@ -70,6 +70,24 @@ test('stale/invalid saves reject; unchanged saves do not create history',async()
 test('audit failure rolls back the responsibility change',async()=>{
   const f=fixture({failAudit:true});assert.equal((await f.run()).status,500);
   assert.equal(f.responsibility,'NON OEM');assert.deepEqual(f.history,[]);assert.ok(f.queries.includes('ROLLBACK'));
+});
+
+test('both manager roles save the reason with server timestamp; invalid input cannot write',async()=>{
+  for(const role of ['Maintenance Manager','Project Manager']){
+    const f=fixture();
+    const result=await f.run(manager(role),{oemResponsibility:'OEM',previousResponsibility:'NON OEM',responsibilityChangeReason:'  OEM warranty confirmed  '});
+    assert.equal(result.status,200);
+    assert.equal(result.data.oemResponsibilityHistory[0].reason,'OEM warranty confirmed');
+    assert.ok(f.queries.some(sql=>sql.includes("'changedAt',NOW(),'reason',$6::text")));
+  }
+  for(const responsibilityChangeReason of ['a'.repeat(1001),{},123]){
+    const f=fixture();
+    assert.equal((await f.run(undefined,{oemResponsibility:'OEM',previousResponsibility:'NON OEM',responsibilityChangeReason})).status,400);
+    assert.equal(f.responsibility,'NON OEM');assert.equal(f.history.length,0);
+  }
+  const f=fixture();
+  await f.run(undefined,{oemResponsibility:'NON OEM',previousResponsibility:'NON OEM',responsibilityChangeReason:'No actual change'});
+  assert.equal(f.history.length,0);
 });
 
 test('general edit keeps saved responsibility locked except authorized managers and rejects stale changes',()=>{
