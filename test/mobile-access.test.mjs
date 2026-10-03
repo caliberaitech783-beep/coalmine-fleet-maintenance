@@ -48,7 +48,7 @@ test("Super Admin sessions carry their selected master and tab visibility", () =
     },
   });
   assert.deepEqual(profile.permissions.masterAccess, ["Equipment master"]);
-  assert.deepEqual(profile.permissions.tabAccess, ["Audit Trail", "Reports", "Tickets"]);
+  assert.deepEqual(profile.permissions.tabAccess, ["Audit Trail", "Reports", "Tickets", "CD"]);
 });
 
 test("MIS can verify but cannot create or maintain requests", () => {
@@ -64,15 +64,15 @@ test("operational users keep independent desktop and mobile menu access",()=>{
   const profile=resolveMobileAccess({user:{userType:"Mobile User",userGroup:"Maintenance User",desktopUserMenuAccess:"Requests | CD",desktopUserRequestAccess:"View requests | Close request form",mobileUserMenuAccess:"Tickets",mobileUserRequestAccess:""}});
   assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","CD"]);
   assert.deepEqual(profile.permissions.desktopUserRequestAccess,["View requests","Close request form","Closed history"]);
-  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets"]);
+  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets","CD"]);
   assert.deepEqual(profile.permissions.mobileUserRequestAccess,["Closed history"]);
 });
 
-test("Directory is not part of any operational role default",()=>{
+test("Directory is part of every operational role default",()=>{
   for(const userGroup of ["Production User","Maintenance User","MIS User"]){
     const profile=resolveMobileAccess({user:{userType:"Mobile User",userGroup}});
-    assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Tickets"]);
-    assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Tickets"]);
-    assert.equal(profile.permissions.desktopUserMenuAccess.includes("CD"),false);
+    assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Tickets","CD"]);
+    assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Tickets","CD"]);
+    assert.equal(profile.permissions.desktopUserMenuAccess.includes("CD"),true);
   }
 });

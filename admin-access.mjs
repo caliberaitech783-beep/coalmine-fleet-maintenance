@@ -24,7 +24,7 @@ export const ADMIN_TAB_OPTIONS = [
   "Audit Trail",
   "Tickets",
 ];
-export const ADMIN_DEFAULT_TAB_OPTIONS = ADMIN_TAB_OPTIONS.filter((option) => option !== "CD");
+export const ADMIN_DEFAULT_TAB_OPTIONS = [...ADMIN_TAB_OPTIONS];
 export const ADMIN_REPORT_OPTIONS = [
   "Reports",
   "General Report",
@@ -55,21 +55,20 @@ export function accessSelection(record = {}, key, options = []) {
   return [...new Set(raw.map((value) => String(value).trim()).filter((value) => allowed.has(value)))];
 }
 
-// CD used to be forced on for desktop users. Remove that legacy value once
-// during deployment so Directory becomes a genuine per-view opt-in. The
-// migration is intentionally limited to menu fields and preserves every
-// other role and permission setting.
-export function removeLegacyDirectoryMenuAccess(record = {}) {
+// Directory is a core account-scoped page. Keep it in any explicitly stored
+// desktop/mobile menu selection without broadening any other permission.
+export function ensureDirectoryMenuAccess(record = {}) {
   const next = {...record};
-  for (const key of ["tabAccess", "mobileTabAccess", "desktopUserMenuAccess", "mobileUserMenuAccess"]) {
+  const desktopAccount=/super|admin/i.test(String(next.userType||''))||String(next.userGroup||'').trim()==='User';
+  const keys=desktopAccount?["tabAccess","mobileTabAccess"]:["desktopUserMenuAccess","mobileUserMenuAccess"];
+  for (const key of keys) {
     if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
     const original = next[key];
     const values = (Array.isArray(original) ? original : String(original || "").split(/\s*[|,]\s*/))
       .map((value) => String(value).trim())
       .filter(Boolean);
-    if (!values.includes("CD")) continue;
-    const filtered = [...new Set(values.filter((value) => value !== "CD"))];
-    next[key] = Array.isArray(original) ? filtered : filtered.join(" | ");
+    const required = [...new Set([...values,"CD"])];
+    next[key] = Array.isArray(original) ? required : required.join(" | ");
   }
   return next;
 }
@@ -109,7 +108,7 @@ export function adminAccessPermissions(user = {}) {
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
   const requiredTabs = ticketAccount ? ["Tickets"] : [];
-  const tabAccess = [...new Set([...(selectedTabs ?? ADMIN_DEFAULT_TAB_OPTIONS), ...requiredTabs])];
+  const tabAccess = [...new Set([...(selectedTabs ?? ADMIN_DEFAULT_TAB_OPTIONS), ...requiredTabs,"CD"])];
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
   const enabled=value=>value===true||/^(true|yes|1|on)$/i.test(String(value||'').trim());
@@ -132,7 +131,7 @@ export function adminAccessPermissions(user = {}) {
     auditAccess: accessSelection(user, "auditAccess", ADMIN_SUBMENU_OPTIONS["Audit Trail"].options),
     ticketAccess: accessSelection(user, "ticketAccess", ADMIN_SUBMENU_OPTIONS.Tickets.options),
     mobileMasterAccess: mobileSelection("masterAccess",ADMIN_MASTER_OPTIONS,accessSelection(user,"masterAccess",ADMIN_MASTER_OPTIONS)),
-    mobileTabAccess: mobileSelection("tabAccess",ADMIN_TAB_OPTIONS,tabAccess),
+    mobileTabAccess: [...new Set([...mobileSelection("tabAccess",ADMIN_TAB_OPTIONS,tabAccess),"CD"])],
     mobileDashboardAccess: mobileSelection("dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options,accessSelection(user,"dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options)),
     mobileWhatsappAccess: mobileSelection("whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options,accessSelection(user,"whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options)),
     mobileReportAccess: mobileSelection("reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options,accessSelection(user,"reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options)),

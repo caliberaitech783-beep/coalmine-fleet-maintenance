@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ADMIN_DEFAULT_TAB_OPTIONS, ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, managerRoleSelection, masterAccessAllows, navigationPermissionsForView, removeLegacyDirectoryMenuAccess} from "../admin-access.mjs";
+import {ADMIN_DEFAULT_TAB_OPTIONS, ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, ensureDirectoryMenuAccess, managerRoleSelection, masterAccessAllows, navigationPermissionsForView} from "../admin-access.mjs";
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
   assert.equal(permissions.adminLevel, "Admin");
   assert.equal(permissions.masterAccess, null);
   assert.deepEqual(permissions.tabAccess, ADMIN_DEFAULT_TAB_OPTIONS);
-  assert.equal(permissions.tabAccess.includes("CD"), false);
+  assert.equal(permissions.tabAccess.includes("CD"), true);
   assert.equal(accessAllows(permissions.masterAccess, "Equipment master"), true);
 });
 
@@ -19,7 +19,7 @@ test("manager authority is retained in the admin session permissions", () => {
   const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: "Maintenance Manager", tabAccess: "Dashboard"});
   assert.equal(permissions.adminLevel, "Manager");
   assert.equal(permissions.managerRole, "Maintenance Manager");
-  assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets"]);
+  assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets", "CD"]);
 });
 
 test("a non-admin can manage multiple operational teams", () => {
@@ -32,8 +32,8 @@ test("a non-admin can manage multiple operational teams", () => {
 
 test("desktop and mobile menu selections remain independent per user",()=>{
   const permissions=adminAccessPermissions({adminLevel:"Manager",tabAccess:"Dashboard | Tickets",masterAccess:"Equipment master",mobileTabAccess:"Masters | Tickets",mobileMasterAccess:"Region master",mobileDashboardAccess:"",mobileTicketAccess:"Tickets"});
-  assert.deepEqual(permissions.tabAccess,["Dashboard","Tickets"]);
-  assert.deepEqual(permissions.mobileTabAccess,["Masters","Tickets"]);
+  assert.deepEqual(permissions.tabAccess,["Dashboard","Tickets","CD"]);
+  assert.deepEqual(permissions.mobileTabAccess,["Masters","Tickets","CD"]);
   assert.deepEqual(navigationPermissionsForView(permissions,false).masterAccess,["Equipment master"]);
   assert.deepEqual(navigationPermissionsForView(permissions,true).masterAccess,["Region master"]);
 });
@@ -51,26 +51,26 @@ test("new administrators receive only explicitly selected masters and tabs", () 
     tabAccess: "Audit Trail",
   });
   assert.deepEqual(permissions.masterAccess, ["Equipment master", "Region master"]);
-  assert.deepEqual(permissions.tabAccess, ["Audit Trail", "Tickets"]);
+  assert.deepEqual(permissions.tabAccess, ["Audit Trail", "Tickets", "CD"]);
   assert.equal(accessAllows(permissions.masterAccess, "OEM master"), false);
   assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), false);
 });
 
-test("Directory is available but remains disabled until selected", () => {
+test("Directory is mandatory for desktop and responsive mobile views", () => {
   const desktop = adminAccessPermissions({adminLevel:"Manager",tabAccess:"Dashboard | CD"});
   assert.deepEqual(desktop.tabAccess,["Dashboard","CD","Tickets"]);
   assert.deepEqual(desktop.mobileTabAccess,["Dashboard","CD","Tickets"]);
   const separateMobile = adminAccessPermissions({adminLevel:"Manager",tabAccess:"Dashboard",mobileTabAccess:"CD | Tickets"});
-  assert.deepEqual(separateMobile.tabAccess,["Dashboard","Tickets"]);
+  assert.deepEqual(separateMobile.tabAccess,["Dashboard","Tickets","CD"]);
   assert.deepEqual(separateMobile.mobileTabAccess,["CD","Tickets"]);
 });
 
-test("the one-time migration removes only inherited Directory selections", () => {
-  const original={tabAccess:"Dashboard | CD | Reports",mobileTabAccess:["CD","Tickets"],desktopUserMenuAccess:"Requests | CD",mobileUserMenuAccess:"Tickets",managerRole:"MIS Manager"};
-  assert.deepEqual(removeLegacyDirectoryMenuAccess(original),{
-    tabAccess:"Dashboard | Reports",mobileTabAccess:["Tickets"],desktopUserMenuAccess:"Requests",mobileUserMenuAccess:"Tickets",managerRole:"MIS Manager",
+test("the one-time migration adds only required Directory selections", () => {
+  const original={userType:"Super Admin",tabAccess:"Dashboard | Reports",mobileTabAccess:["Tickets"],managerRole:"MIS Manager"};
+  assert.deepEqual(ensureDirectoryMenuAccess(original),{
+    userType:"Super Admin",tabAccess:"Dashboard | Reports | CD",mobileTabAccess:["Tickets","CD"],managerRole:"MIS Manager",
   });
-  assert.deepEqual(original.mobileTabAccess,["CD","Tickets"]);
+  assert.deepEqual(original.mobileTabAccess,["Tickets"]);
 });
 
 test("existing administrators can open the newly introduced Delayed Reason master", () => {

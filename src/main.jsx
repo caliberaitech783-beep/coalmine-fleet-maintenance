@@ -1,4 +1,5 @@
 import {ibossAccountsAllowed} from "../iboss-access.mjs";
+import {assignedUserRoles,ACCOUNT_PRIVILEGES,accountPrivileges} from "../account-role-access.mjs";
 import { siteReportHtml } from "./site-report.mjs";
 import { isIdleVehicleRequest } from "../request-idle.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
@@ -585,6 +586,8 @@ function AuthModeTabs({ mode, onModeChange }) {
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 function Login({ onLogin, theme, toggleTheme }) {
   const [accountsPortal,setAccountsPortal]=useState(()=>new URLSearchParams(window.location.search).get('portal')==='accounts');
+  const [loginRoles,setLoginRoles]=useState([]);
+  const [selectedLoginRole,setSelectedLoginRole]=useState('');
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const passwordInputRef = useRef(null);
@@ -655,9 +658,10 @@ function Login({ onLogin, theme, toggleTheme }) {
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, portal:accountsPortal?'accounts':'operations' }),
+        body: JSON.stringify({ username, password, portal:accountsPortal?'accounts':'operations', selectedRole:selectedLoginRole }),
       });
       const data = await readApiJson(response, "Could not sign in.");
+      if(data.requiresRoleSelection){setLoginRoles(data.roles||[]);setSelectedLoginRole('');return;}
       if (data.requiresPasswordChange) {
         setPasswordChange({ changeToken: data.changeToken, name: data.name });
         return;
@@ -737,7 +741,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
-          <button type="button" className="login-accounts-link" onClick={()=>{setAccountsPortal(!accountsPortal);setError('');setPassword('');setPasswordChange(null);setLoginMode('signin');}}><Landmark /><span><strong>{accountsPortal?'Fleet operations':'Accounts'}</strong>{accountsPortal?'Back to sign in':'Open Accounts sign in'}</span></button>
+          <button type="button" className="login-accounts-link" onClick={()=>{setAccountsPortal(!accountsPortal);setLoginRoles([]);setSelectedLoginRole('');setError('');setPassword('');setPasswordChange(null);setLoginMode('signin');}}><Landmark /><span><strong>{accountsPortal?'Fleet operations':'Accounts'}</strong>{accountsPortal?'Back to sign in':'Open Accounts sign in'}</span></button>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>
@@ -814,6 +818,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <h2>{accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
           <p>{accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
+          {!accountsPortal&&loginRoles.length>0&&<label>Choose your assigned workspace<select required value={selectedLoginRole} onChange={event=>setSelectedLoginRole(event.target.value)}><option value="">Select workspace</option>{loginRoles.map(role=><option key={role}>{role}</option>)}</select></label>}
           <label className="login-label" htmlFor="login-username">User name</label>
           <div className="login-input">
             <User aria-hidden="true" />
@@ -1053,7 +1058,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
-  const canViewDirectory = activeManagerRoles.includes("Project Manager") || accessAllows(viewPermissions.tabAccess, "CD");
+  // Directory is a core account-scoped page. Keep it visible even for sessions
+  // issued before the required-menu migration; the API enforces their scope.
+  const canViewDirectory = true;
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;
@@ -1238,7 +1245,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setIbossSelectionClosed(false)}
         >
           <div className="nav-config-row"><button className={`header-nav-item${visibleIbossNav.some(([name]) => name === active) || ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-nav="iboss" aria-haspopup="menu" aria-expanded={ibossOpen} onClick={() => {setIbossSelectionClosed(false);closeMenus(); setIbossOpen(!ibossOpen);}}>
-            <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">IBOSS</span><ChevronDown className="masters-chevron" />
+            <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span><span className="nav-label">Accounts</span><ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown iboss-dropdown" role="menu">
             {visibleIbossNav.map(([name,Icon,workspace]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name || name === "Accounts" && ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
@@ -3111,6 +3118,7 @@ const mobileAccessKey=(key)=>`mobile${key[0].toUpperCase()}${key.slice(1)}`;
 const desktopSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
 const mobileSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [mobileAccessKey(field), `Mobile ${label}`, "multi-checkbox"]);
 const userSubmenuFields = [...desktopSubmenuFields, ...mobileSubmenuFields, ["mobileTabAccess", "Mobile visible tabs", "multi-checkbox"]];
+userSubmenuFields.push(["userRoles","Assigned roles","multi-checkbox"],["accountAccess","Accounts privileges","multi-checkbox"]);
 userSubmenuFields.push(["desktopManagerCreateRequest", "Desktop manager create request", "checkbox"], ["mobileManagerCreateRequest", "Mobile manager create request", "checkbox"]);
 const operationalViewFields = [
   ["desktopUserMenuAccess","Desktop user menus","multi-checkbox"],
@@ -3119,8 +3127,8 @@ const operationalViewFields = [
   ["mobileUserRequestAccess","Mobile request submenus","multi-checkbox"],
 ];
 userSubmenuFields.push(...operationalViewFields);
-const operationalDefaultMenuOptions=["Requests","Tickets"];
-const operationalMenuOptions=[...operationalDefaultMenuOptions,"CD"];
+const operationalDefaultMenuOptions=["Requests","Tickets","CD"];
+const operationalMenuOptions=[...operationalDefaultMenuOptions];
 const userMenuOptionLabel=(option)=>option==="CD"?"Directory (CD)":option;
 const operationalRequestOptions={
   "Production User":["View requests","Create request","Closed history"],
@@ -4274,7 +4282,7 @@ function AccessSelectAll({label,options=[],selected=[],onChange}){
 function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false,managerRequestPrivileges=false}){
   const prefix=view==="mobile"?"mobile":"";
   const keyFor=(field)=>prefix?mobileAccessKey(field):field;
-  const requiredTabs=isManager?["Dashboard","Tickets"]:[];
+  const requiredTabs=["CD",...(isManager?["Dashboard","Tickets"]:[])];
   const shownTabs=[...new Set([...visibleTabs,...requiredTabs])];
   const [submenuSelections,setSubmenuSelections]=useState(()=>Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field,options})=>{
     const saved=selectedAccessValues(record,keyFor(field),prefix?field:"").filter((option)=>options.includes(option));
@@ -4303,14 +4311,14 @@ function OperationalViewMenuFields({record={},view="desktop",role=""}){
   const requestField=view==="mobile"?"mobileUserRequestAccess":"desktopUserRequestAccess";
   const isGeneral = role === GENERAL_USER_ROLE;
   const roleRecord = privilegeSelectionValue(record.userGroup) === role ? record : {};
-  const menuOptions = isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
-  const [menus,setMenus]=useState(() => isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions);
+  const menuOptions = role === "Account User" ? ["CD"] : isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
+  const [menus,setMenus]=useState(() => [...new Set([...(isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions),"CD"])]);
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
-    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={setMenus} />{menuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}</span></label>)}</div></fieldset>
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><input type="hidden" name={menuField} value="CD"/><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={(selection)=>setMenus([...new Set([...selection,"CD"])])} />{menuOptions.map((option)=>{const required=option==="CD";return <label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} disabled={required} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div></fieldset>
     {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div><AccessSelectAll label="Select all submenus" options={requestOptions} selected={selectedRequests} onChange={setSelectedRequests} />{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} checked={selectedRequests.includes(option)} onChange={(event)=>toggleRequest(option,event.target.checked)}/><span>{option}</span></label>)}</div></fieldset>}
   </section>;
 }
@@ -4320,6 +4328,13 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
     ? "User"
     : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
+  const [selectedRoles,setSelectedRoles]=useState(()=>assignedUserRoles(record));
+  const [selectedAccounts,setSelectedAccounts]=useState(()=>accountPrivileges(record));
+  const toggleRole=(role,checked)=>{
+    const next=checked?[...new Set([...selectedRoles,role])]:selectedRoles.filter(value=>value!==role);
+    setSelectedRoles(next);
+    if(roleSection==='team')setAccountRole(next.find(value=>value!=='Account User')||next[0]||'');
+  };
   const [roleSection, setRoleSection] = useState(initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
   const [managerRoles, setManagerRoles] = useState(managerRoleSelection(record.managerRole));
@@ -4335,20 +4350,25 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
   const isSuperAdmin = isDesktopUser && userAuthority === "Super Admin";
   const isManager = isDesktopUser && userAuthority === "Manager";
   return <>
+    <input type="hidden" name="userRoles" value={(isDesktopUser?selectedRoles.filter(role=>role==='Account User'):selectedRoles).join(' | ')} />
+    {!selectedRoles.includes('Account User')&&<input type="hidden" name="accountAccess" value={accountPrivileges(record).join(' | ')} />}
     <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole === "Account User" ? "Account User" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
       <legend>User role *</legend>
-      <p>Select the workspace and built-in authority for this account.</p>
+      <p>Select one or more team roles, or configure an Admin / Non Admin account with optional Accounts access.</p>
       <div className="role-category-tabs" role="tablist" aria-label="User category">
         <button type="button" role="tab" aria-selected={roleSection === "manager"} className={roleSection === "manager" ? "active" : ""} onClick={() => { setRoleSection("manager"); setAccountRole("User"); }}>Manager User</button>
-        <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); if (accountRole === "User") setAccountRole(""); }}>Team User</button>
+        <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); setAccountRole(selectedRoles.find(role=>role!=='Account User')||selectedRoles[0]||''); }}>Team User</button>
       </div>
       {roleSection === "manager" && <input type="hidden" name="userGroup" value="User" />}
-      {roleSection === "team" && <div className="role-option-grid">{mobileUserRoleOptions.map((option) => <label key={option} className={accountRole === option ? "selected" : ""}>
-        <input type="radio" name="userGroup" value={option} required checked={accountRole === option} onChange={() => setAccountRole(option)} />
+      {roleSection === "team" && <input type="hidden" name="userGroup" value={accountRole} />}
+      {roleSection === "team" && <div className="role-option-grid">{mobileUserRoleOptions.map((option) => <label key={option} className={selectedRoles.includes(option) ? "selected" : ""}>
+        <input type="checkbox" value={option} checked={selectedRoles.includes(option)} onChange={event=>toggleRole(option,event.target.checked)} />
         <span><b>{option}</b><small>{mobileRoleAuthority[option]}</small></span>
       </label>)}</div>}
     </fieldset>
+    {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspace</legend><label><input type="checkbox" checked={selectedRoles.includes('Account User')} onChange={event=>toggleRole('Account User',event.target.checked)} /> Account User</label></fieldset>}
+    {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
       <legend>User authority *</legend>
       <p>Choose whether this desktop user is a full Admin or a configurable Manager.</p>
@@ -4387,15 +4407,15 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         </label>)}</div>
       </div>}
     </fieldset>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && <UserSiteFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && <UserSiteFields record={record} siteOptions={siteOptions} />}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
       <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager managerRequestPrivileges={isManager} />
       <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager managerRequestPrivileges={isManager} />
     </>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && <>
-      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "All menu choices are available and unticked by default. Select only the menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
+    {accountRole && !isDesktopUser && <>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === "Account User" ? "Directory is required for every account. Accounts remains this role’s only additional workspace." : accountRole === GENERAL_USER_ROLE ? "Directory is required. Select any additional menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
     </>}
@@ -4404,6 +4424,11 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
 }
 
 function applyUserRoleDefaults(record) {
+  if(Object.hasOwn(record,'userRoles')){
+    const selected=assignedUserRoles(record);
+    if(record.userGroup!=='User')record.userGroup=selected.find(role=>role!=='Account User')||selected[0]||'';
+    record.userRoles=selected.join(' | ');
+  }
   const role = privilegeSelectionValue(record.userGroup);
   if (role === "User") {
     record.userType = "Super Admin";
@@ -4471,7 +4496,7 @@ function applyUserRoleDefaults(record) {
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
       if(role === "Account User"){
-        record[menuField]="";record[requestField]="";
+        record[menuField]="CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
         record[menuField]=generalUserMenuSelection(record,view).join(" | ");
         if(!Object.hasOwn(record,requestField))record[requestField]=operationalRequestOptions[role].join(" | ");
@@ -4579,6 +4604,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       record.login = record.login.toUpperCase();
       record.employee = record.employee.toUpperCase();
       applyUserRoleDefaults(record);
+      if(!record.userType){alert('Select at least one user role.');return;}
     }
     if (name === "Users & employees" && record.userType === "Mobile User" && !record.site) {
       alert("Select at least one site for this user.");
@@ -7958,6 +7984,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       updated.employee = updated.employee.toUpperCase();
     }
     if (name === "Users & employees") applyUserRoleDefaults(updated);
+    if(name==='Users & employees'&&!updated.userType){alert('Select at least one user role.');return;}
     if (name === "Users & employees" && updated.userType === "Mobile User" && !updated.site) {
       alert("Select at least one site for this user.");
       return;
@@ -11038,7 +11065,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     transfers: "Vehicle Transfer Control",
   };
   const canCreate = isProduction || isMaintenance;
-  const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets"),showDirectoryMenu=canSeeUserMenu("CD");
+  const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets"),showDirectoryMenu=true;
   const showDashboardMenu=!isGeneral||canSeeUserMenu("Dashboard"),showReportsMenu=!isGeneral||canSeeUserMenu("Reports");
   useEffect(()=>{
     if(!isGeneral||embedded)return;
@@ -11284,7 +11311,9 @@ function App() {
       if (saved === "light" || saved === "dark") return saved;
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }),
-    [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null);
+    [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null),
+    [accountWorkspace,setAccountWorkspace]=useState("accounts"),
+    [accountDirectoryView,setAccountDirectoryView]=useState("directory");
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
@@ -11322,7 +11351,7 @@ function App() {
     let activeRequest = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((profile) => { if (activeRequest) { setProfileLocation(String(profile.location || "").trim()); setProfileDesignationKey(String(profile.designationKey || "").trim()); setSession(current => current?.token === session.token ? {...current,permissions:{...current.permissions,ibossAccounts:profile.ibossAccounts === true}} : current); } })
+      .then((profile) => { if (activeRequest) { setProfileLocation(String(profile.location || "").trim()); setProfileDesignationKey(String(profile.designationKey || "").trim()); setSession(current => current?.token === session.token ? {...current,permissions:{...current.permissions,ibossAccounts:profile.ibossAccounts === true,accountAccess:profile.accountAccess}} : current); } })
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
@@ -11438,9 +11467,9 @@ function App() {
       }
     };
     checkVersion();
-    // Deploy checks do not need to wake every signed-in browser every ten
-    // seconds. Focus/pageshow refreshes already catch returning users quickly.
-    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 5 * 60_000));
+    // Version checks are tiny and uncached. A one-minute ceiling keeps every
+    // signed-in role on the same deployed interface without ending its session.
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
     window.addEventListener("focus",checkVersion);
     window.addEventListener("pageshow",checkVersion);
     return () => {
@@ -11711,11 +11740,11 @@ function App() {
   ) : renderedActive === "Purchase Order" ? (
     <PurchaseOrderReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Accounts Transactions" ? (
-    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} initialSection="transactions" />
+    <IbossAccounts token={session?.token || authToken} permissions={session?.permissions} ReportSection={ReportSection} initialSection="transactions" />
   ) : renderedActive === "Accounts Masters" ? (
-    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} initialSection="masters" />
+    <IbossAccounts token={session?.token || authToken} permissions={session?.permissions} ReportSection={ReportSection} initialSection="masters" />
   ) : renderedActive === "Accounts" ? (
-    <IbossAccounts token={session?.token || authToken} ReportSection={ReportSection} />
+    <IbossAccounts token={session?.token || authToken} permissions={session?.permissions} ReportSection={ReportSection} />
   ) : renderedActive === "PO-GRN Reconciliation" ? (
     <PoGrnReconciliation token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "GRN Register" ? (
@@ -11780,8 +11809,8 @@ function App() {
   ]);
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
-    <header><CaliberBrand subtitle="Accounts" /><nav><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
-    <main>{ibossAccountsAllowed(session)?<IbossAccounts token={session.token} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
+    <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
+    <main>{accountWorkspace==="directory"?<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={accountDirectoryView==="directory"} className={accountDirectoryView==="directory"?"active":""} onClick={()=>setAccountDirectoryView("directory")}><BookUser/>Directory</button><button type="button" role="tab" aria-selected={accountDirectoryView==="tenure"} className={accountDirectoryView==="tenure"?"active":""} onClick={()=>setAccountDirectoryView("tenure")}><Users/>Employee Tenure Report</button></div>{accountDirectoryView==="tenure"?<EmployeeTenureReport token={session.token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={session.token}/>}</>:ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
   if (session.role === "normal")

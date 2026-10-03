@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import {hashPassword, verifyPassword} from '../password-auth.mjs';
+import {assignedUserRoles,hasAccountRole} from '../account-role-access.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
 const sourceBetween = (start, end) => {
@@ -35,7 +36,7 @@ function harness({targetLevel = '', actorLevel = 'Admin', missing = false} = {})
     isTrueSuperAdmin: record => record?.adminLevel === 'Super Admin',
     userLoginCandidates: record => [record.login.toLowerCase()],
     loginRecordCandidates: (rows, username) => rows.filter(row => row.record_data.login.toLowerCase() === username),
-    privilegeForUser: () => ({}),
+    assignedUserRoles,hasAccountRole,privilegeForUser: () => ({}),
     resolveMobileAccess: () => ({sessionRole: 'super', userType: 'Super User', permissions: {adminLevel: 'Admin'}}),
     ADMIN_LOCK_POLICY_PAUSED: true,
     randomUUID: () => 'isolated-login-token',

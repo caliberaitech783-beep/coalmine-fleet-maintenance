@@ -1,10 +1,11 @@
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
-import {ibossAccountsEligible,ibossAccountsAllowed} from './iboss-access.mjs';
+import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
+import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
 import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
-import {accountView} from './iboss-accounts.mjs';
+import {accountView,ACCOUNT_SECTIONS} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
 import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
@@ -38,9 +39,9 @@ import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
-import {accessAllows,managerRoleSelection,masterAccessAllows,normalizeAdminLevel,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
+import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
-import {cdirViewerContext} from './cdir-access.mjs';
+import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -1184,19 +1185,18 @@ async function migrate(){
         VALUES ('user_access_labels_normalized','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
-    // CD was previously forced for desktop accounts. Clear that inherited
-    // value once so Directory is unticked for every role until an
-    // administrator explicitly selects it for desktop and/or mobile.
-    const {rows:directoryOptInApplied}=await client.query("SELECT value FROM app_metadata WHERE key='directory_cd_opt_in_v1' FOR UPDATE");
-    if(!directoryOptInApplied.length){
+    // Directory is a core, account-scoped page. Persist it into existing menu
+    // selections so User Master shows the mandatory checkbox consistently.
+    const {rows:directoryAccessApplied}=await client.query("SELECT value FROM app_metadata WHERE key='directory_cd_required_v2' FOR UPDATE");
+    if(!directoryAccessApplied.length){
       const {rows:userRows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' FOR UPDATE");
       for(const row of userRows){
-        const normalized=removeLegacyDirectoryMenuAccess(row.record_data);
+        const normalized=ensureDirectoryMenuAccess(row.record_data);
         if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
           await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
-        VALUES ('directory_cd_opt_in_v1','true',NOW())
+        VALUES ('directory_cd_required_v2','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     // Canonicalize stored operational locations without deleting or re-syncing
@@ -2199,7 +2199,12 @@ app.post('/api/login',async(req,res,next)=>{
     const login=String(employee.login||userLoginCandidates(employee)[0]||username).trim();
     const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),username]);
     const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
-    const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
+    const fleetRoles=assignedUserRoles(employee).filter(role=>role!=='Account User');
+    const desktopAccount=String(employee.userType||'').toLowerCase().includes('super');
+    if(req.body.portal==='accounts'&&!hasAccountRole(employee))return res.status(403).json({error:'This ID is not assigned to Accounts. Select Fleet operations.'});
+    if(req.body.portal!=='accounts'&&!desktopAccount&&fleetRoles.length>1&&!req.body.selectedRole)return res.json({requiresRoleSelection:true,roles:fleetRoles});
+    if(req.body.portal!=='accounts'&&req.body.selectedRole&&!fleetRoles.includes(req.body.selectedRole))return res.status(403).json({error:'This workspace is not assigned to your ID.'});
+    const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers),portal:req.body.portal,selectedRole:req.body.selectedRole});
     req.audit={
       actorLogin:login,
       actorName:employee.employee,
@@ -3786,7 +3791,8 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
     req.audit=false;
     res.set('Cache-Control','no-store');
     const [directory,user]=await Promise.all([cdirDirectory(),currentUserRecord(req.session)]);
-    res.json({...directory,viewer:cdirViewerContext({session:req.session,user,sites:directory.sites})});
+    const viewer=cdirViewerContext({session:req.session,user,sites:directory.sites});
+    res.json({...cdirDirectoryForViewer(directory,viewer),viewer});
   }catch(error){next(error)}
 });
 
@@ -3913,8 +3919,9 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
 
 const accountsMergeAllowed=async req=>{
   const user=await currentUserRecord(req.session);
-  const profile=resolveMobileAccess({user});
-  return ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+  const profile=resolveMobileAccess({user,portal:req.session.userType==='Account User'?'accounts':undefined});
+  const section=req.params.view?(ACCOUNT_SECTIONS.masters.includes(req.params.view)?'Masters':'Transactions'):req.params.chain?'Report Merge':'Dashboard';
+  return accountSectionAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions},section);
 };
 const accountsMergeFailed=(res,error)=>{
   if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
@@ -4223,7 +4230,7 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
     const record=rows[0]?.record_data||{};
     const location=assignedUserSiteName(record);
     const designation=flowDesignationForUser(record,resolveMobileAccess({user:record}));
-    res.json({ibossAccounts:ibossAccountsEligible(record),location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
+    res.json({ibossAccounts:ibossAccountsEligible(record),accountAccess:accountPrivileges(record),location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
   }catch(error){next(error)}
 });
 
@@ -4249,7 +4256,7 @@ async function currentDashboardAuthorization(session,client=pool){
     ...userLoginCandidates(user),
     String(session?.login||'').trim().toLowerCase(),
   ].filter(Boolean));
-  const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers)});
+  const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers),portal:session.userType==='Account User'?'accounts':undefined,selectedRole:session.role==='normal'&&session.assignedRole!=='Account User'?session.assignedRole:undefined});
   return {user,session:dashboardSessionFromProfile(profile)};
 }
 

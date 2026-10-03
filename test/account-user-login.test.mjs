@@ -13,11 +13,13 @@ test('Account User retains Accounts access after the profile refresh',()=>{
   assert.equal(ibossAccountsEligible({userType:'Mobile User',userGroup:'General User'}),false);
   assert.equal(ibossAccountsEligible({...user,adminLevel:'Manager'}),false);
 });
-test('Account User has only Accounts authority, never administrator or fleet write access',()=>{
+test('Account User has Accounts and scoped Directory, never administrator or fleet write access',()=>{
   const profile=resolveMobileAccess({user:{userType:'Account User',adminLevel:'Super Admin',tabAccess:'Masters',userGroup:'Account User'}});
   const session={...profile,role:profile.sessionRole};
   assert.equal(session.role,'normal');
   assert.equal(ibossAccountsAllowed(session),true);
+  assert.deepEqual(profile.permissions.desktopUserMenuAccess,['CD']);
+  assert.deepEqual(profile.permissions.mobileUserMenuAccess,['CD']);
   for(const permission of ['readRequests','viewDashboardRequests','viewEquipment','createRequests','editRequests','deleteRequests','closeRequests','verifyRequests'])assert.equal(profile.permissions[permission],false);
   assert.equal(profile.permissions.adminLevel,undefined);
   assert.equal(ibossAccountsAllowed({...session,permissions:{}}),false);
@@ -39,7 +41,7 @@ test('Accounts login checks server authority before issuing a session or passwor
 });
 test('selected login portal rejects cross-portal IDs before login, including missing portal',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  const start=server.indexOf("    if(req.body.portal==='accounts'");
+  const start=server.indexOf("    if(req.body.portal==='accounts'&&(profile");
   const end=server.indexOf('    if(!profile.userType)',start);
   const guard=new Function('req','profile','res','ibossAccountsAllowed',server.slice(start,end)+';return null;');
   const account=resolveMobileAccess({user:{userType:'Account User'}});
@@ -61,8 +63,8 @@ test('saving Account User clears inherited administrative and operational select
   const saved=apply({userGroup:'Account User',adminLevel:'Super Admin',desktopUserMenuAccess:'Requests',mobileUserMenuAccess:'Masters',read:true,edit:true});
   assert.equal(saved.userType,'Account User');
   assert.equal(saved.adminLevel,'');
-  assert.equal(saved.desktopUserMenuAccess,'');
-  assert.equal(saved.mobileUserMenuAccess,'');
+  assert.equal(saved.desktopUserMenuAccess,'CD');
+  assert.equal(saved.mobileUserMenuAccess,'CD');
   assert.equal(saved.edit,false);
   assert.equal(saved.read,false);
 });

@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {accountPrivileges} from '../account-role-access.mjs';
 import {BookUser,Contact,Wallet,Landmark,Network,Settings,BookOpen,Percent,ArrowLeft,RefreshCw} from 'lucide-react';
 import {ACCOUNT_VIEWS,ACCOUNT_SECTIONS} from '../iboss-accounts.mjs';
 import {purchaseOrderRange} from '../purchase-order-report.mjs';
@@ -13,17 +14,21 @@ import DrillPanel from './iboss-drill-panel.jsx';
 import {accountDrill,ACCOUNT_DRILLS} from '../iboss-drill.mjs';
 const SECTIONS=[['dashboard','Dashboard'],['masters','Masters'],['transactions','Transactions'],['merge','Report Merge']];
 const icons=[BookUser,Contact,Wallet,Landmark,Settings,Network,BookOpen,Percent];
-export default function IbossAccounts({token,ReportSection,initialSection='dashboard'}) {
- const [section,setSection]=useState(initialSection);
+export default function IbossAccounts({token,ReportSection,initialSection='dashboard',permissions={}}) {
+ const allowed=accountPrivileges(permissions);
+ const visibleSections=SECTIONS.filter(([,label])=>allowed.includes(label));
+ const accessKey=allowed.join('|');
+ const [requestedSection,setSection]=useState(initialSection);
+ const section=visibleSections.some(([key])=>key===requestedSection)?requestedSection:visibleSections[0]?.[0];
  const [view,setView]=useState('');
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
  const [drill,setDrill]=useState(null);
  const [mergeContext,setMergeContext]=useState(null);
- const dashboardOpen=(key,options={})=>{if(options.range){setRange(options.range);setDraft(options.range);}if(key==='merge'&&options.anchor){setDrill({chain:options.chain,key:options.anchor,focus:{step:'party',docNo:options.label}});return;}if(key==='merge'){setMergeContext(options);setSection('merge');setView('');return;}setSection(ACCOUNT_SECTIONS.masters.includes(key)?'masters':'transactions');open(key);};
+ const dashboardOpen=(key,options={})=>{const target=key==='merge'?'merge':ACCOUNT_SECTIONS.masters.includes(key)?'masters':'transactions';if(!visibleSections.some(([section])=>section===target))return;if(options.range){setRange(options.range);setDraft(options.range);}if(key==='merge'&&options.anchor){setDrill({chain:options.chain,key:options.anchor,focus:{step:'party',docNo:options.label}});return;}if(key==='merge'){setMergeContext(options);setSection('merge');setView('');return;}setSection(target);open(key);};
  const definition=ACCOUNT_VIEWS[view];
- useEffect(()=>{setSection(initialSection);setView('');setValidation('');},[initialSection]);
+ useEffect(()=>{setSection(initialSection);setView('');setDrill(null);setValidation('');},[initialSection,accessKey]);
  useEffect(()=>{
   if(!view)return;
   const controller=new AbortController();setData({rows:[],loading:true,error:''});
@@ -39,11 +44,12 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
   setData({rows:[],loading:true,error:''});setValidation('');setView(key);
  };
  const refresh=event=>{event.preventDefault();try{if(definition.dated)purchaseOrderRange(draft.from,draft.to);if(definition.asOf)purchaseOrderRange(draft.to,draft.to);setValidation('');setRange({...draft});setAttempt(value=>value+1);}catch(error){setValidation(error.message);}};
- const changeSection=(next,focus=false)=>{setSection(next);setView('');setValidation('');if(focus)queueMicrotask(()=>document.getElementById(`accounts-tab-${next}`)?.focus());};
- const sectionKeyDown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const index=SECTIONS.findIndex(([key])=>key===section),last=SECTIONS.length-1;changeSection(SECTIONS[event.key==='Home'?0:event.key==='End'?last:event.key==='ArrowLeft'?(index+last)%SECTIONS.length:(index+1)%SECTIONS.length][0],true);};
+ const changeSection=(next,focus=false)=>{if(!visibleSections.some(([key])=>key===next))return;setSection(next);setView('');setValidation('');if(focus)queueMicrotask(()=>document.getElementById(`accounts-tab-${next}`)?.focus());};
+ const sectionKeyDown=event=>{if(!visibleSections.length||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const index=visibleSections.findIndex(([key])=>key===section),last=visibleSections.length-1;changeSection(visibleSections[event.key==='Home'?0:event.key==='End'?last:event.key==='ArrowLeft'?(index+last)%visibleSections.length:(index+1)%visibleSections.length][0],true);};
+ if(!visibleSections.length)return <section className="iboss-accounts"><h1>Accounts</h1><p>No Accounts privileges are assigned. Contact your administrator.</p></section>;
  return <section className="reports-workspace stock-statement iboss-accounts">
   <h1><Landmark aria-hidden="true"/> Accounts</h1>
-  <div className="iboss-accounts-sections" role="tablist" aria-label="Accounts sections" onKeyDown={sectionKeyDown}>{SECTIONS.map(([key,label])=><button key={key} type="button" role="tab" id={`accounts-tab-${key}`} tabIndex={section===key?0:-1} aria-selected={section===key} aria-controls={`accounts-panel-${key}`} onClick={()=>changeSection(key)}>{label}</button>)}</div>
+  <div className="iboss-accounts-sections" role="tablist" aria-label="Accounts sections" onKeyDown={sectionKeyDown}>{visibleSections.map(([key,label])=><button key={key} type="button" role="tab" id={`accounts-tab-${key}`} tabIndex={section===key?0:-1} aria-selected={section===key} aria-controls={`accounts-panel-${key}`} onClick={()=>changeSection(key)}>{label}</button>)}</div>
   {section==='dashboard'?<div role="tabpanel" id="accounts-panel-dashboard" aria-labelledby="accounts-tab-dashboard"><IbossDashboard token={token} ReportSection={ReportSection} onOpen={dashboardOpen}/></div>:section==='merge'?<div role="tabpanel" id="accounts-panel-merge" aria-labelledby="accounts-tab-merge"><IbossReportMerge token={token} ReportSection={ReportSection} embedded initialChain={mergeContext?.chain||''} initialRange={mergeContext?.range}/></div>:<div className="iboss-accounts-panel" role="tabpanel" id={`accounts-panel-${section}`} aria-labelledby={`accounts-tab-${section}`}>
    <h2>{section==='transactions'?'Transactions':'Masters'}</h2>
    <div className="iboss-accounts-grid">{ACCOUNT_SECTIONS[section].map((key,index)=>{const entry=ACCOUNT_VIEWS[key],Icon=icons[index%icons.length];return <button type="button" key={key} aria-pressed={view===key} onClick={()=>open(key)}><span className={`iboss-account-icon tone-${index%icons.length}`}><Icon aria-hidden="true"/></span><span>{entry.title}</span></button>;})}</div>

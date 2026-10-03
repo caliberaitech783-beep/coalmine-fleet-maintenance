@@ -113,6 +113,7 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .accounts-user-workspace > header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:20px 28px;background:linear-gradient(110deg,#522e90,#ef4960);color:#fff}
 .accounts-user-workspace > header nav{display:flex;gap:12px}
 .accounts-user-workspace > header button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:8px}
+.accounts-user-workspace > header button.active{border-color:#fff;background:#ffffff22;box-shadow:inset 0 -2px #fff}
 .accounts-user-workspace > main{padding:24px}
 @media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{margin-top:16px}.login-application-links > a,.login-application-links > button{min-width:0;flex:1;padding:12px}.accounts-user-workspace > main{padding:12px}}
 /* Keep the archive outside navigation styling, with a single full-page scroll area. */

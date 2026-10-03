@@ -1,3 +1,4 @@
+import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 export const MOBILE_USER_ROLES = [
   "Production User",
   "Maintenance User",
@@ -16,7 +17,7 @@ export const GENERAL_USER_MENU_OPTIONS = [
   "Audit Trail",
   "Tickets",
 ];
-export const GENERAL_USER_DEFAULT_MENUS = [];
+export const GENERAL_USER_DEFAULT_MENUS = ["CD"];
 
 export function generalUserMenuSelection(record = {}, view = "desktop") {
   const field = `${view}UserMenuAccess`;
@@ -24,7 +25,7 @@ export function generalUserMenuSelection(record = {}, view = "desktop") {
     return view === "mobile" ? generalUserMenuSelection(record, "desktop") : [...GENERAL_USER_DEFAULT_MENUS];
   }
   const values = Array.isArray(record[field]) ? record[field] : String(record[field] || "").split(/\s*[|,]\s*/);
-  return [...new Set(values.map((value) => String(value).trim()).filter((value) => GENERAL_USER_MENU_OPTIONS.includes(value)))];
+  return [...new Set([...values.map((value) => String(value).trim()).filter((value) => GENERAL_USER_MENU_OPTIONS.includes(value)),"CD"])];
 }
 
 // API access is the union of the configured desktop and mobile menus.
@@ -93,12 +94,24 @@ export function loginRecordCandidates(rows = [], username = "") {
   return rows.filter((row) => userLoginCandidates(row?.record_data || row).includes(normalized));
 }
 
-export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
+export function resolveMobileAccess({ user = {}, privilege = {}, portal, selectedRole } = {}) {
+  const roles=assignedUserRoles(user);
+  if(portal==='accounts') {
+    if(!hasAccountRole(user))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    return {sessionRole:'normal',userType:'Account User',assignedRole:'Account User',permissions:{ibossAccounts:true,accountAccess:accountPrivileges(user),desktopUserMenuAccess:['CD'],mobileUserMenuAccess:['CD'],readRequests:false,viewDashboardRequests:false,viewEquipment:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false}};
+  }
+  if(Object.hasOwn(user,'userRoles')&&!String(user.userType||'').toLowerCase().includes('super')){
+    const fleetRoles=roles.filter(role=>role!=='Account User');
+    const chosen=selectedRole||fleetRoles[0];
+    if(selectedRole&&!fleetRoles.includes(selectedRole))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    if(!chosen&&!hasAccountRole(user))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    user={...user,userType:chosen?'Mobile User':hasAccountRole(user)?'Account User':'',userGroup:chosen||''};
+  }
   const accountType = normalizeAccountType(
     user.userType || user.accessType || user.accountType || user.role || privilege.accessType,
   );
   if (accountType === "accounts") {
-    return {sessionRole:"normal",userType:"Account User",assignedRole:"Account User",permissions:{ibossAccounts:true,readRequests:false,viewDashboardRequests:false,viewAllRequests:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false,viewEquipment:false,viewRepairTypes:false}};
+    return {sessionRole:"normal",userType:"Account User",assignedRole:"Account User",permissions:{ibossAccounts:true,accountAccess:accountPrivileges(user),desktopUserMenuAccess:["CD"],mobileUserMenuAccess:["CD"],readRequests:false,viewDashboardRequests:false,viewAllRequests:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false,viewEquipment:false,viewRepairTypes:false}};
   }
   if (accountType === "super") {
     const adminAccess = adminAccessPermissions(user);
@@ -117,6 +130,8 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
         viewEquipment: true,
         viewRepairTypes: true,
         ...adminAccess,
+        accountAccess:accountPrivileges(user),
+        explicitAccountRole:hasAccountRole(user),
       },
     };
   }
@@ -167,9 +182,10 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       },
     };
   }
-  const accessList=(key,fallback=[])=>Object.hasOwn(user,key)
-    ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean))]
-    : fallback;
+  const accessList=(key,fallback=[])=>[...new Set(Object.hasOwn(user,key)
+    ? String(user[key]||"").split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean)
+    : fallback)];
+  const menuAccessList=(key,fallback=[])=>[...new Set([...accessList(key,fallback),"CD"])];
   const roleRequestMenus=assignedRole==="Production User"
     ? ["View requests","Create request","Closed history"]
     : maintenance
@@ -191,9 +207,9 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       // is site-scoped by the masters endpoint; repair types are reference data.
       viewEquipment: true,
       viewRepairTypes: true,
-      desktopUserMenuAccess:accessList("desktopUserMenuAccess",["Requests","Tickets"]),
+      desktopUserMenuAccess:menuAccessList("desktopUserMenuAccess",["Requests","Tickets"]),
       desktopUserRequestAccess:[...new Set([...accessList("desktopUserRequestAccess",roleRequestMenus),"Closed history"])],
-      mobileUserMenuAccess:accessList("mobileUserMenuAccess",accessList("desktopUserMenuAccess",["Requests","Tickets"])),
+      mobileUserMenuAccess:menuAccessList("mobileUserMenuAccess",accessList("desktopUserMenuAccess",["Requests","Tickets"])),
       mobileUserRequestAccess:[...new Set([...accessList("mobileUserRequestAccess",accessList("desktopUserRequestAccess",roleRequestMenus)),"Closed history"])],
     },
   };
