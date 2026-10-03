@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Landmark,Wallet,BookOpen,Clock,FileText,Shield,Users,ArrowUpRight,RefreshCw,ChevronRight,Calendar,AlertTriangle,Percent,Building2} from 'lucide-react';
 import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
 import {purchaseOrderRange} from '../purchase-order-report.mjs';
-import {indiaDateTimeInputValue} from '../report-date-range.mjs';
+import {dashboardFinancialYearRange,DASHBOARD_REFRESH_MS} from './iboss-dashboard-refresh.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
 import DateInput from './date-input.mjs';
 import DrillPanel from './iboss-drill-panel.jsx';
@@ -43,10 +43,15 @@ function MetricDetails({metric,range,token,ReportSection,preview,close}){
 
 export default function IbossDashboard({token,ReportSection,onOpen:openReport,preview=null}){
  const [mode,setMode]=useState('management');
- const [range,setRange]=useState(()=>preview?{from:preview.from,to:preview.to}:{from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)});
+ const [range,setRange]=useState(()=>preview?{from:preview.from,to:preview.to}:dashboardFinancialYearRange());
  const onOpen=(key,options={})=>openReport(key,{range,...options});
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState(''),[selected,setSelected]=useState(null);
  const [data,setData]=useState(preview?{...preview,loading:false}:{loading:true});
+ useEffect(()=>{
+  if(preview||data.loading)return;
+  const timer=setInterval(()=>setAttempt(value=>value+1),DASHBOARD_REFRESH_MS);
+  return ()=>clearInterval(timer);
+ },[preview,data.loading,attempt]);
  useEffect(()=>{
   if(preview)return;
   const controller=new AbortController();setData({loading:true});
@@ -66,6 +71,7 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
   <div className="iboss-dash-title"><div><small>IBOSS / ACCOUNTS</small><h2>Finance at a glance</h2><p>Balances, commitments and follow-up — one place to start your day.</p></div><div className="iboss-dash-mode" role="group" aria-label="Dashboard focus"><button type="button" aria-pressed={mode==='management'} onClick={()=>setMode('management')}>Management</button><button type="button" aria-pressed={mode==='accounts'} onClick={()=>setMode('accounts')}>Accounts team</button></div></div>
   <form className="iboss-dash-controls" onSubmit={refresh}><label>Activity from<DateInput value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To / planning date<DateInput value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label><button type="submit" disabled={data.loading}><RefreshCw/>{data.loading?'Loading…':preview?'Apply preview dates':'Refresh'}</button><span><i className="iboss-dash-status"/>{preview?'Example data':data.checkedAt?`Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})}`:'Connecting to Oracle'}</span></form>
   {validation&&<p role="alert">{validation}</p>}
+  {!preview&&<p className="iboss-dash-note">Automatically refreshes from Oracle every 10 minutes while this dashboard is open. Your selected date range is retained.</p>}
   {data.loading?<div className="iboss-dash-loading" role="status">Loading balances, commitments and source reports from Oracle…</div>:data.error?<div className="iboss-dash-loading" role="alert">{data.error}<button type="button" onClick={()=>setAttempt(value=>value+1)}>Retry</button></div>:<>
    <div className="iboss-dash-scope"><span>Current balances + activity from {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)}</span><span>Amounts in ERP reporting units · L = lakh · Cr = crore</span></div>
    <div className="iboss-dash-kpis">{data.cards.map(card=>{const Icon=iconByKind[card.kind]||Wallet;return <button type="button" className={`iboss-dash-kpi ${card.kind}`} key={card.key} onClick={()=>select(card.key)} aria-label={`Open ${card.title} records`}><span className="iboss-dash-kpi-top"><span>{card.title}</span><Icon/></span><strong>{dashboardAmount(card.amount)}</strong><span className="iboss-dash-kpi-count">{card.count.toLocaleString('en-IN')} {units[card.key]||'bills'}<ArrowUpRight/></span><small>{card.note}</small></button>;})}</div>
