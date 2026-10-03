@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {MERGE_CHAINS,MAX_MERGE_STEPS,mergeChain,resolveSelection,mergeStatements,buildMergedReport,buildTrail} from '../iboss-report-merge.mjs';
 
-import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
+import {ACCOUNT_VIEWS,ACCOUNT_SECTIONS} from '../iboss-accounts.mjs';
 
 const range={from:'2026-04-01',to:'2026-09-30'};
 
@@ -22,7 +22,7 @@ test('selections above 10 reports are refused, and vehicles match on letters and
 
 test('only master lookups and the unlinked asset reports stay outside Report Merge',()=>{
  const merged=new Set(Object.values(MERGE_CHAINS).flatMap(chain=>chain.steps.map(step=>step.title.replace(' (Banks)',''))));
- const outside=Object.values(ACCOUNT_VIEWS).map(view=>view.title).filter(title=>!merged.has(title));
+ const outside=Object.values(ACCOUNT_SECTIONS).flat().map(key=>ACCOUNT_VIEWS[key].title).filter(title=>!merged.has(title));
  assert.deepEqual(outside.sort(),['Asset Details Report','Asset Register','Chart Of Accounts','Cost Centre Master','Work Centre Master']);
 });
 

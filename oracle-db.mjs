@@ -51,8 +51,8 @@ let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
 
-export async function oracleAccounts(view,from,to,page=0) {
-  const query=accountPageQuery(view,from,to,page);
+export async function oracleAccounts(view,from,to,page=0,search='') {
+  const query=accountPageQuery(view,from,to,page,search);
   const pool=await oraclePool();const connection=await pool.getConnection();
   try {
     connection.callTimeout=60000;

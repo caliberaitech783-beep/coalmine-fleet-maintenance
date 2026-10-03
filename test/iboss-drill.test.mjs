@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {ACCOUNT_DRILLS,accountDrill,vehicleKey} from '../iboss-drill.mjs';
-import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
+import {ACCOUNT_VIEWS,ACCOUNT_SECTIONS} from '../iboss-accounts.mjs';
 import {MERGE_CHAINS,buildTrail,mergeStatements} from '../iboss-report-merge.mjs';
 
 test('every drill column exists in its Accounts report and opens a real step of a real trail',()=>{
@@ -17,7 +17,7 @@ test('every drill column exists in its Accounts report and opens a real step of 
 });
 
 test('only reports with nothing to trace stay without drill-down',()=>{
- const without=Object.keys(ACCOUNT_VIEWS).filter(view=>!ACCOUNT_DRILLS[view]).sort();
+ const without=Object.values(ACCOUNT_SECTIONS).flat().filter(view=>!ACCOUNT_DRILLS[view]).sort();
  assert.deepEqual(without,['asset-details','asset-register','bank-guarantee-nature','bank-guarantee-type','cost-centre','work-centre']);
 });
 

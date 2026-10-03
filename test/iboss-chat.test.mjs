@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chatOptions,matchChatQuestion,filterChatOptions} from '../src/iboss-chat-options.mjs';
+import {chatOptions,matchChatQuestion,filterChatOptions,vendorSearchText} from '../src/iboss-chat-options.mjs';
 import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
 import {readFileSync} from 'node:fs';
 import React from 'react';
@@ -27,8 +27,19 @@ test('guided questions resolve only supported requests without silently dropping
 test('chat renders suggested questions and date controls before fetching',async()=>{
  const source=readFileSync(new URL('../src/iboss-chat.jsx',import.meta.url),'utf8').replace(/^import .*;\r?$/gm,'').replace('export default function','function');
  const {code}=await transformWithOxc(source,'chat.jsx',{jsx:{runtime:'classic'}});
- const scope={React,useEffect:React.useEffect,useRef:React.useRef,useState:React.useState,chatOptions,filterChatOptions,indiaDateTimeInputValue,DateInput:()=>null};
+ const scope={React,useEffect:React.useEffect,useRef:React.useRef,useState:React.useState,chatOptions,filterChatOptions,vendorSearchText,indiaDateTimeInputValue,DateInput:()=>null};
  const Component=new Function(...Object.keys(scope),`${code};return IbossChat;`)(...Object.values(scope));
  const markup=renderToStaticMarkup(React.createElement(Component,{allowed:['Transactions']}));
  assert.match(markup,/Accounts Chat Bot/);assert.match(markup,/bank closing/);assert.match(markup,/To \/ balance date/);assert.doesNotMatch(markup,/Fetching ERP records/);
+});
+
+test('payment, EMI, aliases and spelling variations suggest the correct summaries',()=>{
+ const options=chatOptions(['Transactions']);
+ for(const text of ['payment','paymen','paymant','advise']){
+  const result=filterChatOptions(text,options);assert.ok(result.some(o=>o.view==='chat-payment-summary'),text);
+ }
+ const payment=filterChatOptions('payment',options);assert.ok(payment.some(o=>o.view==='chat-payment-done'));assert.ok(payment.some(o=>o.view==='chat-payment-pending'));
+ assert.equal(filterChatOptions('how many emi paid pending',options)[0].view,'chat-emi-summary');
+ assert.equal(vendorSearchText('closing balance for vendor ABC'),'ABC');
+ assert.deepEqual(filterChatOptions('zzzzunmatched',options),[]);
 });
