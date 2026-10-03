@@ -1058,7 +1058,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
-  const canViewDirectory = activeManagerRoles.includes("Project Manager") || accessAllows(viewPermissions.tabAccess, "CD");
+  // Directory is a core account-scoped page. Keep it visible even for sessions
+  // issued before the required-menu migration; the API enforces their scope.
+  const canViewDirectory = true;
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;
@@ -11063,7 +11065,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     transfers: "Vehicle Transfer Control",
   };
   const canCreate = isProduction || isMaintenance;
-  const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets"),showDirectoryMenu=canSeeUserMenu("CD");
+  const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets"),showDirectoryMenu=true;
   const showDashboardMenu=!isGeneral||canSeeUserMenu("Dashboard"),showReportsMenu=!isGeneral||canSeeUserMenu("Reports");
   useEffect(()=>{
     if(!isGeneral||embedded)return;

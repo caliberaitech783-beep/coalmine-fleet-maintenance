@@ -50,7 +50,8 @@ test('C-Dir region-first filters, All/My Sites tabs and Project Manager leaderbo
   assert.match(html,/id="gfRegion"[\s\S]*?id="gfSite"[\s\S]*?id="gfDept"[\s\S]*?id="gfDesig"[\s\S]*?id="gfName"/);
   assert.match(html,/All[\s\S]*?My Site\(s\)/);
   assert.match(html,/Project Manager Site Coverage/);
-  assert.match(client,/activeManagerRoles\.includes\("Project Manager"\) \|\| accessAllows\(viewPermissions\.tabAccess, "CD"\)/);
+  assert.match(client,/const canViewDirectory = true/);
+  assert.match(client,/showDirectoryMenu=true/);
 });
 
 test('C-Dir expanded filters stay in document flow and use responsive grids',()=>{
