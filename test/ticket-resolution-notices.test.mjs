@@ -50,5 +50,5 @@ test('notice persists until successful manual close and late polling cannot rest
   assert.doesNotMatch(source,/setTimeout|onMouseLeave|onKeyDown/);
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.match(main,/<TicketResolutionNotices key=\{token\} token=\{token\} \/>/);
-  assert.equal((main.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g)||[]).length,2);
+  assert.equal((main.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g)||[]).length,3);
 });

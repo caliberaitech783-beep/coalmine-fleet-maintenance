@@ -10,6 +10,7 @@ export function ibossAccountsEligible(user = {}) {
 }
 
 export function ibossAccountsAllowed(session = {}, permissions = session.permissions || {}) {
+  if (session.role === 'normal' && session.userType === 'Account User' && session.assignedRole === 'Account User') return permissions.ibossAccounts === true;
   const allows = (selection, name) => selection == null || selection.includes(name);
   return session.role === 'super' && permissions.ibossAccounts === true
     && String(permissions.adminLevel || '').trim().toLowerCase() !== 'manager'

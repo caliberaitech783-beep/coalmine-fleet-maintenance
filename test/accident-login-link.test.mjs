@@ -2,15 +2,16 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("the Accident application link sits in the blue panel beside Secure access", async () => {
+test("Accident and Accounts links sit beneath the logo", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
-  const styles = await readFile(new URL("../src/style.css", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/user-sessions.css", import.meta.url), "utf8");
 
-  const proofRow = source.match(/<div className="login-proof">[\s\S]*?<\/div>\s*<\/div>/);
+  const proofRow = source.match(/<div className="login-application-links">[\s\S]*?<\/div>/);
   assert.ok(proofRow, "expected the login-proof row in the blue panel");
 
   // The link lives in the proof row, immediately after Secure access.
-  assert.match(proofRow[0], /Secure access<\/strong>Role-based control<\/span><\/div>\s*<a className="login-accident-link"/);
+  assert.match(source, /<CaliberBrand className="login-brand"[^>]*\/>\s*<div className="login-application-links">/);
+  assert.match(proofRow[0], /login-accounts-link/);
   assert.match(proofRow[0], /href="https:\/\/bdms\.cmll\.in"/);
   assert.match(proofRow[0], /<AlertTriangle \/>/);
   assert.match(proofRow[0], /<strong>Accident<\/strong>Open application/);
@@ -25,9 +26,9 @@ test("the Accident application link sits in the blue panel beside Secure access"
   assert.doesNotMatch(styles, /\.login-auth-tabs\{grid-template-columns:repeat\(3,/);
 
   // Styled as an actionable item on the dark panel.
-  assert.match(styles, /\.login-proof>\.login-accident-link\{/);
-  assert.match(styles, /\.login-proof>\.login-accident-link:hover\{/);
-  assert.match(styles, /\.login-proof>\.login-accident-link:focus-visible\{/);
+  assert.match(styles, /\.login-application-links > a,\.login-application-links > button\{/);
+  assert.match(styles, /\.login-application-links > :hover\{/);
+  assert.match(styles, /\.login-application-links > :focus-visible\{/);
 });
 
 test("accident reporting stays reachable when the proof row is hidden on phones", async () => {

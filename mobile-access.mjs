@@ -41,6 +41,7 @@ export function permissionEnabled(value) {
 
 export function normalizeAccountType(value) {
   const text = String(value || "").trim().toLowerCase();
+  if (text === "account user") return "accounts";
   if (text.includes("super") || text === "admin" || text.includes("admin user")) return "super";
   if (text.includes("mobile") || text.includes("normal")) return "mobile";
   return "";
@@ -96,6 +97,9 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
   const accountType = normalizeAccountType(
     user.userType || user.accessType || user.accountType || user.role || privilege.accessType,
   );
+  if (accountType === "accounts") {
+    return {sessionRole:"normal",userType:"Account User",assignedRole:"Account User",permissions:{ibossAccounts:true,readRequests:false,viewDashboardRequests:false,viewAllRequests:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false,viewEquipment:false,viewRepairTypes:false}};
+  }
   if (accountType === "super") {
     const adminAccess = adminAccessPermissions(user);
     return {

@@ -204,7 +204,7 @@ test("The login gate blocks unconnected users and admins manage exemptions", () 
   assert.match(gate, /web\.telegram\.org/);
   assert.match(gate, /onClick=\{logout\}/);
   assert.equal((source.match(/<TelegramGate token=\{token\} logout=\{logout\} \/>/g) || []).length, 1);
-  assert.equal((source.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g) || []).length, 2);
+  assert.equal((source.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g) || []).length, 3);
   assert.ok(server.includes("required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available})"));
   assert.ok(server.includes("app.put('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator"));
   assert.ok(server.includes("action:'Save Telegram login requirement'"));
