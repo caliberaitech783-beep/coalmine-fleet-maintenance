@@ -5,7 +5,7 @@ import {ibossAccountsEligible,ibossAccountsAllowed} from '../iboss-access.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
 const session=user=>{const p=resolveMobileAccess({user:{userType:'Super User',...user}});return {role:p.sessionRole,permissions:p.permissions};};
 test('IBOSS admits explicit administrators, directors and Accounts staff',()=>{
- for(const user of [{adminLevel:'Admin'},{adminLevel:'Super Admin'},{adminLevel:'Manager',designation:'Director'},{adminLevel:'Manager',department:'Accounts'},{adminLevel:'Manager',designation:'Senior Accountant'},{adminLevel:'Manager',department:'Finance & Accounts'}])assert.equal(ibossAccountsAllowed(session(user)),true,JSON.stringify(user));
+ for(const user of [{adminLevel:'Admin'},{adminLevel:'Super Admin'},{designation:'Director'},{department:'Accounts'},{designation:'Senior Accountant'},{department:'Finance & Accounts'}])assert.equal(ibossAccountsAllowed(session(user)),true,JSON.stringify(user));
 });
 test('broad Reports and legacy default Admin do not grant IBOSS',()=>{
  for(const user of [{},{adminLevel:'Manager',managerRole:'Project Manager'},{adminLevel:'Manager',department:'Production'},{adminLevel:'Manager',designation:'MIS Manager'},{adminLevel:'Manager',employee:'Director Accounts',login:'accounts'}])assert.equal(ibossAccountsAllowed(session({...user,reportAccess:'Reports | Accounts'})),false,JSON.stringify(user));
@@ -17,6 +17,16 @@ test('explicit menu restrictions still apply and responsive view cannot bypass a
  assert.equal(ibossAccountsAllowed(session({adminLevel:'Admin',tabAccess:[]})),false);
  assert.equal(ibossAccountsAllowed(session({adminLevel:'Admin',reportAccess:[]})),false);
  assert.equal(ibossAccountsAllowed(session({adminLevel:'Admin'}),{ibossAccounts:false}),false);
+});
+
+test('Manager profiles are denied even with matching assignments or older session grants',()=>{
+ for(const extra of [{designation:'Director'},{department:'Accounts'},{designation:'Senior Accountant'},{userType:'Admin'},{managerRole:'Project Manager'}]){
+  const user={...extra,adminLevel:'Manager'};
+  assert.equal(ibossAccountsEligible(user),false);
+  assert.equal(ibossAccountsAllowed(session(user)),false);
+ }
+ assert.equal(ibossAccountsAllowed({role:'super',permissions:{adminLevel:'Manager',ibossAccounts:true}}),false);
+ assert.equal(ibossAccountsAllowed({role:'super',permissions:{adminLevel:' manager ',ibossAccounts:true,reportAccess:['Accounts']}}),false);
 });
 test('all Accounts endpoints and navigation share the eligibility gate',()=>{
  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
