@@ -5,8 +5,6 @@ import {cdirViewerContext} from '../cdir-access.mjs';
 
 const html=fs.readFileSync(new URL('../public/cd/caliber-directory.html',import.meta.url),'utf8');
 const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-const themeClient=fs.readFileSync(new URL('../public/cd/directory-theme.js',import.meta.url),'utf8');
-const topbarCss=fs.readFileSync(new URL('../src/topbar.css',import.meta.url),'utf8');
 
 const sites=[
   {id:'sasti-oc',label:'Sasti OC',dataKey:'SASTI'},
@@ -28,6 +26,9 @@ test('C-Dir gives Project Managers and General Users a site-scoped profile witho
   assert.equal(general.profile,'general-user');
   assert.equal('login' in general,false);
   assert.equal('permissions' in general,false);
+
+  const mis=cdirViewerContext({session:{role:'normal',assignedRole:'MIS User'},user:{userGroup:'MIS User',site:'Sasti OC'},sites});
+  assert.deepEqual(mis,{profile:'site-user',label:'MIS User',mySitesEnabled:true,siteIds:['sasti-oc'],sites:['Sasti OC']});
 });
 
 test('C-Dir region-first filters, All/My Sites tabs and Project Manager leaderboard are present',()=>{
@@ -46,13 +47,13 @@ test('C-Dir expanded filters stay in document flow and use responsive grids',()=
   assert.match(html,/overflow-x:hidden/);
 });
 
-test('C-Dir uses native embedded chrome and delegates scrolling to BDMS',()=>{
-  assert.match(client,/src="\/cd\/caliber-directory\.html\?embedded=1"/);
-  assert.match(client,/event\.data\?\.type !== "cdir:resize"/);
-  assert.match(client,/scrolling="no"/);
-  assert.match(themeClient,/root\.dataset\.embedded = embedded \? 'true' : 'false'/);
-  assert.match(themeClient,/postMessage\(\{ type: 'cdir:resize', height \}/);
-  assert.match(html,/html\[data-embedded="true"\] \.tb-logo,[\s\S]*?\.tb-clock\{display:none;\}/);
-  assert.match(html,/html\[data-embedded="true"\] \.hero-band\{[\s\S]*?width:100%/);
-  assert.match(topbarCss,/\.caliber-directory-page \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/);
+test('C-Dir is a native application page and does not render the legacy iframe',()=>{
+  const component=fs.readFileSync(new URL('../src/caliber-directory-page.jsx',import.meta.url),'utf8');
+  assert.doesNotMatch(client,/src="\/cd\/caliber-directory\.html/);
+  assert.doesNotMatch(component,/<iframe\b/);
+  assert.match(client,/import CaliberDirectoryPage from "\.\/caliber-directory-page\.jsx"/);
+  assert.match(client,/<CaliberDirectoryPage token=\{session\?\.token \|\| authToken\}/);
+  assert.match(component,/All regions[\s\S]*?WCL[\s\S]*?NCL/);
+  assert.match(component,/My Site\(s\)/);
+  assert.match(component,/Project Manager Site Coverage/);
 });

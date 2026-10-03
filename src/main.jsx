@@ -304,6 +304,7 @@ import "./ticket-status-tabs.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
+import CaliberDirectoryPage from "./caliber-directory-page.jsx";
 import StockStatement from './stock-statement.jsx';
 import PurchaseOrderReport from './purchase-order-report.jsx';
 import GrnRegister from './grn-register.jsx';
@@ -9869,33 +9870,6 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     </div>{remainingWorkflowRows > 0 && <div className="workflow-table-load-more" role="status"><span>Showing {visibleWorkflowRows.length} of {sortedRows.length} records</span><button type="button" onClick={() => setVisibleRowLimit((limit) => Math.min(limit + WORKFLOW_RENDER_BATCH, sortedRows.length))}>Show next {Math.min(WORKFLOW_RENDER_BATCH, remainingWorkflowRows)}</button></div>}</>
   );
 }
-function CaliberDirectoryPage() {
-  const frameRef = useRef(null);
-  const [frameHeight, setFrameHeight] = useState(900);
-  useEffect(() => {
-    const resizeDirectory = (event) => {
-      if (event.origin !== window.location.origin || event.source !== frameRef.current?.contentWindow || event.data?.type !== "cdir:resize") return;
-      const nextHeight = Number(event.data.height);
-      if (!Number.isFinite(nextHeight) || nextHeight < 300) return;
-      setFrameHeight(Math.min(50000, Math.ceil(nextHeight)));
-    };
-    window.addEventListener("message", resizeDirectory);
-    return () => window.removeEventListener("message", resizeDirectory);
-  }, []);
-  return (
-    <section className="caliber-directory-page" aria-label="Caliber Directory">
-      <iframe
-        ref={frameRef}
-        title="Caliber Directory"
-        src="/cd/caliber-directory.html?embedded=1"
-        loading="eager"
-        scrolling="no"
-        style={{height: `${frameHeight}px`}}
-      />
-    </section>
-  );
-}
-
 function MeterReadingFields({ request, stage, equipmentRecords = [], required = false, missingOnly = false }) {
   const readings = requestMeterReadings(request, stage, equipmentRecords);
   const title = stage === "opening" ? "Opening" : "Closing";
@@ -11213,7 +11187,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
-      {!embedded&&section==="directory"&&showDirectoryMenu&&<><div className="report-category-tabs"><button type="button" onClick={() => setDirectoryView("directory")}>Directory</button><button type="button" onClick={() => setDirectoryView("tenure")}>Employee Tenure Report</button></div>{directoryView === "tenure" ? <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} /> : <CaliberDirectoryPage />}</>}
+      {!embedded&&section==="directory"&&showDirectoryMenu&&<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={directoryView === "directory"} className={directoryView === "directory" ? "active" : ""} onClick={() => setDirectoryView("directory")}><BookUser />Directory</button><button type="button" role="tab" aria-selected={directoryView === "tenure"} className={directoryView === "tenure" ? "active" : ""} onClick={() => setDirectoryView("tenure")}><UsersRound />Employee Tenure Report</button></div>{directoryView === "tenure" ? <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} /> : <CaliberDirectoryPage token={session?.token || authToken} />}</>}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
@@ -11752,7 +11726,7 @@ function App() {
   ) : renderedActive === "Employee Tenure Report" ? (
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "CD" ? (
-    <CaliberDirectoryPage />
+    <CaliberDirectoryPage token={session?.token || authToken} />
   ) : renderedActive === "Manager Profile" ? (
     <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
   ) : renderedActive === "Tickets" ? (

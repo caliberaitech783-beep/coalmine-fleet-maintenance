@@ -898,14 +898,6 @@
   box-shadow: none;
 }
 
-.caliber-directory-page iframe {
-  display: block;
-  width: 100%;
-  min-height: calc(100vh - 120px);
-  border: 0;
-  background: transparent;
-  overflow: hidden;
-}
 
 /* Administration lists eleven entries since the backup pages joined it. Keep the
    whole menu on screen on a laptop by scrolling inside it rather than running
