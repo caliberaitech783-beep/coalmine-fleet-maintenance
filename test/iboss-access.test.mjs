@@ -33,7 +33,8 @@ test('all Accounts endpoints and navigation share the eligibility gate',()=>{
  const section=server.slice(server.indexOf("app.get('/api/reports/iboss-accounts/:view'"),server.indexOf("app.get('/api/reports/po-grn-reconciliation'"));
  assert.equal((section.match(/if\(!await accountsMergeAllowed\(req\)\)/g)||[]).length,5);
  assert.match(section,/currentUserRecord\(req.session\)/);
- assert.match(section,/resolveMobileAccess\(\{user\}\)/);
+ assert.match(section,/resolveMobileAccess\(\{user,portal:/);
+ assert.match(section,/accountSectionAllowed/);
  const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.match(main,/filter\(\(\)=>ibossAccountsAllowed\(session,viewPermissions\)\)/);
  assert.match(main,/\["Accounts","Accounts Masters","Accounts Transactions"\].includes\(name\)\) return ibossAccountsAllowed/);

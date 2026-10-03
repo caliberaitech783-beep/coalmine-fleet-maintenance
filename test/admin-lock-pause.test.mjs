@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import * as policy from '../admin-lock-policy.mjs';
+import {assignedUserRoles,hasAccountRole} from '../account-role-access.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const extract=(start,end)=>{
@@ -80,7 +81,7 @@ function loginHarness({paused=true,level='Admin',mustChangePassword=false}={}){
     loginRecordCandidates:(rows,username)=>rows.filter(row=>row.record_data.login===username),
     userLoginCandidates:record=>[record.login],
     verifyPassword:(password,hash)=>{passwordChecks.push({password,hash});return password==='correct-test-password'&&hash==='test-password-hash';},
-    privilegeForUser:()=>({}),
+    assignedUserRoles,hasAccountRole,privilegeForUser:()=>({}),
     resolveMobileAccess:()=>({sessionRole:'super',userType:'Super User',assignedRole:null,permissions:{adminLevel:level}}),
     isLockableAdmin:policy.isLockableAdmin,
     activeAdminLockIncidents:async()=>{incidentReads++;return [structuredClone(existingIncident)];},

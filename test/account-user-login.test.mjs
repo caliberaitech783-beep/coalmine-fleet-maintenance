@@ -39,7 +39,7 @@ test('Accounts login checks server authority before issuing a session or passwor
 });
 test('selected login portal rejects cross-portal IDs before login, including missing portal',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  const start=server.indexOf("    if(req.body.portal==='accounts'");
+  const start=server.indexOf("    if(req.body.portal==='accounts'&&(profile");
   const end=server.indexOf('    if(!profile.userType)',start);
   const guard=new Function('req','profile','res','ibossAccountsAllowed',server.slice(start,end)+';return null;');
   const account=resolveMobileAccess({user:{userType:'Account User'}});

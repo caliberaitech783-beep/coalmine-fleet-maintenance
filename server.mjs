@@ -1,10 +1,11 @@
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
-import {ibossAccountsEligible,ibossAccountsAllowed} from './iboss-access.mjs';
+import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
+import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
 import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
-import {accountView} from './iboss-accounts.mjs';
+import {accountView,ACCOUNT_SECTIONS} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
 import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
@@ -2199,7 +2200,12 @@ app.post('/api/login',async(req,res,next)=>{
     const login=String(employee.login||userLoginCandidates(employee)[0]||username).trim();
     const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),username]);
     const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
-    const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
+    const fleetRoles=assignedUserRoles(employee).filter(role=>role!=='Account User');
+    const desktopAccount=String(employee.userType||'').toLowerCase().includes('super');
+    if(req.body.portal==='accounts'&&!hasAccountRole(employee))return res.status(403).json({error:'This ID is not assigned to Accounts. Select Fleet operations.'});
+    if(req.body.portal!=='accounts'&&!desktopAccount&&fleetRoles.length>1&&!req.body.selectedRole)return res.json({requiresRoleSelection:true,roles:fleetRoles});
+    if(req.body.portal!=='accounts'&&req.body.selectedRole&&!fleetRoles.includes(req.body.selectedRole))return res.status(403).json({error:'This workspace is not assigned to your ID.'});
+    const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers),portal:req.body.portal,selectedRole:req.body.selectedRole});
     req.audit={
       actorLogin:login,
       actorName:employee.employee,
@@ -3913,8 +3919,9 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
 
 const accountsMergeAllowed=async req=>{
   const user=await currentUserRecord(req.session);
-  const profile=resolveMobileAccess({user});
-  return ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+  const profile=resolveMobileAccess({user,portal:req.session.userType==='Account User'?'accounts':undefined});
+  const section=req.params.view?(ACCOUNT_SECTIONS.masters.includes(req.params.view)?'Masters':'Transactions'):req.params.chain?'Report Merge':'Dashboard';
+  return accountSectionAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions},section);
 };
 const accountsMergeFailed=(res,error)=>{
   if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
@@ -4223,7 +4230,7 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
     const record=rows[0]?.record_data||{};
     const location=assignedUserSiteName(record);
     const designation=flowDesignationForUser(record,resolveMobileAccess({user:record}));
-    res.json({ibossAccounts:ibossAccountsEligible(record),location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
+    res.json({ibossAccounts:ibossAccountsEligible(record),accountAccess:accountPrivileges(record),location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
   }catch(error){next(error)}
 });
 
@@ -4249,7 +4256,7 @@ async function currentDashboardAuthorization(session,client=pool){
     ...userLoginCandidates(user),
     String(session?.login||'').trim().toLowerCase(),
   ].filter(Boolean));
-  const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers)});
+  const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers),portal:session.userType==='Account User'?'accounts':undefined,selectedRole:session.role==='normal'&&session.assignedRole!=='Account User'?session.assignedRole:undefined});
   return {user,session:dashboardSessionFromProfile(profile)};
 }
 

@@ -1,3 +1,4 @@
+import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 export const MOBILE_USER_ROLES = [
   "Production User",
   "Maintenance User",
@@ -93,12 +94,24 @@ export function loginRecordCandidates(rows = [], username = "") {
   return rows.filter((row) => userLoginCandidates(row?.record_data || row).includes(normalized));
 }
 
-export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
+export function resolveMobileAccess({ user = {}, privilege = {}, portal, selectedRole } = {}) {
+  const roles=assignedUserRoles(user);
+  if(portal==='accounts') {
+    if(!hasAccountRole(user))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    return {sessionRole:'normal',userType:'Account User',assignedRole:'Account User',permissions:{ibossAccounts:true,accountAccess:accountPrivileges(user),readRequests:false,viewDashboardRequests:false,viewEquipment:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false}};
+  }
+  if(Object.hasOwn(user,'userRoles')&&!String(user.userType||'').toLowerCase().includes('super')){
+    const fleetRoles=roles.filter(role=>role!=='Account User');
+    const chosen=selectedRole||fleetRoles[0];
+    if(selectedRole&&!fleetRoles.includes(selectedRole))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    if(!chosen&&!hasAccountRole(user))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
+    user={...user,userType:chosen?'Mobile User':hasAccountRole(user)?'Account User':'',userGroup:chosen||''};
+  }
   const accountType = normalizeAccountType(
     user.userType || user.accessType || user.accountType || user.role || privilege.accessType,
   );
   if (accountType === "accounts") {
-    return {sessionRole:"normal",userType:"Account User",assignedRole:"Account User",permissions:{ibossAccounts:true,readRequests:false,viewDashboardRequests:false,viewAllRequests:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false,viewEquipment:false,viewRepairTypes:false}};
+    return {sessionRole:"normal",userType:"Account User",assignedRole:"Account User",permissions:{ibossAccounts:true,accountAccess:accountPrivileges(user),readRequests:false,viewDashboardRequests:false,viewAllRequests:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false,viewEquipment:false,viewRepairTypes:false}};
   }
   if (accountType === "super") {
     const adminAccess = adminAccessPermissions(user);
@@ -117,6 +130,8 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
         viewEquipment: true,
         viewRepairTypes: true,
         ...adminAccess,
+        accountAccess:accountPrivileges(user),
+        explicitAccountRole:hasAccountRole(user),
       },
     };
   }
