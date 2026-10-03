@@ -1277,14 +1277,14 @@ function AnnouncementHistoryButton({token}) {
       setRows(previous=>[...previous,...(result.announcements||[])]);setCursor(result.nextCursor);
     }catch(error){setError(error.message);}finally{setLoading(false);}
   };
-  return <><button type="button" data-nav="announcements" onClick={()=>setOpen(true)}><MessageCircle /><span className="nav-label">Announcements</span></button>{open&&<Modal title="Announcements" close={()=>setOpen(false)}>
+  return <><button type="button" data-nav="announcements" onClick={()=>setOpen(true)}><MessageCircle /><span className="nav-label">Announcements</span></button>{open&&createPortal(<Modal title="Announcements" close={()=>setOpen(false)} className="announcement-archive-modal" overlayClassName="announcement-archive-overlay">
     <section className="announcement-history"><p>Previously sent announcements remain available here after you close their popup.</p>
       {error&&<p role="alert">{error}</p>}{loading&&<p role="status">Loading announcements...</p>}
       {!loading&&!error&&!rows.length&&<p>No announcements yet.</p>}
-      <ul>{rows.map(row=><li key={row.id}>{row.message&&<p style={{whiteSpace:'pre-wrap'}}>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} className="announcement-image thumbnail" />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||'Administrator'}</small></li>)}</ul>
+      <ul>{rows.map(row=><li key={row.id}>{row.message&&<p style={{whiteSpace:'pre-wrap'}}>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||'Administrator'}</small></li>)}</ul>
       {cursor&&<button type="button" disabled={loading} onClick={loadMore}>Load older announcements</button>}
     </section>
-  </Modal>}</>;
+  </Modal>,document.body)}</>;
 }
 
 function formatTwelveHourDateTime(value) {

@@ -103,6 +103,20 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .login-history-table tr.login-never td:nth-child(6) { color: #b23836; font-weight: 800; }
 /* Announcement images: shown in the popup, previewed while composing and as thumbnails in the history. */
 .session-message-inbox-body{max-height:calc(100dvh - 230px);overflow:auto}
+/* Keep the archive outside navigation styling, with a single full-page scroll area. */
+.overlay.announcement-archive-overlay{padding:0;place-items:stretch}
+.overlay > .modal.announcement-archive-modal{width:100%;max-width:none;min-width:0;height:100dvh;max-height:100dvh;margin:0;padding:0;border-radius:0;resize:none;display:flex;flex-direction:column;overflow:hidden;background:#fff;color:#17233c;text-align:left}
+.modal.announcement-archive-modal > header{flex:none;margin:0;padding:16px 24px;background:#fff;color:#17233c}
+.modal.announcement-archive-modal > header h3{color:#17233c;background:transparent}
+.modal.announcement-archive-modal > header > button:not(.modal-back-button){color:#51308d}
+.announcement-archive-modal > .announcement-history{flex:1;min-height:0;margin:0;padding:20px clamp(16px,3vw,48px);overflow:auto;border:0;color:#17233c}
+.announcement-archive-modal .announcement-history > p{margin:0 0 20px;color:#465773}
+.announcement-archive-modal .announcement-history ul{max-height:none;overflow:visible;gap:20px}
+.announcement-archive-modal .announcement-history li{display:flex;flex-direction:column;align-items:stretch;gap:16px;min-width:0;padding:20px;background:#f8fafd;color:#17233c}
+.announcement-archive-modal .announcement-history li p{font-size:16px;line-height:1.65;color:#17233c;overflow-wrap:anywhere}
+.announcement-archive-modal .announcement-history li small{font-size:13px;line-height:1.5;color:#465773}
+.announcement-archive-modal .announcement-image{margin:0;text-align:left}
+.announcement-archive-modal .announcement-image img{max-width:100%;max-height:none;height:auto;margin:0}
 .announcement-image{display:block;margin-top:14px;text-align:center}
 .announcement-image img{display:block;max-width:100%;max-height:min(55vh,520px);margin:0 auto;border:1px solid #dbe3ef;border-radius:6px;object-fit:contain;cursor:zoom-in}
 .announcement-image.loading{padding:28px;border:1px dashed #c9d5e6;border-radius:6px;color:#7b899d;font-size:13px}

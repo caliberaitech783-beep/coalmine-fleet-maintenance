@@ -24,3 +24,14 @@ test('all desktop and operational navigation bars end with announcement history'
   assert.match(component,/whiteSpace:'pre-wrap'/);
   assert.doesNotMatch(component,/acknowledge|method:'POST'|method:'PATCH'/);
 });
+test('announcement archive is full-screen, readable and isolated from navigation colours',()=>{
+  const component=client.slice(client.indexOf('function AnnouncementHistoryButton'),client.indexOf('function formatTwelveHourDateTime'));
+  const css=readFileSync(new URL('../src/user-sessions.css',import.meta.url),'utf8');
+  assert.match(component,/open&&createPortal\(<Modal/);
+  assert.match(component,/<\/Modal>,document.body\)/);
+  assert.match(component,/className="announcement-archive-modal"/);
+  assert.doesNotMatch(component,/announcement-image thumbnail/);
+  assert.match(css,/\.modal\.announcement-archive-modal\{[^}]*height:100dvh/);
+  assert.match(css,/\.announcement-archive-modal \.announcement-history ul\{max-height:none;overflow:visible/);
+  assert.match(css,/\.announcement-archive-modal \.announcement-history li p\{[^}]*color:#17233c;overflow-wrap:anywhere/);
+});
