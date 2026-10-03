@@ -81,6 +81,9 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/accessRegions=\['WCL','NCL'\]/);
   assert.match(component,/rootScope[\s\S]*?viewer\.allAccess\?'All'/);
   assert.match(component,/headOffice[\s\S]*?corporateOffice[\s\S]*?accessRegions\.map/);
+  assert.match(component,/primaryScopeOptions[\s\S]*?regionalSiteOptions/);
+  assert.match(component,/className="cdir-scope-sites"[\s\S]*?\{scopeRegion\} sites/);
+  assert.match(component,/regionalSiteOptions\.map/);
   assert.match(component,/accessRegions\.includes\(scopeRegion\)[\s\S]*?site\.group===scopeRegion/);
   assert.match(component,/const scopeRows=allRows/);
   assert.match(component,/const scopedSites=directory\?\.sites\|\|\[\]/);
@@ -103,5 +106,6 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/Show all people/);
   assert.match(css,/\.cdir-site-chips,\.cdir-category-chips\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
   assert.match(css,/\.cdir-view-nav\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
+  assert.match(css,/\.cdir-scope-sites>div\{flex-wrap:wrap/);
   assert.match(css,/\.cdir-show-all/);
 });
