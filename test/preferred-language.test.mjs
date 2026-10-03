@@ -59,7 +59,7 @@ test('login form offers two language dropdowns and keeps both choices', () => {
   assert.match(loginSource, /\["preferredLanguage", "Language 1 \u00b7 \u092d\u093e\u0937\u093e 1"/);
   assert.match(loginSource, /\["secondaryLanguage", "Language 2 \u00b7 \u092d\u093e\u0937\u093e 2"/);
   assert.match(loginSource, /speechLanguages\.map\(\(\[, englishName, code, nativeName\]\) => \(/, 'every supported language is listed');
-  assert.match(loginSource, /body: JSON\.stringify\(\{ username, password \}\)/, 'the login request is unchanged');
+  assert.match(loginSource, /body: JSON\.stringify\(\{ username, password, portal:accountsPortal\?'accounts':'operations' \}\)/, 'the login request includes the selected portal without changing language preferences');
   assert.match(loginSource, /preferredLanguage,\n      secondaryLanguage,\n    \}\);/, 'the session keeps both languages');
   assert.match(loginSource, /body: JSON\.stringify\(\{ preferredLanguage, secondaryLanguage \}\),/, 'both choices are remembered on the user record after sign-in');
   assert.match(source, /\["en-IN", "English", "en", "English"\],\n  \["hi-IN", "Hindi", "hi", "\u0939\u093f\u0902\u0926\u0940"\],\n  \["mr-IN", "Marathi", "mr", "\u092e\u0930\u093e\u0920\u0940"\]/);

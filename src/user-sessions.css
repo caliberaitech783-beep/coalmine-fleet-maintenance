@@ -103,6 +103,18 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .login-history-table tr.login-never td:nth-child(6) { color: #b23836; font-weight: 800; }
 /* Announcement images: shown in the popup, previewed while composing and as thumbnails in the history. */
 .session-message-inbox-body{max-height:calc(100dvh - 230px);overflow:auto}
+.login > section.login-visual{background:linear-gradient(135deg,#522e90 0%,#9d2e80 55%,#ef4960 100%)}
+.login-application-links{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+.login-application-links > a,.login-application-links > button{display:flex;align-items:center;gap:12px;min-width:180px;padding:16px 20px;border:1px solid #ffffff66;border-radius:12px;background:#ffffff16;color:#fff;text-decoration:none;text-align:left;font-size:13px}
+.login-application-links strong{display:block;font-size:18px;margin-bottom:4px}
+.login-application-links svg{width:28px;height:28px;flex:none}
+.login-application-links > :hover{background:#ffffff2e}
+.login-application-links > :focus-visible{outline:3px solid white;outline-offset:3px}
+.accounts-user-workspace > header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:20px 28px;background:linear-gradient(110deg,#522e90,#ef4960);color:#fff}
+.accounts-user-workspace > header nav{display:flex;gap:12px}
+.accounts-user-workspace > header button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:8px}
+.accounts-user-workspace > main{padding:24px}
+@media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{margin-top:16px}.login-application-links > a,.login-application-links > button{min-width:0;flex:1;padding:12px}.accounts-user-workspace > main{padding:12px}}
 /* Keep the archive outside navigation styling, with a single full-page scroll area. */
 .overlay.announcement-archive-overlay{padding:0;place-items:stretch}
 .overlay > .modal.announcement-archive-modal{width:100%;max-width:none;min-width:0;height:100dvh;max-height:100dvh;margin:0;padding:0;border-radius:0;resize:none;display:flex;flex-direction:column;overflow:hidden;background:#fff;color:#17233c;text-align:left}

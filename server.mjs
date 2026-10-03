@@ -2209,6 +2209,7 @@ app.post('/api/login',async(req,res,next)=>{
       targetReference:login,
       changedFields:[],
     };
+    if(req.body.portal==='accounts'&&!ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions}))return res.status(403).json({error:'This login is not authorised for Accounts. Ask an administrator to create an Account User.'});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, MIS User, or General User in Users & employees.'});
     if(!ADMIN_LOCK_POLICY_PAUSED&&profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
@@ -3910,7 +3911,7 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
 const accountsMergeAllowed=async req=>{
   const user=await currentUserRecord(req.session);
   const profile=resolveMobileAccess({user});
-  return ibossAccountsAllowed({role:profile.sessionRole,permissions:profile.permissions});
+  return ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
 };
 const accountsMergeFailed=(res,error)=>{
   if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
