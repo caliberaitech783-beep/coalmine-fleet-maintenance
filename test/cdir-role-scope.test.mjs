@@ -5,6 +5,8 @@ import {cdirViewerContext} from '../cdir-access.mjs';
 
 const html=fs.readFileSync(new URL('../public/cd/caliber-directory.html',import.meta.url),'utf8');
 const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+const themeClient=fs.readFileSync(new URL('../public/cd/directory-theme.js',import.meta.url),'utf8');
+const topbarCss=fs.readFileSync(new URL('../src/topbar.css',import.meta.url),'utf8');
 
 const sites=[
   {id:'sasti-oc',label:'Sasti OC',dataKey:'SASTI'},
@@ -42,4 +44,15 @@ test('C-Dir expanded filters stay in document flow and use responsive grids',()=
   assert.match(html,/@media \(max-width:1180px\)\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(html,/@media \(max-width:760px\)\{[\s\S]*?grid-template-columns:minmax\(0,1fr\)/);
   assert.match(html,/overflow-x:hidden/);
+});
+
+test('C-Dir uses native embedded chrome and delegates scrolling to BDMS',()=>{
+  assert.match(client,/src="\/cd\/caliber-directory\.html\?embedded=1"/);
+  assert.match(client,/event\.data\?\.type !== "cdir:resize"/);
+  assert.match(client,/scrolling="no"/);
+  assert.match(themeClient,/root\.dataset\.embedded = embedded \? 'true' : 'false'/);
+  assert.match(themeClient,/postMessage\(\{ type: 'cdir:resize', height \}/);
+  assert.match(html,/html\[data-embedded="true"\] \.tb-logo,[\s\S]*?\.tb-clock\{display:none;\}/);
+  assert.match(html,/html\[data-embedded="true"\] \.hero-band\{[\s\S]*?width:100%/);
+  assert.match(topbarCss,/\.caliber-directory-page \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/);
 });

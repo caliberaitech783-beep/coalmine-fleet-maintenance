@@ -891,11 +891,11 @@
 .caliber-directory-page {
   width: 100%;
   min-height: calc(100vh - 118px);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 14px 38px rgba(23, 35, 60, 0.08);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
 }
 
 .caliber-directory-page iframe {
@@ -903,7 +903,8 @@
   width: 100%;
   min-height: calc(100vh - 120px);
   border: 0;
-  background: #fff;
+  background: transparent;
+  overflow: hidden;
 }
 
 /* Administration lists eleven entries since the backup pages joined it. Keep the

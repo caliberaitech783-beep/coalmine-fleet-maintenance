@@ -9870,12 +9870,27 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   );
 }
 function CaliberDirectoryPage() {
+  const frameRef = useRef(null);
+  const [frameHeight, setFrameHeight] = useState(900);
+  useEffect(() => {
+    const resizeDirectory = (event) => {
+      if (event.origin !== window.location.origin || event.source !== frameRef.current?.contentWindow || event.data?.type !== "cdir:resize") return;
+      const nextHeight = Number(event.data.height);
+      if (!Number.isFinite(nextHeight) || nextHeight < 300) return;
+      setFrameHeight(Math.min(50000, Math.ceil(nextHeight)));
+    };
+    window.addEventListener("message", resizeDirectory);
+    return () => window.removeEventListener("message", resizeDirectory);
+  }, []);
   return (
     <section className="caliber-directory-page" aria-label="Caliber Directory">
       <iframe
+        ref={frameRef}
         title="Caliber Directory"
-        src="/cd/caliber-directory.html"
+        src="/cd/caliber-directory.html?embedded=1"
         loading="eager"
+        scrolling="no"
+        style={{height: `${frameHeight}px`}}
       />
     </section>
   );
