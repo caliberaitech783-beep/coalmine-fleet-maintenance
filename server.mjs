@@ -72,6 +72,7 @@ import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,reg
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
+import {telegramInvitationBatch,telegramInvitationSummary} from './telegram-site-invitations.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3546,9 +3547,12 @@ app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator,async(_
 app.get('/api/telegram/site-groups',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
   try{
     const [groups,users]=await Promise.all([telegramSiteGroups(),telegramLinkedSiteUsers()]);
+    const invitations=await telegramInvitationRecords();
     res.set('Cache-Control','no-store');
     res.json({groups:TELEGRAM_SITES.map(site=>({...groups.find(group=>group.site===site),site,
-      linkedUsers:users.filter(({user})=>telegramUserHasSite(user,site)).length})),
+      linkedUsers:users.filter(({user})=>telegramUserHasSite(user,site)).length,
+      invitations:telegramInvitationSummary(users.filter(({user})=>telegramUserHasSite(user,site)).map(user=>user.chatId),
+        invitations.get(groups.find(group=>group.site===site)?.chatId)||new Map())})),
       unassignedUsers:users.filter(({user})=>!TELEGRAM_SITES.some(site=>telegramUserHasSite(user,site))).length});
   }catch(error){next(error)}
 });
@@ -3559,13 +3563,16 @@ app.post('/api/telegram/site-groups/invite',requireSuper,requireWhatsAppAdminist
     const group=(await telegramSiteGroups()).find(value=>value.site===site);
     if(!group)return res.status(409).json({error:'Register this site group in Telegram first.'});
     await telegramSiteGroupDetails(group.chatId);
-    const results={invited:0,alreadyMember:0,failed:0};
     const users=(await telegramLinkedSiteUsers()).filter(({user})=>telegramUserHasSite(user,site));
-    for(const chatId of new Set(users.map(user=>user.chatId))){
-      try{(await inviteUserToTelegramSite(group,chatId))==='Invited'?results.invited++:results.alreadyMember++}
-      catch(error){results.failed++;console.error('Telegram site invite failed.',error.message)}
-      await new Promise(resolve=>setTimeout(resolve,100));
-    }
+    const key=chatId=>`telegram_site_invite:${group.chatId}:${chatId}`;
+    const results=await telegramInvitationBatch({chatIds:users.map(user=>user.chatId),
+      read:async()=> (await telegramInvitationRecords()).get(group.chatId)||new Map(),
+      claim:async chatId=> (await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at)
+        VALUES ($1,'{"status":"Sending"}'::jsonb,NOW()) ON CONFLICT (setting_key) DO NOTHING RETURNING setting_key`,[key(chatId)])).rowCount===1,
+      send:chatId=>inviteUserToTelegramSite(group,chatId),
+      finish:async(chatId,status)=>{await pool.query(`UPDATE app_settings SET setting_value=$2::jsonb,updated_at=NOW() WHERE setting_key=$1`,
+        [key(chatId),JSON.stringify({status})])},
+    });
     req.audit={eventType:'Integration',module:'Telegram',action:'Invite assigned site users',targetReference:site,
       reason:`Invited ${results.invited}; already joined ${results.alreadyMember}; failed ${results.failed}`};
     res.json(results);
@@ -4367,6 +4374,16 @@ async function ticketVisibleToSession(ticket,session){
 // the group to a supergroup its id changes, and the new id is stored here.
 const TELEGRAM_GROUP_SETTING_KEY='telegram_admin_group';
 const TELEGRAM_SITE_GROUPS_KEY='telegram_site_groups';
+async function telegramInvitationRecords(){
+  const {rows}=await pool.query("SELECT setting_key,setting_value FROM app_settings WHERE setting_key LIKE 'telegram_site_invite:%'");
+  const groups=new Map();
+  for(const row of rows){
+    const [,chatId,userId]=row.setting_key.split(':');
+    if(!groups.has(chatId))groups.set(chatId,new Map());
+    groups.get(chatId).set(userId,row.setting_value?.status||'Sending');
+  }
+  return groups;
+}
 async function telegramSiteGroups(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
   return normalizeTelegramSiteGroups(rows[0]?.setting_value);
