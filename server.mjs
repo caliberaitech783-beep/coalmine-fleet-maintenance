@@ -70,7 +70,8 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus} from './telegram.mjs';
+import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
+import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3542,6 +3543,45 @@ app.get('/api/telegram/status',requireSuper,requireWhatsAppAdministrator,async(_
 });
 
 // Invites every connected Admin and Super Admin who is not yet in the admin group.
+app.get('/api/telegram/site-groups',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
+  try{
+    const [groups,users]=await Promise.all([telegramSiteGroups(),telegramLinkedSiteUsers()]);
+    res.set('Cache-Control','no-store');
+    res.json({groups:TELEGRAM_SITES.map(site=>({...groups.find(group=>group.site===site),site,
+      linkedUsers:users.filter(({user})=>telegramUserHasSite(user,site)).length})),
+      unassignedUsers:users.filter(({user})=>!TELEGRAM_SITES.some(site=>telegramUserHasSite(user,site))).length});
+  }catch(error){next(error)}
+});
+
+app.post('/api/telegram/site-groups/invite',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
+  try{
+    const site=telegramSiteName(req.body?.site);
+    const group=(await telegramSiteGroups()).find(value=>value.site===site);
+    if(!group)return res.status(409).json({error:'Register this site group in Telegram first.'});
+    await telegramSiteGroupDetails(group.chatId);
+    const results={invited:0,alreadyMember:0,failed:0};
+    const users=(await telegramLinkedSiteUsers()).filter(({user})=>telegramUserHasSite(user,site));
+    for(const chatId of new Set(users.map(user=>user.chatId))){
+      try{(await inviteUserToTelegramSite(group,chatId))==='Invited'?results.invited++:results.alreadyMember++}
+      catch(error){results.failed++;console.error('Telegram site invite failed.',error.message)}
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    req.audit={eventType:'Integration',module:'Telegram',action:'Invite assigned site users',targetReference:site,
+      reason:`Invited ${results.invited}; already joined ${results.alreadyMember}; failed ${results.failed}`};
+    res.json(results);
+  }catch(error){next(error)}
+});
+
+app.post('/api/telegram/site-groups/test',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
+  try{
+    const group=(await telegramSiteGroups()).find(value=>value.site===telegramSiteName(req.body?.site));
+    if(!group)return res.status(409).json({error:'Register this site group in Telegram first.'});
+    await sendTelegramText({chatId:group.chatId,message:`BDMS • ${group.site}\nProduction, Maintenance, MIS and the site head can share updates and reply here.`});
+    req.audit={eventType:'Integration',module:'Telegram',action:'Send site group test',targetReference:group.site};
+    res.json({sent:true});
+  }catch(error){next(error)}
+});
+
 app.post('/api/telegram/admin-group/invite',requireSuper,requireWhatsAppAdministrator,async(req,res)=>{
   req.audit={eventType:'Integration',module:'Telegram',action:'Invite administrators to admin group',targetType:'Telegram group',changedFields:[]};
   if(!telegramConfiguration().configured)return res.status(400).json({error:'Telegram is not configured.'});
@@ -3694,7 +3734,34 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       await reply(update.chatId,`Connected to Nerve Center.\nName: ${user.employee||rows[0].login}\nLogin: ${String(user.login||rows[0].login).toUpperCase()}\nRole: ${role}\nLocation: ${location}\n\nYou will now receive your BDMS alerts here, as on WhatsApp.\nSend /stop at any time to turn them off.`);
       if(isBdmsAdministrator(user))await inviteAdministratorToTelegramGroup(rows[0].login,update.chatId)
         .catch(error=>console.error('Telegram admin group invite failed.',error.message));
+    }else if(update.kind==='registerSite'){
+      const {rows}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.userId]);
+      const users=await Promise.all(rows.map(({login})=>bdmsUserRecord(login)));
+      const member=await telegramChatMemberStatus(update.groupChatId,update.userId);
+      if(!users.some(user=>user&&isBdmsAdministrator(user))||!['creator','administrator'].includes(member))
+        return await reply(update.groupChatId,'A connected BDMS administrator who administers this Telegram group must register it.');
+      const site=telegramSiteName(update.site);
+      if(!site)return await reply(update.groupChatId,`Choose a BDMS site: ${TELEGRAM_SITES.join(', ')}.`);
+      if(update.groupChatId===(await telegramGroupSettings()).chatId)return await reply(update.groupChatId,'Keep BDMS Admin Alert for management. Register a separate site group.');
+      try{
+        const details=await telegramSiteGroupDetails(update.groupChatId);
+        const inviteLink=await createTelegramJoinRequestLink(update.groupChatId,{name:`BDMS ${site}`});
+        await registerTelegramSiteGroup({site,chatId:update.groupChatId,title:details.title,inviteLink});
+        await appendBackendProcessAudit({module:'Telegram',action:'Register site group',targetReference:site,reason:`Registered by ${rows.map(row=>row.login).join(', ')}`});
+        await reply(update.groupChatId,`Linked to ${site}. In BDMS → Meta API setup → Site groups, choose Invite assigned users. Join requests are checked against current BDMS site assignments.`);
+      }catch(error){await reply(update.groupChatId,error.message)}
     }else if(update.kind==='joinRequest'){
+      const siteGroup=(await telegramSiteGroups()).find(group=>group.chatId===update.groupChatId);
+      if(siteGroup){
+        const {rows}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.userId]);
+        const users=await Promise.all(rows.map(({login})=>bdmsUserRecord(login)));
+        const approved=users.some(user=>telegramUserHasSite(user,siteGroup.site));
+        await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);
+        await appendBackendProcessAudit({module:'Telegram',action:approved?'Approve site group join request':'Decline site group join request',
+          targetReference:siteGroup.site,reason:approved?'Connected user assigned to this site':'No connected account assigned to this site'}).catch(()=>{});
+        if(!approved)await reply(update.userChatId,`You must connect Telegram from your BDMS profile and be assigned to ${siteGroup.site} to join this group.`);
+        return;
+      }
       // Only BDMS administrators who connected their Telegram may join the admin group.
       const group=await telegramGroupSettings();
       if(update.groupChatId!==group.chatId)return;
@@ -3707,6 +3774,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       if(!approved)await reply(update.userChatId,'The BDMS ADMIN ALERT group is only for BDMS administrators. Your request was declined.');
     }else if(update.kind==='migrated'){
       await followTelegramGroupMigration(update.groupChatId,update.newChatId);
+      await migrateTelegramSiteGroup(update.groupChatId,update.newChatId);
     }else if(update.kind==='start'||update.kind==='text'){
       await reply(update.chatId,'To receive Nerve Center alerts here, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
     }
@@ -4298,6 +4366,61 @@ async function ticketVisibleToSession(ticket,session){
 // The admin group's id starts as TELEGRAM_DEFAULT_CHAT_ID. If Telegram upgrades
 // the group to a supergroup its id changes, and the new id is stored here.
 const TELEGRAM_GROUP_SETTING_KEY='telegram_admin_group';
+const TELEGRAM_SITE_GROUPS_KEY='telegram_site_groups';
+async function telegramSiteGroups(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
+  return normalizeTelegramSiteGroups(rows[0]?.setting_value);
+}
+async function updateTelegramSiteGroups(change){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('telegram-site-groups'))");
+    const {rows}=await client.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
+    const groups=change(normalizeTelegramSiteGroups(rows[0]?.setting_value));
+    await client.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[TELEGRAM_SITE_GROUPS_KEY,JSON.stringify(groups)]);
+    await client.query('COMMIT');
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
+}
+async function registerTelegramSiteGroup(group){
+  await updateTelegramSiteGroups(groups=>{
+    if(groups.some(value=>(value.site===group.site&&value.chatId!==group.chatId)||(value.chatId===group.chatId&&value.site!==group.site)))
+      throw new Error('This site or group is already linked. Ask the BDMS administrator to review its existing mapping.');
+    return [...groups.filter(value=>value.site!==group.site),group];
+  });
+}
+async function migrateTelegramSiteGroup(oldChatId,newChatId){
+  if(!(await telegramSiteGroups()).some(group=>group.chatId===String(oldChatId)))return;
+  await updateTelegramSiteGroups(groups=>groups.map(group=>group.chatId===String(oldChatId)?{...group,chatId:String(newChatId),inviteLink:''}:group));
+}
+async function telegramLinkedSiteUsers(){
+  const {rows}=await pool.query(`SELECT l.login,l.chat_id AS "chatId",m.record_data AS "user"
+    FROM telegram_user_links l JOIN LATERAL (SELECT record_data FROM master_records
+      WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=l.login LIMIT 1) m ON TRUE`);
+  return rows;
+}
+async function inviteUserToTelegramSite(group,chatId){
+  const status=await telegramChatMemberStatus(group.chatId,chatId).catch(()=>'');
+  if(['creator','administrator','member','restricted'].includes(status))return 'Already in the group';
+  if(!group.inviteLink){
+    group.inviteLink=await createTelegramJoinRequestLink(group.chatId,{name:`BDMS ${group.site}`});
+    await registerTelegramSiteGroup(group);
+  }
+  await sendTelegramText({chatId,message:`Your BDMS site is ${group.site}. Join its group to receive site updates and reply with your Production, Maintenance, MIS and site head colleagues.\nTap to request membership: ${group.inviteLink}\nYour current BDMS site assignment is checked before approval.`});
+  return 'Invited';
+}
+async function deliverToTelegramSite({site,message,purpose}){
+  const group=(await telegramSiteGroups()).find(value=>value.site===telegramSiteName(site));
+  if(!group||purpose==='passwordResetOtp')return;
+  try{await sendTelegramText({chatId:group.chatId,message,purpose})}
+  catch(error){
+    if(!error.migrateToChatId)throw error;
+    await migrateTelegramSiteGroup(group.chatId,error.migrateToChatId);
+    await sendTelegramText({chatId:String(error.migrateToChatId),message,purpose});
+  }
+}
 async function telegramGroupSettings(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_GROUP_SETTING_KEY]).catch(()=>({rows:[]}));
   const stored=rows[0]?.setting_value||{};
@@ -4442,6 +4565,9 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const messagePurpose=purpose||workflowTemplate?.templateKey||'';
   const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nNerve Center notification\n${message}`;
   if(telegramGroup)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,message:telegramText});
+  if(telegramGroup&&telegramSiteName(site))setImmediate(()=>{
+    deliverToTelegramSite({site,message:telegramText,purpose:messagePurpose}).catch(error=>console.error('Telegram site delivery failed.',error.message));
+  });
   if(!logins.length)return [];
   const whatsappActive=whatsappPurposeEnabled(reportSettings,messagePurpose);
   const {rows}=await client.query(`SELECT record_data FROM master_records

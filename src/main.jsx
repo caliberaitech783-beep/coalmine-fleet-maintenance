@@ -20,6 +20,7 @@ import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
+import TelegramSiteGroups from './telegram-site-groups.jsx';
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -8730,6 +8731,7 @@ function MetaWhatsAppSetup() {
       {(telegramNotice || telegram?.error) && <div className={`meta-whatsapp-feedback ${telegramNotice?.ok ? "success" : "error"}`} role={telegramNotice?.ok ? "status" : "alert"}>{telegramNotice?.text || telegram.error}</div>}
       <footer className="telegram-actions"><button type="button" onClick={inviteTelegramAdmins} disabled={telegramWorking || !telegram?.connected}><Users />Invite all admins to the group</button><button type="button" className="primary" onClick={sendTelegramTest} disabled={telegramWorking || !telegram?.connected}>{telegramWorking ? <RefreshCw className="spin" /> : <Send />}{telegramWorking ? "Sending..." : "Send Telegram test"}</button></footer>
       {telegram?.webhook?.lastError && <div className="meta-whatsapp-feedback error" role="alert">Telegram cannot reach the app: {telegram.webhook.lastError}</div>}
+      <TelegramSiteGroups token={authToken}/>
       <div className="telegram-links">
         <h3>Users connected to Telegram <span>{telegramLinks.length}</span></h3>
         <p>Each user connects once from their profile icon → Connect Telegram. They then get the same alerts as on WhatsApp.</p>

@@ -115,6 +115,10 @@ export function parseTelegramUpdate(update){
       username:clean(message.from?.username)};
   }
   const member=update?.my_chat_member;
+  if(['group','supergroup'].includes(message?.chat?.type)&&!message.sender_chat&&message.from?.id&&typeof message.text==='string'){
+    const match=message.text.trim().match(/^\/bdms_site(?:@\w+)?\s+(.+)$/i);
+    if(match)return {kind:'registerSite',groupChatId:String(message.chat.id),userId:String(message.from.id),site:match[1].trim()};
+  }
   if(member?.chat?.type==='private'&&['kicked','left'].includes(member.new_chat_member?.status))
     return {kind:'blocked',chatId:String(member.chat.id)};
   const request=update?.chat_join_request;
@@ -157,8 +161,8 @@ export async function telegramStatus({env=process.env,fetchImpl=fetch}={}){
 }
 
 // The admin group invite asks to join; the bot then approves administrators only.
-export async function createTelegramJoinRequestLink(chatId,{env=process.env,fetchImpl=fetch}={}){
-  const result=await telegramRequest('createChatInviteLink',{env,fetchImpl,json:{chat_id:chatId,name:'BDMS administrators',creates_join_request:true}});
+export async function createTelegramJoinRequestLink(chatId,{env=process.env,fetchImpl=fetch,name='BDMS administrators'}={}){
+  const result=await telegramRequest('createChatInviteLink',{env,fetchImpl,json:{chat_id:chatId,name:name.slice(0,32),creates_join_request:true}});
   return clean(result?.invite_link);
 }
 
@@ -169,4 +173,13 @@ export async function answerTelegramJoinRequest(chatId,userId,approve,{env=proce
 export async function telegramChatMemberStatus(chatId,userId,{env=process.env,fetchImpl=fetch}={}){
   const member=await telegramRequest('getChatMember',{env,fetchImpl,json:{chat_id:chatId,user_id:Number(userId)}});
   return clean(member?.status);
+}
+
+export async function telegramSiteGroupDetails(chatId,{env=process.env,fetchImpl=fetch}={}){
+  const bot=await telegramRequest('getMe',{env,fetchImpl,json:{}});
+  const chat=await telegramRequest('getChat',{env,fetchImpl,json:{chat_id:chatId}});
+  if(!['group','supergroup'].includes(chat?.type))throw new Error('Choose a Telegram group.');
+  const member=await telegramRequest('getChatMember',{env,fetchImpl,json:{chat_id:chatId,user_id:bot.id}});
+  if(member?.status!=='administrator'||member.can_invite_users!==true)throw new Error('Make the BDMS bot a group administrator with permission to invite users first.');
+  return {title:clean(chat.title)};
 }

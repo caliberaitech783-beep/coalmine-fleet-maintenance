@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {telegramSiteName} from '../telegram-site-groups.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -59,7 +60,8 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
     else assert.fail(`Unexpected SQL: ${sql}`);
     return {rows:[],rowCount:1};
   }};
-  const bindings={pool:client,storedWhatsAppReportSettings:async()=>settings,
+  const bindings={pool:client,storedWhatsAppReportSettings:async()=>settings,telegramSiteName,
+    setImmediate,deliverToTelegramSite:async()=>{},
     whatsappPurposeEnabled:(value,purpose)=>whatsappPurposeEnabled(value,purpose,now),
     ...siteAccess,resolveMobileAccess,assignedUserSiteName,canonicalSiteName,isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,
     isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,reportTemplateFallback,
