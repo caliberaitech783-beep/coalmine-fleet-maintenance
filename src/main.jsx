@@ -972,10 +972,17 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   useEffect(() => {
     const header=document.getElementById('admin-primary-navigation');
     if(!header)return undefined;
-    const updateHeight=()=>document.documentElement.style.setProperty('--navigation-header-height',`${Math.ceil(header.getBoundingClientRect().height)}px`);
+    let lastHeight=0;
+    const updateHeight=(entries)=>{
+      const box=entries?.[0]?.borderBoxSize;
+      const height=Math.ceil((Array.isArray(box)?box[0]:box)?.blockSize ?? header.getBoundingClientRect().height);
+      if(height===lastHeight)return;
+      lastHeight=height;
+      document.documentElement.style.setProperty('--navigation-header-height',`${height}px`);
+    };
     updateHeight();
     const observer=new ResizeObserver(updateHeight);
-    observer.observe(header);
+    observer.observe(header,{box:'border-box'});
     return ()=>{observer.disconnect();document.documentElement.style.removeProperty('--navigation-header-height');};
   },[]);
   const [mastersOpen, setMastersOpen] = useState(false);

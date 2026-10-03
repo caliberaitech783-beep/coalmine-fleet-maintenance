@@ -43,7 +43,8 @@
 .app > aside nav > .nav-config-row > button,
 .app > aside nav > .masters-menu > .nav-config-row > button {
   max-width: 100%;
-  overflow: visible;
+  /* Clip the decorative shine inside the button, not the wrapping navigation. */
+  overflow: hidden;
 }
 
 .app > aside nav .nav-label {
@@ -1187,6 +1188,37 @@
   height: 12px;
   background: transparent;
 }
+/* Keep top-level navigation readable without the moving shine overlay. */
+.app > aside nav button.header-nav-item::before,
+.normal > header .normal-header-nav > button[data-nav]::before {
+  content: none;
+  animation: none;
+  transition: none;
+}
+
+.app > #admin-primary-navigation > nav,
+.normal > header .normal-header-nav,
+.accounts-user-workspace > header > nav { --navigation-label-size: 18px; }
+
+.app > #admin-primary-navigation > nav > .nav-config-row > button,
+.app > #admin-primary-navigation > nav > .masters-menu > .nav-config-row > button,
+.app > #admin-primary-navigation > nav > button,
+.normal > header .normal-header-nav > button,
+.accounts-user-workspace > header > nav > button {
+  font-size: var(--navigation-label-size);
+}
+
+@media (max-width: 1600px) {
+  .app > #admin-primary-navigation > nav,
+  .normal > header .normal-header-nav,
+  .accounts-user-workspace > header > nav { --navigation-label-size: 16px; }
+}
+@media (max-width: 900px) {
+  .app > #admin-primary-navigation > nav,
+  .normal > header .normal-header-nav,
+  .accounts-user-workspace > header > nav { --navigation-label-size: 14px; }
+}
+
 /* Use the C-Dir purple-to-pink selection treatment consistently in navigation. */
 .app > aside nav .header-nav-item.active,
 .app > aside nav .header-nav-item[aria-expanded="true"],
