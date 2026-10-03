@@ -1,4 +1,6 @@
 import {ibossAccountsAllowed} from "../iboss-access.mjs";
+import {requestShiftLabel,requestShiftColumns} from "../request-shift.mjs";
+import {RequestShiftProvider,useRequestShiftData,withRequestShiftCells} from "./request-shift-context.jsx";
 import {assignedUserRoles,ACCOUNT_PRIVILEGES,accountPrivileges} from "../account-role-access.mjs";
 import { siteReportHtml } from "./site-report.mjs";
 import { isIdleVehicleRequest } from "../request-idle.mjs";
@@ -3822,6 +3824,9 @@ function PrintButton({ title, columns = [], rows = [], className = "secondary", 
 // printSection: Smart Print captures the dashboard section (.mine-panel) holding the menu, as it is on screen.
 // excelSheets: a function returning [{name, title, columns, rows}]; Excel then has one sheet per table.
 function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Print/Export", printOnly = false, smartPrintItem = true, smartLabels = false, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
+  const {shifts}=useRequestShiftData();
+  columns=requestShiftColumns(columns,rows,shifts);
+  smartPrintColumns=requestShiftColumns(smartPrintColumns,smartPrintRows,shifts);
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -4108,9 +4113,13 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
 }
 const printSavedReport = ({ title, columns, rows, reportGrouping }) => openSmartPrint({ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
 function ActionsTable(props) {
-  return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
+  const shiftData=useRequestShiftData();
+  return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(props.children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
+  const {shifts}=useRequestShiftData();
+  columns=requestShiftColumns(columns,rows,shifts);
+  if(columns[0]?.key==='requestShift'&&visibleColumnKeys.length)visibleColumnKeys=['requestShift',...visibleColumnKeys.filter(key=>key!=='requestShift')];
   const [columnFilters, setColumnFilters] = useState({});
   const [savedReportDialog, setSavedReportDialog] = useState("");
   const [openFilter, setOpenFilter] = useState(null);
@@ -4187,7 +4196,8 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     <>
       {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : toolbarPortal ? null : reportTableToolbar}
       <table className="report-filter-table">
-        <thead><tr><th className="table-serial-header" scope="col">Sr. No.</th>{displayedColumns.map((column) => (
+        <thead><tr>{displayedColumns[0]?.key!=='requestShift'&&<th className="table-serial-header" scope="col">Sr. No.</th>}{displayedColumns.map((column) => (
+          <React.Fragment key={column.key}>
           <FilterableHeader
             key={column.key}
             durationSortOnly={false}
@@ -4201,13 +4211,14 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
             values={columnValues[column.key] || []}
             filterValue={columnFilters[column.key] || ""}
             onFilterChange={(value) => updateColumnFilter(column.key, value)}
-          />
+          />{column.key==='requestShift'&&<th className="table-serial-header" scope="col">Sr. No.</th>}
+          </React.Fragment>
         ))}</tr></thead>
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              <td className="table-serial-cell">{firstVisibleRow + index}</td>
-              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns[0]?.key!=='requestShift'&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}
+              {displayedColumns.map((column) => <React.Fragment key={column.key}><td className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>{column.key==='requestShift'&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}</React.Fragment>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length + 1} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
@@ -5702,6 +5713,7 @@ function readMeterEvidence(file) {
   });
 }
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+  const shiftData=useRequestShiftData();
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
@@ -5878,6 +5890,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     >
       <form className="form" onSubmit={submit}>
         <div className="formgrid">
+          <label style={{gridColumn:"1 / -1"}}>Shift<input readOnly aria-label="Shift" value={shiftData.loading?'Loading shift…':requestShiftLabel({site:currentLocation,start:`${requestDate} ${requestTime}`},shiftData.shifts)} /></label>
           <label>
             Equipment group *
             <select
@@ -7682,6 +7695,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
+        report={...report,columns:requestShiftColumns(report.columns,report.rows,shiftRecords)};
         const zipRequests = selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row,selectedReportShift));
         const filteredRows = reportRowsForShift(report,report.title === "Availability Report"
           ? buildDepartmentReports({requests:zipRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
@@ -11815,7 +11829,7 @@ function App() {
   </div>;
   if (session.role === "normal")
     return (
-      <>
+      <RequestShiftProvider token={session.token} requests={requests}>
         <Normal
           requests={requests}
           requestsLoaded={requestsLoaded}
@@ -11833,10 +11847,10 @@ function App() {
         />
         <AppBackgroundServices session={session} logout={logout} />
         {globalVehicleHistoryDialog}
-      </>
+      </RequestShiftProvider>
     );
   return (
-    <div className="app">
+    <RequestShiftProvider token={session.token} requests={requests}><div className="app">
       <Side
         active={active}
         setActive={(x) => {
@@ -11895,7 +11909,7 @@ function App() {
       <NavigationLoadTimeToast key={active} active={active} startedAt={menuLoadStartedAt} />
       <AppBackgroundServices session={session} logout={logout} />
       {globalVehicleHistoryDialog}
-    </div>
+    </div></RequestShiftProvider>
   );
 }
 createRoot(document.getElementById("root")).render(

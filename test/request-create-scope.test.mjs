@@ -1,4 +1,6 @@
 import * as siteAccess from '../region-scope.mjs';
+import {requestShiftLabel} from '../request-shift.mjs';
+import {SHIFT_MASTER_DEFAULTS} from '../shift-master.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -18,12 +20,14 @@ async function create({user={site:'Sasti OC'},session=production,body={}}={}){
   let handlers;
   const calls=[],followups=[];
   const context={
-    setImmediate:callback=>followups.push(callback),
+    requestShiftLabel,setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},readSession:async req=>req.testSession,
     ...siteAccess,currentUserRecord:async()=>user,canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,
     activeRequestConflict:async payload=>{calls.push({kind:'conflict',payload});return null;},requestProjection:'*',
     pool:{async query(sql,values){
+      if(sql.includes("master_name='Shift Master'"))return {rows:SHIFT_MASTER_DEFAULTS.map(record_data=>({record_data}))};
+      if(sql.startsWith('UPDATE maintenance_requests SET request_shift')){calls.push({kind:'shift',values});return {rows:[]};}
       if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
       assert.ok(sql.startsWith('INSERT INTO maintenance_requests'));
       calls.push({kind:'insert',sql,values});
@@ -57,6 +61,15 @@ test('normal users cannot create other-site or unassigned requests, even through
     assert.equal(result.status,403);
     assert.match(result.body.error,/assigned location/);
     assert.equal(result.calls.length,0,'reject before cross-site conflict lookup or insertion');
+  }
+});
+
+test('both creation roles receive a server-assigned shift, ignoring a forged choice',async()=>{
+  for(const assignedRole of ['Production User','Maintenance User']){
+    const result=await create({session:{...production,assignedRole},body:{start:'2026-09-08 14:00:00',requestShift:'Shift A'}});
+    assert.equal(result.status,201);
+    assert.equal(result.body.requestShift,'Shift B');
+    assert.equal(result.calls.find(call=>call.kind==='shift').values[1],'Shift B');
   }
 });
 

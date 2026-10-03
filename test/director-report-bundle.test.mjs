@@ -72,9 +72,9 @@ test('director lifecycle reports distinguish idle, manager approval and MIS veri
   const approved={...idle,ref:'APPROVED',status:'Closed',closedAt:'2026-09-02 11:00',idealApprovedAt:'2026-09-02 11:00',idealApprovedBy:'Manager',verifiedAt:'2026-09-03 15:00'};
   const tables=buildDirectorReportTables({requests:[idle,approved,{ref:'PARTS',status:'Awaiting parts',start:'2026-09-01 08:00'}],now:new Date('2026-09-04T12:00:00+05:30')});
   const opened=tables.find(table=>table.title==='Location wise opened BD');
-  assert.deepEqual(opened.rows.map(row=>row[0]),['PARTS']);
+  assert.deepEqual(opened.rows.map(row=>row[opened.columns.findIndex(column=>column.key==='reference')]),['PARTS']);
   const closed=tables.find(table=>table.title==='Location wise closing BD');
-  assert.deepEqual(closed.rows.map(row=>row[0]),['APPROVED']);
+  assert.deepEqual(closed.rows.map(row=>row[closed.columns.findIndex(column=>column.key==='reference')]),['APPROVED']);
   const pm=tables.find(table=>table.title==='Idle with PM verif.');
   const column=key=>pm.columns.findIndex(column=>column.key===key);
   assert.equal(pm.rows[0][column('idleTime')],'—');

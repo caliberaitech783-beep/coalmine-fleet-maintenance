@@ -133,6 +133,7 @@ test("Reports tables apply the same saved column order through their controlled 
   const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   let capturedKey;
   const render = await harness(main.slice(main.indexOf("function ReportTable("), main.indexOf("function parseCsv(")), "ReportTable", {
+    useRequestShiftData:()=>({shifts:[]}),requestShiftColumns:columns=>columns,
     defaultDurationSort, reportTime12, mobileTablePageSize: () => 0, tableFilterText: value => String(value || ""),
     sortCollator: new Intl.Collator(), matchesSmartSearch: () => true, tableRowMatchesFilters: () => true,
     useSortableRows: rows => [rows, { key: "", direction: "asc" }, () => {}],

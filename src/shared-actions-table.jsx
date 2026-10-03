@@ -55,6 +55,8 @@ export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAft
     }
   }
   if (columnTransform) columns.splice(0, columns.length, ...columnTransform(columns));
+  const shiftColumn=columns.find(column=>column.key==='requestShift');
+  if(shiftColumn)columns.splice(0,columns.length,shiftColumn,...columns.filter(column=>column!==shiftColumn));
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
@@ -66,7 +68,9 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
     const allColumnKeys = columns.map((column) => column.key);
     return allColumnKeys;
   }, [columns]);
-  const [visible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
+  const [storedVisible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
+  const visible=allColumnKeys.includes('requestShift')?['requestShift',...storedVisible.filter(key=>key!=='requestShift')]:storedVisible;
+  const withNumberCell=(cells,number)=>visible[0]==='requestShift'?[cells[0],number,...cells.slice(1)]:[number,...cells];
   const setVisible = (keys) => {
     const next = ensureJobReferenceVisibleKeys(keys, columns);
     setVisibleState(next);
@@ -190,7 +194,7 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
     const numberColumn = { key: SERIAL_COLUMN_KEY, label: SERIAL_COLUMN_LABEL, value: (row) => rowNumbers.get(row) };
     // Print can reuse the export model; decorate each distinct model just once.
     for (const data of new Set([exportData, printData, smartPrintData])) if (data) {
-      data.columns = [numberColumn, ...data.columns];
+      data.columns = data.columns[0]?.key==='requestShift'?[data.columns[0],numberColumn,...data.columns.slice(1)]:[numberColumn, ...data.columns];
       data.rows = numberedRows;
     }
   }
@@ -299,12 +303,12 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
         if (!showRowNumbers) return projected;
         const cells = tableElements(projected.props.children);
         if (section.type === "thead") return position === 0 ? React.cloneElement(projected, {},
-          <th key="row-number" className="table-serial-header" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>{SERIAL_COLUMN_LABEL}</th>, cells) : projected;
+          withNumberCell(cells,<th key="row-number" className="table-serial-header" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>{SERIAL_COLUMN_LABEL}</th>)) : projected;
         if (!isDataRow(row)) return React.cloneElement(projected, {}, cells.map((cell) => React.cloneElement(cell, { colSpan: Math.max(1, indices.length + 1) })));
-        const numbered = React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
+        const numbered = React.cloneElement(projected, {}, withNumberCell(cells,<td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>));
         if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
           const group = siteSummary.find(item => item.label === reportSite(row));
-          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{tableProps["data-oem-column-layout"] && sections.filter(item => item.type === "thead").flatMap(item => tableElements(item.props.children)).map((header, index) => { const projectedHeader = projectTableRow(sortableHeaderRow(header), indices); return React.cloneElement(projectedHeader, {key: `site-columns-${index}`, className: "site-report-columns"}, <th scope="col">{SERIAL_COLUMN_LABEL}</th>, projectedHeader.props.children); })}{numbered}</React.Fragment>;
+          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{tableProps["data-oem-column-layout"] && sections.filter(item => item.type === "thead").flatMap(item => tableElements(item.props.children)).map((header, index) => { const projectedHeader = projectTableRow(sortableHeaderRow(header), indices); return React.cloneElement(projectedHeader, {key: `site-columns-${index}`, className: "site-report-columns"}, withNumberCell(tableElements(projectedHeader.props.children),<th key="row-number" scope="col">{SERIAL_COLUMN_LABEL}</th>)); })}{numbered}</React.Fragment>;
         }
         return numbered;
       }));

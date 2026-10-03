@@ -13,7 +13,7 @@ test('MIS reports have the approved column order and wrapping',()=>{
     'Total In and out count report':['site','date','opened','closed','net','pendingClose','verified','idle','pendingVerification','averageTat'],
     'MIS Red Flag Report':['site','door','equipmentGroup','model','openingHmr','openingKmr','category','ref','misFlaggedAt','misFlaggedBy','misFlagRemark','closedAt','closedBy','closingHmr','closingKmr','chassis'],
   };
-  for(const [title,keys] of Object.entries(expected)) assert.deepEqual(reports.find(r=>r.title===title).columns.map(c=>c.key),keys,title);
+  for(const [title,keys] of Object.entries(expected)) assert.deepEqual(reports.find(r=>r.title===title).columns.map(c=>c.key),keys.includes('ref')?['requestShift',...keys]:keys,title);
   assert.equal(reports.find(r=>r.title==='30 Min. Mismatch').columns.find(c=>c.key==='difference').label,'TAT');
   assert.ok(reports.find(r=>r.title==='Total In and out count report').columns.every(c=>c.wrap&&c.wrapHeader));
   assert.ok(reports.find(r=>r.title==='MIS Turn Around Time').columns.filter(c=>['closeToMis','closeToFirstTrip','firstTripToMis'].includes(c.key)).every(c=>c.wrapHeader));

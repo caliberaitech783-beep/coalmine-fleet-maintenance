@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {requestShiftLabel} from '../request-shift.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -48,6 +49,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
       if(!client&&legacyReadBarrier){if(++reads===2)releaseReads();await bothReads;}
       return {rows:rows.slice(0,1)};
     }
+    if(sql.includes("master_name='Shift Master'")||sql.startsWith('UPDATE maintenance_requests SET request_shift'))return {rows:[]};
     assert.ok(sql.startsWith('INSERT INTO maintenance_requests'),`Unexpected query ${sql}`);
     if(failInsert)throw Error('Simulated database insert failure');
     if(saved.some(row=>row.ref===values[0]))throw Object.assign(Error('duplicate reference'),{code:'23505',constraint:'maintenance_requests_reference_key'});
@@ -62,7 +64,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
   }};
   const context={
     setImmediate:callback=>followups.push(callback),
-    ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
+    requestShiftLabel,...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>({site:'Sasti OB'}),
     canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,isActiveMaintenanceRequest,requestsVisibleGlobally,requestProjection:'*',
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],

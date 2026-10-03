@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {requestShiftLabel} from '../request-shift.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
@@ -40,7 +41,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }
@@ -73,6 +74,9 @@ test('changing equipment group clears the old vehicle, hidden door and fetched d
   });
   const props = { equipmentRecords: records, equipmentLoaded: true, assignedLocation: 'Sasti OB' };
   let tree = app.render(props);
+  const shift=all(tree,node=>node.props['aria-label']==='Shift')[0];
+  assert.equal(shift.props.readOnly,true);
+  assert.equal(shift.props.onChange,undefined);
   const group = () => all(tree, node => node.props.name === 'equipmentGroup')[0];
   const combo = () => byType(tree, EquipmentCombobox);
   const door = () => all(tree, node => node.props.name === 'door')[0].props.value;

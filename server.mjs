@@ -102,6 +102,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
+import {requestShiftLabel} from './request-shift.mjs';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,canManagePendingCorrection,canDeletePendingCorrection,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionReviewRemarkError,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 import {isRequestAlertSuppressedUser,isRequestLifecycleAlert} from './whatsapp-recipient-policy.mjs';
@@ -532,6 +533,7 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS maintenance_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS request_shift TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility_history JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE maintenance_requests
@@ -5688,7 +5690,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
+const requestProjection=`reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
@@ -6546,6 +6548,15 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
   }catch(error){next(error)}
 });
 
+app.get('/api/request-shifts',requireSession,async(req,res,next)=>{
+  try{
+    const user=await currentUserRecord(req.session);
+    const scope=dashboardEquipmentScope(req.session,user);
+    const {rows}=await pool.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
+    res.json(rows.map(row=>row.record_data).filter(row=>!scope.restrictToScope||reportScopeIncludesSite({sites:scope.allowedSites},row.site)));
+  }catch(error){next(error)}
+});
+
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
@@ -6572,11 +6583,15 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverName=String(driverName).trim().slice(0,200);
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
     const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
+    const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
+    const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
       [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
+    await client.query('UPDATE maintenance_requests SET request_shift=$2 WHERE reference=$1',[ref,requestShift]);
+    result.rows[0].requestShift=requestShift;
     if(complaintMedia.length){
       await client.query('UPDATE maintenance_requests SET complaint_media=$2::jsonb WHERE reference=$1',[ref,JSON.stringify(complaintMedia)]);
       result.rows[0].complaintMediaAvailable=true;

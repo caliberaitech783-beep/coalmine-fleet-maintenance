@@ -9,6 +9,7 @@ import {MIS_IN_OUT_REPORT_COLUMNS, MIS_IN_OUT_REPORT_DESCRIPTION, buildSiteInOut
 import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 import {formatShiftDateTime} from './shift-report-time.mjs';
+import {requestShiftColumns} from './request-shift.mjs';
 import {STAGE_TIMING_GAPS,STAGE_TIMING_TOTALS,stageTimingRow,stageGapLabel,slowestStageLabel} from './stage-timing-report.mjs';
 import {withBreakdownMeterColumns} from './breakdown-meter-columns.mjs';
 
@@ -188,5 +189,5 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
     ],requests,r => r.start || r.createdAt),
   ];
   // Every breakdown report carries the HMR / KMR readings of each request.
-  return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)})});
+  return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:requestShiftColumns(withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)}),item.rows,shiftRecords)});
 }

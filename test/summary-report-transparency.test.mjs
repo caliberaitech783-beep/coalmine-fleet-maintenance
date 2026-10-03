@@ -51,18 +51,18 @@ test('Idle manager closure is identified without inventing a repair-completion e
   assert.equal(value(report,row,'maintenanceTat'),'56s');
   assert.equal(report.columns.at(-1).key,'closureEvent','closure type is the last column');
   assert.equal(report.columns.at(-2).key,'ref','job reference sits beside closure type at the end');
-  assert.equal(report.columns[0].key,'site','location leads the summary');
+  assert.equal(report.columns[0].key,'requestShift','shift leads the summary');
   assert.ok(!report.columns.some(column=>['chassis','timingNotes'].includes(column.key)));
   assert.equal(value(report,{...r4,closedBy:''},'closureEvent'),'Maintenance closure | Actor not recorded');
   assert.equal(value(report,{...r4,closedAt:''},'closureEvent'),'Closure time not recorded | Maintenance actor');
 });
 
-test('Summary UI values and scheduled Excel/PDF data share the same 23-column definitions',async()=>{
+test('Summary UI values and scheduled Excel/PDF data share the same 24-column definitions',async()=>{
   const rows=Object.freeze([r1,r4]);
   const before=JSON.stringify(rows);
   const report=summary(rows);
   const table=buildDirectorReportTables({requests:rows,now:new Date('2026-09-08T23:00:00+05:30')}).find(table=>table.title==='Summary Report');
-  assert.equal(report.columns.length,23);
+  assert.equal(report.columns.length,24);
   const keys=report.columns.map(column=>column.key);
   assert.deepEqual(keys.slice(keys.indexOf('closedAt'),keys.indexOf('closedAt')+3),['closedAt','closingHmr','closingKmr'],'closing meter readings follow the closing time');
   assert.deepEqual(keys.slice(keys.indexOf('complaint'),keys.indexOf('complaint')+3),['complaint','openingHmr','openingKmr'],'opening meter readings follow the breakdown reason');

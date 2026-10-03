@@ -1,4 +1,5 @@
 import {requestStatusLabel} from './src/request-status.mjs';
+import {requestShiftColumns,requestShiftLabel} from './request-shift.mjs';
 import {REPORT_XLSX_STYLES, styleReportSheets} from './report-xlsx-style.mjs';
 import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
@@ -148,11 +149,13 @@ function enrichRequests(requests=[],equipmentRecords=[]){
   });
 }
 
-function table(title,department,description,columns,rows){
+function table(title,department,description,columns,rows,shifts=[]){
+  columns=requestShiftColumns(columns,rows,shifts);
   return {title,pdfTitle:reportPdfHeading(title,rows),department,description,columns,rows:rows.map((row)=>columns.map((column)=>cell(typeof column.value==='function'?column.value(row):row[column.key])))};
 }
 
 export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],shiftRecords=[],now=new Date()}={}){
+  requests=requests.map(row=>({...row,requestShift:requestShiftLabel(row,shiftRecords)}));
   requests=requestsWithDoorNumbers(requests,equipmentRecords).map(normalizeOperationalSiteFields);
   equipmentRecords=equipmentRecords.map(record=>normalizeOperationalSiteFields({...record,door:equipmentDoorNumber(record)}));
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);

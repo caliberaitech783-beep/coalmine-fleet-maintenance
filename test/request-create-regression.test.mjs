@@ -1,4 +1,5 @@
 import * as siteAccess from '../region-scope.mjs';
+import {requestShiftLabel} from '../request-shift.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,6 +22,7 @@ function createRoute({ conflict = null, insertError, reports = async () => {}, n
   let handler, status, body, inserts = 0;
   const followups = [], errors = [], logs = [];
   const pool = { query: async sql => {
+    if(sql.includes("master_name='Shift Master'")||sql.startsWith('UPDATE maintenance_requests SET request_shift'))return {rows:[]};
     assert.match(sql, /INSERT INTO maintenance_requests/);
     if (insertError) throw insertError;
     inserts++;
@@ -37,7 +39,7 @@ function createRoute({ conflict = null, insertError, reports = async () => {}, n
       if (conflict) throw Object.assign(new Error(activeRequestConflictMessage(conflict, request.door)), { duplicate: true, existingReference: conflict.ref });
       return write(pool);
     },
-    pool, parseRequestTimelineTimestamp, validateRequestTimelineChange,
+    pool, requestShiftLabel, parseRequestTimelineTimestamp, validateRequestTimelineChange,
     recordRequestTimeline: async () => {},
     maintenanceWriteFailure: (error, _res, next) => next(error),
     requestProjection: "reference AS ref",
