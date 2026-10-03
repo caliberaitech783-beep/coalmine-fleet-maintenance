@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("mobile request forms enforce chassis, search, duplicate blocking, and stored audio", async () => {
+test("mobile request forms allow optional chassis and retain search, duplicate blocking, and stored audio", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
 
@@ -10,7 +10,9 @@ test("mobile request forms enforce chassis, search, duplicate blocking, and stor
   const combobox = await readFile(new URL("../src/equipment-combobox.jsx", import.meta.url), "utf8");
   assert.match(combobox, /role="combobox"/);
   assert.match(combobox, /aria-autocomplete="list"/);
-  assert.match(source, /Chassis number is not available\. Contact the admin team/);
+  assert.match(source, /Chassis number \(optional\)/);
+  assert.doesNotMatch(source, /if \(!request\.chassis\)/);
+  assert.doesNotMatch(server, /Chassis number is required/);
   assert.match(source, /\/api\/requests\/conflict/);
   assert.match(source, /request-conflict-warning/);
   assert.match(source, /Already off road \/ under maintenance/);

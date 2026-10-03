@@ -6544,7 +6544,6 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
-    if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
     const complaintMedia=req.body?.complaintMedia??[];
     if(req.body?.complaintMedia!==undefined&&!validComplaintMedia(complaintMedia))return res.status(400).json({error:'Attach at most one photo and one video, in supported formats, up to 5 MB each.'});

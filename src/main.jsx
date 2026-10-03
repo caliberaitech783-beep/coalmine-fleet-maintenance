@@ -5826,10 +5826,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       alert("The selected equipment has no door, registration or chassis identifier. Contact the admin team to update Equipment Master before creating this request.");
       return;
     }
-    if (!request.chassis) {
-      alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
-      return;
-    }
     submittingRef.current = true;
     setSubmitting(true);
     setCheckingConflict(false);
@@ -5940,10 +5936,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               aria-readonly="true"
             />
           </label>
-          <label className={v && !equipmentDetails.chassis ? "chassis-missing" : ""}>
-            Chassis number *
-            <input value={equipmentDetails.chassis || "Not available — contact admin team"} readOnly required aria-invalid={Boolean(v && !equipmentDetails.chassis)} />
-            {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
+          <label>
+            Chassis number (optional)
+            <input value={equipmentDetails.chassis || ""} readOnly placeholder={v ? "Not recorded in Equipment Master" : "Select equipment to fetch chassis number"} />
           </label>
           <label>
             Make

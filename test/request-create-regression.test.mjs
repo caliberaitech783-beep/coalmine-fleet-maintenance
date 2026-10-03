@@ -187,7 +187,7 @@ test("conflict checks still block pre-existing requests locally and from the ser
   assert.equal(remote.alerts.length, 1);
 });
 
-test("two submit events before React re-renders save once and close after persistence", async () => {
+test("without a chassis, two submit events still save once and close after persistence", async () => {
   const response = deferred();
   let saves = 0, closes = 0, submitting = false;
   const alerts = [], submittingRef = { current: false };
@@ -196,7 +196,7 @@ test("two submit events before React re-renders save once and close after persis
   const submit = evaluate(`${client.slice(start, end)} return submit;`, {
     submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null,
     FormData: class { get(name) { return request[name] || ""; } },
-    requestEquipmentMeterType: () => "HMR", v: {}, equipmentDetails: request,
+    requestEquipmentMeterType: () => "HMR", v: {}, equipmentDetails: {...request, chassis: ""},
     equipmentGroup: "", currentLocation: request.site, driverLookup: { name: "" },
     setSubmitting: value => { submitting = value; }, setCheckingConflict: () => {}, setDuplicateConflict: () => {},
     submitMaintenanceRequest, activeRequestConflictMessage,

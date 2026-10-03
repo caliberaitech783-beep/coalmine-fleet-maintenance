@@ -91,6 +91,16 @@ test('authorized Super/Admin creation remains available without an operational s
   assert.equal(forbidden.calls.length,0);
 });
 
+test('chassis is optional while door identity and site restrictions remain enforced',async()=>{
+  for(const chassis of ['',undefined,'CH-123']){
+    const result=await create({body:{chassis}});
+    assert.equal(result.status,201);
+    assert.equal(result.calls.find(call=>call.kind==='insert').values[5],chassis || '');
+  }
+  assert.equal((await create({body:{chassis:'',door:''}})).status,400);
+  assert.equal((await create({body:{chassis:'',site:'Majri OC'}})).status,403);
+});
+
 test('missing driver lookup data remains empty rather than inventing a driver or a source',async()=>{
   for(const body of [{},{driverName:'  ',driverNameSource:'Oracle'}]){
     const result=await create({body});
