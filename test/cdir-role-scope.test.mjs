@@ -112,6 +112,13 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/view==='people'[\s\S]*?DirectoryTable rows=\{employeeRows\}/);
   assert.match(component,/view==='vacancies'[\s\S]*?DirectoryTable rows=\{vacancies\}/);
   assert.match(component,/onOrganisation=\{openOrganisation\}[\s\S]*?organisationManagers=\{organisation\.managerIds\}/);
+  assert.match(component,/const organisationScope=useMemo\(\(\)=>buildCdirOrganisation\(siteRows\)/);
+  assert.match(component,/const organisationFilterActive=filters\.department!==ALL[\s\S]*?filters\.name/);
+  assert.match(component,/employeeRows\.map\(cdirPersonId\)\.filter\(id=>organisationScope\.managerIds\.has\(id\)\)/);
+  assert.match(component,/candidates\.has\(parentId\)\)return false/);
+  assert.match(component,/model=\{organisationRoot\?organisation:organisationScope\}/);
+  assert.match(component,/rootIds=\{organisationRoot\?undefined:organisationFilterRoots\}/);
+  assert.match(component,/filtered=\{!organisationRoot&&\(organisationFilterActive\|\|organisationGeographyFiltered\)\}/);
   assert.match(component,/rootPerson=\{organisationRoot\}[\s\S]*?onShowAll=\{\(\)=>setOrganisationRoot\(null\)\}/);
   assert.match(component,/exportRows\(currentExportRows,redacted\)/);
   assert.match(css,/\.cdir-site-chips,\.cdir-category-chips\{flex-wrap:wrap;[\s\S]*?overflow:visible/);

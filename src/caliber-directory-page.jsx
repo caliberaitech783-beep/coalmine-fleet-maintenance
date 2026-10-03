@@ -103,13 +103,13 @@ function OrganisationBranch({personId,model,onSelect,trail=new Set()}){
   return <li><button className="cdir-org-person" type="button" onClick={()=>onSelect(person)}><strong>{person.name}</strong><span>{person.designation||'Designation not recorded'}</span><small>{person.siteLabel||'Site not recorded'}{children.length?` · ${children.length} direct report${children.length===1?'':'s'}`:''}</small></button>{children.length>0&&<ul>{children.map(childId=><OrganisationBranch key={childId} personId={childId} model={model} onSelect={onSelect} trail={nextTrail}/>)}</ul>}</li>;
 }
 
-function OrganisationView({model,rootPerson,onSelect,onShowAll}){
+function OrganisationView({model,rootPerson,rootIds,onSelect,onShowAll,filtered=false}){
   const requestedId=rootPerson?cdirPersonId(rootPerson):'';
   const focusedId=requestedId&&model.managerIds.has(requestedId)?requestedId:'';
-  const roots=focusedId?[focusedId]:model.roots;
+  const roots=focusedId?[focusedId]:Array.isArray(rootIds)?rootIds:model.roots;
   const focused=focusedId?model.personById.get(focusedId):null;
   const reports=focusedId?model.descendantIds(focusedId).length:0;
-  return <section className="cdir-section cdir-organisation"><div className="cdir-section-head"><div><h2>{focused?`${focused.name}'s Organisation`:'Organisation Chart'}</h2><p>{focused?`${reports} employee${reports===1?'':'s'} report under this person.`:'All employees who have reporting teams, with everyone under them. Reporting lines use C-Directory first and the User Master Superior field as a fallback.'}</p></div>{focused&&<button type="button" onClick={onShowAll}><Network/>Show full chart</button>}</div>{roots.length?<div className="cdir-org-forest">{roots.map(rootId=><ul className="cdir-org-tree" key={rootId}><OrganisationBranch personId={rootId} model={model} onSelect={onSelect}/></ul>)}</div>:<div className="cdir-empty">No employee reporting relationships are recorded in Masters.</div>}</section>;
+  return <section className="cdir-section cdir-organisation"><div className="cdir-section-head"><div><h2>{focused?`${focused.name}'s Organisation`:'Organisation Chart'}</h2><p>{focused?`${reports} employee${reports===1?'':'s'} report under this person.`:filtered?'Reporting managers matching the selected filters are shown with their complete downstream teams.':'All employees who have reporting teams, with everyone under them. Reporting lines use C-Directory first and the User Master Superior field as a fallback.'}</p></div>{focused&&<button type="button" onClick={onShowAll}><Network/>Show full chart</button>}</div>{roots.length?<div className="cdir-org-forest">{roots.map(rootId=><ul className="cdir-org-tree" key={rootId}><OrganisationBranch personId={rootId} model={model} onSelect={onSelect}/></ul>)}</div>:<div className="cdir-empty">{filtered?'No employee with a reporting team matches the selected filters.':'No employee reporting relationships are recorded in Masters.'}</div>}</section>;
 }
 
 export default function CaliberDirectoryPage({token}){
@@ -135,6 +135,21 @@ export default function CaliberDirectoryPage({token}){
   const overviewMode=corporateLeadership.length?'corporate':'site',leadership=corporateLeadership.length?corporateLeadership:siteLeadership;
   const employeeRows=useMemo(()=>filteredRows.filter(activePerson),[filteredRows]);
   const vacancies=useMemo(()=>filteredRows.filter(person=>statusOf(person)==='VACANT'),[filteredRows]);
+  const organisationScope=useMemo(()=>buildCdirOrganisation(siteRows),[siteRows]);
+  const organisationFilterActive=filters.department!==ALL||filters.designation!==ALL||filters.category!==ALL||Boolean(clean(filters.name));
+  const organisationFilterRoots=useMemo(()=>{
+    if(!organisationFilterActive)return undefined;
+    const candidates=new Set(employeeRows.map(cdirPersonId).filter(id=>organisationScope.managerIds.has(id)));
+    return [...candidates].filter(id=>{
+      const visited=new Set([id]);let parentId=organisationScope.parentById.get(id);
+      while(parentId&&!visited.has(parentId)){
+        if(candidates.has(parentId))return false;
+        visited.add(parentId);parentId=organisationScope.parentById.get(parentId);
+      }
+      return true;
+    });
+  },[employeeRows,organisationFilterActive,organisationScope]);
+  const organisationGeographyFiltered=filters.region!==ALL||filters.site!==ALL;
   const browseCountRows=view==='people'||view==='organisation'?employeeRows:view==='vacancies'?vacancies:filteredRows;
   const categoryCountRows=view==='people'||view==='organisation'?categoryBaseRows.filter(activePerson):view==='vacancies'?categoryBaseRows.filter(person=>statusOf(person)==='VACANT'):categoryBaseRows;
   const currentExportRows=view==='people'?employeeRows:view==='vacancies'?vacancies:filteredRows;
@@ -193,6 +208,6 @@ export default function CaliberDirectoryPage({token}){
     {view==='dashboard'&&<><SummaryHero meta={directory.meta||{}} rows={filteredRows} leadershipCount={leadership.length} scopeLabel={scopeLabel} mode={overviewMode}/><section className="cdir-section"><div className="cdir-section-head"><div><h2>{overviewMode==='corporate'?'Leadership roster':'Site leadership roster'}</h2><p>{leadership.length} {overviewMode==='corporate'?'leadership':'senior site'} profile{leadership.length===1?'':'s'} in the selected scope.</p></div></div><DirectoryTable rows={leadership} redacted={redacted} onSelect={setSelected} empty="No active employee profiles match these filters."/></section><div className="cdir-show-all"><button type="button" onClick={showAllPeople}>Show all people <span aria-hidden="true">→</span></button></div>{(viewer.allAccess||viewer.profile==='project-manager')&&<ProjectManagerLeaderboard rows={filteredRows}/>}</>}
     {view==='people'&&<section className="cdir-section"><div className="cdir-section-head"><div><h2>{filters.site===ALL?'Employee directory':siteOptions.find(site=>site.id===filters.site)?.label||'Employee directory'}</h2><p>{employeeRows.length} available employee{employeeRows.length===1?'':'s'} match the selected filters.</p></div><button type="button" onClick={()=>exportRows(employeeRows,redacted)}><Download/>Export current view</button></div><DirectoryTable rows={employeeRows} redacted={redacted} onSelect={setSelected} onOrganisation={openOrganisation} organisationManagers={organisation.managerIds} empty="No employees match these filters."/></section>}
     {view==='vacancies'&&<section className="cdir-section"><div className="cdir-section-head"><div><h2>Vacancies</h2><p>{vacancies.length} vacant sanctioned position{vacancies.length===1?'':'s'} in the selected scope.</p></div><button type="button" onClick={()=>exportRows(vacancies,redacted)}><Download/>Export vacancies</button></div><DirectoryTable rows={vacancies} redacted={redacted} onSelect={setSelected} empty="No vacancies match these filters."/></section>}
-    {view==='matrix'&&<MatrixView directory={directory} rows={filteredRows} onSite={site=>openFiltered({site})} onCategory={category=>openFiltered({category})}/>} {view==='organisation'&&<OrganisationView model={organisation} rootPerson={organisationRoot} onSelect={setSelected} onShowAll={()=>setOrganisationRoot(null)}/>}<ProfileDrawer person={selected} redacted={redacted} onClose={()=>setSelected(null)}/>
+    {view==='matrix'&&<MatrixView directory={directory} rows={filteredRows} onSite={site=>openFiltered({site})} onCategory={category=>openFiltered({category})}/>} {view==='organisation'&&<OrganisationView model={organisationRoot?organisation:organisationScope} rootPerson={organisationRoot} rootIds={organisationRoot?undefined:organisationFilterRoots} filtered={!organisationRoot&&(organisationFilterActive||organisationGeographyFiltered)} onSelect={setSelected} onShowAll={()=>setOrganisationRoot(null)}/>}<ProfileDrawer person={selected} redacted={redacted} onClose={()=>setSelected(null)}/>
   </section>;
 }
