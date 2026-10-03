@@ -1,3 +1,4 @@
+import {ibossAccountsEligible,ibossAccountsAllowed} from './iboss-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
 import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
@@ -3877,10 +3878,7 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
 });
 
 app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
-  const permissions=req.session.permissions || {};
-  if(req.session.role!=='super'||!accessAllows(permissions.tabAccess,'Reports')||
-    !(accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Accounts')))
-    return res.status(403).json({error:'You do not have access to Accounts.'});
+  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   try {const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
   catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
@@ -3893,10 +3891,10 @@ app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
   }
 });
 
-const accountsMergeAllowed=req=>{
-  const permissions=req.session.permissions || {};
-  return req.session.role==='super'&&accessAllows(permissions.tabAccess,'Reports')&&
-    (accessAllows(permissions.reportAccess,'Reports')||accessAllows(permissions.reportAccess,'Accounts'));
+const accountsMergeAllowed=async req=>{
+  const user=await currentUserRecord(req.session);
+  const profile=resolveMobileAccess({user});
+  return ibossAccountsAllowed({role:profile.sessionRole,permissions:profile.permissions});
 };
 const accountsMergeFailed=(res,error)=>{
   if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
@@ -3906,7 +3904,7 @@ const accountsMergeFailed=(res,error)=>{
 
 app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   try{purchaseOrderRange(req.query.from,req.query.to);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
   try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to));}
@@ -3914,7 +3912,7 @@ app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
 });
 app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
-  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   const input={from:req.query.from,to:req.query.to,page:Number(req.query.page||0)};
   try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
@@ -3923,7 +3921,7 @@ app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req
 });
 
 app.get('/api/reports/iboss-accounts-merge/:chain',requireSession,async(req,res)=>{
-  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   let selection;
   try {
     purchaseOrderRange(req.query.from,req.query.to);
@@ -3937,7 +3935,7 @@ app.get('/api/reports/iboss-accounts-merge/:chain',requireSession,async(req,res)
 });
 
 app.get('/api/reports/iboss-accounts-merge/:chain/trail',requireSession,async(req,res)=>{
-  if(!accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   const key=String(req.query.key||'');
   try {
     mergeChain(req.params.chain);purchaseOrderRange(req.query.from,req.query.to);
@@ -4203,7 +4201,7 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
     const record=rows[0]?.record_data||{};
     const location=assignedUserSiteName(record);
     const designation=flowDesignationForUser(record,resolveMobileAccess({user:record}));
-    res.json({location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
+    res.json({ibossAccounts:ibossAccountsEligible(record),location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
   }catch(error){next(error)}
 });
 

@@ -1,3 +1,4 @@
+import {ibossAccountsAllowed} from "../iboss-access.mjs";
 import { siteReportHtml } from "./site-report.mjs";
 import { isIdleVehicleRequest } from "../request-idle.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
@@ -1056,7 +1057,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
-  const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(([name])=>accessAllows(viewPermissions.tabAccess,"Reports") && reportAccessAllows(viewPermissions.reportAccess,name));
+  const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const canViewAdmin=session?.role==="super"&&["admin","super admin"].includes(String(permissions.adminLevel||"").trim().toLowerCase());
   const navigationHidden = collapsedNavigation && !open;
@@ -11281,7 +11282,7 @@ function App() {
     let activeRequest = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((profile) => { if (activeRequest) { setProfileLocation(String(profile.location || "").trim()); setProfileDesignationKey(String(profile.designationKey || "").trim()); } })
+      .then((profile) => { if (activeRequest) { setProfileLocation(String(profile.location || "").trim()); setProfileDesignationKey(String(profile.designationKey || "").trim()); setSession(current => current?.token === session.token ? {...current,permissions:{...current.permissions,ibossAccounts:profile.ibossAccounts === true}} : current); } })
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
@@ -11350,8 +11351,8 @@ function App() {
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
-    if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation","Accounts"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
-    if (["Accounts Masters","Accounts Transactions"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,"Accounts");
+    if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
+    if (["Accounts","Accounts Masters","Accounts Transactions"].includes(name)) return ibossAccountsAllowed(session,activeNavigationPermissions);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);

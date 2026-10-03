@@ -22,7 +22,7 @@ test('Accounts endpoint is session and report permission protected; UI loads liv
  const ui=fs.readFileSync(new URL('../src/iboss-accounts.jsx',import.meta.url),'utf8');
  const main=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.match(server,/app\.get\('\/api\/reports\/iboss-accounts\/:view',requireSession/);
- assert.match(server,/accessAllows\(permissions\.reportAccess,'Accounts'\)/);
+ assert.match(server,/if\(!await accountsMergeAllowed\(req\)\)/);
  assert.match(server,/accountView\(req\.params\.view\)/);
  assert.match(ui,/AbortController/);assert.match(ui,/purchaseOrderRange\(draft\.from,draft\.to\)/);
  assert.match(ui,/key==='day-book'.*currentDay=\{from:today,to:today\}/);

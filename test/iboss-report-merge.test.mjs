@@ -106,5 +106,5 @@ test('Report Merge remains an Accounts page tab alongside Dashboard, protected b
  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  assert.ok(server.includes("app.get('/api/reports/iboss-accounts-merge/:chain',requireSession"));
  assert.ok(server.includes("app.get('/api/reports/iboss-accounts-merge/:chain/trail',requireSession"));
- assert.ok(server.includes("accessAllows(permissions.reportAccess,'Accounts')"));
+ assert.ok(server.includes("if(!await accountsMergeAllowed(req))"));
 });

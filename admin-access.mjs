@@ -1,4 +1,5 @@
 import { isCdirMaster } from "./cdir-masters.mjs";
+import { ibossAccountsEligible } from './iboss-access.mjs';
 
 export const ADMIN_MASTER_OPTIONS = [
   "Users & employees",
@@ -120,6 +121,7 @@ export function adminAccessPermissions(user = {}) {
     desktopManagerCreateRequest,
     mobileManagerCreateRequest,
     adminLevel,
+    ibossAccounts: ibossAccountsEligible(user),
     managerRole: managerRoles[0]||"",
     managerRoles,
     masterAccess: accessSelection(user, "masterAccess", ADMIN_MASTER_OPTIONS),
