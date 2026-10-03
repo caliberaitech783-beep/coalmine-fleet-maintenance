@@ -2,8 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
-import {ibossAccountsAllowed} from '../iboss-access.mjs';
+import {ibossAccountsAllowed,ibossAccountsEligible} from '../iboss-access.mjs';
 import {ADMIN_SUBMENU_OPTIONS} from '../admin-access.mjs';
+test('Account User retains Accounts access after the profile refresh',()=>{
+  const user={userType:'Account User',userGroup:'Account User',adminLevel:''};
+  const profile=resolveMobileAccess({user});
+  const session={...profile,role:profile.sessionRole};
+  assert.equal(ibossAccountsEligible(user),true);
+  assert.equal(ibossAccountsAllowed({...session,permissions:{...session.permissions,ibossAccounts:ibossAccountsEligible(user)}}),true);
+  assert.equal(ibossAccountsEligible({userType:'Mobile User',userGroup:'General User'}),false);
+  assert.equal(ibossAccountsEligible({...user,adminLevel:'Manager'}),false);
+});
 test('Account User has only Accounts authority, never administrator or fleet write access',()=>{
   const profile=resolveMobileAccess({user:{userType:'Account User',adminLevel:'Super Admin',tabAccess:'Masters',userGroup:'Account User'}});
   const session={...profile,role:profile.sessionRole};
