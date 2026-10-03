@@ -969,6 +969,15 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
 }
 
 function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", activeReportCategory = "general" }) {
+  useEffect(() => {
+    const header=document.getElementById('admin-primary-navigation');
+    if(!header)return undefined;
+    const updateHeight=()=>document.documentElement.style.setProperty('--navigation-header-height',`${Math.ceil(header.getBoundingClientRect().height)}px`);
+    updateHeight();
+    const observer=new ResizeObserver(updateHeight);
+    observer.observe(header);
+    return ()=>{observer.disconnect();document.documentElement.style.removeProperty('--navigation-header-height');};
+  },[]);
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);

@@ -27,7 +27,7 @@ function harness(initialWidth) {
     }
     return queries.get(query);
   };
-  const scope = {document: {addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
+  const scope = {document: {getElementById:()=>null,addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
     masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed,

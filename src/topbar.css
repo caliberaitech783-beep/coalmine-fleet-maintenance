@@ -4,7 +4,8 @@
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr) clamp(235px, 18vw, 310px);
   width: 100%;
-  height: 76px;
+  height: auto;
+  min-height: 76px;
   padding: 10px 22px;
   flex-direction: row;
   align-items: center;
@@ -27,6 +28,7 @@
   min-width: 0;
   flex: 1;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   overflow: visible;
@@ -35,19 +37,18 @@
 .app > aside nav > .nav-config-row,
 .app > aside nav > .masters-menu {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .app > aside nav > .nav-config-row > button,
 .app > aside nav > .masters-menu > .nav-config-row > button {
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .app > aside nav .nav-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 
@@ -207,7 +208,7 @@
 .app > .content {
   width: 100%;
   margin-left: 0;
-  margin-top: 76px;
+  margin-top: var(--navigation-header-height, 76px);
 }
 
 @media (min-width: 1601px) {
@@ -255,7 +256,7 @@
 
 .top {
   position: sticky;
-  top: 76px;
+  top: var(--navigation-header-height, 76px);
   z-index: 9;
   box-shadow: 0 4px 14px #17233c0d;
 }
@@ -312,9 +313,8 @@
   margin: 0;
   justify-content: flex-start;
   gap: 4px;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .normal-header-nav::-webkit-scrollbar { display: none; }
