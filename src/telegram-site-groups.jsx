@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 
 export default function TelegramSiteGroups({token}){
-  const [data,setData]=useState(null),[busy,setBusy]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState('');
+  const [data,setData]=useState(null),[busy,setBusy]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState(''),[campaign,setCampaign]=useState(null);
   async function request(path,body){
     const response=await fetch(`/api/telegram/site-groups${path}`,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     let result;
@@ -14,6 +14,22 @@ export default function TelegramSiteGroups({token}){
     try{setData(await request(''))}catch(error){setError(error.message)}
   }
   useEffect(()=>{refresh()},[token]);
+  function download(value,name){
+    const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
+    const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  async function exportUsers(){
+    setBusy('export');setError('');
+    try{download(await request('/export'),'BDMS-site-group-users.json')}catch(error){setError(error.message)}finally{setBusy('')}
+  }
+  async function sendCampaign(){
+    setBusy('campaign');setError('');setNotice('');
+    try{
+      let result;
+      do{result=await request('/campaign',{});setCampaign(result);setNotice(`Site joining campaign: ${result.sent} sent, ${result.failed} failed, ${result.uncertain} uncertain, ${result.pending} pending.`)}while(result.pending>0);
+      download(result,'BDMS-site-joining-delivery-results.json');
+    }catch(error){setError(error.message)}finally{setBusy('')}
+  }
   async function action(site,kind){
     setBusy(site);setError('');setNotice('');
     try{
@@ -31,6 +47,10 @@ export default function TelegramSiteGroups({token}){
     <p>Production, Maintenance, MIS and the site head share updates within their assigned site. Management keeps BDMS Admin Alert.</p>
     <p>To link a group, make CALIBER BDMS an administrator with permission to invite users, then send the command below from your connected BDMS administrator account in that group.</p>
     <button type="button" onClick={refresh} disabled={Boolean(busy)}>Refresh groups</button>
+    {' '}<button type="button" onClick={exportUsers} disabled={Boolean(busy)}>Export users and invitation links</button>
+    {' '}<button type="button" onClick={sendCampaign} disabled={Boolean(busy)}>Send one-time joining links to all assigned users</button>
+    <p>The one-time campaign sends one message per connected Telegram account with its assigned site links. Saved attempts are never sent again by this button.</p>
+    {campaign&&<><button type="button" onClick={()=>download(campaign,'BDMS-site-joining-delivery-results.json')}>Download campaign results</button>{campaign.rows.some(row=>['Failed','Uncertain','Sending'].includes(row.status))&&<table><thead><tr><th>User</th><th>Login</th><th>Delivery</th><th>Review</th></tr></thead><tbody>{campaign.rows.filter(row=>['Failed','Uncertain','Sending'].includes(row.status)).map(row=><tr key={row.login}><td>{row.name}</td><td>{row.login}</td><td>{row.status}</td><td>{row.reason}</td></tr>)}</tbody></table>}</>}
     {error&&<p role="alert" className="meta-whatsapp-feedback error">{error}</p>}
     {notice&&<p role="status" className="meta-whatsapp-feedback success">{notice}</p>}
     {data?<><div style={{overflowX:'auto'}}><table><thead><tr><th>Site</th><th>Group</th><th>Connected site users</th><th>Setup / invitations</th></tr></thead>
