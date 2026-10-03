@@ -26,15 +26,15 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /managerRoleOptions\.map[\s\S]*type="checkbox" name="managerRole"/);
   assert.match(source, /Consolidated WhatsApp report regions[\s\S]*MANAGER_REGION_OPTIONS\.map[\s\S]*name="managerRegion"/);
   assert.match(source, /Included sites[\s\S]*name="managerSites"/);
-  assert.match(source, /accountRole && !isDesktopUser && accountRole !== "Account User" && <UserSiteFields record=\{record\} siteOptions=\{siteOptions\}/);
+  assert.match(source, /accountRole && !isDesktopUser && <UserSiteFields record=\{record\} siteOptions=\{siteOptions\}/);
   assert.doesNotMatch(source, /\(!isDesktopUser \|\| isManager\) && <label>Location/);
   assert.match(source, /accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
   assert.match(source, /isDesktopUser && <>[\s\S]*Selected menus for each view/);
-  assert.match(source, /accountRole && !isDesktopUser && accountRole !== "Account User" && <>[\s\S]*OperationalViewMenuFields/);
+  assert.match(source, /accountRole && !isDesktopUser && <>[\s\S]*OperationalViewMenuFields/);
   assert.match(source, /desktopUserMenuAccess[\s\S]*mobileUserMenuAccess/);
   assert.match(source, /option==="CD"\?"Directory \(CD\)":option/);
-  assert.match(source, /operationalMenuOptions=\[\.\.\.operationalDefaultMenuOptions,"CD"\]/);
+  assert.match(source, /operationalDefaultMenuOptions=\["Requests","Tickets","CD"\]/);
   assert.match(source, /showRequestsMenu&&canCreate&&canSeeRequestMenu\("Create request"\)/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
@@ -72,7 +72,7 @@ test("each Manager receives a role-specific dashboard", () => {
   assert.match(source, /renderedActive === "Manager Profile" \? \(\s*<ManagerDashboard/);
 });
 
-test("Admin receives every default menu except the optional Directory", () => {
+test("Admin receives every default menu including required Directory", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const defaults = source.match(/function applyUserRoleDefaults[\s\S]*?\n}/)?.[0] || "";
   assert.match(defaults, /role === "User"/);

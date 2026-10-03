@@ -3125,8 +3125,8 @@ const operationalViewFields = [
   ["mobileUserRequestAccess","Mobile request submenus","multi-checkbox"],
 ];
 userSubmenuFields.push(...operationalViewFields);
-const operationalDefaultMenuOptions=["Requests","Tickets"];
-const operationalMenuOptions=[...operationalDefaultMenuOptions,"CD"];
+const operationalDefaultMenuOptions=["Requests","Tickets","CD"];
+const operationalMenuOptions=[...operationalDefaultMenuOptions];
 const userMenuOptionLabel=(option)=>option==="CD"?"Directory (CD)":option;
 const operationalRequestOptions={
   "Production User":["View requests","Create request","Closed history"],
@@ -4280,7 +4280,7 @@ function AccessSelectAll({label,options=[],selected=[],onChange}){
 function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false,managerRequestPrivileges=false}){
   const prefix=view==="mobile"?"mobile":"";
   const keyFor=(field)=>prefix?mobileAccessKey(field):field;
-  const requiredTabs=isManager?["Dashboard","Tickets"]:[];
+  const requiredTabs=["CD",...(isManager?["Dashboard","Tickets"]:[])];
   const shownTabs=[...new Set([...visibleTabs,...requiredTabs])];
   const [submenuSelections,setSubmenuSelections]=useState(()=>Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field,options})=>{
     const saved=selectedAccessValues(record,keyFor(field),prefix?field:"").filter((option)=>options.includes(option));
@@ -4309,14 +4309,14 @@ function OperationalViewMenuFields({record={},view="desktop",role=""}){
   const requestField=view==="mobile"?"mobileUserRequestAccess":"desktopUserRequestAccess";
   const isGeneral = role === GENERAL_USER_ROLE;
   const roleRecord = privilegeSelectionValue(record.userGroup) === role ? record : {};
-  const menuOptions = isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
-  const [menus,setMenus]=useState(() => isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions);
+  const menuOptions = role === "Account User" ? ["CD"] : isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
+  const [menus,setMenus]=useState(() => [...new Set([...(isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions),"CD"])]);
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
-    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={setMenus} />{menuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}</span></label>)}</div></fieldset>
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><input type="hidden" name={menuField} value="CD"/><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={(selection)=>setMenus([...new Set([...selection,"CD"])])} />{menuOptions.map((option)=>{const required=option==="CD";return <label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} disabled={required} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div></fieldset>
     {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div><AccessSelectAll label="Select all submenus" options={requestOptions} selected={selectedRequests} onChange={setSelectedRequests} />{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} checked={selectedRequests.includes(option)} onChange={(event)=>toggleRequest(option,event.target.checked)}/><span>{option}</span></label>)}</div></fieldset>}
   </section>;
 }
@@ -4405,15 +4405,15 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         </label>)}</div>
       </div>}
     </fieldset>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && <UserSiteFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && <UserSiteFields record={record} siteOptions={siteOptions} />}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
       <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager managerRequestPrivileges={isManager} />
       <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager managerRequestPrivileges={isManager} />
     </>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && <>
-      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "All menu choices are available and unticked by default. Select only the menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
+    {accountRole && !isDesktopUser && <>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === "Account User" ? "Directory is required for every account. Accounts remains this role’s only additional workspace." : accountRole === GENERAL_USER_ROLE ? "Directory is required. Select any additional menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
     </>}
@@ -4494,7 +4494,7 @@ function applyUserRoleDefaults(record) {
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
       if(role === "Account User"){
-        record[menuField]="";record[requestField]="";
+        record[menuField]="CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
         record[menuField]=generalUserMenuSelection(record,view).join(" | ");
         if(!Object.hasOwn(record,requestField))record[requestField]=operationalRequestOptions[role].join(" | ");
@@ -11309,7 +11309,9 @@ function App() {
       if (saved === "light" || saved === "dark") return saved;
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }),
-    [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null);
+    [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null),
+    [accountWorkspace,setAccountWorkspace]=useState("accounts"),
+    [accountDirectoryView,setAccountDirectoryView]=useState("directory");
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
@@ -11805,8 +11807,8 @@ function App() {
   ]);
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
-    <header><CaliberBrand subtitle="Accounts" /><nav><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
-    <main>{ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
+    <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
+    <main>{accountWorkspace==="directory"?<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={accountDirectoryView==="directory"} className={accountDirectoryView==="directory"?"active":""} onClick={()=>setAccountDirectoryView("directory")}><BookUser/>Directory</button><button type="button" role="tab" aria-selected={accountDirectoryView==="tenure"} className={accountDirectoryView==="tenure"?"active":""} onClick={()=>setAccountDirectoryView("tenure")}><Users/>Employee Tenure Report</button></div>{accountDirectoryView==="tenure"?<EmployeeTenureReport token={session.token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={session.token}/>}</>:ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
   if (session.role === "normal")

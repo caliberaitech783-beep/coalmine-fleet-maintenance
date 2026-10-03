@@ -39,9 +39,9 @@ import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
-import {accessAllows,managerRoleSelection,masterAccessAllows,normalizeAdminLevel,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
+import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
-import {cdirViewerContext} from './cdir-access.mjs';
+import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -1185,19 +1185,18 @@ async function migrate(){
         VALUES ('user_access_labels_normalized','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
-    // CD was previously forced for desktop accounts. Clear that inherited
-    // value once so Directory is unticked for every role until an
-    // administrator explicitly selects it for desktop and/or mobile.
-    const {rows:directoryOptInApplied}=await client.query("SELECT value FROM app_metadata WHERE key='directory_cd_opt_in_v1' FOR UPDATE");
-    if(!directoryOptInApplied.length){
+    // Directory is a core, account-scoped page. Persist it into existing menu
+    // selections so User Master shows the mandatory checkbox consistently.
+    const {rows:directoryAccessApplied}=await client.query("SELECT value FROM app_metadata WHERE key='directory_cd_required_v2' FOR UPDATE");
+    if(!directoryAccessApplied.length){
       const {rows:userRows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' FOR UPDATE");
       for(const row of userRows){
-        const normalized=removeLegacyDirectoryMenuAccess(row.record_data);
+        const normalized=ensureDirectoryMenuAccess(row.record_data);
         if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
           await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
-        VALUES ('directory_cd_opt_in_v1','true',NOW())
+        VALUES ('directory_cd_required_v2','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     // Canonicalize stored operational locations without deleting or re-syncing
@@ -3792,7 +3791,8 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
     req.audit=false;
     res.set('Cache-Control','no-store');
     const [directory,user]=await Promise.all([cdirDirectory(),currentUserRecord(req.session)]);
-    res.json({...directory,viewer:cdirViewerContext({session:req.session,user,sites:directory.sites})});
+    const viewer=cdirViewerContext({session:req.session,user,sites:directory.sites});
+    res.json({...cdirDirectoryForViewer(directory,viewer),viewer});
   }catch(error){next(error)}
 });
 

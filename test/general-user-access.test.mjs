@@ -28,7 +28,7 @@ async function authorize(session,path,{method="GET",query={}}={}){
   return result;
 }
 
-test("General User is a recognized Team User with every menu available and none selected by default",()=>{
+test("General User is a recognized Team User with Directory selected by default",()=>{
   assert.ok(MOBILE_USER_ROLES.includes(GENERAL_USER_ROLE));
   assert.deepEqual(GENERAL_USER_MENU_OPTIONS,["Dashboard","CD","Masters","WhatsApp Integration","Requests","Reports","Audit Trail","Tickets"]);
   for(const name of ["General User"," general ","general_user"])assert.equal(normalizeMobileUserRole(name),GENERAL_USER_ROLE);
@@ -36,7 +36,7 @@ test("General User is a recognized Team User with every menu available and none 
   assert.equal(profile.role,"normal");
   assert.equal(profile.assignedRole,GENERAL_USER_ROLE);
   for(const view of ["desktop","mobile"]){
-    assert.deepEqual(profile.permissions[`${view}UserMenuAccess`],[]);
+    assert.deepEqual(profile.permissions[`${view}UserMenuAccess`],["CD"]);
     assert.deepEqual(profile.permissions[`${view}UserRequestAccess`],[]);
   }
   assert.equal(profile.permissions.viewDashboardRequests,false);
@@ -47,10 +47,10 @@ test("General User is a recognized Team User with every menu available and none 
 test("General User keeps independent saved menus and explicit empty selections",()=>{
   const profile=sessionFor({desktopUserMenuAccess:"Dashboard | CD | Reports",mobileUserMenuAccess:"Tickets"});
   assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Dashboard","CD","Reports"]);
-  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets"]);
+  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets","CD"]);
   const empty=sessionFor({desktopUserMenuAccess:"",mobileUserMenuAccess:""});
-  assert.deepEqual(empty.permissions.desktopUserMenuAccess,[]);
-  assert.deepEqual(empty.permissions.mobileUserMenuAccess,[]);
+  assert.deepEqual(empty.permissions.desktopUserMenuAccess,["CD"]);
+  assert.deepEqual(empty.permissions.mobileUserMenuAccess,["CD"]);
   assert.equal(empty.permissions.viewEquipment,false);
   assert.equal(empty.permissions.viewDashboardRequests,false);
   assert.equal(empty.permissions.readRequests,false);
@@ -58,8 +58,8 @@ test("General User keeps independent saved menus and explicit empty selections",
 
 test("missing mobile settings inherit desktop; invalid menus never grant access",()=>{
   const profile=sessionFor({desktopUserMenuAccess:["Requests","Requests","Masters","Reports","Unknown"]});
-  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Masters","Reports"]);
-  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Masters","Reports"]);
+  assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests","Masters","Reports","CD"]);
+  assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Requests","Masters","Reports","CD"]);
   assert.deepEqual(profile.permissions.desktopUserRequestAccess,["View requests","Closed history"]);
   assert.equal(profile.permissions.readRequests,true);
   assert.equal(generalUserCanAccessMenu(profile,"Masters"),true);
@@ -85,11 +85,11 @@ test("saving General User defaults and all-unchecked menus matches the form",()=
   });
   vm.runInContext(source,context);
   const defaults=context.applyUserRoleDefaults({...user});
-  assert.equal(defaults.desktopUserMenuAccess,"");
-  assert.equal(defaults.mobileUserMenuAccess,"");
+  assert.equal(defaults.desktopUserMenuAccess,"CD");
+  assert.equal(defaults.mobileUserMenuAccess,"CD");
   const saved=context.applyUserRoleDefaults({...user,desktopUserMenuAccess:"",mobileUserMenuAccess:"Tickets",desktopUserRequestAccess:"",mobileUserRequestAccess:"",edit:true});
-  assert.equal(saved.desktopUserMenuAccess,"");
-  assert.equal(saved.mobileUserMenuAccess,"Tickets");
+  assert.equal(saved.desktopUserMenuAccess,"CD");
+  assert.equal(saved.mobileUserMenuAccess,"Tickets | CD");
   assert.equal(saved.edit,false);
   assert.equal(saved.userType,"Mobile User");
 });
