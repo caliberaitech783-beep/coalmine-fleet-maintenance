@@ -3926,7 +3926,9 @@ app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   try{purchaseOrderRange(req.query.from,req.query.to);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to));}
+  const section=req.query.section||'all';
+  if(!['all','core','receivable','tax'].includes(section))return res.status(400).json({error:'Invalid dashboard section.'});
+  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to,section));}
   catch(error){console.error('IBOSS dashboard failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load the dashboard from Oracle. Please retry.'});}
 });
 app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{
