@@ -39,6 +39,7 @@ import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows,normalizeAdminLevel,removeLegacyDirectoryMenuAccess} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
+import {cdirViewerContext} from './cdir-access.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -3780,7 +3781,8 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
     res.set('Cache-Control','no-store');
-    res.json(await cdirDirectory());
+    const [directory,user]=await Promise.all([cdirDirectory(),currentUserRecord(req.session)]);
+    res.json({...directory,viewer:cdirViewerContext({session:req.session,user,sites:directory.sites})});
   }catch(error){next(error)}
 });
 

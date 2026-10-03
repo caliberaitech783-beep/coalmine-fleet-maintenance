@@ -1046,7 +1046,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
-  const canViewDirectory = accessAllows(viewPermissions.tabAccess, "CD");
+  const canViewDirectory = activeManagerRoles.includes("Project Manager") || accessAllows(viewPermissions.tabAccess, "CD");
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;

@@ -580,6 +580,19 @@
   .nav-dock{position:sticky;top:0;z-index:60;background:var(--bg);padding:8px 0;}
   .nav-dock-row{display:flex;align-items:stretch;gap:10px;}
   .filter-strip{margin:10px 0 0;padding:10px 12px;background:var(--surface, #fff);border:1px solid var(--line);border-radius:8px;}
+  .directory-scope-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px;background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;}
+  .directory-scope-tab{appearance:none;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff);color:var(--ink);font:700 14px var(--sans);padding:10px 18px;cursor:pointer;}
+  .directory-scope-tab.active{border-color:var(--accent3);background:var(--accent3);color:#fff;box-shadow:0 5px 14px rgba(83,40,122,.18);}
+  .directory-profile-badge{margin-left:auto;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:var(--soft);color:var(--accent3);font:700 12px var(--mono);}
+  .directory-profile-badge[data-profile="project-manager"]{background:#fff0d7;color:#874d00;}
+  .directory-profile-badge[data-profile="general-user"]{background:#e8f3ff;color:#15538d;}
+  .region-row{margin-bottom:8px;}
+  .region-row .tag.active{background:var(--accent3);border-color:var(--accent3);color:#fff;}
+  body.scope-mine .all-scope-only{display:none!important;}
+  .pm-leaderboard{margin-top:18px;}
+  .pm-leaderboard h2{margin:0;font-size:20px;}
+  .pm-leaderboard .coverage{margin:8px 0 12px;}
+  @media (max-width:760px){.directory-profile-badge{margin-left:0;width:100%;justify-content:center}.filter-strip{overflow-x:auto}.filter-row{flex-wrap:nowrap}}
   .nav-dock-row .back-btn{margin:0;padding:0 16px;flex:none;}
   .nav-dock-row .nav-dock-bar{flex:1;width:auto;}
   .back-btn.disabled{opacity:.45;pointer-events:none;}
@@ -629,16 +642,16 @@
   </div>
   <div class="sidebar-body">
     <div class="sidebar-section">
-      <button class="tbtn tbtn-add sidebar-btn" id="btnAddEmployee">&#10133; ADD NEW EMPLOYEE</button>
+      <button class="tbtn tbtn-add sidebar-btn all-scope-only" id="btnAddEmployee">&#10133; ADD NEW EMPLOYEE</button>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-section-label">Search &amp; Filter</div>
-      <button class="tbtn sidebar-btn" id="btnFilterSearch">&#128269; SEARCH: SITE &#9656; DEPT &#9656; DESIGNATION</button>
+      <button class="tbtn sidebar-btn" id="btnFilterSearch">&#128269; SEARCH: REGION &#9656; SITE &#9656; DEPT &#9656; DESIGNATION</button>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-section-label">Views</div>
-      <button class="tbtn sidebar-btn" id="btnMatrix">&#9638; CATEGORY MATRIX</button>
-      <button class="tbtn sidebar-btn" id="btnChart">&#128202; EMPLOYEE CHART</button>
+      <button class="tbtn sidebar-btn all-scope-only" id="btnMatrix">&#9638; CATEGORY MATRIX</button>
+      <button class="tbtn sidebar-btn all-scope-only" id="btnChart">&#128202; EMPLOYEE CHART</button>
       <button class="tbtn sidebar-btn" id="btnVacant">&#9888;&#65039; VACANCIES ONLY</button>
       <button class="tbtn sidebar-btn" id="btnNotes">&#128737; DATA NOTES</button>
     </div>
@@ -651,7 +664,7 @@
       <button class="tbtn sidebar-btn" id="btnExportView">&#8595; EXPORT CURRENT VIEW</button>
       <button class="tbtn sidebar-btn" id="btnExportAll">&#8595; EXPORT FULL DIRECTORY</button>
     </div>
-    <div class="sidebar-section">
+    <div class="sidebar-section all-scope-only">
       <div class="sidebar-section-label">Edits Data</div>
       <button class="tbtn sidebar-btn" id="btnExportEdits">&#8595; EXPORT EDITS (JSON)</button>
       <button class="tbtn sidebar-btn" id="btnImportEdits">&#8593; IMPORT EDITS (JSON)</button>
@@ -716,6 +729,12 @@
 
   <hr class="sep"/>
 
+  <div class="directory-scope-bar" id="directoryScopeTabs" role="tablist" aria-label="Directory scope">
+    <button type="button" class="directory-scope-tab active" id="scopeAll" role="tab" aria-selected="true">All</button>
+    <button type="button" class="directory-scope-tab" id="scopeMine" role="tab" aria-selected="false" style="display:none;">My Site(s)</button>
+    <span class="directory-profile-badge" id="directoryProfileBadge" data-profile="all-user">All directory</span>
+  </div>
+
   <div class="nav-dock" id="navDock">
     <div class="nav-dock-row">
     <button class="back-btn" id="backBtn">&larr; Back</button>
@@ -726,7 +745,9 @@
       <span class="ndb-hint"><span id="navDockHintTxt">Sites &amp; filters</span> <span class="ndb-caret">&#9662;</span></span>
     </button>
     </div>
-    <div class="filter-row filter-strip" id="filterStrip" style="display:none;">
+    <div class="filter-row filter-strip" id="filterStrip">
+      <div class="filter-group"><span class="lbl">Region</span><select id="gfRegion" class="filter-select"><option value="ALL">All</option><option value="WCL">WCL</option><option value="NCL">NCL</option></select></div>
+      <span class="filter-arrow">&#9656;</span>
       <div class="filter-group"><span class="lbl">&#128205; Site/Office</span><select id="gfSite" class="filter-select"></select></div>
       <span class="filter-arrow">&#9656;</span>
       <div class="filter-group"><span class="lbl">Department</span><select id="gfDept" class="filter-select"></select></div>
@@ -736,6 +757,7 @@
       <div class="filter-group"><span class="lbl">&#128269; Name</span><input id="gfName" type="text" class="filter-select" placeholder="Type a name&hellip;" autocomplete="off"/></div>
     </div>
     <div class="nav-dock-panel" id="navDockPanel">
+      <div class="crossrow region-row" id="regionPills"></div>
       <div class="pillrow" id="sitePills"></div>
       <div class="crossrow" id="groupPills"></div>
       <div class="crossrow" id="catPills"></div>
@@ -771,6 +793,10 @@ window.cdirDirectoryReady = (async function(){
 (async function(){
   await window.cdirDirectoryReady;
   const DATA = JSON.parse(document.getElementById('directory-data').textContent);
+  const VIEWER = DATA.viewer || {profile:'all-user',label:'All directory',mySitesEnabled:false,siteIds:[],sites:[]};
+  let directoryScope = 'all';
+  let selectedRegion = 'ALL';
+  const viewerSiteIds = new Set(Array.isArray(VIEWER.siteIds) ? VIEWER.siteIds : []);
   // Keep each position stable, including repeated employee IDs and vacant slots.
   const recordKeys = new Set();
   Object.keys(DATA.matrix).forEach(mk=>{
@@ -1030,8 +1056,12 @@ window.cdirDirectoryReady = (async function(){
     out.sort(catOrderCmp);
     return out;
   }
-  let ALL_ROSTER = allRosterUnique();
-  function refreshAllRoster(){ ALL_ROSTER = allRosterUnique(); }
+  let FULL_ROSTER = allRosterUnique();
+  let ALL_ROSTER = FULL_ROSTER;
+  function refreshAllRoster(){
+    FULL_ROSTER = allRosterUnique();
+    ALL_ROSTER = directoryScope==='mine' ? FULL_ROSTER.filter((person)=>viewerSiteIds.has(person.siteId)) : FULL_ROSTER;
+  }
   let chartTimer = null;
 
   // ---------- edit data (in-memory this session; export/import as JSON to persist) ----------
@@ -1128,6 +1158,7 @@ window.cdirDirectoryReady = (async function(){
       totalVacant:vacant, totalResigned:resigned, totalDepartments:departments.size,
       totalSitesOffices:DATA.sites.filter(site=>DATA.siteTotals[site.id]>0).length});
     DATA.categoryTotalsUnique = categories;
+    refreshAllRoster();
     renderTopPills();
   }
 
@@ -1247,37 +1278,28 @@ window.cdirDirectoryReady = (async function(){
   }
 
   function categoryRosterAllSites(cat){
-    let out = [];
-    const seen = new Set();
-    DATA.sites.forEach(s=>{
-      if(s.flag==='jayant_combined'){
-        if(seen.has(s.dataKey)) return;
-        seen.add(s.dataKey);
-      }
-      (DATA.matrix[s.id+'|'+cat]||[]).forEach(p=> out.push(Object.assign({cat, siteLabel:s.label, siteId:s.id}, p)));
-    });
-    out.sort(catOrderCmp);
-    return out;
+    return ALL_ROSTER.filter((person)=>person.cat===cat).sort(catOrderCmp);
   }
 
   // ---------- cascading Site -> Department -> Designation search ----------
-  function rosterForFilterSite(siteId){
-    if(!siteId) return ALL_ROSTER;
+  function rosterForFilterSite(siteId, region){
+    if(!siteId) return !region||region==='ALL' ? ALL_ROSTER : ALL_ROSTER.filter((person)=>(sitesById[person.siteId]||{}).group===region);
     const site = sitesById[siteId];
     if(!site || site.flag==='not_in_roster') return [];
-    return siteRoster(site);
+    if(directoryScope==='mine'&&!viewerSiteIds.has(siteId)) return [];
+    return siteRoster(site).filter((person)=>directoryScope!=='mine'||viewerSiteIds.has(person.siteId));
   }
-  function departmentsForFilter(siteId){
-    const list = rosterForFilterSite(siteId);
+  function departmentsForFilter(siteId, region){
+    const list = rosterForFilterSite(siteId,region);
     return Array.from(new Set(list.map(p=>p.department).filter(Boolean))).sort();
   }
-  function designationsForFilter(siteId, dept){
-    let list = rosterForFilterSite(siteId);
+  function designationsForFilter(siteId, dept, region){
+    let list = rosterForFilterSite(siteId,region);
     if(dept) list = list.filter(p=>p.department===dept);
     return Array.from(new Set(list.map(p=>p.designation).filter(Boolean))).sort();
   }
-  function peopleForFilter(siteId, dept, desig, name){
-    let list = rosterForFilterSite(siteId);
+  function peopleForFilter(siteId, dept, desig, name, region){
+    let list = rosterForFilterSite(siteId,region);
     if(dept) list = list.filter(p=>p.department===dept);
     if(desig) list = list.filter(p=>p.designation===desig);
     if(name){
@@ -1418,6 +1440,7 @@ window.cdirDirectoryReady = (async function(){
   const sitePillsEl = document.getElementById('sitePills');
   const catPillsEl = document.getElementById('catPills');
   const groupPillsEl = document.getElementById('groupPills');
+  const regionPillsEl = document.getElementById('regionPills');
   const ALL_ID = '__ALL__';
   const DASH_ID = '__DASH__';
 
@@ -1426,27 +1449,47 @@ window.cdirDirectoryReady = (async function(){
     WCL: {label:'WCL', full:'WCL (Western Coalfields Ltd.) Sites', ids: DATA.sites.filter(s=>s.group==='WCL').map(s=>s.id)},
     NCL: {label:'NCL', full:'NCL (Northern Coalfields Ltd.) Sites', ids: DATA.sites.filter(s=>s.group==='NCL').map(s=>s.id)},
   };
-  function groupCount(ids){ return ids.reduce((sum,id)=> sum + (DATA.siteTotals[id]||0), 0); }
+  function activeSites(){ return DATA.sites.filter((site)=>directoryScope!=='mine'||viewerSiteIds.has(site.id)); }
+  function sitesForRegion(region){ return activeSites().filter((site)=>region==='ALL'||site.group===region); }
+  function rosterCountForSites(ids){ const selected=new Set(ids); return ALL_ROSTER.filter((person)=>selected.has(person.siteId)).length; }
+  function groupCount(ids){ return rosterCountForSites(ids); }
+  function regionCount(region){ return rosterCountForSites(sitesForRegion(region).map((site)=>site.id)); }
 
   // rebuilds the site/category/group pill rows from current DATA counts and rebinds their click
   // handlers; called at startup and again whenever a new employee record changes those counts.
   function renderTopPills(){
-    const pillDefs = [{id:DASH_ID, label:'&#128202; Dashboard', count:null}, {id:ALL_ID, label:'All Sites', count: DATA.meta.totalStaffSanctioned}]
-      .concat(DATA.sites.map(s=>({id:s.id, label:s.label, flag:s.flag, count: DATA.siteTotals[s.id]||0})));
+    const filteredSites=sitesForRegion(selectedRegion);
+    const pillDefs = (directoryScope==='all' ? [{id:DASH_ID, label:'&#128202; Dashboard', count:null}] : [])
+      .concat([{id:ALL_ID,label:directoryScope==='mine'?'My Sites':'All Sites',count:regionCount(selectedRegion)}])
+      .concat(filteredSites.map(s=>({id:s.id, label:s.label, flag:s.flag, count: rosterCountForSites([s.id])})));
+    regionPillsEl.innerHTML = '<span class="lbl">Region:</span>' + ['ALL','WCL','NCL'].map((region)=>
+      `<button class="tag${selectedRegion===region?' active':''}" data-region="${region}">${region==='ALL'?'All':region} <span class="tag-count">(${regionCount(region)})</span></button>`).join('');
     sitePillsEl.innerHTML = pillDefs.map(p=>
       `<button class="pill" data-site="${p.id}">${p.label}${p.flag==='jayant_combined'?' <span class="flag">*</span>':''}${p.flag==='not_in_roster'?' <span class="flag">&dagger;</span>':''}${p.count!==null?` <span class="pill-count">(${p.count})</span>`:''}</button>`
     ).join('');
 
-    catPillsEl.innerHTML = '<span class="lbl">&#128269; Cross-drill by category:</span>' +
+    catPillsEl.innerHTML = directoryScope==='mine' ? '' : '<span class="lbl">&#128269; Cross-drill by category:</span>' +
       CATS.map(c=>`<button class="tag" data-cat="${c}">${c} <span class="tag-count">(${DATA.categoryTotalsUnique[c]||0})</span></button>`).join('');
 
-    groupPillsEl.innerHTML = '<span class="lbl">&#127959;&#65039; Group by company:</span>' +
+    groupPillsEl.innerHTML = directoryScope==='mine' ? '' : '<span class="lbl">&#127959;&#65039; Group by company:</span>' +
       Object.keys(GROUP_DEFS).map(g=>`<button class="tag" data-group="${g}">${GROUP_DEFS[g].label} <span class="tag-count">(${groupCount(GROUP_DEFS[g].ids)})</span></button>`).join('');
+
+    regionPillsEl.querySelectorAll('.tag').forEach((button)=>{
+      button.addEventListener('click',()=>{
+        selectedRegion=button.dataset.region;
+        renderTopPills();
+        go({type:'siteDeptDesig',region:selectedRegion,site:'',dept:'',desig:'',name:''},{replace:current().type==='siteDeptDesig'});
+      });
+    });
 
     sitePillsEl.querySelectorAll('.pill').forEach(p=>{
       p.addEventListener('click', ()=>{
         if(p.dataset.site===DASH_ID) go({type:'dashboard'}, {replace: stack.length===1});
-        else go({type:'site', site:p.dataset.site}, {replace: stack.length===1});
+        else if(p.dataset.site===ALL_ID) go({type:'siteDeptDesig',region:selectedRegion,site:'',dept:'',desig:'',name:''},{replace:stack.length===1});
+        else {
+          selectedRegion=(sitesById[p.dataset.site]||{}).group||selectedRegion;
+          go({type:'site', site:p.dataset.site}, {replace: stack.length===1});
+        }
       });
     });
     catPillsEl.querySelectorAll('.tag').forEach(t=>{
@@ -1458,7 +1501,7 @@ window.cdirDirectoryReady = (async function(){
     // re-apply the current active highlight (pills were just rebuilt from scratch)
     if(typeof render==='function' && typeof current==='function' && stack && stack.length){
       const v = current();
-      sitePillsEl.querySelectorAll('.pill').forEach(p=> p.classList.toggle('active', (v.type==='site' && p.dataset.site===v.site) || (v.type==='dashboard' && p.dataset.site===DASH_ID)));
+      sitePillsEl.querySelectorAll('.pill').forEach(p=> p.classList.toggle('active', (v.type==='site' && p.dataset.site===v.site) || (v.type==='dashboard' && p.dataset.site===DASH_ID) || (v.type==='siteDeptDesig'&&!v.site&&p.dataset.site===ALL_ID)));
       catPillsEl.querySelectorAll('.tag').forEach(t=> t.classList.toggle('active', v.type==='category' && t.dataset.cat===v.cat));
       groupPillsEl.querySelectorAll('.tag').forEach(t=> t.classList.toggle('active', v.type==='group' && t.dataset.group===v.group));
     }
@@ -1480,7 +1523,7 @@ window.cdirDirectoryReady = (async function(){
     else if(v.type==='site') lbl = v.site===ALL_ID ? 'All Sites' : ((DATA.sites.find(s=>s.id===v.site)||{}).label || v.site);
     else if(v.type==='group') lbl = (GROUP_DEFS[v.group]||{}).full || v.group;
     else if(v.type==='category') lbl = 'Category: ' + v.cat;
-    else if(v.type==='siteDeptDesig') lbl = (v.site ? ((DATA.sites.find(s=>s.id===v.site)||{}).label||v.site) : 'All Sites') + (v.dept?' &rsaquo; '+v.dept:'') + (v.desig?' &rsaquo; '+v.desig:'');
+    else if(v.type==='siteDeptDesig') lbl = 'Region '+((v.region||'ALL')==='ALL'?'All':v.region)+' &rsaquo; '+(v.site ? ((DATA.sites.find(s=>s.id===v.site)||{}).label||v.site) : (directoryScope==='mine'?'My Sites':'All Sites')) + (v.dept?' &rsaquo; '+v.dept:'') + (v.desig?' &rsaquo; '+v.desig:'');
     if(!lbl) lbl = ({matrix:'Category matrix',chart:'Employee chart',vacant:'Vacancies',person:'Employee profile',personEdit:'Edit employee',newPerson:'Add employee'})[v.type] || 'Directory';
     navDockCur.textContent = lbl.replace(/&rsaquo;/g, '›');
   }
@@ -1521,7 +1564,8 @@ window.cdirDirectoryReady = (async function(){
   }
   function back(){
     if(stack.length>1) stack.pop();
-    else if(current().type!=='dashboard') stack[0] = {type:'dashboard'};
+    else if(directoryScope==='mine'&&current().type!=='siteDeptDesig') stack[0] = {type:'siteDeptDesig',region:'ALL',site:'',dept:'',desig:'',name:''};
+    else if(directoryScope==='all'&&current().type!=='dashboard') stack[0] = {type:'dashboard'};
     sortState = {key:null, dir:1};
     teamEditOpen = false;
     pendingRemoveKey = null;
@@ -1529,6 +1573,40 @@ window.cdirDirectoryReady = (async function(){
     render();
   }
   backBtn.addEventListener('click', back);
+
+  // ---------- All / My Site(s) role-aware directory scope ----------
+  const scopeAllBtn=document.getElementById('scopeAll');
+  const scopeMineBtn=document.getElementById('scopeMine');
+  const profileBadge=document.getElementById('directoryProfileBadge');
+  function refreshDirectoryProfile(){
+    scopeAllBtn.classList.toggle('active',directoryScope==='all');
+    scopeMineBtn.classList.toggle('active',directoryScope==='mine');
+    scopeAllBtn.setAttribute('aria-selected',directoryScope==='all'?'true':'false');
+    scopeMineBtn.setAttribute('aria-selected',directoryScope==='mine'?'true':'false');
+    document.body.classList.toggle('scope-mine',directoryScope==='mine');
+    const assigned=viewerSiteIds.size;
+    profileBadge.dataset.profile=VIEWER.profile||'all-user';
+    profileBadge.textContent=VIEWER.mySitesEnabled
+      ? `${VIEWER.label} profile · ${directoryScope==='mine'?(assigned?assigned+' assigned site'+(assigned===1?'':'s'):'no matched site assignment'):'All directory'}`
+      : 'All directory';
+  }
+  function setDirectoryScope(scope){
+    if(scope==='mine'&&!VIEWER.mySitesEnabled)return;
+    directoryScope=scope;
+    selectedRegion='ALL';
+    refreshAllRoster();
+    refreshDirectoryProfile();
+    stack=[scope==='mine'?{type:'siteDeptDesig',region:'ALL',site:'',dept:'',desig:'',name:''}:{type:'dashboard'}];
+    renderTopPills();
+    render();
+  }
+  if(VIEWER.mySitesEnabled){
+    scopeMineBtn.style.display='';
+    scopeMineBtn.textContent=viewerSiteIds.size===1?'My Site':'My Site(s)';
+  }
+  scopeAllBtn.addEventListener('click',()=>setDirectoryScope('all'));
+  scopeMineBtn.addEventListener('click',()=>setDirectoryScope('mine'));
+  refreshDirectoryProfile();
 
   // ---------- sorting ----------
   const SORT_ACCESSORS = {
@@ -1660,6 +1738,10 @@ window.cdirDirectoryReady = (async function(){
 
   // ---------- renderers ----------
   function renderSiteView(siteId){
+    if(directoryScope==='mine'&&siteId!==ALL_ID&&!viewerSiteIds.has(siteId)){
+      contentEl.innerHTML='<div class="empty-state">This site is outside your assigned My Site(s) scope.</div>';
+      return;
+    }
     let title, roster, cards, coverage, exportRows;
     if(siteId===ALL_ID){
       title = 'CMLL &mdash; All Sites Overview';
@@ -2165,6 +2247,26 @@ window.cdirDirectoryReady = (async function(){
     });
     return out.slice(0,10);
   }
+  function renderProjectManagerLeaderboard(roster){
+    const managers=[];
+    const seen=new Set();
+    roster.filter((person)=>person.status!=='VACANT'&&/\bproject manager\b/i.test(person.designation||'')).forEach((person)=>{
+      const key=(person.name||person.empId||'')+'|'+person.siteId;
+      if(seen.has(key))return;
+      seen.add(key);
+      const team=roster.filter((member)=>member.siteId===person.siteId);
+      managers.push({person,filled:team.filter((member)=>member.status==='ACTIVE').length,vacant:team.filter((member)=>member.status==='VACANT').length,total:team.length});
+    });
+    managers.sort((a,b)=>b.filled-a.filled||a.vacant-b.vacant||(a.person.name||'').localeCompare(b.person.name||''));
+    if(!managers.length)return `<section class="pm-leaderboard"><h2>Project Manager Site Coverage</h2><div class="empty-state">No Project Manager is assigned in this directory scope.</div></section>`;
+    return `<section class="pm-leaderboard">
+      <h2>Project Manager Site Coverage</h2>
+      <div class="coverage">Directory coverage ranking by filled team positions. This is a staffing view, not a performance score.</div>
+      <div class="table-wrap"><table class="roster"><thead><tr><th>Rank</th><th>Project Manager</th><th>Site</th><th>Filled team</th><th>Vacant</th><th>Sanctioned</th></tr></thead><tbody>
+      ${managers.map((entry,index)=>`<tr><td><b>${index+1}</b></td><td><b>${entry.person.name||'—'}</b></td><td>${entry.person.siteLabel||'—'}</td><td>${entry.filled}</td><td>${entry.vacant}</td><td>${entry.total}</td></tr>`).join('')}
+      </tbody></table></div>
+    </section>`;
+  }
   function renderDashboardView(){
     const leadership = buildLeadershipRoster();
     contentEl.innerHTML = `
@@ -2182,6 +2284,7 @@ window.cdirDirectoryReady = (async function(){
         </div>
       </div>
       ${rosterTable(leadership, {showSite:true})}
+      ${renderProjectManagerLeaderboard(FULL_ROSTER)}
     `;
     attachRowHandlers(contentEl);
     attachSortHandlers(contentEl, leadership, {showSite:true}, render);
@@ -2192,19 +2295,13 @@ window.cdirDirectoryReady = (async function(){
     const grp = GROUP_DEFS[groupKey];
     if(!grp){ contentEl.innerHTML = '<div class="empty-state">Unknown group.</div>'; return; }
     const idSet = new Set(grp.ids);
-    let roster = [];
-    DATA.sites.forEach(s=>{
-      if(!idSet.has(s.id) || s.flag==='not_in_roster') return;
-      CATS.forEach(cat=>{
-        (DATA.matrix[s.id+'|'+cat]||[]).forEach(p=> roster.push(Object.assign({cat, siteId:s.id, siteLabel:s.label}, p)));
-      });
-    });
+    let roster = ALL_ROSTER.filter((person)=>idSet.has(person.siteId));
     roster.sort(catOrderCmp);
-    const totals = grp.ids.reduce((acc,id)=>{
-      const st = DATA.siteStats[id] || {sanctioned:0, filled:0, vacant:0};
-      acc.sanctioned+=st.sanctioned; acc.filled+=st.filled; acc.vacant+=st.vacant;
+    const totals = roster.reduce((acc,person)=>{
+      acc.sanctioned++;
+      if(person.status==='VACANT')acc.vacant++;else if(person.status==='ACTIVE')acc.filled++;
       return acc;
-    }, {sanctioned:0, filled:0, vacant:0});
+    },{sanctioned:0,filled:0,vacant:0});
     const missing = DATA.sites.filter(s=> idSet.has(s.id) && s.flag==='not_in_roster');
     const coverage = `Coverage: <b>${totals.sanctioned}</b> sanctioned positions across <b>${grp.ids.length}</b> sites &middot; <b>${totals.filled}</b> filled / <b>${totals.vacant}</b> vacant &middot; roster snapshot ${DATA.meta.generated}` +
       (missing.length ? ` &middot; <span style="color:var(--vacant);">${missing.map(s=>s.label).join(', ')} not yet in roster</span>` : '');
@@ -2231,56 +2328,61 @@ window.cdirDirectoryReady = (async function(){
     attachSortHandlers(contentEl, list, {showSite:true}, render);
   }
 
-  // ---------- always-visible Site > Dept > Designation > Name strip (shown on any site tab) ----------
-  const gfSite = document.getElementById('gfSite'), gfDept = document.getElementById('gfDept'),
+  // ---------- always-visible Region > Site > Department > Designation > Name strip ----------
+  const gfRegion = document.getElementById('gfRegion'), gfSite = document.getElementById('gfSite'), gfDept = document.getElementById('gfDept'),
         gfDesig = document.getElementById('gfDesig'), gfName = document.getElementById('gfName'),
         filterStrip = document.getElementById('filterStrip');
   const escA = x=> String(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   function updateFilterStrip(v){
-    const show = v.type==='site' || v.type==='siteDeptDesig';
-    filterStrip.style.display = show ? '' : 'none';
-    if(!show){ gfName.value=''; return; }
+    filterStrip.style.display = '';
     const siteId = v.type==='site' ? (v.site===ALL_ID ? '' : v.site) : (v.site||'');
+    const region = siteId ? ((sitesById[siteId]||{}).group||'ALL') : (v.region||selectedRegion||'ALL');
+    const regionChanged=selectedRegion!==region&&['WCL','NCL'].includes(region);
+    selectedRegion=['WCL','NCL'].includes(region)?region:'ALL';
+    if(regionChanged)renderTopPills();
     const dept = v.type==='siteDeptDesig' ? (v.dept||'') : '';
     const desig = v.type==='siteDeptDesig' ? (v.desig||'') : '';
-    gfSite.innerHTML = '<option value="">All Sites</option>' + DATA.sites.filter(s=>s.flag!=='not_in_roster' || s.id===siteId)
+    gfRegion.value=selectedRegion;
+    gfSite.innerHTML = `<option value="">${directoryScope==='mine'?'All My Sites':'All Sites'}</option>` + sitesForRegion(selectedRegion).filter(s=>s.flag!=='not_in_roster' || s.id===siteId)
       .map(s=>`<option value="${escA(s.id)}" ${siteId===s.id?'selected':''}>${s.label}</option>`).join('');
-    gfDept.innerHTML = '<option value="">All Departments</option>' + departmentsForFilter(siteId)
+    gfDept.innerHTML = '<option value="">All Departments</option>' + departmentsForFilter(siteId,selectedRegion)
       .map(d=>`<option value="${escA(d)}" ${dept===d?'selected':''}>${d}</option>`).join('');
-    gfDesig.innerHTML = '<option value="">All Designations</option>' + designationsForFilter(siteId, dept)
+    gfDesig.innerHTML = '<option value="">All Designations</option>' + designationsForFilter(siteId,dept,selectedRegion)
       .map(d=>`<option value="${escA(d)}" ${desig===d?'selected':''}>${d}</option>`).join('');
     if(document.activeElement!==gfName) gfName.value = v.type==='siteDeptDesig' ? (v.name||'') : '';
   }
-  function goFilter(site, dept, desig){
-    go({type:'siteDeptDesig', site, dept, desig, name: gfName.value}, {replace: current().type==='siteDeptDesig'});
+  function goFilter(region, site, dept, desig){
+    selectedRegion=region||'ALL';
+    renderTopPills();
+    go({type:'siteDeptDesig',region:selectedRegion,site,dept,desig,name:gfName.value},{replace:current().type==='siteDeptDesig'});
   }
-  gfSite.addEventListener('change', ()=> goFilter(gfSite.value, '', ''));
-  gfDept.addEventListener('change', ()=> goFilter(gfSite.value, gfDept.value, ''));
-  gfDesig.addEventListener('change', ()=> goFilter(gfSite.value, gfDept.value, gfDesig.value));
+  gfRegion.addEventListener('change',()=>goFilter(gfRegion.value,'','',''));
+  gfSite.addEventListener('change',()=>goFilter(gfRegion.value,gfSite.value,'',''));
+  gfDept.addEventListener('change',()=>goFilter(gfRegion.value,gfSite.value,gfDept.value,''));
+  gfDesig.addEventListener('change',()=>goFilter(gfRegion.value,gfSite.value,gfDept.value,gfDesig.value));
   gfName.addEventListener('input', ()=>{
     const v = current();
     if(v.type==='siteDeptDesig' && window.__fsRefresh){ v.name = gfName.value; window.__fsRefresh(); }
-    else { goFilter(gfSite.value, gfDept.value, gfDesig.value); gfName.focus(); }
+    else { goFilter(gfRegion.value,gfSite.value,gfDept.value,gfDesig.value); gfName.focus(); }
   });
 
   function renderSiteDeptDesigView(v){
+    const region = v.region || 'ALL';
     const siteId = v.site || '';
     const dept = v.dept || '';
     const desig = v.desig || '';
     const name = v.name || '';
-    const deptOpts = departmentsForFilter(siteId);
-    const desigOpts = designationsForFilter(siteId, dept);
-    const siteLabel = siteId ? (sitesById[siteId]||{label:''}).label : 'All Sites';
+    const siteLabel = siteId ? (sitesById[siteId]||{label:''}).label : (directoryScope==='mine'?'My Sites':'All Sites');
 
     function resultsHtml(list){
       return `
-        <div class="coverage">Coverage: <b>${list.length}</b> employee${list.length===1?'':'s'} matching &middot; ${siteLabel}${dept?' &middot; '+dept:''}${desig?' &middot; '+desig:''}${name?' &middot; name contains &ldquo;'+name+'&rdquo;':''}</div>
+        <div class="coverage">Coverage: <b>${list.length}</b> employee${list.length===1?'':'s'} matching &middot; Region ${region==='ALL'?'All':region} &middot; ${siteLabel}${dept?' &middot; '+dept:''}${desig?' &middot; '+desig:''}${name?' &middot; name contains &ldquo;'+name+'&rdquo;':''}</div>
         ${list.length ? rosterTable(list, {showSite: !siteId}) : '<div class="empty-state">No employees match this combination. Try clearing one of the filters.</div>'}
       `;
     }
     function currentList(){
       const nameEl = document.getElementById('gfName');
-      return peopleForFilter(siteId, dept, desig, nameEl ? nameEl.value : name);
+      return peopleForFilter(siteId,dept,desig,nameEl?nameEl.value:name,region);
     }
     function wireResultHandlers(list){
       const expBtn = document.getElementById('expFilterSearch');
@@ -2296,9 +2398,10 @@ window.cdirDirectoryReady = (async function(){
       wireResultHandlers(list);
     }
 
-    const initialList = peopleForFilter(siteId, dept, desig, name);
+    const initialList = peopleForFilter(siteId,dept,desig,name,region);
     contentEl.innerHTML = `
-      <div class="section-head"><h2 style="font-size:20.5px;">&#128269; Search &mdash; Site &#9656; Department &#9656; Designation</h2><button class="exp" id="expFilterSearch">&#8595; EXPORT</button></div>
+      <div class="section-head"><h2 style="font-size:20.5px;">&#128269; Search &mdash; Region &#9656; Site &#9656; Department &#9656; Designation</h2><button class="exp" id="expFilterSearch">&#8595; EXPORT</button></div>
+      ${directoryScope==='mine'&&VIEWER.profile==='project-manager'?renderProjectManagerLeaderboard(ALL_ROSTER):''}
       <div id="fsResults">${resultsHtml(initialList)}</div>
     `;
     window.__fsRefresh = refreshResults;
@@ -2308,12 +2411,12 @@ window.cdirDirectoryReady = (async function(){
   function render(){
     const v = current();
     // pill highlight
-    sitePillsEl.querySelectorAll('.pill').forEach(p=> p.classList.toggle('active', (v.type==='site' && p.dataset.site===v.site) || (v.type==='dashboard' && p.dataset.site===DASH_ID)));
+    sitePillsEl.querySelectorAll('.pill').forEach(p=> p.classList.toggle('active', (v.type==='site' && p.dataset.site===v.site) || (v.type==='dashboard' && p.dataset.site===DASH_ID) || (v.type==='siteDeptDesig'&&!v.site&&p.dataset.site===ALL_ID)));
     catPillsEl.querySelectorAll('.tag').forEach(t=> t.classList.toggle('active', v.type==='category' && t.dataset.cat===v.cat));
     groupPillsEl.querySelectorAll('.tag').forEach(t=> t.classList.toggle('active', v.type==='group' && t.dataset.group===v.group));
     backBtn.classList.add('show');
-    backBtn.classList.toggle('disabled', stack.length<=1 && v.type==='dashboard');
-    backBtn.disabled = stack.length<=1 && v.type==='dashboard';
+    backBtn.classList.toggle('disabled',stack.length<=1);
+    backBtn.disabled = stack.length<=1;
     refreshDataNotes();
     if(typeof updateNavDock==='function') updateNavDock(v);
     updateFilterStrip(v);
@@ -2456,7 +2559,7 @@ window.cdirDirectoryReady = (async function(){
 
   document.getElementById('btnMatrix').addEventListener('click', ()=> go({type:'matrix'}));
   document.getElementById('btnAddEmployee').addEventListener('click', ()=> go({type:'newPerson', presetSiteId:null, presetCat:null}));
-  document.getElementById('btnFilterSearch').addEventListener('click', ()=> go({type:'siteDeptDesig', site:'', dept:'', desig:''}));
+  document.getElementById('btnFilterSearch').addEventListener('click', ()=> go({type:'siteDeptDesig',region:selectedRegion,site:'',dept:'',desig:'',name:''}));
 
   // ---------- file offering (works both as a plain local file and inside a published Claude artifact) ----------
   async function offerDownload(filename, blob){
@@ -2497,7 +2600,7 @@ window.cdirDirectoryReady = (async function(){
     if(v.type==='site') exportCSV(v.site===ALL_ID? ALL_ROSTER : siteRoster(sitesById[v.site]), v.site===ALL_ID);
     else if(v.type==='category') exportCSV(categoryRosterAllSites(v.cat), true);
     else if(v.type==='person') exportCSV([v.person], true);
-    else if(v.type==='siteDeptDesig') exportCSV(peopleForFilter(v.site||'',v.dept||'',v.desig||'',v.name||''),true);
+    else if(v.type==='siteDeptDesig') exportCSV(peopleForFilter(v.site||'',v.dept||'',v.desig||'',v.name||'',v.region||'ALL'),true);
     else if(v.type==='vacant') exportCSV(ALL_ROSTER.filter(p=>p.status==='VACANT'),true);
     else if(v.type==='group') exportCSV(ALL_ROSTER.filter(p=>GROUP_DEFS[v.group].ids.includes(p.siteId)),true);
     else if(v.type==='dashboard') exportCSV(buildLeadershipRoster(),true);
