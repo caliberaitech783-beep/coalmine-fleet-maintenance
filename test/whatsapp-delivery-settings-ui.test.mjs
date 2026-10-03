@@ -180,9 +180,13 @@ test('existing operational headers retain Reports and General User follows its m
   const {code:navCode}=await transformWithOxc(`function MobileNav(){return (${main.slice(start,end)});}`,'mobile-reports-preview.jsx',{jsx:{runtime:'classic'}});
   for(const [mobileRole,showReportsMenu] of [['Production User',true],['Maintenance User',true],['MIS User',true],['OEM User',true],['General User',false],['General User',true]]){
     const sections=[],scope={React,mobileRole,isGeneral:mobileRole==='General User',isMis:mobileRole==='MIS User',canRequestCorrection:['Production User','Maintenance User','MIS User'].includes(mobileRole),section:'dashboard',showDashboardMenu:true,showDirectoryMenu:false,showReportsMenu,showRequestsMenu:false,showTicketsMenu:false,setSection:next=>sections.push(next),
+      authToken:'navigation-fixture',AnnouncementHistoryButton:()=>null,
       ...Object.fromEntries(['LayoutDashboard','BookOpen','Wrench','Pencil','FileBarChart','Ticket','ArrowRightLeft'].map(name=>[name,()=>null]))};
     const Nav=new Function(...Object.keys(scope),`${navCode};return MobileNav;`)(...Object.values(scope));
     const tree=Nav(),buttons=descendants(tree,node=>node.type==='button');
+    const announcements=descendants(tree,node=>node.type===scope.AnnouncementHistoryButton);
+    assert.equal(announcements.length,1,mobileRole);
+    assert.equal(announcements[0].props.token,scope.authToken);
     const reports=buttons.find(button=>renderToStaticMarkup(button).includes('Reports'));
     assert.equal(Boolean(reports),showReportsMenu,mobileRole);
     if(reports){reports.props.onClick();assert.deepEqual(sections,['reports']);}

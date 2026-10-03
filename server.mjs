@@ -2511,7 +2511,7 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
 // Announcements: an Admin or Super Admin broadcasts a short text to every user.
 // Each user sees it as a blocking popup until they close it; closing is stored
 // per user (login), so it does not come back on another device.
-// Reading the archive never acknowledges a popup or grants announcement management rights.
+// All signed-in roles can read history without acknowledging popups or gaining management rights.
 app.get('/api/announcements/history',requireSession,async(req,res,next)=>{
   try{
     const before=req.query.before===undefined?null:Number(req.query.before);
