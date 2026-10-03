@@ -1189,6 +1189,13 @@
   background: transparent;
 }
 /* Keep top-level navigation readable without the moving shine overlay. */
+.normal > header .normal-header-nav > button > .nav-label {
+  display: inline;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .app > aside nav button.header-nav-item::before,
 .normal > header .normal-header-nav > button[data-nav]::before {
   content: none;
@@ -1198,7 +1205,7 @@
 
 .app > #admin-primary-navigation > nav,
 .normal > header .normal-header-nav,
-.accounts-user-workspace > header > nav { --navigation-label-size: 18px; }
+.accounts-user-workspace > header > nav { --navigation-label-size: 14px; }
 
 .app > #admin-primary-navigation > nav > .nav-config-row > button,
 .app > #admin-primary-navigation > nav > .masters-menu > .nav-config-row > button,
@@ -1211,7 +1218,7 @@
 @media (max-width: 1600px) {
   .app > #admin-primary-navigation > nav,
   .normal > header .normal-header-nav,
-  .accounts-user-workspace > header > nav { --navigation-label-size: 16px; }
+  .accounts-user-workspace > header > nav { --navigation-label-size: 12px; }
 }
 @media (max-width: 900px) {
   .app > #admin-primary-navigation > nav,

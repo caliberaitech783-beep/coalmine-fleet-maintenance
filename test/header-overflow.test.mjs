@@ -13,11 +13,19 @@ test('all profile navigation options wrap rather than clipping the last button',
   assert.match(read('src/user-sessions.css'),/\.accounts-user-workspace > header nav\{[^}]*flex-wrap:wrap/);
 });
 
-test('header shine is removed and top-level menu text is enlarged at every breakpoint',()=>{
+test('header shine stays removed and desktop menu text uses compact sizes',()=>{
   const css=read('src/topbar.css');
   assert.match(css,/\.normal > header \.normal-header-nav > button\[data-nav\]::before \{\s*content: none;\s*animation: none;\s*transition: none;/);
-  for(const size of [18,16,14])assert.ok(css.includes(`--navigation-label-size: ${size}px`));
+  assert.match(css,/\.accounts-user-workspace > header > nav \{ --navigation-label-size: 14px; \}/);
+  assert.match(css,/@media \(max-width: 1600px\) \{[\s\S]*?--navigation-label-size: 12px;/);
+  assert.match(css,/@media \(max-width: 900px\) \{[\s\S]*?--navigation-label-size: 14px;/);
+  assert.doesNotMatch(css,/--navigation-label-size: (18|16)px/);
   assert.match(css,/\.app > #admin-primary-navigation > nav > button,[\s\S]*?font-size: var\(--navigation-label-size\)/);
+});
+
+test('mobile navigation labels override the generic hidden header spans',()=>{
+  assert.match(read('src/topbar.css'),/\.normal > header \.normal-header-nav > button > \.nav-label \{\s*display: inline;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/);
+  assert.match(read('src/main.jsx'),/data-nav="announcements"[^\r\n]*<span className="nav-label">Announcements<\/span>/);
 });
 
 test('wrapped admin and manager navigation reserves its actual height and cleans up',()=>{
