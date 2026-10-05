@@ -6829,6 +6829,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 
 
 // Narrow manager action; the existing edit/daily-update permission and locks stay unchanged.
+function registerReopenBreakdownRoute(){
 app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim(),reason=String(req.body?.reason||'').trim();
@@ -6861,6 +6862,8 @@ app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,r
     res.json(result.rows[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
+
+}
 
 function registerBreakdownResponsibilityRoute(){
 app.patch('/api/requests/:reference/breakdown-responsibility',requireSession,async(req,res,next)=>{
@@ -8174,6 +8177,7 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
 // Vite fingerprints every file under /app-assets, so a deploy changes the URL and
 // browsers may keep these for a year. index.html is still revalidated.
 registerBreakdownResponsibilityRoute();
+registerReopenBreakdownRoute();
 app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutable:true,maxAge:'1y'}));
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
