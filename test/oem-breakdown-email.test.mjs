@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails} from '../oem-breakdown-email.mjs';
+import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails,OEM_TRIAL_CC} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
 test('IST 5PM and activation anchored 1/3/7/10 day schedule',()=>{
   for(const [level,days] of [['L1',1],['L2',3],['L3',7],['L4',10]]){
@@ -49,4 +49,25 @@ test('missing mail configuration fails explicitly without loading or sending rec
 test('another scheduler holding the lock cannot send duplicate reports',async()=>{
   const result=await sendScheduledOemEmails({pool:{connect:async()=>({query:async()=>({rows:[{locked:false}]}),release(){}})},loadData:()=>assert.fail('lock required'),mailer:{transporter:null}});
   assert.deepEqual(result,{skipped:true});
+});
+test('only the first three reports globally get trial CC and sending confirmations, across restarts',async()=>{
+  let used=0;const claims=new Set(),messages=[];
+  const client={release(){},async query(sql,args){
+    if(sql.includes('pg_try'))return {rows:[{locked:true}]};
+    if(sql.startsWith('SELECT activation'))return {rows:[{activation_date:'2026-10-05'}]};
+    if(sql.startsWith('INSERT INTO oem_email_deliveries')){const id=args.slice(0,2).join('|');if(claims.has(id))return {rows:[],rowCount:0};claims.add(id);return {rows:[],rowCount:1};}
+    if(sql.startsWith('UPDATE oem_email_schedule SET trial_cc_used'))return {rows:used<3?[{trial_cc_used:++used}]:[]};
+    return {rows:[],rowCount:1};
+  }};
+  const options={pool:{connect:async()=>client},loadData:async()=>({contacts:[contact],requests:[],equipment:[]}),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:Array.isArray(message.to)?message.to:[message.to,...message.cc||[]],messageId:'test'};}}}};
+  for(let day=5;day<=8;day++){
+    const now=new Date(`2026-10-0${day}T11:30:00Z`);
+    await sendScheduledOemEmails({...options,now});await sendScheduledOemEmails({...options,now});
+  }
+  const reports=messages.filter(message=>!message.subject.startsWith('Sending confirmation'));
+  const confirmations=messages.filter(message=>message.subject.startsWith('Sending confirmation'));
+  assert.equal(reports.length,4);assert.equal(confirmations.length,3);assert.equal(used,3);
+  for(const report of reports.slice(0,3))assert.deepEqual(report.cc,OEM_TRIAL_CC);
+  assert.equal(reports[3].cc,undefined);
+  for(const confirmation of confirmations){assert.deepEqual(confirmation.to,OEM_TRIAL_CC);assert.match(confirmation.text,/not confirmation of inbox delivery/);}
 });
