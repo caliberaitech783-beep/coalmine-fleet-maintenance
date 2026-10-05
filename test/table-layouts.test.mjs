@@ -129,6 +129,38 @@ test("switching a shared table layout immediately projects headings, rows and ex
   assert.equal(new Set(layoutScopes).size, 1, "a site/date title change keeps the same saved layouts available");
 });
 
+test("Shift can move back or be hidden without misaligning rows and exports", async (t) => {
+  const previousStorage = globalThis.localStorage;
+  const storage = memory();
+  globalThis.localStorage = { ...storage, removeItem: key => storage.data.delete(key) };
+  t.after(() => { if (previousStorage === undefined) delete globalThis.localStorage; else globalThis.localStorage = previousStorage; });
+  const source = readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  const h = React.createElement;
+  const { sections, columns } = tableModel.tableModel([
+    h("thead", {}, h("tr", {}, h("th", {sortKey: "requestShift"}, "Shift"), h("th", {sortKey: "door"}, "Door"))),
+    h("tbody", {}, h("tr", {}, h("td", {}, "Shift B"), h("td", {}, "D-1"))),
+  ]);
+  const render = await harness(source.slice(source.indexOf("function TableView(")), "TableView", { ...tableModel, defaultDurationSort, primaryRecordDateColumn,
+    sharedTablePageSize: () => 0, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: Null,
+    isDataRow: row => tableModel.tableElements(row.props.children).length > 1, RecordDateRange: Null, ArrowUpDown: Null, ArrowUp: Null, ArrowDown: Null });
+  const props = { sections, columns, Menu: Null, ColumnsDialog: Null, SortDialog: Null, FilterDialog: Null, ExportMenu: Null, exportTitle: "Shift regression", tableProps: {}, recordDateFilter: false, showRowNumbers: true };
+  let tree = render(props);
+  for (const [keys, headings, values] of [
+    [["door", "requestShift"], ["Sr. No.", "Door", "Shift"], ["1", "D-1", "Shift B"]],
+    [["door"], ["Sr. No.", "Door"], ["1", "D-1"]],
+    [["requestShift", "door"], ["Shift", "Sr. No.", "Door"], ["Shift B", "1", "D-1"]],
+  ]) {
+    descendants(tree, node => node.props.visibleKeys)[0].props.onSelect(keys);
+    tree = render(props);
+    const table = descendants(tree, node => node.type === "table")[0];
+    assert.deepEqual(descendants(table, node => node.type === "th").map(content), headings);
+    assert.deepEqual(descendants(table, node => node.type === "td").map(tableModel.tableCellText), values);
+    const exported = descendants(tree, node => node.props.title === props.exportTitle && node.props.smartPrintColumns)[0];
+    assert.deepEqual(exported.props.columns.map(column => column.label), headings);
+    assert.deepEqual(tableModel.restoreColumnOrder(`nerveCenterTableColumns:${props.exportTitle}`, columns.map(column => column.key)), keys);
+  }
+});
+
 test("Reports tables apply the same saved column order through their controlled view", async () => {
   const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   let capturedKey;

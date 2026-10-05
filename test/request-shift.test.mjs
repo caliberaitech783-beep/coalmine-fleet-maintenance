@@ -30,7 +30,9 @@ test('Shift stays first in request exports without duplicate serial numbers or c
   assert.deepEqual(data.rows,[['Shift B','1','REQ-1']]);
   assert.deepEqual(withSerialColumn(columns.map(({label})=>({label})),[['Shift B','REQ-1']]).rows,data.rows);
   assert.deepEqual(withSerialColumn(data.columns,data.rows),data);
-  assert.deepEqual(model.ensureJobReferenceVisibleKeys(['ref'],columns),['requestShift','ref']);
+  assert.deepEqual(model.ensureJobReferenceVisibleKeys(['requestShift','ref'],columns),['requestShift','ref']);
+  assert.deepEqual(model.ensureJobReferenceVisibleKeys(['ref','requestShift'],columns),['ref','requestShift']);
+  assert.deepEqual(model.ensureJobReferenceVisibleKeys(['ref'],columns),['ref']);
   const summary=[{key:'count',label:'Count'}];
   assert.equal(shifts.requestShiftColumns(summary,[{count:3}],SHIFT_MASTER_DEFAULTS),summary);
 });

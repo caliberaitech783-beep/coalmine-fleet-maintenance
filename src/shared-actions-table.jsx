@@ -69,7 +69,7 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
     return allColumnKeys;
   }, [columns]);
   const [storedVisible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
-  const visible=allColumnKeys.includes('requestShift')?['requestShift',...storedVisible.filter(key=>key!=='requestShift')]:storedVisible;
+  const visible = storedVisible;
   const withNumberCell=(cells,number)=>visible[0]==='requestShift'?[cells[0],number,...cells.slice(1)]:[number,...cells];
   const setVisible = (keys) => {
     const next = ensureJobReferenceVisibleKeys(keys, columns);

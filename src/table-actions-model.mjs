@@ -107,7 +107,8 @@ export function prioritizeJobReferenceColumns(columns) {
 }
 
 export function ensureJobReferenceVisibleKeys(keys, columns) {
-  if(columns.some(column=>column.key==='requestShift'))return ['requestShift',...ensureJobReferenceVisibleKeys(keys.filter(key=>key!=='requestShift'),columns.filter(column=>column.key!=='requestShift'))];
+  // Keep the default Shift-first layout, but never override an explicit move or hide.
+  if(keys[0]==='requestShift' && columns.some(column=>column.key==='requestShift'))return ['requestShift',...ensureJobReferenceVisibleKeys(keys.filter(key=>key!=='requestShift'),columns.filter(column=>column.key!=='requestShift'))];
   const jobKeys = columns.filter(isJobReferenceColumn).map((column) => column.key);
   if (!jobKeys.length) return keys;
   const requested = keys.length ? keys : columns.map((column) => column.key);
