@@ -87,7 +87,8 @@ async function runRoute(action, body) {
   const writes = [];
   const start = `app.patch('/api/requests/:reference${action}'`;
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
-  evaluate(route, {
+  const linkedSelection=server.slice(server.indexOf('async function withLinkedMaintenanceSelection('),server.indexOf("app.post('/api/requests/:reference/daily-remarks'"));
+  evaluate(linkedSelection+route, {
     ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
