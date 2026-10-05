@@ -73,7 +73,7 @@ import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} 
 import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {telegramInvitationBatch,telegramInvitationSummary} from './telegram-site-invitations.mjs';
-import {TELEGRAM_SITE_CAMPAIGN,telegramSiteExport,telegramCampaignRecipients,telegramCampaignMessage,telegramCampaignBatch} from './telegram-site-campaign.mjs';
+import {telegramSiteCampaignId,telegramSiteExport,telegramCampaignRecipients,telegramCampaignMessage,telegramCampaignBatch} from './telegram-site-campaign.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
@@ -3600,18 +3600,20 @@ app.get('/api/telegram/site-groups/export',requireSuper,requireWhatsAppAdministr
 
 app.post('/api/telegram/site-groups/campaign',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
   try{
+    const campaign=telegramSiteCampaignId(req.body?.campaign);
+    if(!campaign)return res.status(400).json({error:'Select one of the configured one-time invitation campaigns.'});
     const [users,groups]=await Promise.all([telegramLinkedSiteUsers(),telegramSiteGroups()]);
     if(TELEGRAM_SITES.some(site=>!groups.find(group=>group.site===site)?.inviteLink))return res.status(409).json({error:'All eight site groups need their existing invitation links before sending.'});
     for(const group of groups)await telegramSiteGroupDetails(group.chatId);
     const recipients=telegramCampaignRecipients(users,groups);
-    const prefix=`telegram_site_campaign:${TELEGRAM_SITE_CAMPAIGN}:`;
-    const result=await telegramCampaignBatch({recipients,
+    const prefix=`telegram_site_campaign:${campaign}:`;
+    const result=await telegramCampaignBatch({campaign,recipients,
       read:async()=>{const {rows}=await pool.query('SELECT setting_key,setting_value FROM app_settings WHERE setting_key LIKE $1',[`${prefix}%`]);return new Map(rows.map(row=>[row.setting_key.slice(prefix.length),row.setting_value]))},
       claim:async recipient=>(await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW()) ON CONFLICT (setting_key) DO NOTHING RETURNING setting_key`,[`${prefix}${recipient.chatId}`,JSON.stringify({status:'Sending',reason:'Delivery attempt claimed; confirmation pending.'})])).rowCount===1,
       send:recipient=>sendTelegramText({chatId:recipient.chatId,message:telegramCampaignMessage(recipient)}),
       finish:async(recipient,value)=>{await pool.query('UPDATE app_settings SET setting_value=$2::jsonb,updated_at=NOW() WHERE setting_key=$1',[`${prefix}${recipient.chatId}`,JSON.stringify(value)])},
     });
-    req.audit={eventType:'Integration',module:'Telegram',action:'Send one-time site joining campaign',targetReference:TELEGRAM_SITE_CAMPAIGN,reason:`Sent ${result.sent}; failed ${result.failed}; uncertain ${result.uncertain}`};
+    req.audit={eventType:'Integration',module:'Telegram',action:'Send one-time site joining campaign',targetReference:campaign,reason:`Sent ${result.sent}; failed ${result.failed}; uncertain ${result.uncertain}`};
     res.json(result);
   }catch(error){next(error)}
 });

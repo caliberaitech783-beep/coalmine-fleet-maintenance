@@ -22,12 +22,12 @@ export default function TelegramSiteGroups({token}){
     setBusy('export');setError('');
     try{download(await request('/export'),'BDMS-site-group-users.json')}catch(error){setError(error.message)}finally{setBusy('')}
   }
-  async function sendCampaign(){
+  async function sendCampaign(campaignId){
     setBusy('campaign');setError('');setNotice('');
     try{
       let result;
-      do{result=await request('/campaign',{});setCampaign(result);setNotice(`Site joining campaign: ${result.sent} sent, ${result.failed} failed, ${result.uncertain} uncertain, ${result.pending} pending.`)}while(result.pending>0);
-      download(result,'BDMS-site-joining-delivery-results.json');
+      do{result=await request('/campaign',campaignId?{campaign:campaignId}:{});setCampaign(result);setNotice(`${campaignId?'Oct 5 resend campaign':'Site joining campaign'}: ${result.sent} sent, ${result.failed} failed, ${result.uncertain} uncertain, ${result.pending} pending.`)}while(result.pending>0);
+      download(result,campaignId?'BDMS-site-joining-resend-2026-10-05-results.json':'BDMS-site-joining-delivery-results.json');
     }catch(error){setError(error.message)}finally{setBusy('')}
   }
   async function action(site,kind){
@@ -48,8 +48,10 @@ export default function TelegramSiteGroups({token}){
     <p>To link a group, make CALIBER BDMS an administrator with permission to invite users, then send the command below from your connected BDMS administrator account in that group.</p>
     <button type="button" onClick={refresh} disabled={Boolean(busy)}>Refresh groups</button>
     {' '}<button type="button" onClick={exportUsers} disabled={Boolean(busy)}>Export users and invitation links</button>
-    {' '}<button type="button" onClick={sendCampaign} disabled={Boolean(busy)}>Send one-time joining links to all assigned users</button>
+    {' '}<button type="button" onClick={()=>sendCampaign()} disabled={Boolean(busy)}>Send one-time joining links to all assigned users</button>
+    {' '}<button type="button" onClick={()=>sendCampaign('site-joining-resend-2026-10-05')} disabled={Boolean(busy)}>Resend invitations to all assigned users — Oct 5</button>
     <p>The one-time campaign sends one message per connected Telegram account with its assigned site links. Saved attempts are never sent again by this button.</p>
+    <p>The Oct 5 resend sends a fresh invitation to every currently assigned account, including recipients of the original campaign. Its separate saved history prevents duplicate resends if you continue after an interruption.</p>
     {campaign&&<><button type="button" onClick={()=>download(campaign,'BDMS-site-joining-delivery-results.json')}>Download campaign results</button>{campaign.rows.some(row=>['Failed','Uncertain','Sending'].includes(row.status))&&<table><thead><tr><th>User</th><th>Login</th><th>Delivery</th><th>Review</th></tr></thead><tbody>{campaign.rows.filter(row=>['Failed','Uncertain','Sending'].includes(row.status)).map(row=><tr key={row.login}><td>{row.name}</td><td>{row.login}</td><td>{row.status}</td><td>{row.reason}</td></tr>)}</tbody></table>}</>}
     {error&&<p role="alert" className="meta-whatsapp-feedback error">{error}</p>}
     {notice&&<p role="status" className="meta-whatsapp-feedback success">{notice}</p>}

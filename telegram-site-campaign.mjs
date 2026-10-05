@@ -2,6 +2,11 @@ import {TELEGRAM_SITES,telegramUserHasSite} from './telegram-site-groups.mjs';
 
 // Fixed identity for the explicitly requested, one-time follow-up campaign.
 export const TELEGRAM_SITE_CAMPAIGN='site-joining-2026-10-03';
+export const TELEGRAM_SITE_RESEND_CAMPAIGN='site-joining-resend-2026-10-05';
+export function telegramSiteCampaignId(value){
+  if(value===undefined)return TELEGRAM_SITE_CAMPAIGN;
+  return [TELEGRAM_SITE_CAMPAIGN,TELEGRAM_SITE_RESEND_CAMPAIGN].includes(value)?value:'';
+}
 export function telegramSiteExport(users,groups){
   return users.flatMap(({login,user})=>{
     const sites=TELEGRAM_SITES.filter(site=>telegramUserHasSite(user,site));
@@ -24,7 +29,7 @@ export function telegramCampaignRecipients(users,groups){
 export function telegramCampaignMessage(recipient){
   return `BDMS site group invitations\n\n${recipient.links.map(link=>`${link.site}\n${link.invitationLink}`).join('\n\n')}\n\nTap each assigned site link, then Request to Join. BDMS checks your connected Telegram account and current site assignment. Production, Maintenance, MIS and the site head can reply and share site updates here.`;
 }
-export async function telegramCampaignBatch({recipients,read,claim,send,finish}){
+export async function telegramCampaignBatch({campaign=TELEGRAM_SITE_CAMPAIGN,recipients,read,claim,send,finish}){
   const records=await read();
   for(const recipient of recipients.filter(value=>!records.has(value.chatId)).slice(0,5)){
     if(!await claim(recipient))continue;
@@ -38,7 +43,7 @@ export async function telegramCampaignBatch({recipients,read,claim,send,finish})
   const saved=await read();
   const rows=recipients.map(recipient=>({login:recipient.login,name:recipient.name,sites:recipient.links.map(link=>link.site),
     status:saved.get(recipient.chatId)?.status||'Pending',reason:saved.get(recipient.chatId)?.reason||''}));
-  return {campaign:TELEGRAM_SITE_CAMPAIGN,total:rows.length,sent:rows.filter(row=>row.status==='Sent').length,
+  return {campaign,total:rows.length,sent:rows.filter(row=>row.status==='Sent').length,
     failed:rows.filter(row=>row.status==='Failed').length,uncertain:rows.filter(row=>!['Sent','Failed','Pending'].includes(row.status)).length,
     pending:rows.filter(row=>row.status==='Pending').length,rows};
 }
