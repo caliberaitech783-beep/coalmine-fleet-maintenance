@@ -1,7 +1,77 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {buildOemEmailWithAttachments} from '../oem-breakdown-email.mjs';
+import {oemExtraSendDue} from '../oem-breakdown-email.mjs';
+import {readFile} from 'node:fs/promises';
 import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails,OEM_TRIAL_CC} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
+test('extra batch opens only on October 5 at 7 PM IST and expires at midnight',()=>{
+  assert.equal(oemExtraSendDue(new Date('2026-10-05T13:29:59Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-05T13:30:00Z')),true);
+  assert.equal(oemExtraSendDue(new Date('2026-10-05T18:29:59Z')),true);
+  assert.equal(oemExtraSendDue(new Date('2026-10-05T18:30:00Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T13:30:00Z')),false);
+});
+test('Volvo Trucks includes Volvo tippers but never excavators, loaders, closed or other-site cases',()=>{
+  const recipient=oemEmailRecipients([{...contact,oem:'Volvo Trucks'}])[0];
+  const equipment=[
+    {door:'T1',make:'VOLVO',group:'VOLVO TIPPERS',currentLocation:'Sasti OC'},
+    {door:'E1',make:'VOLVO',group:'EXCAVATOR',currentLocation:'Sasti OC'},
+    {door:'P1',make:'VOLVO',group:'PAY LOADER',currentLocation:'Sasti OC'},
+    {door:'T2',make:'VOLVO',group:'TIPPERS',currentLocation:'Jayant OC'},
+    {door:'T3',make:'VOLVO TIPPERS',currentLocation:'Sasti OC'},
+  ];
+  const requests=equipment.map(asset=>({door:asset.door,site:asset.currentLocation,status:'Accepted',oemResponsibility:'OEM'}));
+  assert.deepEqual(oemEmailRows({recipient,equipment,requests}).map(row=>row.door),['T1','T3']);
+  assert.equal(oemEmailRows({recipient,equipment,requests:requests.map(row=>({...row,closedAt:'2026-10-05'}))}).length,0);
+});
+test('extra batch sends every level with active cases exactly once, with attachments, without changing regular cadence',async()=>{
+  const claims=new Set(),messages=[];
+  const client={release(){},async query(sql,args){
+    if(sql.includes('pg_try'))return {rows:[{locked:true}]};
+    if(sql.startsWith('SELECT activation'))return {rows:[{activation_date:'2026-10-04'}]};
+    if(sql.startsWith('INSERT INTO oem_email_deliveries')){
+      const id=args.slice(0,2).join('|');if(claims.has(id))return {rowCount:0};
+      claims.add(id);return {rowCount:1};
+    }
+    return {rows:[],rowCount:1};
+  }};
+  const options={pool:{connect:async()=>client},loadData:async()=>({
+    contacts:[...[1,2,3,4].map(level=>({...contact,level:`Level ${level}`,email:`l${level}@example.com`})),{...contact,oem:'No cases',email:'empty@example.com'}],
+    equipment:[{door:'D1',make:'Scania',currentLocation:'Sasti OC'}],
+    requests:[{ref:'ACTIVE-1',door:'D1',site:'Sasti OC',status:'Accepted',oemResponsibility:'OEM'}],
+  }),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:[message.to],messageId:'test'};}}}};
+  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T11:30:00Z')});
+  assert.equal(messages.length,2); // Existing regular L1 behaviour, including empty reports, is unchanged.
+  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T13:29:59Z')});
+  assert.equal(messages.length,2);
+  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T13:30:00Z')});
+  assert.equal(messages.length,6);
+  for(const message of messages.slice(2)){
+    assert.match(message.subject,/Additional 7 PM/);assert.match(message.text,/ACTIVE-1/);
+    assert.equal(message.attachments.length,2);assert.notEqual(message.to,'empty@example.com');
+  }
+  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T14:00:00Z')});
+  assert.equal(messages.length,6);
+  await sendScheduledOemEmails({...options,now:new Date('2026-10-06T13:30:00Z')});
+  assert.equal(messages.length,8); // Only regular L1 on the next day, no repeat extra batch.
+});
+test('PDF and real Excel attachments include every selected case and match website workbook styling',async()=>{
+  const rows=Array.from({length:75},(_,i)=>({ref:`CASE-${i}`,door:`D${i}`,site:'Sasti OC',complaint:'Parts pending',start:'2026-10-05 10:00:00'}));
+  const report=await buildOemEmailWithAttachments({recipient:oemEmailRecipients([contact])[0],rows,now:new Date('2026-10-05T11:30:00Z')});
+  assert.equal(report.attachments.length,2);
+  const [xlsx,pdf]=report.attachments;
+  assert.equal(xlsx.content.subarray(0,2).toString(),'PK');
+  assert.equal(pdf.content.subarray(0,5).toString(),'%PDF-');
+  const xml=xlsx.content.toString();
+  for(const row of rows)assert.ok(xml.includes(row.ref));
+  assert.match(xml,/TableStyleLight15/);
+  assert.match(xml,/FF000000/);
+  const website=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const shared=await readFile(new URL('../report-xlsx.mjs',import.meta.url),'utf8');
+  const normalize=value=>value.replaceAll('\r\n','\n').trim();
+  assert.equal(normalize(shared.slice(shared.indexOf('function escapeExportHtml'),shared.indexOf('\nexport {'))),normalize(website.slice(website.indexOf('function escapeExportHtml'),website.indexOf('function buildXlsxWorkbook('))));
+});
 test('IST 5PM and activation anchored 1/3/7/10 day schedule',()=>{
   for(const [level,days] of [['L1',1],['L2',3],['L3',7],['L4',10]]){
     assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T11:29:59Z')),false);
@@ -67,6 +137,7 @@ test('only the first three reports globally get trial CC and sending confirmatio
   const reports=messages.filter(message=>!message.subject.startsWith('Sending confirmation'));
   const confirmations=messages.filter(message=>message.subject.startsWith('Sending confirmation'));
   assert.equal(reports.length,4);assert.equal(confirmations.length,3);assert.equal(used,3);
+  for(const message of messages)assert.equal(message.attachments.length,2);
   for(const report of reports.slice(0,3))assert.deepEqual(report.cc,OEM_TRIAL_CC);
   assert.equal(reports[3].cc,undefined);
   for(const confirmation of confirmations){assert.deepEqual(confirmation.to,OEM_TRIAL_CC);assert.match(confirmation.text,/not confirmation of inbox delivery/);}

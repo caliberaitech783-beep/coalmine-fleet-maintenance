@@ -578,6 +578,7 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS issues JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS workflow_history JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS running_bd_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS linked_request_references JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_readings JSONB NOT NULL DEFAULT '{}';
@@ -5878,7 +5879,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestProjection=`archived_at AS "archivedAt", issues, workflow_history AS "workflowHistory", to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
+const requestProjection=`archived_at AS "archivedAt", linked_request_references AS "linkedRequestReferences", issues, workflow_history AS "workflowHistory", to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
@@ -6599,10 +6600,10 @@ function maintenanceWriteFailure(error,res,next){
   if(error.status)return res.status(error.status).json({error:error.message,...(error.code?{code:error.code}:{})});
   return next(error);
 }
-async function withMaintenanceArrivalGuard(req,reference,write){
-  const client=await pool.connect();
+async function withMaintenanceArrivalGuard(req,reference,write,sharedClient=null){
+  const client=sharedClient||await pool.connect();
   try{
-    await client.query('BEGIN');
+    if(!sharedClient)await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
     const {rows}=await client.query(`SELECT site,complaint,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
@@ -6618,7 +6619,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
     const responsibilityChangeReason=req.body?.responsibilityChangeReason ?? '';
     if(typeof responsibilityChangeReason!=='string'||responsibilityChangeReason.length>1000)throw Object.assign(new Error('Responsibility change reason must be text up to 1000 characters.'),{status:400});
-    const result=await write(client,rows[0]);
+    const result=await write(client,rows[0],reference);
     if(req.body?.complaint!==undefined){
       await client.query(`UPDATE maintenance_requests SET breakdown_reason_history=breakdown_reason_history || jsonb_build_array(jsonb_build_object(
         'from',$1::text,'to',complaint,'changedBy',$2::text,'login',$3::text,'changedAt',NOW()))
@@ -6637,8 +6638,28 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       }
     }
     if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
-    await client.query('COMMIT');
+    if(!sharedClient)await client.query('COMMIT');
     return result;
+  }catch(error){if(!sharedClient)await client.query('ROLLBACK');throw error}
+  finally{if(!sharedClient)client.release()}
+}
+
+async function withLinkedMaintenanceSelection(req,reference,write){
+  if(req.body?.targetReferences===undefined)return withMaintenanceArrivalGuard(req,reference,write);
+  const selected=req.body.targetReferences;
+  if(!Array.isArray(selected)||!selected.length||selected.some(value=>typeof value!=='string')||selected.length>100)throw Object.assign(new Error('Select at least one linked ticket.'),{status:400});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const anchor=await client.query('SELECT reference,linked_request_references FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1',[reference]);
+    if(!anchor.rows.length)throw Object.assign(new Error('This ticket no longer exists.'),{status:409});
+    const allowed=new Set([reference,...(anchor.rows[0].linked_request_references||[])]);
+    const references=[...new Set(selected)].sort();
+    if(references.some(value=>!allowed.has(value)))throw Object.assign(new Error('Select only tickets linked to this request.'),{status:400});
+    const results=[];
+    for(const target of references)results.push(await withMaintenanceArrivalGuard(req,target,write,client));
+    await client.query('COMMIT');
+    return {rows:results.flatMap(result=>result.rows),delayedClosure:results.some(result=>result.delayedClosure)};
   }catch(error){await client.query('ROLLBACK');throw error}
   finally{client.release()}
 }
@@ -6807,19 +6828,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverName=String(driverName).trim().slice(0,200);
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
     const {rows}=await createRequestWithVehicleLock({door,chassis,existingReference:req.body?.existingReference,existingReason:req.body?.existingReason},async(client,duplicate)=>{
-    if(duplicate){
-      if(displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
-      await client.query('SELECT reference FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 FOR UPDATE',[duplicate.ref]);
-      await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests) - 'workflow_history' - 'first_trip_card_image' - 'opening_meter_file' - 'closing_meter_file' || jsonb_build_object('productionFirstTrip',(SELECT to_jsonb(p) FROM production_first_trip_acceptances p WHERE p.request_reference=$1),'time',NOW())) WHERE reference=$1`,[duplicate.ref]);
-      const result=await client.query(`UPDATE maintenance_requests SET
-        issues=(CASE WHEN issues='[]'::jsonb THEN jsonb_build_array(jsonb_build_object('reason',complaint,'resolved',false)) ELSE issues END) || $1::jsonb,
-        complaint=CASE WHEN $2 THEN complaint || E'\n' || $3 ELSE complaint END,
-        status='In progress',running_bd_at=NULL,closed_at=NULL,closed_by='',verified_at=NULL,verified_by='',verification_status='',vehicle_idle=FALSE,first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='',mis_flagged_at=NULL,mis_flagged_by='',mis_flag_remark='',in_progress_at=NOW(),in_progress_by=$5
-        WHERE reference=$4 AND status<>'Closed' RETURNING ${requestProjection}`,[JSON.stringify(req.body.existingReason==='different'?[{reason:complaint,resolved:false,reportedAt:start}]:[]),req.body.existingReason==='different',complaint,duplicate.ref,req.session.name||'Production User']);
-      if(!result.rows.length)throw Object.assign(new Error('The existing ticket changed. Select the vehicle again.'),{status:409});
-      await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[duplicate.ref]);
-      return result;
-    }
+    if(duplicate && displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
@@ -6832,6 +6841,12 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(complaintMedia.length){
       await client.query('UPDATE maintenance_requests SET complaint_media=$2::jsonb WHERE reference=$1',[ref,JSON.stringify(complaintMedia)]);
       result.rows[0].complaintMediaAvailable=true;
+    }
+    if(duplicate){
+      const linked=await client.query('SELECT reference,linked_request_references FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 FOR UPDATE',[duplicate.ref]);
+      const references=[...new Set([duplicate.ref,...(linked.rows[0]?.linked_request_references||[]),ref])];
+      await client.query(`UPDATE maintenance_requests SET linked_request_references=(SELECT COALESCE(jsonb_agg(item),'[]'::jsonb) FROM jsonb_array_elements_text($1::jsonb) item WHERE item<>reference) WHERE archived_at IS NULL AND reference=ANY($2::text[])`,[JSON.stringify(references),references]);
+      result.rows[0].linkedRequestReferences=references.filter(value=>value!==ref);
     }
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
@@ -7002,10 +7017,17 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       const assignedScope=userSiteScope(user);
       if(!reportScopeIncludesSite(assignedScope,existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
-    if((ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
-    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
+    const primaryReference=reference;
+    const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
+    // Each visit keeps its own opening evidence; only the on-road evidence is shared.
+    const openingMeterReadings=reference===primaryReference ? (req.body?.openingMeterReadings??{}) : (before.openingMeterReadings||{});
+    const openingMeterReading=reference===primaryReference ? String(req.body?.openingMeterReading||'').trim() : '';
+    const openingMeterFile=reference===primaryReference ? String(req.body?.openingMeterFile||'') : '';
+    const openingMeterFileName=reference===primaryReference ? String(req.body?.openingMeterFileName||'').trim().slice(0,255) : '';
+    const delayedReason=reference===primaryReference ? String(req.body?.delayedReason||'').trim().slice(0,160) : '';
     if(before.status==='Running BD')before={...before,firstTripAt:null,verifiedAt:null};
-    requireMaintenanceMeters(req.session,before,req.body||{},['opening','closing']);
+    requireMaintenanceMeters(req.session,before,{...req.body,openingMeterReadings,openingMeterReading},['opening','closing']);
     if(ideal||status==='Closed'){
       validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
       buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
@@ -7038,7 +7060,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
           JSON.stringify(Object.fromEntries(Object.entries({...closingMeterReadings,...(closingMeterReading?{[effectiveMeterType]:closingMeterReading}:{})}).filter(([,value])=>value!==''))),
           closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
-    const issues=status==='Running BD'||before.issues?.length?resolveRequestIssues(before,req.body?.resolvedIssues):[];
+    const issues=status==='Running BD'||before.issues?.length?resolveRequestIssues(before,req.body?.resolvedIssuesByReference?.[reference] ?? req.body?.resolvedIssues):[];
     if((ideal||status==='Closed')&&before.issues?.length&&hasOutstandingRequestIssues(issues))throw Object.assign(new Error('Resolve every outstanding issue before closing this ticket.'),{status:400});
     if(status==='Running BD'&&!hasOutstandingRequestIssues(issues))throw Object.assign(new Error('All issues are fixed. Use On road — maintenance completed.'),{status:400});
     if(status==='Running BD'||before.issues?.length)await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests) - 'workflow_history' - 'first_trip_card_image' - 'opening_meter_file' - 'closing_meter_file' || jsonb_build_object('time',NOW())) WHERE reference=$1`,[reference]);
@@ -7065,6 +7087,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const timelineEvents=ideal?['closedAt','idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
     return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:ideal||status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:ideal||status==='Closed'?['closedAt']:[]};
     });
+    for(const savedRow of rows){
+    const rows=[savedRow];
     if(ideal){
       try{
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
@@ -7104,7 +7128,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         console.error(`Request ${rows[0].ref} was closed, but its notification recipients could not be resolved.`,error);
       }
     }
-    res.json(rows[0]);
+    }
+    res.json(req.body?.targetReferences ? {updatedRequests:rows} : rows[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 

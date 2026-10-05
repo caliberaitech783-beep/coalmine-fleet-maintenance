@@ -311,6 +311,7 @@ import "./dashboard-section-export.css";
 import "./workspace-night.css";
 import "./vehicle-history-density.css";
 import "./ticket-status-tabs.css";
+import "./linked-request-picker.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
@@ -6051,7 +6052,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <AlertTriangle />
             <span>
               <b>{duplicateConflict.checkFailed ? "Door-number check unavailable" : "Already off road / under maintenance"}</b>
-              {duplicateConflict.checkFailed ? duplicateConflict.message : <>Request {duplicateConflict.existingReference} remains open.<p>{duplicateConflict.complaint}</p><label>Is this breakdown for the same reason?<select required value={existingReason} onChange={event=>setExistingReason(event.target.value)}><option value="">Select reason</option><option value="same">Same reason — resume existing ticket</option><option value="different">Different reason — add issue to existing ticket</option></select></label></>}
+              {duplicateConflict.checkFailed ? duplicateConflict.message : <>Request {duplicateConflict.existingReference} remains open.<p>{duplicateConflict.complaint}</p><label>Is this breakdown for the same reason?<select required value={existingReason} onChange={event=>setExistingReason(event.target.value)}><option value="">Select reason</option><option value="same">Same reason — create linked ticket</option><option value="different">Different reason — create linked ticket</option></select></label></>}
             </span>
           </div>
         )}
@@ -6060,7 +6061,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             Cancel
           </button>
           <button className="primary" disabled={submitting || checkingConflict || Boolean(duplicateConflict && (duplicateConflict.checkFailed || !existingReason))}>
-            {submitting ? "Submitting…" : checkingConflict ? "Checking door…" : duplicateConflict ? (existingReason ? "Resume existing ticket" : "Select breakdown reason") : "Submit request"} <ChevronRight />
+            {submitting ? "Submitting…" : checkingConflict ? "Checking door…" : duplicateConflict ? (existingReason ? "Create linked request" : "Select breakdown reason") : "Submit request"} <ChevronRight />
           </button>
         </footer>
       </form>
@@ -10045,7 +10046,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   </Modal>;
 }
 
-function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requireMeters = false }) {
+function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [], close, onSave, requireMeters = false }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const displayDateTime = (value) => {
     if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
@@ -10070,6 +10071,10 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requi
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
   const storedDelayedReason=String(request.delayedReason||"").trim();
+  const linkedTickets=[request,...linkedRequests.filter(row=>row.ref!==request.ref && (request.linkedRequestReferences||[]).includes(row.ref) && !['Closed','Idle','Ideal'].includes(row.status))];
+  const [ticketPrompt,setTicketPrompt]=useState(false);
+  const [targetReferences,setTargetReferences]=useState([request.ref]);
+  const ticketDecision=useRef(false);
   const [idlePrompt,setIdlePrompt] = useState(false);
   const idleDecision = useRef(false);
   const closeForm = useRef(null);
@@ -10077,6 +10082,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requi
     <form ref={closeForm} className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
+      if(linkedTickets.length>1 && !ticketDecision.current){setTicketPrompt(true);return;}
       if (!idleDecision.current && status === "Closed") {
         const onRoadTime = requestStartParts("");
         setClosingDate(onRoadTime.date);
@@ -10096,7 +10102,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requi
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -10104,6 +10110,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requi
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
+        {request.linkedRequestReferences?.length>0 && <div><span>Linked requests</span><b>{request.linkedRequestReferences.join(", ")}</b></div>}
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{displayDateTime(request.start)}</b></div>
@@ -10134,6 +10141,18 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave, requi
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "On road"} <ChevronRight /></button></footer>
+  {ticketPrompt && <Modal className="linked-request-picker" title="Choose requests to update" close={()=>setTicketPrompt(false)}>
+    <div className="linked-picker-body">
+      <div className="linked-picker-intro"><span className="linked-picker-icon"><Wrench size={22}/></span><div><strong>{status==="Closed" ? "Which repairs are complete?" : "Which requests are returning on road?"}</strong><p>{status==="Closed" ? "Select one or both requests. Selected tickets will close and go to MIS for verification." : "Selected tickets will move to Running BD. Outstanding issues remain open."}</p></div></div>
+      <div className="linked-picker-toolbar"><span role="status" aria-live="polite"><strong>{targetReferences.length}</strong> of {linkedTickets.length} selected</span><button type="button" className="linked-picker-select-all" onClick={()=>setTargetReferences(linkedTickets.map(row=>row.ref))}>Select all requests</button></div>
+      <fieldset className="linked-picker-list"><legend className="sr-only">Linked requests</legend>{linkedTickets.map(row=><label className={`linked-picker-card${targetReferences.includes(row.ref)?" is-selected":""}`} key={row.ref}>
+        <input type="checkbox" checked={targetReferences.includes(row.ref)} onChange={event=>setTargetReferences(current=>event.target.checked?[...current,row.ref]:current.filter(ref=>ref!==row.ref))}/>
+        <span className="linked-picker-ticket"><span className="linked-picker-ticket-header"><strong>{row.ref}</strong><span className={`linked-picker-status${row.status==="Running BD"?" is-running-bd":""}`}>{row.status}</span></span><span className="linked-picker-reason">{row.complaint}</span><span className="linked-picker-visit">{row.ref===request.ref?"Current request":"Linked request"}{row.door?` · ${row.door}`:""}</span></span>
+      </label>)}</fieldset>
+      <p className="linked-picker-note"><ShieldCheck size={16}/><span>Unselected requests keep their current status.</span></p>
+    </div>
+    <footer className="linked-picker-footer"><button type="button" onClick={()=>setTicketPrompt(false)}>Back</button><button type="button" className="primary" disabled={!targetReferences.length} onClick={()=>{ticketDecision.current=true;setTicketPrompt(false);closeForm.current?.requestSubmit();}}>Continue with {targetReferences.length || "selected"} {targetReferences.length===1?"request":"requests"}<ChevronRight size={18}/></button></footer>
+  </Modal>}
   {idlePrompt && <Modal title="On road — move vehicle to Idle?" close={() => { if (!submitting) { setIdlePrompt(false); idleDecision.current=false; } }}>
       {status==="Running BD" ? <p>The vehicle will go to MIS for verification. This ticket remains open until every issue is fixed.</p> : <p>The maintenance request will be Closed. Choose whether the vehicle should now be Idle.</p>}
 
@@ -11178,9 +11197,10 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     catch (error) { if (!requireArrivalReason(editing, error)) throw error; }
   };
   const closeRequest = async (payload) => {
-    if (requireArrivalReason(closing)) return;
+    const selected=payload.targetReferences ? requestRows.filter(row=>payload.targetReferences.includes(row.ref)) : [closing];
+    if(selected.some(row=>requireArrivalReason(row)))return;
     try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); setCreatedRequestRef("Vehicle Has Been On road"); }
-    catch (error) { if (!requireArrivalReason(closing, error)) alert(error.message); }
+    catch (error) { if (!requireArrivalReason(closing, error)) throw error; }
   };
   const saveDailyRemark = async (payload) => {
     if (requireArrivalReason(remarking)) return;
@@ -11300,7 +11320,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm requireMeters={maintenanceMetersRequired(session)} onAddDailyRemark={onAddDailyRemark} request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
-    {closing && <CloseRequestForm requireMeters={maintenanceMetersRequired(session)} request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
+    {closing && <CloseRequestForm requireMeters={maintenanceMetersRequired(session)} request={closing} linkedRequests={requestRows} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} equipmentRecords={equipmentRecords} close={() => setVerifying(null)} onSave={verifyRequest} />}
     {productionFirstTrip && <ProductionFirstTripForm request={productionFirstTripSourceRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}
     {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
@@ -11685,6 +11705,10 @@ function App() {
       const confirmUncertainWrite = async () => {
         try {
           const refreshed = await loadRequests();
+          if(Array.isArray(payload.targetReferences)){
+            const updated=payload.targetReferences.map(ref=>refreshed.find(row=>row.ref===ref));
+            return updated.every((row,index)=>requestWriteOutcomeConfirmed(requests.find(before=>before.ref===payload.targetReferences[index])||{ref:payload.targetReferences[index]},row,action,payload)) ? {updatedRequests:updated} : null;
+          }
           const saved = refreshed.find((row) => row.ref === reference);
           return requestWriteOutcomeConfirmed(before, saved, action, payload) ? saved : null;
         } catch { return null; }
@@ -11725,7 +11749,7 @@ function App() {
         throw error;
       }
       requestLoadSequence.current += 1;
-      setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
+      setRequests((current) => current.map((row) => Array.isArray(saved.updatedRequests) ? saved.updatedRequests.find(updated=>updated.ref===row.ref)||row : row.ref === reference ? saved : row));
       notifyRequestChange(window);
       return saved;
     },
