@@ -81,7 +81,7 @@ export function TableLayoutControls({ store, draftKeys, defaultKeys, onSelect })
       <button type="submit" className="primary" disabled={!name.trim()}>{mode === "rename" ? "Save name" : "Save layout"}</button>
       <button type="button" onClick={() => { setMode(""); setError(""); }}>Cancel naming</button>
     </form>}
-    <p className="table-layout-hint">Save the displayed columns and their order for this table. Layouts are saved for your account in this browser.{modified ? " This layout has unsaved column changes." : ""}</p>
+    <p className="table-layout-hint">Apply automatically remembers your columns and their order for your account in this browser until you change them again. Named layouts are optional.{modified ? " This layout has unsaved column changes." : ""}</p>
     {(error || store.error) && <p className="table-layout-error" role="alert">{error || store.error}</p>}
     {notice && <p className="table-layout-notice" role="status">{notice}</p>}
   </div>;

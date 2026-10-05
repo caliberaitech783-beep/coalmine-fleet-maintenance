@@ -8,6 +8,7 @@ import { defaultDurationSort } from "./duration-sort.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, closedTimeAfterStartedColumns, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
 import { useTableLayouts, TableLayoutSelect } from "./table-layouts.jsx";
+import { useColumnPreferences } from "./use-column-preferences.jsx";
 import "./table-actions.css";
 import "./sortable-table.css";
 
@@ -63,18 +64,16 @@ export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAft
 
 function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
-  const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}${tableProps["data-oem-column-layout"] ? ":oem-reasons-meters-v1" : ""}`;
   const allColumnKeys = useMemo(() => {
     const allColumnKeys = columns.map((column) => column.key);
     return allColumnKeys;
   }, [columns]);
-  const [storedVisible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
-  const visible = storedVisible;
+  const [storedVisible, setVisibleState] = useColumnPreferences("shared-table", columns);
+  const visible = ensureJobReferenceVisibleKeys(storedVisible, columns);
   const withNumberCell=(cells,number)=>visible[0]==='requestShift'?[cells[0],number,...cells.slice(1)]:[number,...cells];
   const setVisible = (keys) => {
     const next = ensureJobReferenceVisibleKeys(keys, columns);
     setVisibleState(next);
-    storeColumnOrder(columnStorageKey, next, allColumnKeys);
   };
   // The column schema identifies this table type; site/date headings can change without hiding its layouts.
   const layoutStore = useTableLayouts("shared-table", columns);
