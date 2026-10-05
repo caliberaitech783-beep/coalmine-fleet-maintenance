@@ -7026,7 +7026,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
     if(rows.length && (status==='Running BD'||before.issues?.length)){
-      const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2 ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
+      const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2::timestamptz ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
       rows[0]=saved.rows[0];
       await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[reference]);
     }
