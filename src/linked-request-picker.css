@@ -1,5 +1,5 @@
-.modal.linked-request-picker{width:min(760px,calc(100vw - 32px));max-width:760px;resize:none;overflow:hidden}
-.linked-request-picker .linked-picker-body{padding:24px 28px 20px}
+.modal.linked-request-picker{width:min(760px,calc(100vw - 32px));max-width:760px;resize:none;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100dvh - 32px)}
+.linked-request-picker .linked-picker-body{padding:24px 28px 20px;min-height:0;overflow-y:auto}
 .linked-request-picker .linked-picker-intro{display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border:1px solid #e6ddf4;background:#f8f5fc;border-radius:14px;color:#25314a}
 .linked-request-picker .linked-picker-icon{display:grid;place-items:center;width:42px;height:42px;flex:0 0 42px;background:#ede4fa;color:#6b3dae;border-radius:12px}
 .linked-request-picker .linked-picker-intro strong{font-size:17px;line-height:1.5}
@@ -21,7 +21,7 @@
 .linked-request-picker .linked-picker-reason{font-size:14px;line-height:1.6;color:#46536b;font-weight:500;overflow-wrap:anywhere;white-space:pre-wrap}
 .linked-request-picker .linked-picker-visit{font-size:12px;font-weight:400;color:#7c8497}
 .linked-request-picker .linked-picker-note{display:flex;align-items:center;gap:8px;margin:16px 0 0;font-size:12px;color:#758097;line-height:1.5}
-.linked-request-picker footer.linked-picker-footer{display:flex;justify-content:flex-end;gap:12px;margin:0;padding:18px 28px;border-top:1px solid #ece6f3;background:#fcfbfe}
+.linked-request-picker footer.linked-picker-footer{display:flex;justify-content:flex-end;gap:12px;margin:0;padding:18px 28px;border-top:1px solid #ece6f3;background:#fcfbfe;flex-shrink:0}
 .linked-request-picker .linked-picker-footer button{min-height:44px;margin:0;display:inline-flex;align-items:center;justify-content:center;gap:7px}
 .linked-request-picker .linked-picker-list .sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:600px){.linked-request-picker .linked-picker-body{padding:18px 16px}.linked-request-picker label.linked-picker-card{padding:14px;gap:10px}.linked-request-picker .linked-picker-ticket-header{align-items:flex-start;flex-direction:column}.linked-request-picker footer.linked-picker-footer{padding:16px;flex-wrap:wrap}.linked-request-picker .linked-picker-footer .primary{flex:1}.linked-request-picker .linked-picker-intro{padding:14px;gap:10px}.linked-request-picker .linked-picker-intro strong{font-size:15px}}
