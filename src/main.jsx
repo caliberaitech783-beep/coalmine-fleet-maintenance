@@ -140,6 +140,7 @@ import {MOBILE_USER_ROLES, GENERAL_USER_ROLE, GENERAL_USER_MENU_OPTIONS, general
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {fetchPdfExport} from "./pdf-export-request.mjs";
+import {userPermissionOptions,retainedHiddenPermissions} from "./user-permission-options.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
@@ -4328,9 +4329,10 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
       {requiredTabs.map((tab)=><input key={tab} type="hidden" name={keyFor("tabAccess")} value={tab} />)}
       <div><AccessSelectAll label="Select all menus" options={ADMIN_TAB_OPTIONS} selected={shownTabs} onChange={setVisibleTabs} />{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div>
     </fieldset>
-    {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field),selected=submenuSelections[submenu.field]||[];return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
+    {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field),selected=submenuSelections[submenu.field]||[],options=userPermissionOptions(submenu),retained=retainedHiddenPermissions(submenu,selected);return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
       <legend>{tab} · Submenus</legend>
-      <div><AccessSelectAll label="Select all submenus" options={submenu.options} selected={selected} onChange={(selection)=>setSubmenu(submenu.field,selection)} />{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} checked={selected.includes(option)} onChange={(event)=>toggleSubmenu(submenu.field,option,event.target.checked)} /><span>{navigationLabel(option)}</span></label>)}</div>
+      {retained.map(option=><input key={option} type="hidden" name={field} value={option} />)}
+      <div><AccessSelectAll label="Select all submenus" options={options} selected={selected} onChange={(selection)=>setSubmenu(submenu.field,[...retained,...selection])} />{options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} checked={selected.includes(option)} onChange={(event)=>toggleSubmenu(submenu.field,option,event.target.checked)} /><span>{navigationLabel(option)}</span></label>)}</div>
     </fieldset>})}
   </section>;
 }
