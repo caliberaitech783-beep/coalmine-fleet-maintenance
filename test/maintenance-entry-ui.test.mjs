@@ -313,7 +313,7 @@ for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays
   idleRadio(tree, 'no').props.onChange();
   tree = app.render();
   assert.equal(field(tree, 'idleReason'), undefined);
-  assert.equal(field(tree, 'status').props.disabled, true);
+  assert.equal(field(tree, 'status').props.disabled, false);
   assert.equal(field(tree, 'status').props.value, 'Closed');
   await app.submit(tree);
   assert.equal(app.saved[1].status, 'Closed');
@@ -331,4 +331,14 @@ test('an existing Idle record initializes both its radio choice and saved reason
   assert.equal(idleRadio(tree, 'yes').props.checked, true);
   assert.equal(field(tree, 'idleReason').props.value, 'No work');
   assert.ok(textContent(tree).includes('Selected idle reason: No work'));
+});
+
+test('Running BD returns the vehicle to MIS without closing or asking for Idle',async()=>{
+ const app=closeHarness();let tree=app.render();
+ field(tree,'status').props.onChange({target:{value:'Running BD'}});tree=app.render();
+ await app.submit(tree);
+ assert.equal(app.saved.length,1);
+ assert.equal(app.saved[0].status,'Running BD');
+ assert.equal(app.saved[0].ideal,false);
+ assert.equal(idleRadio(app.render(),'yes'),undefined);
 });

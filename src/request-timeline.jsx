@@ -107,6 +107,8 @@ export function RequestTimelineView({data}) {
     </div>
     <p className="request-timeline-note">Pending stages do not yet have a completed duration. A missing timestamp is not zero time: its exact duration cannot be calculated. “Not recorded” indicates an invalid or unavailable duration. Recording a time does not independently prove when the event happened. Use the existing correction or red-flag workflow if the entry is incorrect.</p>
     <p>Days of breakdown measures elapsed time from submission to recorded closure, or to now while still open. It is not arrival waiting time or confirmed hands-on repair time.</p>
+    {request.issues?.length>0 && <section><h3>Breakdown issues</h3>{request.issues.map((issue,index)=><p key={index}><strong>{issue.resolved?"Fixed":"Outstanding"}</strong> — {issue.reason}</p>)}</section>}
+    {request.workflowHistory?.length>0 && <details><summary>Previous maintenance visits and Running BD verification</summary>{request.workflowHistory.map((visit,index)=><article key={index}><p><strong>{visit.status}</strong> · {stamp(visit.time)}</p><p>{visit.maintenance_work}</p>{visit.verified_at && <p>MIS verified {stamp(visit.verified_at)} by {visit.verified_by}</p>}</article>)}</details>}
     <details className="timeline-source-audit"><summary>Additional timestamp audit details</summary>
     <div className="request-timeline-events">
       {events.filter(event => event.eventAt || ["start","acceptedAt","closedAt","firstTripAt","verifiedAt"].includes(event.event)).map(event => {

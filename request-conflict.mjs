@@ -5,6 +5,7 @@ function normalized(value) {
 export function isActiveMaintenanceRequest(request = {}) {
   const closedAt = request.closedAt ?? request.closed_at;
   const verifiedAt = request.verifiedAt ?? request.verified_at;
+  if(normalized(request.status)==="running bd")return true;
   return normalized(request.status) !== "closed"
     && !String(closedAt ?? "").trim()
     && !String(verifiedAt ?? "").trim();

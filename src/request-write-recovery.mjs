@@ -11,6 +11,7 @@ export function requestWriteOutcomeConfirmed(before = {}, after = {}, action = "
     return before.acceptanceRequired === true && !text(before.acceptedAt) && Boolean(text(after.acceptedAt));
   }
   if (action === "close") {
+    if(payload.status==="Running BD")return status(after)==="running bd" && Boolean(text(after.runningBdAt)) && text(after.runningBdAt)!==text(before.runningBdAt);
     return Boolean(text(after.closedAt)) || ["closed", "idle", "ideal"].includes(status(after));
   }
   if (action === "verify") return Boolean(text(after.verifiedAt));

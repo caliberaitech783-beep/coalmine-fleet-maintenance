@@ -1,6 +1,6 @@
 import { parseIndiaRequestDateTime } from "./request-time.mjs";
 
-export const REQUEST_CLOSE_STATUSES = ["In progress", "Awaiting parts", "Closed"];
+export const REQUEST_CLOSE_STATUSES = ["In progress", "Awaiting parts", "Running BD", "Closed"];
 export const MAX_TRIP_CARD_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_METER_EVIDENCE_BYTES = 5 * 1024 * 1024;
 export const MAX_REQUEST_AUDIO_BYTES = 3 * 1024 * 1024;
@@ -75,9 +75,15 @@ export function requestDateTimeValue(date, time) {
 
 export function requestMayBeChanged(request = {}) {
   const status = String(request.status || "").toLowerCase();
-  return !request.closedAt && !request.verifiedAt && status !== "closed" && status !== "idle" && status !== "ideal";
+  return !request.closedAt && (!request.verifiedAt || status === "running bd") && status !== "closed" && status !== "idle" && status !== "ideal";
 }
 
 export function requestMayBeVerified(request = {}) {
-  return String(request.status || "").toLowerCase() === "closed" && !request.verifiedAt;
+  return ["closed", "running bd"].includes(String(request.status || "").toLowerCase()) && !request.verifiedAt;
 }
+
+export function resolveRequestIssues(request = {}, resolvedIndexes = []) {
+ const indexes=Array.isArray(resolvedIndexes)?resolvedIndexes:[];
+ return (request.issues?.length?request.issues:[{reason:request.complaint,resolved:false}]).map((issue,index)=>({...issue,resolved:issue.resolved===true||indexes.includes(index)}));
+}
+export function hasOutstandingRequestIssues(issues=[]) {return issues.some(issue=>issue.resolved!==true);}

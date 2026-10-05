@@ -27,11 +27,11 @@ function harness({row=eligible,user={site:'Sasti OB'},beforeUpdate}={}){
       queries.push({sql,values});
       if(sql.startsWith('SELECT '))return {rows:saved?[structuredClone(saved)]:[]};
       assert.match(sql,/SET mis_flagged_at=NOW\(\),mis_flagged_by=\$1,mis_flag_remark=\$2/);
-      assert.match(sql,/WHERE reference=\$3 AND status='Closed' AND verified_at IS NULL AND mis_flagged_at IS NULL/);
+      assert.match(sql,/WHERE reference=\$3 AND status IN \('Closed','Running BD'\) AND verified_at IS NULL AND mis_flagged_at IS NULL/);
       assert.match(sql,/AND site=\$4/);
       if(beforeUpdate)beforeUpdate(saved);
       const [actor,remark,reference,site]=values;
-      if(!saved||saved.ref!==reference||saved.status!=='Closed'||saved.verifiedAt||saved.misFlaggedAt||saved.site!==site)return {rows:[]};
+      if(!saved||saved.ref!==reference||!['Closed','Running BD'].includes(saved.status)||saved.verifiedAt||saved.misFlaggedAt||saved.site!==site)return {rows:[]};
       saved={...saved,misFlaggedAt:'2026-09-08 12:01:02',misFlaggedBy:actor,misFlagRemark:remark};
       return {rows:[structuredClone(saved)]};
     }},

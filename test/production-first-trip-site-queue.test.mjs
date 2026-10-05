@@ -16,8 +16,8 @@ const otherSite={...base,ref:'OTHER-SITE',site:'Jayant OB'};
 const completed={...colleague,ref:'DONE',productionFirstTripAt:'2026-09-24 10:00:00'};
 function queue(overrides={}) {
   const deps={useMemo:factory=>factory(),needsDedicatedDashboardFeed:true,dashboardRequestsReady:true,
-    dashboardRequests:[own,colleague,maintenance,otherSite,completed],assignedLocation:'Sasti OB',equipmentRecords:[],closedRequests:[own],
-    recordsForSite,isProductionFirstTripPending,requestWithEquipmentMasterDetails,...overrides};
+    dashboardRequests:[own,colleague,maintenance,otherSite,completed],assignedLocation:'Sasti OB',equipmentRecords:[],closedRequests:[own],requestRows:[own],
+    recordsForSite,isProductionFirstTripPending,requestWithEquipmentMasterDetails,...overrides,requestRows:overrides.requestRows ?? overrides.closedRequests ?? [own]};
   return new Function(...Object.keys(deps),`${queueCode};return {pending:productionFirstTripRows,history:productionFirstTripReportRows};`)(...Object.values(deps));
 }
 test('every production user at the site sees colleagues and maintenance-created first trips',()=>{

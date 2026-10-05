@@ -21,7 +21,7 @@ export function dashboardFleetSnapshot(allEquipment = [], allRequests = []) {
       continue;
     }
     const index = resolution.assetIndex;
-    const roadStatus = isIdleVehicleRequest(request) ? "idle" : "offroad";
+    const roadStatus = status === "running bd" ? "onroad" : isIdleVehicleRequest(request) ? "idle" : "offroad";
     if (definite[index] !== "offroad") definite[index] = roadStatus;
   }
   return allEquipment.map((record, index) => {

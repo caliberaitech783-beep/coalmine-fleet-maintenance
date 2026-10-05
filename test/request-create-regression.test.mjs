@@ -154,7 +154,7 @@ function conflictHarness({ submitting = false, rows = [], fetch = async () => ({
     useEffect: effect => { cleanup = effect(); },
     door: request.door, equipmentDetails: request, activeRequestRecords: rows,
     submitting, submittingRef, conflictAlerted: { current: "" },
-    setCheckingConflict: () => {}, setDuplicateConflict: value => { conflict = value; },
+    setExistingReason: () => {}, setCheckingConflict: () => {}, setDuplicateConflict: value => { conflict = value; },
     activeRequestConflictMessage, findActiveRequestConflict, fetch, URLSearchParams, authToken: "test",
     window: { alert: message => alerts.push(message), setTimeout: callback => { timers.push(callback); return timers.length; }, clearTimeout: () => {} },
   });
@@ -182,11 +182,11 @@ test("a late duplicate-check response is ignored as soon as submission starts", 
 test("conflict checks still block pre-existing requests locally and from the server", async () => {
   const local = conflictHarness({ rows: [saved] });
   assert.equal(local.conflict().existingReference, saved.ref);
-  assert.equal(local.alerts.length, 1);
+  assert.equal(local.alerts.length, 0);
   const remote = conflictHarness({ fetch: async () => ({ ok: true, json: async () => ({ duplicate: true, existingReference: "REQ-OTHER" }) }) });
   await remote.timers[0]();
   assert.equal(remote.conflict().existingReference, "REQ-OTHER");
-  assert.equal(remote.alerts.length, 1);
+  assert.equal(remote.alerts.length, 0);
 });
 
 test("without a chassis, two submit events still save once and close after persistence", async () => {
@@ -196,7 +196,7 @@ test("without a chassis, two submit events still save once and close after persi
   const start = client.indexOf("  const submit = async (e) =>", client.indexOf("function MaintenanceForm"));
   const end = client.indexOf("  return (", start);
   const submit = evaluate(`${client.slice(start, end)} return submit;`, {
-    submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null,
+    submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null, existingReason:"",
     FormData: class { get(name) { return request[name] || ""; } },
     requestEquipmentMeterType: () => "HMR", v: {}, equipmentDetails: {...request, chassis: ""},
     equipmentGroup: "", currentLocation: request.site, driverLookup: { name: "" },

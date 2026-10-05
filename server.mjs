@@ -35,7 +35,7 @@ import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validateClosingMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {resolveRequestIssues,hasOutstandingRequestIssues,REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validateClosingMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache} from './request-feed-cache.mjs';
@@ -569,6 +569,9 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS issues JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS workflow_history JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS running_bd_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_readings JSONB NOT NULL DEFAULT '{}';
@@ -5868,7 +5871,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestProjection=`reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
+const requestProjection=`issues, workflow_history AS "workflowHistory", to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
@@ -6109,7 +6112,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestTimelineProjection=`meter_type AS "meterType",opening_meter_reading AS "openingMeterReading",closing_meter_reading AS "closingMeterReading",opening_meter_readings AS "openingMeterReadings",closing_meter_readings AS "closingMeterReadings",vehicle_idle AS "vehicleIdle",id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+const requestTimelineProjection=`status, issues, running_bd_at AS "runningBdAt",meter_type AS "meterType",opening_meter_reading AS "openingMeterReading",closing_meter_reading AS "closingMeterReading",opening_meter_readings AS "openingMeterReadings",closing_meter_readings AS "closingMeterReadings",vehicle_idle AS "vehicleIdle",id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",expected_completion_changed_at AS "expectedCompletionChangedAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
 
 const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
   original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
@@ -6566,7 +6569,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
     const {rows}=await client.query(`SELECT site,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
-      FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL FOR UPDATE`,[reference]);
+      FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
       const user=await currentUserRecord(req.session,client);
@@ -6613,7 +6616,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
     const authorLogin=String(req.session.login||'').trim().toLowerCase();
     const authorName=req.session.name||'Maintenance User';
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
-      const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
+      const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
       if(oemResponsibility!==undefined&&!eligible.rows[0].acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
       if(oemResponsibility!==undefined&&eligible.rows[0].oemResponsibility&&eligible.rows[0].oemResponsibility!==oemResponsibility)throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
@@ -6682,7 +6685,7 @@ async function activeRequestConflict({door='',chassis=''}={},client=pool){
   const normalizedDoor=String(door||'').trim();
   const normalizedChassis=String(chassis||'').trim();
   if(!normalizedDoor&&!normalizedChassis)return null;
-  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status,
+  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,site,complaint,issues,status,
       owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
       to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
@@ -6697,7 +6700,7 @@ async function activeRequestConflict({door='',chassis=''}={},client=pool){
   return requestsVisibleGlobally(rows).find(isActiveMaintenanceRequest)||null;
 }
 
-async function createRequestWithVehicleLock({door='',chassis=''},write){
+async function createRequestWithVehicleLock({door='',chassis='',existingReference='',existingReason=''},write){
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -6708,8 +6711,8 @@ async function createRequestWithVehicleLock({door='',chassis=''},write){
       .filter(([,value])=>value).map(([field,value])=>`bdms-request:${field}:${value}`).sort();
     for(const key of keys)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
     const duplicate=await activeRequestConflict({door,chassis},client);
-    if(duplicate)throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
-    const result=await write(client);
+    if(duplicate && !(existingReference===duplicate.ref && ['same','different'].includes(existingReason)))throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
+    const result=await write(client,duplicate);
     await client.query('COMMIT');
     return result;
   }catch(error){await client.query('ROLLBACK');throw error}
@@ -6722,7 +6725,7 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
     if(!door&&!chassis)return res.status(400).json({error:'Select a door number before checking active requests.'});
     const conflict=await activeRequestConflict({door,chassis});
     if(!conflict)return res.json({duplicate:false});
-    res.json({duplicate:true,existingReference:conflict.ref,status:conflict.status,door:conflict.door,message:activeRequestConflictMessage(conflict,door)});
+    res.json({duplicate:true,existingReference:conflict.ref,status:conflict.status,door:conflict.door,complaint:conflict.complaint,issues:conflict.issues,message:activeRequestConflictMessage(conflict,door)});
   }catch(error){next(error)}
 });
 
@@ -6760,7 +6763,20 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const superior=String(requester.superior||'').trim().slice(0,200);
     const storedDriverName=String(driverName).trim().slice(0,200);
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
-    const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
+    const {rows}=await createRequestWithVehicleLock({door,chassis,existingReference:req.body?.existingReference,existingReason:req.body?.existingReason},async(client,duplicate)=>{
+    if(duplicate){
+      if(displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
+      await client.query('SELECT reference FROM maintenance_requests WHERE reference=$1 FOR UPDATE',[duplicate.ref]);
+      await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests) - 'workflow_history' - 'first_trip_card_image' - 'opening_meter_file' - 'closing_meter_file' || jsonb_build_object('productionFirstTrip',(SELECT to_jsonb(p) FROM production_first_trip_acceptances p WHERE p.request_reference=$1),'time',NOW())) WHERE reference=$1`,[duplicate.ref]);
+      const result=await client.query(`UPDATE maintenance_requests SET
+        issues=(CASE WHEN issues='[]'::jsonb THEN jsonb_build_array(jsonb_build_object('reason',complaint,'resolved',false)) ELSE issues END) || $1::jsonb,
+        complaint=CASE WHEN $2 THEN complaint || E'\n' || $3 ELSE complaint END,
+        status='In progress',running_bd_at=NULL,closed_at=NULL,closed_by='',verified_at=NULL,verified_by='',verification_status='',vehicle_idle=FALSE,first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='',mis_flagged_at=NULL,mis_flagged_by='',mis_flag_remark='',in_progress_at=NOW(),in_progress_by=$5
+        WHERE reference=$4 AND status<>'Closed' RETURNING ${requestProjection}`,[JSON.stringify(req.body.existingReason==='different'?[{reason:complaint,resolved:false,reportedAt:start}]:[]),req.body.existingReason==='different',complaint,duplicate.ref,req.session.name||'Production User']);
+      if(!result.rows.length)throw Object.assign(new Error('The existing ticket changed. Select the vehicle again.'),{status:409});
+      await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[duplicate.ref]);
+      return result;
+    }
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
@@ -6857,7 +6873,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
       opening_meter_readings=opening_meter_readings || $10::jsonb,
       delayed_reason=CASE WHEN $12<>'' THEN $12 ELSE delayed_reason END,
       oem_responsibility=COALESCE($14::text,oem_responsibility)
-      WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
+      WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}
         AND (NOT $13::boolean OR expected_completion_changed_at IS NULL)
       RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,oemResponsibility??null]);
     if(!result.rows.length&&revisingEtc)throw etcChangeLimitError();
@@ -6905,11 +6921,12 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     }
     if((ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    if(before.status==='Running BD')before={...before,firstTripAt:null,verifiedAt:null};
     if(ideal||status==='Closed'){
       validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
       buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
     }
-    const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at,delayed_reason FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
+    const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at,delayed_reason FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=(ideal||status==='Closed')&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
     // Closing is never blocked for a missing delayed reason; the reason recorded from the Delayed reason column is kept as is.
@@ -6932,26 +6949,35 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         closing_meter_reading=CASE WHEN $8<>'' THEN $8 ELSE closing_meter_reading END,
         closing_meter_file=CASE WHEN $9<>'' THEN $9 ELSE closing_meter_file END,
         closing_meter_file_name=CASE WHEN $9<>'' THEN $10 ELSE closing_meter_file_name END
-        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference,
+        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference,
           JSON.stringify(Object.fromEntries(Object.entries({...openingMeterReadings,...(openingMeterReading?{[effectiveMeterType]:openingMeterReading}:{})}).filter(([,value])=>value!==''))),
           JSON.stringify(Object.fromEntries(Object.entries({...closingMeterReadings,...(closingMeterReading?{[effectiveMeterType]:closingMeterReading}:{})}).filter(([,value])=>value!==''))),
           closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
+    const issues=status==='Running BD'||before.issues?.length?resolveRequestIssues(before,req.body?.resolvedIssues):[];
+    if((ideal||status==='Closed')&&before.issues?.length&&hasOutstandingRequestIssues(issues))throw Object.assign(new Error('Resolve every outstanding issue before closing this ticket.'),{status:400});
+    if(status==='Running BD'&&!hasOutstandingRequestIssues(issues))throw Object.assign(new Error('All issues are fixed. Use On road — maintenance completed.'),{status:400});
+    if(status==='Running BD'||before.issues?.length)await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests) - 'workflow_history' - 'first_trip_card_image' - 'opening_meter_file' - 'closing_meter_file' || jsonb_build_object('time',NOW())) WHERE reference=$1`,[reference]);
     const {rows}=ideal
       ? await client.query(`UPDATE maintenance_requests SET closed_at=$7,closed_by=$4,maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Closed',idle_reason=$3,delayed_reason=$8,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by='',vehicle_idle=TRUE
-          WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
+          WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference,maintenanceWorkLanguage,closedAt,effectiveDelayedReason])
       : status==='Closed'
         ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,maintenance_work_language=$7,delayed_reason=$5,status='Closed'
-            WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
+            WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,effectiveDelayedReason,reference,maintenanceWorkLanguage])
         : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status=$3,
             in_progress_at=CASE WHEN status<>'In progress' AND $3='In progress' THEN COALESCE(in_progress_at,NOW()) ELSE in_progress_at END,
             in_progress_by=CASE WHEN status<>'In progress' AND $3='In progress' AND in_progress_at IS NULL THEN $5 ELSE in_progress_by END
-            WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
+            WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
+    if(rows.length && (status==='Running BD'||before.issues?.length)){
+      const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2 ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
+      rows[0]=saved.rows[0];
+      await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[reference]);
+    }
     const timelineEvents=ideal?['closedAt','idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
     return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:ideal||status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:ideal||status==='Closed'?['closedAt']:[]};
     });
@@ -6967,6 +6993,9 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       }catch(error){
         console.error(`Request ${rows[0].ref} was marked Idle, but its notification recipients could not be resolved.`,error);
       }
+    }else if(status==='Running BD'){
+      const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+      await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} marked Running BD. MIS verification is required; outstanding issues remain open.`,null,{whatsapp:false});
     }else if(status==='Closed'){
       await sendRequestEventReports('closed',rows[0]);
       try{
@@ -7128,10 +7157,10 @@ app.patch('/api/requests/:reference/mis-flag',requireSession,requirePermission('
     if(!existing)return res.status(404).json({error:'This request no longer exists.'});
     if(!reportScopeIncludesSite(misScope,existing.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(existing.misFlaggedAt)return res.status(409).json({error:'An MIS red flag has already been saved for this request. Its original remark is retained in the MIS Red Flag Report.'});
-    if(existing.status!=='Closed'||existing.verifiedAt)return res.status(409).json({error:'Only closed requests awaiting MIS verification can be red flagged.'});
+    if(!['Closed','Running BD'].includes(existing.status)||existing.verifiedAt)return res.status(409).json({error:'Only closed requests awaiting MIS verification can be red flagged.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests
       SET mis_flagged_at=NOW(),mis_flagged_by=$1,mis_flag_remark=$2
-      WHERE reference=$3 AND status='Closed' AND verified_at IS NULL AND mis_flagged_at IS NULL
+      WHERE reference=$3 AND status IN ('Closed','Running BD') AND verified_at IS NULL AND mis_flagged_at IS NULL
         AND site=$4
       RETURNING ${requestProjection}`,[req.session.name||req.session.login||'MIS User',remark,reference,existing.site]);
     if(!rows.length)return res.status(409).json({error:'This request was already flagged, verified, or changed. Refresh to see its latest details.'});
@@ -7154,12 +7183,12 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const scope=req.session.role==='normal'?userSiteScope(user):managerReportScope(user);
     if(!scope.sites?.length)return res.status(403).json({error:'A location must be assigned before recording the production first trip.'});
     await client.query('BEGIN');
-    const {rows:requestRows}=await client.query(`SELECT reference,site,status,vehicle_idle,started_at AS start,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
+    const {rows:requestRows}=await client.query(`SELECT reference,site,status,vehicle_idle,started_at AS start,COALESCE(closed_at,running_bd_at) AS closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
       FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
     const request=requestRows[0];
     if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
     if(!reportScopeIncludesSite(scope,request.site))throw Object.assign(new Error('This request belongs to a different production location.'),{status:403});
-    if(String(request.status||'').trim()!=='Closed'||!request.closed_at||request.vehicle_idle)throw Object.assign(new Error('Production first trip can be recorded only after the vehicle is released on road and is no longer Idle.'),{status:409});
+    if(!['Closed','Running BD'].includes(String(request.status||'').trim())||!request.closed_at||request.vehicle_idle)throw Object.assign(new Error('Production first trip can be recorded only after the vehicle is released on road and is no longer Idle.'),{status:409});
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
@@ -7215,22 +7244,23 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
     const existing=existingRows[0];
     if(!reportScopeIncludesSite(misScope,existing.site))return res.status(403).json({error:'This request belongs to a different location.'});
-    if(existing.status!=='Closed')return res.status(409).json({error:'Only closed requests can be verified.'});
+    if(!['Closed','Running BD'].includes(existing.status))return res.status(409).json({error:'Only closed requests can be verified.'});
     if(isIdleVehicleRequest(existing))return res.status(409).json({error:'Maintenance is closed, but the vehicle is still Idle. Release it on road before recording its first trip.'});
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
     if(!firstTripDone)return res.status(400).json({error:'MIS first-trip confirmation is mandatory before completing verification.'});
     const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
-    if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
+    if(before.site!==existing.site||!['Closed','Running BD'].includes(before.status))throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
     if(isIdleVehicleRequest(before))throw Object.assign(new Error('Release the Idle vehicle on road before verifying its first trip.'),{status:409});
+    if(before.status==='Running BD')before={...before,closedAt:before.runningBdAt};
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
     validateClosingMeterReadings(before,{meterType:primaryMeterType,closingMeterReadings,closingMeterReading});
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status IN ('Closed','Running BD') AND verified_at IS NULL AND site=$8
       RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading}),firstTripRemark]);
     if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
@@ -7268,7 +7298,7 @@ app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('v
     const misScope=userSiteScope(misUser);
     if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can view trip cards.'});
     const {rows}=await pool.query(`SELECT site,first_trip_card_image AS image FROM maintenance_requests
-      WHERE reference=$1 AND status='Closed' AND verified_at IS NOT NULL`,[reference]);
+      WHERE reference=$1 AND status IN ('Closed','Running BD') AND verified_at IS NOT NULL`,[reference]);
     if(!rows.length)return res.status(404).json({error:'Verified closed request not found.'});
     if(!reportScopeIncludesSite(misScope,rows[0].site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(!validTripCardImageDataUrl(rows[0].image))return res.status(404).json({error:'Trip-card image is not available.'});

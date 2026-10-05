@@ -106,10 +106,10 @@ export function isProductionFirstTripRequired(request = {}, options = {}) {
 
 export function isProductionFirstTripPending(request = {}, options = {}) {
   const status = String(request.status || '').trim().toLowerCase();
-  const closedValue = request.closedAt ?? request.closed_at;
+  const closedValue = request.closedAt ?? request.closed_at ?? request.runningBdAt;
   const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
   const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;
-  return status === 'closed' && isProductionFirstTripRequired(request, options) && Number.isFinite(closedAt) && !String(productionFirstTripAt || '').trim();
+  return ['closed','running bd'].includes(status) && isProductionFirstTripRequired(request, options) && Number.isFinite(closedAt) && !String(productionFirstTripAt || '').trim();
 }
 
 // Production action queue after Maintenance makes the asset on road. These rows

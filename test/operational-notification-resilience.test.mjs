@@ -42,5 +42,5 @@ test("MIS verification is idempotent across mobile retries and concurrent submis
   assert.match(verifyRoute, /if\(existing\.verifiedAt\)return res\.json\(existing\)/);
   assert.match(verifyRoute, /retryRows\[0\]\?\.verifiedAt[\s\S]*return res\.json\(retryRows\[0\]\)/);
   assert.match(verifyRoute, /!reportScopeIncludesSite\(misScope,existing\.site\)/);
-  assert.match(verifyRoute, /existing\.status!=='Closed'/);
+  assert.match(verifyRoute, /!\['Closed','Running BD'\]\.includes\(existing\.status\)/);
 });

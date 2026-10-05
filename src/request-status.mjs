@@ -1,6 +1,7 @@
 // Prefer recorded lifecycle events when an older request still carries the
 // original Open database value. Explicit later states always win.
 export function requestStatusLabel(request = {}) {
+  if (String(request.status || '').trim().toLowerCase() === 'running bd') return 'Running BD';
   if (String(request.verifiedAt || '').trim()) return 'Verified';
   const status = String(request.status || '').trim();
   const normalized = status.toLowerCase();

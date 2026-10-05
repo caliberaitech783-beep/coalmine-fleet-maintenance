@@ -32,6 +32,6 @@ test("open, in-progress and pending idle approvals do not enter either MIS queue
 
 test("MIS queue and history consume the state predicates", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /isMis\s*\?\s*closedRequests\.filter\(visibleInMisRequests\)\s*:\s*activeRequests/);
-  assert.match(source, /historyRows\s*=\s*useMemo\(\(\)\s*=>\s*isMis\s*\?\s*closedRequests\.filter\(visibleInMisHistory\)\s*:\s*isProduction/);
+  assert.match(source, /isMis\s*\?\s*requestRows\.filter\(visibleInMisRequests\)\s*:\s*activeRequests/);
+  assert.match(source, /historyRows\s*=\s*useMemo\(\(\)\s*=>\s*isMis\s*\?\s*requestRows\.filter\(visibleInMisHistory\)\s*:\s*isProduction/);
 });

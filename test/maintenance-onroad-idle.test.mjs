@@ -60,7 +60,7 @@ test('closure records maintenance time and migration backs up previous fields wi
   assert.match(server,/closed_at=CASE WHEN status='Closed' THEN closed_at ELSE COALESCE\(ideal_requested_at,NOW\(\)\) END/);
   const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const form=ui.slice(ui.indexOf('function CloseRequestForm('),ui.indexOf('function VerifyRequestForm('));
-  assert.match(form,/if \(!idleDecision.current\)/);
+  assert.match(form,/if \(!idleDecision.current && status === "Closed"\)/);
   assert.match(form,/setIdlePrompt\(true\)/);
   assert.match(form,/On road — move vehicle to Idle\?/);
   assert.match(form,/Close request and mark vehicle Idle/);

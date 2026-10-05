@@ -166,7 +166,7 @@ function matchingRoadStatus(record, requests, matches) {
   if (["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus)) return record.dashboardRoadStatus;
   const matchingRequests = requests.filter((request) =>
     (normalize(request.status) !== "closed" || isIdleVehicleRequest(request)) && matches(request, record));
-  if (matchingRequests.some((request) => !isIdleVehicleRequest(request))) return "offroad";
+  if (matchingRequests.some((request) => normalize(request.status)!=="running bd" && !isIdleVehicleRequest(request))) return "offroad";
   if (matchingRequests.some(isIdleVehicleRequest)) return "idle";
   // Live BDMS availability follows the request lifecycle, not a stale master
   // snapshot. Keep equipmentRoadStatus/equipmentMetrics for snapshot consumers.
@@ -190,7 +190,7 @@ export function liveEquipmentRoadStatuses(records = [], requests = []) {
     if (requestStatus === "closed" && !isIdleVehicleRequest(request)) continue;
     const match = resolve(request);
     if (!['matched', 'ambiguous'].includes(match.reason)) continue;
-    const status = isIdleVehicleRequest(request) ? "idle" : "offroad";
+    const status = normalize(request.status)==="running bd" ? "onroad" : isIdleVehicleRequest(request) ? "idle" : "offroad";
     for (const index of match.candidateIndexes) {
       if (fixed[index] || statuses[index] === "offroad") continue;
       statuses[index] = status;

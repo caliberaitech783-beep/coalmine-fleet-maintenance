@@ -58,7 +58,7 @@ test('other roles, unassigned sites, inactive requests, missing acceptance and f
   assert.equal((await fixture({active:false}).run()).status,409);
   assert.equal((await fixture({accepted:false}).run()).status,400);
   assert.equal((await fixture({arrival:false}).run()).status,409);
-  assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\) AND verified_at IS NULL FOR UPDATE/);
+  assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\) AND \(verified_at IS NULL OR status='Running BD'\) FOR UPDATE/);
 });
 test('stale/invalid saves reject; unchanged saves do not create history',async()=>{
   const f=fixture();

@@ -350,7 +350,7 @@ for (const status of ['Open', 'In progress', 'Awaiting parts', 'Closed']) test(`
   const props={request: {...accepted, status}, close() {}, onSave: payload => saved.push(payload)};
   let tree = app.render(props);
   assert.equal(field(tree, "status").props.value, "Closed");
-  assert.deepEqual(all(field(tree, "status"), node => node.type === "option").map(node => node.props.value), ['Closed']);
+  assert.deepEqual(all(field(tree, "status"), node => node.type === "option").map(node => node.props.value), ['Closed','Running BD']);
   const event={preventDefault() {}, currentTarget: {maintenanceWork: "Repair completed", closingDate: "2026-09-08", closingTime: "14:00:00"}};
   await form(tree).props.onSubmit(event);
   assert.equal(saved.length,0);
