@@ -63,7 +63,7 @@ export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAft
 }
 
 function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
-  // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
+  // Remember applied columns per account/schema, independent of changing report titles.
   const allColumnKeys = useMemo(() => {
     const allColumnKeys = columns.map((column) => column.key);
     return allColumnKeys;

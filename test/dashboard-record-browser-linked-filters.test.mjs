@@ -31,6 +31,7 @@ const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDa
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
   const values = { ...bindings, ...overrides };
+  values.useColumnPreferences = (table, columns) => values.useState(() => columns.map(column => column.key));
   return new Function("DateInput", ...Object.keys(values), compiled[file])(DateInput, ...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
