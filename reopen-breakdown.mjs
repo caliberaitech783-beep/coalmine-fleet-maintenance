@@ -1,7 +1,7 @@
 import {managerRoleSelection} from './admin-access.mjs';
 export function canReopenBreakdown(session){
   const p=session?.permissions;
-  return session?.role==='super' && p?.adminLevel==='Manager' && managerRoleSelection(p.managerRoles?.length?p.managerRoles:p.managerRole).includes('Maintenance Manager');
+  return session?.role==='super' && p?.adminLevel==='Manager' && managerRoleSelection(p.managerRoles?.length?p.managerRoles:p.managerRole).some(role=>['Maintenance Manager','Project Manager'].includes(role));
 }
 export function reopenBreakdownError(request,reason){
   if(!String(reason||'').trim()||String(reason).length>500)return 'Enter a correction reason (up to 500 characters).';

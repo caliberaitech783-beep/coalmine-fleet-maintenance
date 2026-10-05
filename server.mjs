@@ -6834,7 +6834,7 @@ app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,r
   try{
     const reference=String(req.params.reference||'').trim(),reason=String(req.body?.reason||'').trim();
     const authorization=await currentDashboardAuthorization(req.session);
-    if(!authorization||!canReopenBreakdown(authorization.session))return res.status(403).json({error:'Only a Maintenance Manager can reopen a breakdown.'});
+    if(!authorization||!canReopenBreakdown(authorization.session))return res.status(403).json({error:'Only Maintenance Managers and Project Managers can reopen a breakdown.'});
     const identity=(await pool.query('SELECT door_number AS door,chassis_number AS chassis,site FROM maintenance_requests WHERE reference=$1',[reference])).rows[0];
     if(!identity)return res.status(404).json({error:'Request not found.'});
     if(!userManagesSite(authorization.user,identity.site))return res.status(403).json({error:'This vehicle is outside your assigned sites.'});
@@ -6856,7 +6856,7 @@ app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,r
         WHERE reference=$1 RETURNING ${requestProjection}`,[reference]);
       await recordRequestTimeline(client,req,reference,before,{events:['closedAt'],reason,sources:{closedAt:'user'}});
       await client.query(`INSERT INTO audit_events(event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields)
-        VALUES('Workflow correction','Success',$1,$2,'Maintenance Manager','Maintenance Requests','Reopen breakdown','Maintenance request',$3,$4,$5::jsonb)`,[req.session.login,req.session.name||'',reference,reason,JSON.stringify([{field:'Status',before:before.status,after:updated.rows[0].status}])]);
+        VALUES('Workflow correction','Success',$1,$2,$6,'Maintenance Requests','Reopen breakdown','Maintenance request',$3,$4,$5::jsonb)`,[req.session.login,req.session.name||'',reference,reason,JSON.stringify([{field:'Status',before:before.status,after:updated.rows[0].status}]),managerRoleSelection(current.session.permissions.managerRoles?.length?current.session.permissions.managerRoles:current.session.permissions.managerRole).join(', ')]);
       return updated;
     });
     res.json(result.rows[0]);
