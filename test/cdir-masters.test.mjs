@@ -148,7 +148,7 @@ test("C-Dir Masters opens a clock face of icons that show their full names", () 
 
 test("the Admin menu ends with a Database half clock for the backup pages and Diagnostics", () => {
   assert.ok(source.includes('const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(name)), ["Diagnostics", Stethoscope], ["Storage management", HardDrive], ["Retention rules", CalendarClock], ["Purge data", Eraser]];'));
-  assert.ok(source.includes('{adminNav.filter(([name])=>!backupAdminPages.has(name)&&(canViewAdmin||name==="User Sessions")).map(([name,Icon])=>'), "backup pages are not listed flat");
+  assert.ok(source.includes('{adminNav.filter(([name])=>!backupAdminPages.has(name)&&(canViewAdmin||name==="User Sessions")).map(([name,Icon])=>'), "backup pages are not listed flat and the read-only exception sees only sessions");
   const menu = source.slice(source.indexOf('className="masters-dropdown admin-dropdown"'), source.indexOf("{visibleNav.filter(([name]) => name === \"CD\")"));
   const locks = menu.indexOf('active === "Admin locks"'), database = menu.indexOf('<ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)}');
   assert.ok(locks > 0 && database > locks, "Database is the last Admin entry, after Audit Trail and Admin locks");
