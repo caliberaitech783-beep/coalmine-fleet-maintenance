@@ -5,7 +5,7 @@ import {STOCK_STATEMENT_SQL,stockStatementRow} from '../stock-statement.mjs';
 
 test('stock statement is removed from the top-level IBOSS dropdown',()=>{
   const source=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  const adminMenu=source.slice(source.indexOf('{canViewAdmin && <div'),source.indexOf('{(canViewDirectory ||'));
+  const adminMenu=source.slice(source.indexOf('{(canViewAdmin||isSessionViewOnlyUser(session)) && <div'),source.indexOf('{(canViewDirectory ||'));
   assert.doesNotMatch(adminMenu,/IBOSS|visibleIbossNav/);
   assert.match(source,/className="masters-dropdown iboss-dropdown"/);
   assert.doesNotMatch(source,/const visibleIbossNav = [^\n]+\["Stock Statement"/);
