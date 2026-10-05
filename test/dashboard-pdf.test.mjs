@@ -19,7 +19,7 @@ test("both KPI exports opt into visual PDF without changing ordinary table expor
   assert.equal((source.match(/label="Print\/Export" dashboardPdf/g) || []).length, 2, "the manager KPI export and the whole fleet dashboard export");
   assert.match(source, /dashboardPdf = false/);
   assert.match(source, /if \(dashboardPdf\) \{[\s\S]*?downloadDashboardPdf[\s\S]*?return;\s*\}/);
-  assert.match(source, /fetch\("\/api\/exports\/pdf"/);
+  assert.match(source, /fetchPdfExport\("\/api\/exports\/pdf"/);
 });
 
 test("Smart Print on a dashboard prints the dashboard itself, not the KPI table", () => {
