@@ -13,7 +13,7 @@ import * as timeline from '../request-timeline.mjs';
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const auth=source.slice(source.indexOf('async function requireSession('),source.indexOf('async function requireSuper('));
 const creationGuard=source.slice(source.indexOf('async function createRequestWithVehicleLock('),source.indexOf("app.get('/api/requests/conflict',"));
-const route=source.slice(source.indexOf("app.post('/api/requests',"),source.indexOf("app.patch('/api/requests/:reference',"));
+const route=source.slice(source.indexOf("app.post('/api/requests',"),source.indexOf("\napp.",source.indexOf("app.post('/api/requests',")+1));
 const production={role:'normal',assignedRole:'Production User',name:'Stupal Moon',login:'Stupal',permissions:{createRequests:true}};
 
 async function create({user={site:'Sasti OC'},session=production,body={}}={}){

@@ -28,7 +28,7 @@ function createRoute({ conflict = null, insertError, reports = async () => {}, n
     inserts++;
     return { rows: [saved] };
   } };
-  const snippet = server.slice(server.indexOf("app.post('/api/requests',"), server.indexOf("app.patch('/api/requests/:reference',"));
+  const snippet = server.slice(server.indexOf("app.post('/api/requests',"), server.indexOf("\napp.",server.indexOf("app.post('/api/requests',")+1));
   evaluate(snippet, {
     app: { post: (_path, ...handlers) => { handler = handlers.at(-1); } },
     requireSession: () => {}, requirePermission: () => () => {},

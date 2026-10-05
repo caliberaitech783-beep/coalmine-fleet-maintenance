@@ -15,7 +15,7 @@ import * as timeline from '../request-timeline.mjs';
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const auth=source.slice(source.indexOf('async function requireSession('),source.indexOf('async function requireSuper('));
 const helpers=source.slice(source.indexOf('async function activeRequestConflict('),source.indexOf("app.get('/api/requests/conflict',"));
-const route=source.slice(source.indexOf("app.post('/api/requests',"),source.indexOf("app.patch('/api/requests/:reference',"));
+const route=source.slice(source.indexOf("app.post('/api/requests',"),source.indexOf("\napp.",source.indexOf("app.post('/api/requests',")+1));
 const normalize=value=>String(value||'').trim().toLowerCase();
 
 function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
