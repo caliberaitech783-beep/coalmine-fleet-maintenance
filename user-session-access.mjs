@@ -1,3 +1,4 @@
+// Match the authenticated login only; employee display names never grant access.
 export function isSessionViewOnlyUser(session) {
   return String(session?.login || '').trim().toLowerCase() === 'mahakdudani';
 }
