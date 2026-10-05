@@ -12,7 +12,7 @@ export function oemEmailDay(now=new Date()) {return new Date(now.getTime()+330*6
 export function oemEmailDue(level,activation,now=new Date()) {
   const local=new Date(now.getTime()+330*60000);
   const days=Math.round((Date.parse(oemEmailDay(now))-Date.parse(activation))/86400000);
-  return local.getUTCHours()>=19 && days>=0 && days%OEM_EMAIL_INTERVALS[level]===0;
+  return local.getUTCHours()>=17 && days>=0 && days%OEM_EMAIL_INTERVALS[level]===0;
 }
 // Explicit legacy OEM-master site spellings; never broaden an unknown location to all sites.
 const site=value=>canonicalSiteName(clean(value).replace(/\b(Majri|Sasti|Dhoptala)\s+2\b/gi,'$1 II').replace(/\bGauri Pauni\b/gi,'Gauri Pauni'));

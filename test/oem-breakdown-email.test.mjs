@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
-test('IST 7PM and activation anchored 1/3/7/10 day schedule',()=>{
+test('IST 5PM and activation anchored 1/3/7/10 day schedule',()=>{
   for(const [level,days] of [['L1',1],['L2',3],['L3',7],['L4',10]]){
-    assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T13:29:59Z')),false);
-    assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T13:30:00Z')),true);
-    const next=new Date('2026-10-05T13:30:00Z');next.setUTCDate(next.getUTCDate()+days);
+    assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T11:29:59Z')),false);
+    assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T11:30:00Z')),true);
+    const next=new Date('2026-10-05T11:30:00Z');next.setUTCDate(next.getUTCDate()+days);
     assert.equal(oemEmailDue(level,'2026-10-05',next),true);
-    if(days>1)assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-06T13:30:00Z')),false);
+    if(days>1)assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-06T11:30:00Z')),false);
   }
 });
 test('recipient validation and consolidation never broadens missing locations',()=>{
