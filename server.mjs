@@ -56,6 +56,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
+import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
 import {HOUSEKEEPING_CATEGORIES,housekeepingCategory,purgeRequestError} from './data-housekeeping.mjs';
 import {PURGEABLE_TABLES,deadRowShare,diskState,sharePercent,tableLabel} from './storage-management.mjs';
@@ -1980,6 +1981,8 @@ function requireWhatsAppAdministrator(req,res,next){
 }
 
 function requireAdministrator(req,res,next){
+  if(isSessionViewOnlyUser(req.session)&&req.method!=='GET'&&/^\/api\/(?:user-sessions|user-login-history|announcements|remote-assistance)(?:\/|$)/.test(req.path||''))
+    return res.status(403).json({error:'Your User Sessions access is view only.'});
   const adminLevel=String(req.session?.permissions?.adminLevel||'').trim().toLowerCase();
   if(req.session?.role==='super'&&['admin','super admin'].includes(adminLevel))return next();
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
@@ -2839,8 +2842,8 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
   }catch(error){next(error)}
 });
 
-registerLoginHistoryRoutes(app,{pool,requireSuper,requireAdministrator,locationName:userSessionLocationName});
-app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
+registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView,locationName:userSessionLocationName});
+app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
   try{
     await sessionStore.pruneExpired();
     await expireRemoteAssistanceSessions();

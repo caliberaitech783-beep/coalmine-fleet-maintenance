@@ -7,7 +7,7 @@ const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8")
 const remoteAssistance = readFileSync(new URL("../src/remote-assistance.jsx", import.meta.url), "utf8");
 
 test("user-session administration is restricted, token-safe, and auditable", () => {
-  assert.match(server, /app\.get\('\/api\/user-sessions',requireSuper,requireAdministrator/);
+  assert.match(server, /app\.get\('\/api\/user-sessions',requireSession,requireUserSessionView/);
   assert.match(server, /app\.delete\('\/api\/user-sessions\/:sessionId',requireSuper,requireAdministrator/);
   assert.match(server, /\['admin','super admin'\]\.includes\(adminLevel\)/);
   assert.match(server, /app\.get\('\/api\/audit-events',requireSuper,requireAdministrator/);
