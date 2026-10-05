@@ -4,6 +4,8 @@ import {canonicalSiteName} from './site-location.mjs';
 import {createFleetAssetResolver} from './dashboard-equipment-metrics.mjs';
 import {requestShiftLabel} from './request-shift.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
+import {buildXlsxSheetsWorkbook} from './report-xlsx.mjs';
+import {buildTableExportPdf} from './table-export-pdf.mjs';
 
 const clean=value=>String(value??'').trim();
 const key=value=>clean(value).toLowerCase();
@@ -43,7 +45,7 @@ export function oemEmailRows({requests=[],equipment=[],recipient}) {
       return [{...row,site:location,model:asset.model||row.model,door:row.door||asset.door||asset.equipmentName}];
     }).sort((a,b)=>String(a.site).localeCompare(String(b.site))||String(a.start).localeCompare(String(b.start)));
 }
-export function buildOemEmail({recipient,rows,shifts=[],now=new Date()}) {
+export function buildOemEmail({recipient,rows,shifts=[],now=new Date(),onTable}) {
   const days=OEM_EMAIL_INTERVALS[recipient.level];
   const label=days===1?'Daily Breakdown Report':`${days}-Day Breakdown ${recipient.level==='L2'?'Review':recipient.level==='L3'?'Escalation':'Management Review'}`;
   const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${label} — ${oemEmailDay(now)}`;
@@ -57,6 +59,7 @@ export function buildOemEmail({recipient,rows,shifts=[],now=new Date()}) {
   });
   const intro=`Dear ${recipient.name},\n\nConsolidated active OEM BD cases for ${recipient.oem} across your assigned locations.\nActive OEM BD cases: ${rows.length}\nReport generated: ${oemEmailDay(now)}, ${new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'}).format(now)} IST\n\n${actions[recipient.level]}`;
   const footer='Regards,\nCaliber — Nerve Center\nAutomated OEM Breakdown Reporting';
+  onTable?.({columns:headers.map(label=>({label})),rows:values});
   const cell=(value,tag='td')=>`<${tag} style="border:1px solid #000;padding:8px;text-align:left">${escape(value)}</${tag}>`;
   return {subject,text:`${intro}\n\n${headers.join(' | ')}\n${values.map(row=>row.join(' | ')).join('\n')||'No active OEM BD cases.'}\n\n${footer}`,html:`<div style="font-family:Arial;color:#17233c"><p>${escape(intro).replaceAll('\n','<br>')}</p><table style="border-collapse:collapse"><thead><tr>${headers.map(value=>cell(value,'th')).join('')}</tr></thead><tbody>${values.map((row,index)=>`<tr style="background:${index%2?'#fff':'#eee'}">${row.map(value=>cell(value)).join('')}</tr>`).join('')}</tbody></table>${rows.length?'':'<p>No active OEM BD cases.</p>'}<p>${escape(footer).replaceAll('\n','<br>')}</p></div>`};
 }
@@ -85,9 +88,9 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       const trial=await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
       const trialCc=trial.rows.length?OEM_TRIAL_CC:[];
       if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),recipient.recipientKey]);
-      const report=buildOemEmail({recipient,rows,shifts:data.shifts,now});
-      let result;
+      let result,report;
       try{
+        report=await buildOemEmailWithAttachments({recipient,rows,shifts:data.shifts,now});
         result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
@@ -102,6 +105,7 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
         try{
           const acknowledgement=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:trialCc,
             subject:`Sending confirmation — ${report.subject}`,
+            attachments:report.attachments,
             text:`The mail server accepted the following OEM report for sending. This is not confirmation of inbox delivery or that the OEM has read it.\n\nFrom: ${mailer.config.user}\nTo: ${recipient.email}\nSubject: ${report.subject}\nMessage ID: ${result.messageId||'Not provided'}\nAccepted addresses: ${(result.accepted||[]).join(', ')}\nRejected addresses: ${(result.rejected||[]).join(', ')||'None'}\n\n${report.text}`});
           if(!trialCc.every(address=>acknowledgement.accepted?.some(value=>key(value)===address)))throw new Error('One or more confirmation recipients were not accepted by SMTP');
         }catch(error){acknowledgementStatus=`Failed / review required: ${clean(error.message).slice(0,400)}`;failed++;}
@@ -112,4 +116,17 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
     if(failed)throw new Error(`OEM email report: ${sent} accepted by SMTP; ${failed} failed, see oem_email_deliveries`);
     return sent?{sent}:{skipped:true};
   }finally{if(locked)await client.query('SELECT pg_advisory_unlock(71903541)').catch(()=>{});client.release();}
+}
+
+export async function buildOemEmailWithAttachments(options) {
+  let table;
+  const report=buildOemEmail({...options,onTable:value=>{table=value;}});
+  const title=report.subject;
+  const basename=`OEM-BD-${options.recipient.oem}-${options.recipient.level}-${oemEmailDay(options.now)}`.replace(/[^a-zA-Z0-9_-]/g,'-');
+  const workbook=buildXlsxSheetsWorkbook(title,[{name:'OEM BD',title,...table}]);
+  const pdf=await buildTableExportPdf({title,...table,pageSize:'A3'});
+  return {...report,attachments:[
+    {filename:`${basename}.xlsx`,content:Buffer.from(await workbook.arrayBuffer()),contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+    {filename:`${basename}.pdf`,content:pdf,contentType:'application/pdf'},
+  ]};
 }

@@ -1,7 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {buildOemEmailWithAttachments} from '../oem-breakdown-email.mjs';
+import {readFile} from 'node:fs/promises';
 import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails,OEM_TRIAL_CC} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
+test('PDF and real Excel attachments include every selected case and match website workbook styling',async()=>{
+  const rows=Array.from({length:75},(_,i)=>({ref:`CASE-${i}`,door:`D${i}`,site:'Sasti OC',complaint:'Parts pending',start:'2026-10-05 10:00:00'}));
+  const report=await buildOemEmailWithAttachments({recipient:oemEmailRecipients([contact])[0],rows,now:new Date('2026-10-05T11:30:00Z')});
+  assert.equal(report.attachments.length,2);
+  const [xlsx,pdf]=report.attachments;
+  assert.equal(xlsx.content.subarray(0,2).toString(),'PK');
+  assert.equal(pdf.content.subarray(0,5).toString(),'%PDF-');
+  const xml=xlsx.content.toString();
+  for(const row of rows)assert.ok(xml.includes(row.ref));
+  assert.match(xml,/TableStyleLight15/);
+  assert.match(xml,/FF000000/);
+  const website=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const shared=await readFile(new URL('../report-xlsx.mjs',import.meta.url),'utf8');
+  assert.equal(shared.slice(shared.indexOf('function escapeExportHtml'),shared.indexOf('\nexport {')),website.slice(website.indexOf('function escapeExportHtml'),website.indexOf('function buildXlsxWorkbook(')));
+});
 test('IST 5PM and activation anchored 1/3/7/10 day schedule',()=>{
   for(const [level,days] of [['L1',1],['L2',3],['L3',7],['L4',10]]){
     assert.equal(oemEmailDue(level,'2026-10-05',new Date('2026-10-05T11:29:59Z')),false);
@@ -67,6 +84,7 @@ test('only the first three reports globally get trial CC and sending confirmatio
   const reports=messages.filter(message=>!message.subject.startsWith('Sending confirmation'));
   const confirmations=messages.filter(message=>message.subject.startsWith('Sending confirmation'));
   assert.equal(reports.length,4);assert.equal(confirmations.length,3);assert.equal(used,3);
+  for(const message of messages)assert.equal(message.attachments.length,2);
   for(const report of reports.slice(0,3))assert.deepEqual(report.cc,OEM_TRIAL_CC);
   assert.equal(reports[3].cc,undefined);
   for(const confirmation of confirmations){assert.deepEqual(confirmation.to,OEM_TRIAL_CC);assert.match(confirmation.text,/not confirmation of inbox delivery/);}
