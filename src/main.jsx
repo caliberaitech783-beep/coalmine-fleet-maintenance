@@ -139,6 +139,7 @@ import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelecti
 import {MOBILE_USER_ROLES, GENERAL_USER_ROLE, GENERAL_USER_MENU_OPTIONS, generalUserMenuSelection, generalUserCanAccessMenu, MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
+import {fetchPdfExport} from "./pdf-export-request.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
@@ -3708,7 +3709,7 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
         columns: appendix.columns.map((column) => ({ label: column.label })),
         rows: appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row)))),
       }));
-      const response = await fetch("/api/exports/pdf", {
+      const response = await fetchPdfExport("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(appendixTables.length ? {
@@ -3817,7 +3818,7 @@ async function exportSmartPrintSelection({ format, title, columns = [], rows = [
     columns: appendix.columns.map((column) => ({ label: column.label })),
     rows: appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row)))),
   }));
-  const response = await fetch("/api/exports/pdf", {
+  const response = await fetchPdfExport("/api/exports/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
     body: JSON.stringify(appendixTables.length ? {
@@ -3921,7 +3922,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
         return;
       }
       const exportRows = buildExportRows();
-      const response = await fetch("/api/exports/pdf", {
+      const response = await fetchPdfExport("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
@@ -7721,7 +7722,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           ? buildDepartmentReports({requests:zipRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
           : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo), selectedReportShift);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
-        const pdfResponse = await fetch("/api/exports/pdf", {
+        const pdfResponse = await fetchPdfExport("/api/exports/pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
           body: JSON.stringify({ title: reportPdfHeading(report.title, filteredRows), columns: report.columns.map((column) => ({ label: column.label })), rows: exportRows }),
