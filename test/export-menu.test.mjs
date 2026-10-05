@@ -19,7 +19,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.doesNotMatch(source,/window\.open\("", "_blank"/);
   assert.match(source,/document\.createElement\("iframe"\)/);
   assert.match(source,/frame\.contentWindow\?\.print\(\)/);
-  assert.match(source,/fetch\("\/api\/exports\/pdf"/);
+  assert.match(source,/fetchPdfExport\("\/api\/exports\/pdf"/);
   assert.match(source,/openSmartPrint\(\{ title, columns: smartPrintColumns, rows: smartPrintRows,[^}]*exportFormat: format, exportOnly: true \}\)/);
   assert.match(source,/if \(!excelSheets\) \{\s*smartExport\("xlsx"\);/);
   assert.match(source,/if \(!dashboardPdf\) \{\s*smartExport\("pdf"\);/);
