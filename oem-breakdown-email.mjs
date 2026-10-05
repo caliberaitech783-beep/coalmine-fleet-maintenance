@@ -4,11 +4,19 @@ import {canonicalSiteName} from './site-location.mjs';
 import {createFleetAssetResolver} from './dashboard-equipment-metrics.mjs';
 import {requestShiftLabel} from './request-shift.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
+import {buildXlsxSheetsWorkbook} from './report-xlsx.mjs';
+import {buildTableExportPdf} from './table-export-pdf.mjs';
+import {equipmentGroupValue} from './equipment-group.mjs';
 
 const clean=value=>String(value??'').trim();
 const key=value=>clean(value).toLowerCase();
 export const OEM_EMAIL_INTERVALS={L1:1,L2:3,L3:7,L4:10};
 export const OEM_TRIAL_CC=['anoop.p@cmll.in','stupalmoon2004@gmail.com'];
+// Explicitly authorized extra batch; expires at midnight IST and cannot recur.
+export const OEM_EXTRA_SEND_DAY='2026-10-05';
+export function oemExtraSendDue(now=new Date()) {
+  return oemEmailDay(now)===OEM_EXTRA_SEND_DAY && new Date(now.getTime()+330*60000).getUTCHours()>=19;
+}
 export function oemEmailDay(now=new Date()) {return new Date(now.getTime()+330*60000).toISOString().slice(0,10);}
 export function oemEmailDue(level,activation,now=new Date()) {
   const local=new Date(now.getTime()+330*60000);
@@ -32,21 +40,26 @@ export function oemEmailRecipients(contacts=[]) {
 }
 export function oemEmailRows({requests=[],equipment=[],recipient}) {
   const resolve=createFleetAssetResolver(equipment);
-  return requests.filter(row=>key(row.oemResponsibility)==='oem'&&!['closed','idle','ideal'].includes(key(row.status)))
+  return requests.filter(row=>key(row.oemResponsibility)==='oem'&&!row.closedAt&&!['closed','idle','ideal'].includes(key(row.status)))
     .flatMap(row=>{
       const {assetIndex}=resolve(row,{allowTransferred:true});
       // Unresolved equipment must not be guessed into another OEM's report.
       if(assetIndex===null)return [];
       const asset=equipment[assetIndex],oem=asset.make||asset.oem;
       const location=asset.currentLocation||asset.location||asset.site||row.site;
-      if(key(oem)!==key(recipient.oem)||!recipient.sites.includes(site(location)))return [];
+      const volvoTrucks=['volvo trucks','volvo tippers'].includes(key(recipient.oem));
+      const group=key(equipmentGroupValue(asset,asset.itemName||row.equipmentGroup||''));
+      const matchingOem=volvoTrucks
+        ? ['volvo','volvo trucks','volvo tippers'].includes(key(oem)) && (group ? /\b(tippers?|trucks?)\b/.test(group) : ['volvo trucks','volvo tippers'].includes(key(oem)))
+        : key(oem)===key(recipient.oem);
+      if(!matchingOem||!recipient.sites.includes(site(location)))return [];
       return [{...row,site:location,model:asset.model||row.model,door:row.door||asset.door||asset.equipmentName}];
     }).sort((a,b)=>String(a.site).localeCompare(String(b.site))||String(a.start).localeCompare(String(b.start)));
 }
-export function buildOemEmail({recipient,rows,shifts=[],now=new Date()}) {
+export function buildOemEmail({recipient,rows,shifts=[],now=new Date(),onTable,extraBatch=false}) {
   const days=OEM_EMAIL_INTERVALS[recipient.level];
   const label=days===1?'Daily Breakdown Report':`${days}-Day Breakdown ${recipient.level==='L2'?'Review':recipient.level==='L3'?'Escalation':'Management Review'}`;
-  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${label} — ${oemEmailDay(now)}`;
+  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${extraBatch?'Additional 7 PM Breakdown Report':label} — ${oemEmailDay(now)}`;
   const actions={L1:'Please share the action taken, pending parts or support requirements, and expected restoration time.',L2:'Please coordinate pending service visits, parts availability and delays, and provide a case-wise action plan and expected restoration time.',L3:'Please arrange regional support and confirm responsible persons and target completion dates.',L4:'Please arrange management intervention where technical, parts or service support is needed and share a coordinated recovery plan.'};
   const headers=['Shift','Job Reference','Site','Door No','Model','BD Started','Days of BD','Reason of BD','Latest Update','Delay Reason','ETC'];
   const values=rows.map(row=>{
@@ -57,6 +70,7 @@ export function buildOemEmail({recipient,rows,shifts=[],now=new Date()}) {
   });
   const intro=`Dear ${recipient.name},\n\nConsolidated active OEM BD cases for ${recipient.oem} across your assigned locations.\nActive OEM BD cases: ${rows.length}\nReport generated: ${oemEmailDay(now)}, ${new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'}).format(now)} IST\n\n${actions[recipient.level]}`;
   const footer='Regards,\nCaliber — Nerve Center\nAutomated OEM Breakdown Reporting';
+  onTable?.({columns:headers.map(label=>({label})),rows:values});
   const cell=(value,tag='td')=>`<${tag} style="border:1px solid #000;padding:8px;text-align:left">${escape(value)}</${tag}>`;
   return {subject,text:`${intro}\n\n${headers.join(' | ')}\n${values.map(row=>row.join(' | ')).join('\n')||'No active OEM BD cases.'}\n\n${footer}`,html:`<div style="font-family:Arial;color:#17233c"><p>${escape(intro).replaceAll('\n','<br>')}</p><table style="border-collapse:collapse"><thead><tr>${headers.map(value=>cell(value,'th')).join('')}</tr></thead><tbody>${values.map((row,index)=>`<tr style="background:${index%2?'#fff':'#eee'}">${row.map(value=>cell(value)).join('')}</tr>`).join('')}</tbody></table>${rows.length?'':'<p>No active OEM BD cases.</p>'}<p>${escape(footer).replaceAll('\n','<br>')}</p></div>`};
 }
@@ -76,40 +90,61 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
     if(!oemEmailDue('L1',activation,now))return {skipped:true};
     if(!mailer.transporter)throw new Error('OEM email schedule cannot send: SMTP is not configured');
     const data=await loadData();let sent=0,failed=0;
+    const batches=oemExtraSendDue(now)?['regular','extra-1900']:['regular'];
+    for(const batch of batches){
     for(const recipient of oemEmailRecipients(data.contacts)){
-      if(!oemEmailDue(recipient.level,activation,now))continue;
+      const extraBatch=batch==='extra-1900';
+      if(!extraBatch&&!oemEmailDue(recipient.level,activation,now))continue;
       const rows=oemEmailRows({...data,recipient});
-      const claim=await client.query(`INSERT INTO oem_email_deliveries(day,recipient_key,email,oem,level,status,case_count) VALUES($1,$2,$3,$4,$5,'Sending',$6) ON CONFLICT DO NOTHING RETURNING recipient_key`,[oemEmailDay(now),recipient.recipientKey,recipient.email,recipient.oem,recipient.level,rows.length]);
+      if(extraBatch&&!rows.length)continue;
+      // Keep regular delivery IDs intact; one independent claim per extra recipient/level.
+      const deliveryKey=extraBatch?`${recipient.recipientKey}:extra-1900`:recipient.recipientKey;
+      const claim=await client.query(`INSERT INTO oem_email_deliveries(day,recipient_key,email,oem,level,status,case_count) VALUES($1,$2,$3,$4,$5,'Sending',$6) ON CONFLICT DO NOTHING RETURNING recipient_key`,[oemEmailDay(now),deliveryKey,recipient.email,recipient.oem,recipient.level,rows.length]);
       if(!claim.rowCount)continue;
       // Reserve before SMTP: crashes/ambiguous sends must never extend the three-email trial.
       const trial=await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
       const trialCc=trial.rows.length?OEM_TRIAL_CC:[];
-      if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),recipient.recipientKey]);
-      const report=buildOemEmail({recipient,rows,shifts:data.shifts,now});
-      let result;
+      if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey]);
+      let result,report;
       try{
+        report=await buildOemEmailWithAttachments({recipient,rows,shifts:data.shifts,now,extraBatch});
         result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
         failed++;
         // Do not automatically resend ambiguous SMTP outcomes: delivery may already have occurred.
-        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),recipient.recipientKey,clean(error.message).slice(0,500)]);
+        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,clean(error.message).slice(0,500)]);
         continue;
       }
-      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),recipient.recipientKey,result.messageId||'']);sent++;
+      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,result.messageId||'']);sent++;
       if(trialCc.length){
         let acknowledgementStatus='SMTP accepted';
         try{
           const acknowledgement=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:trialCc,
             subject:`Sending confirmation — ${report.subject}`,
+            attachments:report.attachments,
             text:`The mail server accepted the following OEM report for sending. This is not confirmation of inbox delivery or that the OEM has read it.\n\nFrom: ${mailer.config.user}\nTo: ${recipient.email}\nSubject: ${report.subject}\nMessage ID: ${result.messageId||'Not provided'}\nAccepted addresses: ${(result.accepted||[]).join(', ')}\nRejected addresses: ${(result.rejected||[]).join(', ')||'None'}\n\n${report.text}`});
           if(!trialCc.every(address=>acknowledgement.accepted?.some(value=>key(value)===address)))throw new Error('One or more confirmation recipients were not accepted by SMTP');
         }catch(error){acknowledgementStatus=`Failed / review required: ${clean(error.message).slice(0,400)}`;failed++;}
         // A failed confirmation must not cause the original OEM report to be resent.
-        await client.query('UPDATE oem_email_deliveries SET acknowledgement_status=$3 WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),recipient.recipientKey,acknowledgementStatus]);
+        await client.query('UPDATE oem_email_deliveries SET acknowledgement_status=$3 WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey,acknowledgementStatus]);
       }
+    }
     }
     if(failed)throw new Error(`OEM email report: ${sent} accepted by SMTP; ${failed} failed, see oem_email_deliveries`);
     return sent?{sent}:{skipped:true};
   }finally{if(locked)await client.query('SELECT pg_advisory_unlock(71903541)').catch(()=>{});client.release();}
+}
+
+export async function buildOemEmailWithAttachments(options) {
+  let table;
+  const report=buildOemEmail({...options,onTable:value=>{table=value;}});
+  const title=report.subject;
+  const basename=`OEM-BD-${options.recipient.oem}-${options.recipient.level}-${oemEmailDay(options.now)}`.replace(/[^a-zA-Z0-9_-]/g,'-');
+  const workbook=buildXlsxSheetsWorkbook(title,[{name:'OEM BD',title,...table}]);
+  const pdf=await buildTableExportPdf({title,...table,pageSize:'A3'});
+  return {...report,attachments:[
+    {filename:`${basename}.xlsx`,content:Buffer.from(await workbook.arrayBuffer()),contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+    {filename:`${basename}.pdf`,content:pdf,contentType:'application/pdf'},
+  ]};
 }
