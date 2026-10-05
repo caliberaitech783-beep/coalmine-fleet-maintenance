@@ -17,7 +17,8 @@ test('PDF and real Excel attachments include every selected case and match websi
   assert.match(xml,/FF000000/);
   const website=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
   const shared=await readFile(new URL('../report-xlsx.mjs',import.meta.url),'utf8');
-  assert.equal(shared.slice(shared.indexOf('function escapeExportHtml'),shared.indexOf('\nexport {')),website.slice(website.indexOf('function escapeExportHtml'),website.indexOf('function buildXlsxWorkbook(')));
+  const normalize=value=>value.replaceAll('\r\n','\n').trim();
+  assert.equal(normalize(shared.slice(shared.indexOf('function escapeExportHtml'),shared.indexOf('\nexport {'))),normalize(website.slice(website.indexOf('function escapeExportHtml'),website.indexOf('function buildXlsxWorkbook('))));
 });
 test('IST 5PM and activation anchored 1/3/7/10 day schedule',()=>{
   for(const [level,days] of [['L1',1],['L2',3],['L3',7],['L4',10]]){
