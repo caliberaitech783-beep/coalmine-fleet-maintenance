@@ -1,3 +1,12 @@
+.request-timeline-link.breakdown-reason-history-link {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-align: left;
+}
 .overlay.breakdown-reason-history-overlay {
   padding: 20px;
   place-items: center;

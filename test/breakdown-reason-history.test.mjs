@@ -39,3 +39,12 @@ test('reason history uses a bounded popup without changing the full-screen timel
   assert.match(css,/overflow: auto/);
   assert.doesNotMatch(source,/window\.open|location\.(?:href|assign)|navigate\(/);
 });
+test('clickable BD reasons wrap within their column without changing other timeline links',()=>{
+  const css=readFileSync(new URL('../src/breakdown-reason-history.css',import.meta.url),'utf8');
+  assert.match(source,/className="request-timeline-link breakdown-reason-history-link"/);
+  const rule=css.match(/\.request-timeline-link\.breakdown-reason-history-link\s*\{([^}]+)\}/)[1];
+  assert.match(rule,/white-space: pre-wrap/);
+  assert.match(rule,/overflow-wrap: anywhere/);
+  assert.match(rule,/max-width: 100%/);
+  assert.match(rule,/text-align: left/);
+});

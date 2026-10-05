@@ -17,7 +17,7 @@ export default function BreakdownReasonHistory({reference,reason,token,Dialog}) 
   if(!reference||reference==='—'||!Dialog)return <span>{reason||'—'}</span>;
   const history=Array.isArray(state?.data?.reasonHistory)?state.data.reasonHistory:[];
   const request=state?.data?.request||{};
-  return <><button type="button" className="request-timeline-link" onClick={()=>setOpen(true)} title="View breakdown reason history and daily remarks">{reason||'View reason and daily remarks'}</button>
+  return <><button type="button" className="request-timeline-link breakdown-reason-history-link" onClick={()=>setOpen(true)} title="View breakdown reason history and daily remarks">{reason||'View reason and daily remarks'}</button>
     {open&&<Dialog title={`Breakdown reason history · ${reference}`} className="request-timeline-modal breakdown-reason-history-modal" overlayClassName="breakdown-reason-history-overlay" close={()=>setOpen(false)}>
       <div className="request-timeline-content breakdown-reason-history-content">
       {!state?<p role="status">Loading reasons and daily remarks…</p>:state.error?<div><p role="alert">{state.error}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>Retry</button></div>:<>
