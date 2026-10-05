@@ -9945,7 +9945,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   );
 }
 function MeterReadingFields({ request, stage, equipmentRecords = [], required = false, requireBoth = false, missingOnly = false }) {
-  const readings = {...(requireBoth ? {HMR:"",KMR:""} : {}), ...requestMeterReadings(request, stage, equipmentRecords)};
+  const readings = requestMeterReadings(request, stage, equipmentRecords);
   const title = stage === "opening" ? "Opening" : "Closing";
   return Object.entries(readings).filter(([, reading]) => !missingOnly || !reading).map(([type, reading]) =>
     <label key={type}>{title} {type} reading {required ? "*" : <small>Optional</small>}<input name={`${stage}${type}Reading`} type="number" min="0" step="0.01" inputMode="decimal" required={required} defaultValue={reading} placeholder={`Enter ${stage} ${type}`} /></label>,

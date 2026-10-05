@@ -38,12 +38,12 @@ const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseReque
   alert: message => { throw new Error(message); },
 });
 
-test("Maintenance User forms require both readings even for equipment; other roles retain defaults", () => {
-  const excavator={...tipper,equipmentGroup:"EXCAVATORS",meterType:"HMR",openingMeterReading:""};
+test("Maintenance User forms require HMR only for equipment; other roles retain defaults", () => {
+  const excavator={...tipper,equipmentGroup:"EXCAVATORS",meterType:"HMR",openingMeterReading:"",openingMeterReadings:{HMR:"",KMR:""},closingMeterReadings:{HMR:"",KMR:""}};
   for(const name of ["RequestEditForm","CloseRequestForm"]){
     const html=renderToStaticMarkup(React.createElement(forms[name],{request:excavator,requireMeters:true}));
-    for(const type of ["HMR","KMR"])assert.match(html,new RegExp('<input(?=[^>]*name="opening'+type+'Reading")(?=[^>]*required)[^>]*>'));
-    if(name==="CloseRequestForm")for(const type of ["HMR","KMR"])assert.match(html,new RegExp('<input(?=[^>]*name="closing'+type+'Reading")(?=[^>]*required)[^>]*>'));
+    for(const type of ["HMR"])assert.match(html,new RegExp('<input(?=[^>]*name="opening'+type+'Reading")(?=[^>]*required)[^>]*>'));
+    if(name==="CloseRequestForm")for(const type of ["HMR"])assert.match(html,new RegExp('<input(?=[^>]*name="closing'+type+'Reading")(?=[^>]*required)[^>]*>'));
     const optional=renderToStaticMarkup(React.createElement(forms[name],{request:excavator}));
     assert.doesNotMatch(optional,/name="(?:opening|closing)KMRReading"/);
     assert.doesNotMatch(optional,/<input(?=[^>]*name="(?:opening|closing)HMRReading")(?=[^>]*required)[^>]*>/);

@@ -21,7 +21,7 @@ test("legacy requests derive their meter type from the matching equipment", () =
   ];
   assert.equal(requestMeterTypeForRequest({door: "S116", chassis: "MYKG8X4MON5663995"}, records), "KMR");
   assert.equal(requestMeterTypeForRequest({door: "PL79"}, records), "HMR");
-  assert.equal(requestMeterTypeForRequest({meterType: "KMR", door: "PL79"}, records), "KMR");
+  assert.equal(requestMeterTypeForRequest({meterType: "KMR", door: "PL79"}, records), "HMR");
 });
 
 test("meter readings and evidence files are validated", () => {
@@ -75,8 +75,8 @@ test("request edit validates opening evidence and does not modify closing eviden
   assert.match(editRoute, /opening_meter_file=CASE WHEN \$6<>'' THEN \$6 ELSE opening_meter_file END/);
 });
 
-test("tippers expose both meters using the group, legacy name, matching master or saved readings", () => {
-  for (const request of [{equipmentGroup: "TIPPERS"}, {equipment: "Tipper"}, {openingMeterReadings: {HMR: "0", KMR: "12"}}]) {
+test("tippers expose both meters using the group, legacy name, matching master", () => {
+  for (const request of [{equipmentGroup: "TIPPERS"}, {equipment: "Tipper"}]) {
     assert.deepEqual(requestMeterTypesForRequest(request), ["HMR", "KMR"]);
   }
   assert.deepEqual(requestMeterTypesForRequest({door: " T1 ", meterType: "KMR"}, [{door: "t1", group: "Tippers", category: "Vehicle"}]), ["HMR", "KMR"]);
@@ -116,3 +116,5 @@ test("dual-meter validation rejects malformed maps and invalid values in either 
     assert.equal(validMeterReadings(value), false);
   }
 });
+
+test("equipment saved KMR keys never add odometer fields",()=>{const request={meterType:"HMR",openingMeterReadings:{HMR:"14330.7",KMR:""}};assert.deepEqual(requestMeterTypesForRequest(request),["HMR"]);assert.deepEqual(requestMeterTypesForRequest({...request,door:"EX1",meterType:"KMR"},[{door:"EX1",category:"Equipment"}]),["HMR"]);});

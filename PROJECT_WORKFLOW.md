@@ -540,3 +540,5 @@ Telegram site invitations run in batches of five so large sites do not exceed th
 
 ### Running BD maintenance handoff
 Maintenance can choose On road with breakdown (Running BD) alongside normal completion. The vehicle returns to road availability and enters the existing MIS first-trip verification workflow, while its maintenance ticket remains open. Selecting a vehicle with an active ticket requires Same reason or Different reason; both reuse that ticket, and Different reason adds an outstanding issue. Maintenance must mark every recorded issue fixed before final closure or Idle completion. Earlier visits and verification are retained in workflow history. Tracking Vehicle Throughput includes a Running with BD count with the same scoped list drilldown as the other KPIs.
+
+Equipment requests require HMR only for Maintenance Users at opening and closing. KMR remains required for vehicles; saved secondary KMR keys do not turn equipment into a vehicle.
