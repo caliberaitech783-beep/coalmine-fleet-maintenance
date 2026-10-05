@@ -328,6 +328,7 @@ import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
 import "./dashboard-night.css";
 import "./no-motion.css";
+import "./linked-request-picker.css";
 import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
@@ -10140,11 +10141,17 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "On road"} <ChevronRight /></button></footer>
-  {ticketPrompt && <Modal title="Which linked requests should be updated?" close={()=>setTicketPrompt(false)}>
-    <p>{status==="Closed" ? "Select the requests whose issues are fully fixed. Only selected requests will close and go to MIS for verification." : "Select the requests to mark Running BD. Their outstanding issues will remain open."}</p>
-    <fieldset><legend>Linked requests</legend>{linkedTickets.map(row=><label key={row.ref}><input type="checkbox" checked={targetReferences.includes(row.ref)} onChange={event=>setTargetReferences(current=>event.target.checked?[...current,row.ref]:current.filter(ref=>ref!==row.ref))}/><strong>{row.ref}</strong> · {row.status}<p>{row.complaint}</p></label>)}</fieldset>
-    <button type="button" onClick={()=>setTargetReferences(linkedTickets.map(row=>row.ref))}>Select all requests</button>
-    <footer><button type="button" onClick={()=>setTicketPrompt(false)}>Back</button><button type="button" className="primary" disabled={!targetReferences.length} onClick={()=>{ticketDecision.current=true;setTicketPrompt(false);closeForm.current?.requestSubmit();}}>Continue with selected requests</button></footer>
+  {ticketPrompt && <Modal className="linked-request-picker" title="Choose requests to update" close={()=>setTicketPrompt(false)}>
+    <div className="linked-picker-body">
+      <div className="linked-picker-intro"><span className="linked-picker-icon"><Wrench size={22}/></span><div><strong>{status==="Closed" ? "Which repairs are complete?" : "Which requests are returning on road?"}</strong><p>{status==="Closed" ? "Select one or both requests. Selected tickets will close and go to MIS for verification." : "Selected tickets will move to Running BD. Outstanding issues remain open."}</p></div></div>
+      <div className="linked-picker-toolbar"><span role="status" aria-live="polite"><strong>{targetReferences.length}</strong> of {linkedTickets.length} selected</span><button type="button" className="linked-picker-select-all" onClick={()=>setTargetReferences(linkedTickets.map(row=>row.ref))}>Select all requests</button></div>
+      <fieldset className="linked-picker-list"><legend className="sr-only">Linked requests</legend>{linkedTickets.map(row=><label className={`linked-picker-card${targetReferences.includes(row.ref)?" is-selected":""}`} key={row.ref}>
+        <input type="checkbox" checked={targetReferences.includes(row.ref)} onChange={event=>setTargetReferences(current=>event.target.checked?[...current,row.ref]:current.filter(ref=>ref!==row.ref))}/>
+        <span className="linked-picker-ticket"><span className="linked-picker-ticket-header"><strong>{row.ref}</strong><span className={`linked-picker-status${row.status==="Running BD"?" is-running-bd":""}`}>{row.status}</span></span><span className="linked-picker-reason">{row.complaint}</span><span className="linked-picker-visit">{row.ref===request.ref?"Current request":"Linked request"}{row.door?` · ${row.door}`:""}</span></span>
+      </label>)}</fieldset>
+      <p className="linked-picker-note"><ShieldCheck size={16}/><span>Unselected requests keep their current status.</span></p>
+    </div>
+    <footer className="linked-picker-footer"><button type="button" onClick={()=>setTicketPrompt(false)}>Back</button><button type="button" className="primary" disabled={!targetReferences.length} onClick={()=>{ticketDecision.current=true;setTicketPrompt(false);closeForm.current?.requestSubmit();}}>Continue with {targetReferences.length || "selected"} {targetReferences.length===1?"request":"requests"}<ChevronRight size={18}/></button></footer>
   </Modal>}
   {idlePrompt && <Modal title="On road — move vehicle to Idle?" close={() => { if (!submitting) { setIdlePrompt(false); idleDecision.current=false; } }}>
       {status==="Running BD" ? <p>The vehicle will go to MIS for verification. This ticket remains open until every issue is fixed.</p> : <p>The maintenance request will be Closed. Choose whether the vehicle should now be Idle.</p>}
