@@ -1,5 +1,6 @@
 import {accountPageNumber} from './iboss-account-pages.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
+import {canReopenBreakdown,reopenBreakdownError} from './reopen-breakdown.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
 import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
@@ -6820,6 +6821,39 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 
 
 // Narrow manager action; the existing edit/daily-update permission and locks stay unchanged.
+app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim(),reason=String(req.body?.reason||'').trim();
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization||!canReopenBreakdown(authorization.session))return res.status(403).json({error:'Only a Maintenance Manager can reopen a breakdown.'});
+    const identity=(await pool.query('SELECT door_number AS door,chassis_number AS chassis,site FROM maintenance_requests WHERE reference=$1',[reference])).rows[0];
+    if(!identity)return res.status(404).json({error:'Request not found.'});
+    if(!userManagesSite(authorization.user,identity.site))return res.status(403).json({error:'This vehicle is outside your assigned sites.'});
+    if(!identity.door&&!identity.chassis)return res.status(409).json({error:'Vehicle identity is missing. Additional review is required.'});
+    const result=await createRequestWithVehicleLock(identity,async(client)=>{
+      const before=(await client.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference])).rows[0];
+      if(!before)throw Object.assign(new Error('Request no longer exists.'),{status:409});
+      const current=await currentDashboardAuthorization(req.session,client);
+      if(!current||!canReopenBreakdown(current.session)||!userManagesSite(current.user,before.site))throw Object.assign(new Error('This action is outside your manager permissions or assigned sites.'),{status:403});
+      if(before.door!==identity.door||before.chassis!==identity.chassis)throw Object.assign(new Error('Vehicle identity changed. Refresh and try again.'),{status:409});
+      const error=reopenBreakdownError(before,reason);
+      if(error)throw Object.assign(new Error(error),{status:409});
+      const newer=await client.query(`SELECT reference FROM maintenance_requests WHERE reference<>$1 AND created_at >= (SELECT created_at FROM maintenance_requests WHERE reference=$1)
+        AND (($2<>'' AND lower(trim(door_number))=lower(trim($2))) OR ($3<>'' AND lower(trim(chassis_number))=lower(trim($3)))) LIMIT 1`,[reference,identity.door||'',identity.chassis||'']);
+      if(newer.rowCount)throw Object.assign(new Error('A newer request exists for this vehicle. Additional review is required.'),{status:409});
+      await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests)-'workflow_history'-'first_trip_card_image'-'opening_meter_file'-'closing_meter_file'-'maintenance_audio'-'complaint_audio'-'complaint_media' || jsonb_build_object('time',NOW(),'action','Reopen breakdown','reason',$2::text,'actor',$3::text)) WHERE reference=$1`,[reference,reason,req.session.login]);
+      const updated=await client.query(`UPDATE maintenance_requests SET status=CASE WHEN in_progress_at IS NOT NULL THEN 'In progress' ELSE 'Accepted' END,
+        closed_at=NULL,closed_by=''
+        WHERE reference=$1 RETURNING ${requestProjection}`,[reference]);
+      await recordRequestTimeline(client,req,reference,before,{events:['closedAt'],reason,sources:{closedAt:'user'}});
+      await client.query(`INSERT INTO audit_events(event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields)
+        VALUES('Workflow correction','Success',$1,$2,'Maintenance Manager','Maintenance Requests','Reopen breakdown','Maintenance request',$3,$4,$5::jsonb)`,[req.session.login,req.session.name||'',reference,reason,JSON.stringify([{field:'Status',before:before.status,after:updated.rows[0].status}])]);
+      return updated;
+    });
+    res.json(result.rows[0]);
+  }catch(error){maintenanceWriteFailure(error,res,next)}
+});
+
 function registerBreakdownResponsibilityRoute(){
 app.patch('/api/requests/:reference/breakdown-responsibility',requireSession,async(req,res,next)=>{
   try{
