@@ -1,0 +1,9 @@
+.modal.reopen-breakdown-modal { width: min(1200px, 96vw); max-width: 96vw; }
+.reopen-breakdown-modal > form { display: grid; gap: 24px; padding: 28px 32px; font-size: 16px; }
+.reopen-breakdown-modal > form > p { margin: 0; line-height: 1.6; }
+.reopen-breakdown-modal label { display: grid; gap: 10px; font-weight: 600; }
+.reopen-breakdown-modal select, .reopen-breakdown-modal textarea { width: 100%; min-width: 0; padding: 14px; font: inherit; border: 1px solid #b9c4d7; border-radius: 8px; }
+.reopen-breakdown-modal textarea { min-height: 160px; resize: vertical; }
+.reopen-breakdown-modal footer { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.reopen-breakdown-modal footer button { min-height: 48px; padding: 12px 20px; }
+@media (max-width: 600px) { .reopen-breakdown-modal > form { padding: 18px; gap: 18px; } }

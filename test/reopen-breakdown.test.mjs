@@ -3,10 +3,18 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {canReopenBreakdown,reopenBreakdownError} from '../reopen-breakdown.mjs';
 const eligible={status:'Closed',closedAt:'2026-10-05 16:00:00',acceptedAt:'2026-10-05 14:00:00'};
-test('only a Maintenance Manager receives the narrow reopening permission',()=>{
+test('reopening sits beside history and uses a spacious dedicated dialog',()=>{
+  const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(ui,/Closed history<\/button>\{canReopenRequests&&<button[^>]*data-nav="reopen"/);
+  assert.match(ui,/className="reopen-breakdown-modal"/);
+  const css=readFileSync(new URL('../src/reopen-breakdown-form.css',import.meta.url),'utf8');
+  assert.match(css,/min-height: 160px/);
+});
+test('Maintenance and Project Managers receive the narrow reopening permission',()=>{
   const manager={role:'super',permissions:{adminLevel:'Manager',managerRoles:['Maintenance Manager']}};
   assert.equal(canReopenBreakdown(manager),true);
-  for(const role of ['Production Manager','MIS Manager','Project Manager'])assert.equal(canReopenBreakdown({...manager,permissions:{...manager.permissions,managerRoles:[role]}}),false);
+  assert.equal(canReopenBreakdown({...manager,permissions:{...manager.permissions,managerRoles:['Project Manager']}}),true);
+  for(const role of ['Production Manager','MIS Manager'])assert.equal(canReopenBreakdown({...manager,permissions:{...manager.permissions,managerRoles:[role]}}),false);
   assert.equal(canReopenBreakdown({...manager,role:'normal'}),false);
   assert.equal(canReopenBreakdown({...manager,permissions:{adminLevel:'Admin'}}),false);
 });

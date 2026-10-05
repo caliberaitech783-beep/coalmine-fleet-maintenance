@@ -8,6 +8,7 @@ import {indiaDateTimeEpoch} from './report-date-range.mjs';
 const clean=value=>String(value??'').trim();
 const key=value=>clean(value).toLowerCase();
 export const OEM_EMAIL_INTERVALS={L1:1,L2:3,L3:7,L4:10};
+export const OEM_TRIAL_CC=['anoop.p@cmll.in','stupalmoon2004@gmail.com'];
 export function oemEmailDay(now=new Date()) {return new Date(now.getTime()+330*60000).toISOString().slice(0,10);}
 export function oemEmailDue(level,activation,now=new Date()) {
   const local=new Date(now.getTime()+330*60000);
@@ -67,6 +68,9 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
     if(!locked)return {skipped:true};
     await client.query(`CREATE TABLE IF NOT EXISTS oem_email_schedule (id INTEGER PRIMARY KEY CHECK(id=1), activation_date TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS oem_email_deliveries (day TEXT NOT NULL,recipient_key TEXT NOT NULL,email TEXT NOT NULL,oem TEXT NOT NULL,level TEXT NOT NULL,status TEXT NOT NULL,message_id TEXT,case_count INTEGER NOT NULL DEFAULT 0,error TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(day,recipient_key))`);
+    await client.query(`ALTER TABLE oem_email_schedule ADD COLUMN IF NOT EXISTS trial_cc_used INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS trial_cc BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS acknowledgement_status TEXT`);
     await client.query('INSERT INTO oem_email_schedule(id,activation_date) VALUES(1,$1) ON CONFLICT DO NOTHING',[oemEmailDay(now)]);
     const activation=(await client.query('SELECT activation_date FROM oem_email_schedule WHERE id=1')).rows[0].activation_date;
     if(!oemEmailDue('L1',activation,now))return {skipped:true};
@@ -77,9 +81,14 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       const rows=oemEmailRows({...data,recipient});
       const claim=await client.query(`INSERT INTO oem_email_deliveries(day,recipient_key,email,oem,level,status,case_count) VALUES($1,$2,$3,$4,$5,'Sending',$6) ON CONFLICT DO NOTHING RETURNING recipient_key`,[oemEmailDay(now),recipient.recipientKey,recipient.email,recipient.oem,recipient.level,rows.length]);
       if(!claim.rowCount)continue;
+      // Reserve before SMTP: crashes/ambiguous sends must never extend the three-email trial.
+      const trial=await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
+      const trialCc=trial.rows.length?OEM_TRIAL_CC:[];
+      if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),recipient.recipientKey]);
+      const report=buildOemEmail({recipient,rows,shifts:data.shifts,now});
       let result;
       try{
-        result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...buildOemEmail({recipient,rows,shifts:data.shifts,now})});
+        result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
         failed++;
@@ -88,6 +97,17 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
         continue;
       }
       await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),recipient.recipientKey,result.messageId||'']);sent++;
+      if(trialCc.length){
+        let acknowledgementStatus='SMTP accepted';
+        try{
+          const acknowledgement=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:trialCc,
+            subject:`Sending confirmation — ${report.subject}`,
+            text:`The mail server accepted the following OEM report for sending. This is not confirmation of inbox delivery or that the OEM has read it.\n\nFrom: ${mailer.config.user}\nTo: ${recipient.email}\nSubject: ${report.subject}\nMessage ID: ${result.messageId||'Not provided'}\nAccepted addresses: ${(result.accepted||[]).join(', ')}\nRejected addresses: ${(result.rejected||[]).join(', ')||'None'}\n\n${report.text}`});
+          if(!trialCc.every(address=>acknowledgement.accepted?.some(value=>key(value)===address)))throw new Error('One or more confirmation recipients were not accepted by SMTP');
+        }catch(error){acknowledgementStatus=`Failed / review required: ${clean(error.message).slice(0,400)}`;failed++;}
+        // A failed confirmation must not cause the original OEM report to be resent.
+        await client.query('UPDATE oem_email_deliveries SET acknowledgement_status=$3 WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),recipient.recipientKey,acknowledgementStatus]);
+      }
     }
     if(failed)throw new Error(`OEM email report: ${sent} accepted by SMTP; ${failed} failed, see oem_email_deliveries`);
     return sent?{sent}:{skipped:true};
