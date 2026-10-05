@@ -15,7 +15,7 @@ test('database revisions let unchanged private feeds finish before their large t
   assert.match(server,/CREATE TRIGGER maintenance_daily_remarks_revision_trigger/);
   assert.match(server,/CREATE TRIGGER master_records_revision_trigger/);
   for(const [start,query] of [
-    ["app.get('/api/info-pulse'",'FROM maintenance_requests ORDER BY created_at DESC'],
+    ["app.get('/api/info-pulse'",'FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC'],
     ["app.get('/api/requests'",'const readFeed=async'],
     ["app.get('/api/dashboard/equipment'","WHERE master_name='Equipment master'"],
     ["app.get('/api/masters'",'const {rows}=requestedMasters.length'],

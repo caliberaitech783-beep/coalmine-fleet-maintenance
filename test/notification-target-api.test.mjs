@@ -21,7 +21,7 @@ test('notification targets are exact, uncached, and unavailable through one gene
   assert.match(route,/private, no-store, no-cache, must-revalidate/);
   assert.match(route,/\.vary\('Authorization'\)/);
   assert.match(route,/FROM crm_tickets WHERE reference=\$1/);
-  assert.match(route,/FROM maintenance_requests WHERE reference=\$1/);
+  assert.match(route,/FROM maintenance_requests WHERE archived_at IS NULL AND reference=\$1/);
   assert.match(route,/master_name='Vehicle transfers'/);
   assert.match(route,/\[ticketResult,requestResult,transferResult\]\.filter\(\(result\)=>result\.rows\.length\)\.length>1/);
   assert.match(route,/const unavailable=\(\)=>res\.status\(404\)\.json\(\{error:'Notification target is not available\.'\}\)/);

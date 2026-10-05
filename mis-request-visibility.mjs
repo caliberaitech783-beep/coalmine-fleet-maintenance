@@ -35,6 +35,7 @@ export const GLOBAL_REQUEST_OWNER_HIDE_CUTOFF = "2026-09-09 18:24:44";
 
 export function requestsVisibleGlobally(rows = []) {
   return rows.filter((row) => {
+    if (row?.archivedAt || row?.archived_at) return false;
     const reference = String(row?.ref || row?.reference || "").trim().toUpperCase();
     if (GLOBALLY_RETIRED_REQUEST_REFERENCES.has(reference)) return false;
     const owner = String(row?.owner || row?.requesterName || "").trim().toLowerCase();

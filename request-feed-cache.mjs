@@ -13,15 +13,15 @@ export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
     entry = null;
   }
 
-  function read(load) {
+  function read(load, revision = '') {
     const time = now();
-    if (entry && entry.expiresAt > time) {
+    if (entry && entry.revision === revision && entry.expiresAt > time) {
       hits += 1;
       return entry.promise;
     }
     reads += 1;
     const promise = Promise.resolve().then(load);
-    entry = {expiresAt: time + ttlMs, promise};
+    entry = {expiresAt: time + ttlMs, promise, revision};
     // A failed read must not be served to the next caller, and its rejection is
     // reported to whoever asked for it, never as an unhandled rejection here.
     promise.catch(() => {
