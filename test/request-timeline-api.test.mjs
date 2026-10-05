@@ -107,8 +107,8 @@ test('reason history appends server-side old/new values atomically, and scoped r
 
 test('Maintenance User API rejects incomplete opening and closing readings without committing',async()=>{
   for(const kind of ['edit','close']){
-    const app=harness(kind);
-    const response=await app.call(kind==='edit'?{openingMeterReadings:{HMR:'10'}}:{closingMeterReading:'',closingMeterReadings:{HMR:'20'}});
+    const app=harness(kind,{row:{...active,meterType:'KMR',meter_type:'KMR'}});
+    const response=await app.call(kind==='edit'?{meterType:'KMR',openingMeterReadings:{HMR:'10'}}:{meterType:'KMR',closingMeterReading:'',closingMeterReadings:{HMR:'20'}});
     assert.equal(response.status,400);
     assert.ok(app.queries.some(query=>query.sql==='ROLLBACK'));
     assert.ok(!app.queries.some(query=>query.sql==='COMMIT'));
@@ -292,4 +292,8 @@ test('timeline includes saved creator and scoped maintenance remarks without cha
   assert.equal(result.body.history.length,0);
   assert.deepEqual(app.saved,row);
   assert.equal(app.queries.every(({sql})=>sql.startsWith('SELECT ')),true);
+});
+
+test("Maintenance User equipment API accepts HMR without KMR at edit and close",async()=>{
+ for(const kind of ["edit","close"]){const app=harness(kind,{row:{...active,meterType:"HMR",openingMeterReadings:{HMR:"10",KMR:""}}});const response=await app.call({meterType:"HMR",openingMeterReadings:{HMR:"10"},closingMeterReadings:{HMR:"123"}});assert.equal(response.status,200);assert.ok(app.queries.some(query=>query.sql==="COMMIT"));}
 });
