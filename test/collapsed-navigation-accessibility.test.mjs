@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { transformWithOxc } from "vite";
 import { isSessionViewOnlyUser } from "../user-session-access.mjs";
 import { ibossAccountsAllowed } from "../iboss-access.mjs";
-import { isSessionViewOnlyUser } from "../user-session-access.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const sideSource = source.slice(source.indexOf("function Side("), source.indexOf("function formatTwelveHourDateTime("));
