@@ -28,6 +28,7 @@ import { TwelveHourDateTimeInput, TwelveHourTimeInput } from "./twelve-hour-inpu
 import SharedActionsTable from "./shared-actions-table.jsx";
 import { useTableLayouts, TableLayoutControls, TableLayoutSelect } from "./table-layouts.jsx";
 import { useColumnPreferences } from "./use-column-preferences.jsx";
+import ReopenBreakdownForm from "./reopen-breakdown-form.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
 import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
 import {ProtectedAttachment,ProtectedAudio} from "./protected-media.jsx";
@@ -1531,6 +1532,7 @@ function ManagerCreateRequestForm({equipmentRecords, equipmentLoaded, assignedLo
 
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null, canCreateRequest = false, onCreateRequest }) {
   const [creatingRequest, setCreatingRequest] = useState(false);
+  const [reopeningBreakdown,setReopeningBreakdown]=useState(false);
   const [queueTab,setQueueTab]=useState("active");
   const [firstTripReminderDismissed,setFirstTripReminderDismissed]=useState(false);
   const [requestUpdate, setRequestUpdate] = useState(null);
@@ -1660,6 +1662,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     {managerDataReady && <>
 <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":queueTab==="firstTrip"?"Production first-trip entries":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length} record{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length === 1 ? "" : "s"} in this view</p></div></header>{queueTab==="firstTrip"?<><MobileWorkflowTable rows={productionFirstTripRows} exportTitle="Production First Trip Entry" showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></>:<BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):canUpdateResponsibility?(row)=>{if(row.acceptedAt) setRequestUpdate({kind:"responsibility",request:row});else alert("Maintenance must accept this vehicle before breakdown responsibility can be edited.");}:null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} stableToolbar />}</article>
     </>}
+    {activeManagerRole==="Maintenance Manager"&&queueTab==="history"&&managerDataReady&&!managerReconnecting&&onUpdateRequest&&<button type="button" onClick={()=>setReopeningBreakdown(true)}>Reopen Breakdown</button>}
+    {reopeningBreakdown&&activeManagerRole==="Maintenance Manager"&&<Modal title="Reopen Breakdown" close={()=>setReopeningBreakdown(false)}><ReopenBreakdownForm requests={historyRows} close={()=>setReopeningBreakdown(false)} onSave={(reference,payload)=>onUpdateRequest(reference,payload,"reopen-breakdown")} /></Modal>}
     {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
     {productionFirstTrip && <ProductionFirstTripForm request={requestRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveManagerProductionFirstTrip} />}
     {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} TimelineButton={TimelineButton} />}
@@ -11691,7 +11695,7 @@ function App() {
       };
       let response;
       try {
-        response = await fetch(endpoint, {
+        response = await fetch(action === "reopen-breakdown" ? `/api/requests/${encodeURIComponent(reference)}/reopen-breakdown` : endpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
           body: JSON.stringify(payload),
