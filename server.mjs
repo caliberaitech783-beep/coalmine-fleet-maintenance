@@ -4701,7 +4701,7 @@ function deferWhatsAppNotifications(logins,reference,message,workflowTemplate,{w
     setImmediate(()=>{
       (async()=>{
         const audience=workflowType?whatsappRecipients??logins:await genericWhatsAppAlertLogins(pool,whatsappRecipients??logins,{purpose:workflowTemplate?.templateKey,site});
-        await sendWhatsAppNotifications(pool,audience,reference,message,workflowTemplate,{workflowType,site});
+        await sendWhatsAppNotifications(pool,audience,reference,message,workflowTemplate,{workflowType,site,purpose:workflowTemplate?.templateKey||(workflowType==='closed'?'requestClosed':'')});
       })()
         .catch((error)=>console.error(`Notification for ${reference} was saved, but its WhatsApp follow-up failed.`,error?.message||error))
         .finally(()=>{whatsappDeliveries.delete(delivery);resolve();});
@@ -7046,8 +7046,16 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         console.error(`Request ${rows[0].ref} was marked Idle, but its notification recipients could not be resolved.`,error);
       }
     }else if(status==='Running BD'){
-      const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-      await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} marked Running BD. MIS verification is required; outstanding issues remain open.`,null,{whatsapp:false});
+      try{
+        const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+        const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'closed',site:rows[0].site});
+        const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+        const handoffAt=requestNotificationTime(closedAt);
+        await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} marked Running BD for ${equipmentDetails} at ${rows[0].site} by ${req.session.name||'Maintenance User'} at ${handoffAt}. Maintenance work: ${rows[0].maintenanceWork}. MIS verification is required; the ticket remains open until all issues are fixed. Open request: ${workflowRequestLink(rows[0].ref,publicBaseUrl())}`,null,
+          {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
+      }catch(error){
+        console.error(`Request ${rows[0].ref} was marked Running BD, but its notification recipients could not be resolved.`,error);
+      }
     }else if(status==='Closed'){
       await sendRequestEventReports('closed',rows[0]);
       try{
