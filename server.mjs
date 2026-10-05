@@ -3418,7 +3418,7 @@ app.get('/api/health',async(_req,res)=>{
     res.json({
       status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
-      oemEmailSchedule:{enabled:scheduledJobsEnabled,mailConfigured:ticketEmailConfiguration().configured,timeZone:'Asia/Kolkata',hour:19},
+      oemEmailSchedule:{enabled:scheduledJobsEnabled,mailConfigured:ticketEmailConfiguration().configured,timeZone:'Asia/Kolkata',hour:17},
       cdirRosterRevision,
       performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},requestFeedCache:requestFeedCache.stats,slowRequestThresholdMs},
     });
