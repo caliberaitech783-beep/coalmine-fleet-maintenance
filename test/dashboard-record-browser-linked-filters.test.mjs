@@ -25,7 +25,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   return [file, (await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } })).code + `; return ${name};`];
 })));
 const empty = () => null;
-const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
+const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   matchesSmartSearch, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };

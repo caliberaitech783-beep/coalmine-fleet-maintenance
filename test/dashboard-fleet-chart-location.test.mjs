@@ -18,7 +18,7 @@ const hideCategoryFor = new Function("assetDrilldown", `return ${categoryExpress
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
-const bindings = { React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null };
 const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));

@@ -43,7 +43,7 @@ test("request edit captures opening KMR/HMR evidence but leaves closing evidence
   assert.match(editForm, /MeterReadingFields[^>]*stage="opening"[\s\S]*name="openingMeterFile"/);
   assert.doesNotMatch(editForm, /name="closingMeterReading"|name="closingMeterFile"/);
   assert.match(editForm, /Trip card upload \(optional\)/);
-  assert.doesNotMatch(editForm, /MeterReadingFields[^>]*required/);
+  assert.match(editForm, /MeterReadingFields[^>]*required=\{requireMeters\}/);
   assert.doesNotMatch(editForm, /name="openingMeterReading"[^>]*required|name="openingMeterFile"[^>]*required/);
   assert.match(closeForm, /MeterReadingFields[^>]*stage="closing"/);
 assert.match(source, /showMeterData[\s\S]*Opening KMR[\s\S]*Opening HMR[\s\S]*Closing HMR[\s\S]*Closing KMR/);

@@ -1,3 +1,4 @@
+import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestsWithDoorNumbers} from '../equipment-door.mjs';
 import test from 'node:test';
@@ -70,10 +71,10 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     }else if(sql.includes('SET closed_at=$1')){saved.closedAt=args[0];saved.status='Closed';saved.closedBy=args[1];}
     else if(sql.includes("SET meter_type=CASE")){saved.opening_meter_reading=args[1];}
     else if(sql.includes("status='Idle'")){saved.status='Idle';saved.idealRequestedAt=now;}
-    else saved.status=args[2];
+    else if(!sql.includes('SET breakdown_reason_history=')) saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={ isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={ maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
@@ -85,12 +86,34 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   const remarksHelper=slice('async function attachDailyRemarks(', 'async function requestWorkflowWhatsAppLogins(');
   runInNewContext(`${remarksHelper}\n${common}\n${routes[kind]||''}`,context);
   return {queries,get saved(){return saved;},get audits(){return audits;},get released(){return released;},async call(body={}){
-    const req={session,params:{reference:'REQ-TIMELINE'},body:{complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
+    const req={session,params:{reference:'REQ-TIMELINE'},body:{openingMeterReadings:{HMR:'10',KMR:'20'},closingMeterReadings:{HMR:'123',KMR:'123'},complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
     const res={statusCode:200,headers:{},set(key,value){this.headers[key]=value;},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
     for(const handler of registered){let next=false,error;await handler(req,res,value=>{next=true;error=value;});if(error)throw error;if(!next)break;}
     return {status:res.statusCode,body:res.body,headers:res.headers};
   }};
 }
+
+test('reason history appends server-side old/new values atomically, and scoped reads expose it',async()=>{
+  const app=harness('edit',{row:{...active,complaint:'Original reason'}});
+  assert.equal((await app.call({complaint:'Updated reason'})).status,200);
+  const write=app.queries.find(query=>query.sql.includes('SET breakdown_reason_history='));
+  assert.ok(write.tx);
+  assert.deepEqual(Array.from(write.args),['Original reason',maintenance.name,maintenance.login,active.ref]);
+  assert.match(write.sql,/complaint IS DISTINCT FROM \$1::text/);
+  assert.match(write.sql,/'to',complaint/);
+  assert.match(write.sql,/'changedAt',NOW\(\)/);
+  assert.ok(app.queries.findIndex(query=>query===write)<app.queries.findIndex(query=>query.sql==='COMMIT'));
+});
+
+test('Maintenance User API rejects incomplete opening and closing readings without committing',async()=>{
+  for(const kind of ['edit','close']){
+    const app=harness(kind);
+    const response=await app.call(kind==='edit'?{openingMeterReadings:{HMR:'10'}}:{closingMeterReading:'',closingMeterReadings:{HMR:'20'}});
+    assert.equal(response.status,400);
+    assert.ok(app.queries.some(query=>query.sql==='ROLLBACK'));
+    assert.ok(!app.queries.some(query=>query.sql==='COMMIT'));
+  }
+});
 
 test('ETC no-op retains original seconds and legacy provenance; changed ETC needs a reason before any write',async()=>{
   const unchanged=harness('edit');assert.equal((await unchanged.call()).status,200);

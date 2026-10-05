@@ -9,7 +9,7 @@ test('unsaved responsibility can be switched; saved responsibility stays locked 
   assert.ok(ui.includes('setSelected(value)'));
   assert.ok(ui.includes('type="hidden" name="oemResponsibility" value={selected}'));
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  assert.ok(server.includes('SELECT site,oem_responsibility AS "oemResponsibility"'));
+  assert.ok(server.includes('SELECT site,complaint,oem_responsibility AS "oemResponsibility"'));
   assert.ok(server.includes('before.oemResponsibility&&before.oemResponsibility!==oemResponsibility'));
   assert.ok(server.includes('eligible.rows[0].oemResponsibility&&eligible.rows[0].oemResponsibility!==oemResponsibility'));
 });

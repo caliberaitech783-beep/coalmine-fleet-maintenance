@@ -31,7 +31,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
+const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };

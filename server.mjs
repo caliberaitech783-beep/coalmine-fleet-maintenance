@@ -46,6 +46,7 @@ import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
+import {maintenanceMetersRequired,requireMaintenanceMeters} from './maintenance-meter-required.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth,oracleLatestFleetDrivers} from './oracle-db.mjs';
@@ -542,6 +543,7 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS request_shift TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS oem_responsibility_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS breakdown_reason_history JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -6482,7 +6484,7 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
     if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request timelines.'});
     const reference=String(req.params.reference||'').trim();
-    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection},breakdown_reason_history AS "reasonHistory" FROM maintenance_requests WHERE reference=$1`,[reference]);
     const request=rows[0];
     if(!request)return res.status(404).json({error:'Request not found.'});
     if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
@@ -6494,9 +6496,9 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     const {rows:records}=await pool.query(`SELECT changed_fields FROM audit_events WHERE event_type='Workflow timeline' AND action='Record workflow timestamps' AND outcome='Success' AND target_type='Maintenance request' AND target_reference=$1 AND changed_fields @> $2::jsonb ORDER BY occurred_at ASC,id ASC`,[reference,JSON.stringify([{requestId:String(request.timelineRequestId)}])]);
     const history=records.flatMap(row=>Array.isArray(row.changed_fields)?row.changed_fields:[]).filter(item=>item?.requestId===String(request.timelineRequestId)&&REQUEST_TIMELINE_FIELDS.includes(item?.event)).map(item=>({event:item.event,oldValue:parseRequestTimelineTimestamp(item.oldValue)?.toISOString()??null,newValue:parseRequestTimelineTimestamp(item.newValue)?.toISOString()??null,source:['system','user'].includes(item.source)?item.source:'unknown',recordedAt:parseRequestTimelineTimestamp(item.recordedAt)?.toISOString()??null,actorLogin:String(item.actorLogin||''),actorName:String(item.actorName||''),reason:String(item.reason||''),correction:item.correction===true}));
     res.set('Cache-Control','no-store');
-    const {timelineRequestId,timelineRecordedAt,...visibleRequest}=request;
+    const {timelineRequestId,timelineRecordedAt,reasonHistory,...visibleRequest}=request;
     const [requestWithRemarks]=await attachDailyRemarks([visibleRequest]);
-    res.json({reference,request:requestWithRemarks,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
+    res.json({reference,request:requestWithRemarks,reasonHistory:Array.isArray(reasonHistory)?reasonHistory:[],events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
   }catch(error){next(error)}
 });
 
@@ -6570,7 +6572,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
+    const {rows}=await client.query(`SELECT site,complaint,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -6584,6 +6586,12 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     const responsibilityChangeReason=req.body?.responsibilityChangeReason ?? '';
     if(typeof responsibilityChangeReason!=='string'||responsibilityChangeReason.length>1000)throw Object.assign(new Error('Responsibility change reason must be text up to 1000 characters.'),{status:400});
     const result=await write(client,rows[0]);
+    if(req.body?.complaint!==undefined){
+      await client.query(`UPDATE maintenance_requests SET breakdown_reason_history=breakdown_reason_history || jsonb_build_array(jsonb_build_object(
+        'from',$1::text,'to',complaint,'changedBy',$2::text,'login',$3::text,'changedAt',NOW()))
+        WHERE reference=$4 AND complaint IS DISTINCT FROM $1::text`,
+        [rows[0].complaint,req.session.name||req.session.login||'',req.session.login||'',reference]);
+    }
     // Audit only an actual persisted change; never trust a client-supplied history.
     if(req.body?.oemResponsibility!==undefined){
       const saved=await client.query('SELECT oem_responsibility FROM maintenance_requests WHERE reference=$1',[reference]);
@@ -6847,17 +6855,21 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(oemResponsibility!==undefined&&!['OEM','NON OEM'].includes(oemResponsibility))return res.status(400).json({error:'Choose OEM or NON OEM.'});
     const editDelayedReason=approvedDelayedReason(req.body?.delayedReason);
     const normalizedMeterType=String(meterType).trim().toUpperCase();
-    const normalizedOpeningMeterReading=String(openingMeterReading).trim();
+    let normalizedOpeningMeterReading=String(openingMeterReading).trim();
     const openingMeterReadings=req.body?.openingMeterReadings ?? {};
     if(!validMeterReadings(openingMeterReadings))return res.status(400).json({error:'Enter valid opening HMR and KMR readings.'});
     if(!reference||!complaint)return res.status(400).json({error:'The complaint is required.'});
     if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    // Opening meter data is optional; validate it only when supplied.
+    // Validate supplied data here; Maintenance User completeness is checked under the row lock.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
+    if(maintenanceMetersRequired(req.session)&&req.body?.openingMeterReading===undefined){
+      normalizedOpeningMeterReading=String(openingMeterReadings[normalizedMeterType] ?? before.openingMeterReadings?.[normalizedMeterType] ?? (before.meterType===normalizedMeterType?before.openingMeterReading:'') ?? '').trim();
+    }
+    requireMaintenanceMeters(req.session,before,{...req.body,openingMeterReadings:{...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}},['opening']);
     if(oemResponsibility!==undefined&&!before.acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
     if(oemResponsibility!==undefined&&before.oemResponsibility&&before.oemResponsibility!==oemResponsibility&&!canEditBreakdownResponsibility(req.session))throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
     if(oemResponsibility!==undefined&&(req.body.previousResponsibility!==undefined||(before.oemResponsibility&&before.oemResponsibility!==oemResponsibility))&&req.body.previousResponsibility!==(before.oemResponsibility||''))throw Object.assign(new Error('Breakdown responsibility has changed. Refresh and review before saving.'),{status:409});
@@ -6924,6 +6936,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if((ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     if(before.status==='Running BD')before={...before,firstTripAt:null,verifiedAt:null};
+    requireMaintenanceMeters(req.session,before,req.body||{},['opening','closing']);
     if(ideal||status==='Closed'){
       validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
       buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});

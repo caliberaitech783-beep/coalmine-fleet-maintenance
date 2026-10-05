@@ -1,3 +1,4 @@
+import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -49,6 +50,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
       }
       if(sql.startsWith('UPDATE maintenance_requests')){
         assert.ok(inTransaction,'every maintenance write is inside its request lock transaction');
+        if(sql.includes('SET breakdown_reason_history='))return {rows:[],rowCount:1};
         assert.match(sql,/AND \(NOT \(\(acceptance_required=TRUE/,'mutation repeats the authoritative SQL guard');
         if(!active(saved)||needsFlag(saved))return {rows:[],rowCount:0};
         if(sql.includes("SET meter_type=CASE"))saved.opening_meter_reading=values[1];
@@ -64,7 +66,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   };
   const register=(_path,...handlers)=>{chain=handlers;};
   const context={
-    ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
+    ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',
@@ -80,7 +82,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
     queries,logs,get saved(){return saved;},get released(){return released;},get committed(){return committed;},
     async call({session=allowed,body={}}={}){
       const defaults=kind==='edit'?{complaint:'Repair',expectedCompletionAt:'2026-09-08T20:00',meterType:'HMR'}:kind==='daily'?{remark:'Work update',delayReason:'Parts unavailable'}:{closingDate:'2026-09-08',closingTime:'18:30:00',maintenanceWork:'Repair work',status:'In progress'};
-      const req={params:{reference:'REQ-GATE'},body:{...defaults,...body},testSession:session};
+      const req={params:{reference:'REQ-GATE'},body:{openingMeterReadings:{HMR:'100',KMR:'100'},closingMeterReadings:{HMR:'200',KMR:'200'},...defaults,...body},testSession:session};
       const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
       for(const handler of chain){
         let advanced=false,error;
@@ -141,7 +143,7 @@ test('wrong roles and other-site users cannot bypass maintenance write guards',a
 
 test('close validation and failed status updates roll back meter evidence in the same transaction',async()=>{
   const app=harness('close',{row:{...acceptedLate,arrivalFlaggedAt:'2026-09-08T12:30:00Z',arrivalFlagRemark:'Documented delay'},failFinalWrite:true});
-  await assert.rejects(app.call({body:{openingMeterReading:'250',meterType:'HMR'}}),/Simulated write failure/);
+  await assert.rejects(app.call({body:{openingMeterReading:'250',openingMeterReadings:{HMR:'250',KMR:'100'},meterType:'HMR',closingMeterReadings:{HMR:'300',KMR:'300'}}}),/Simulated write failure/);
   assert.equal(app.saved.opening_meter_reading,'100');
   assert.equal(app.saved.status,'Open');
   assert.ok(app.queries.some(({sql})=>sql==='ROLLBACK'));

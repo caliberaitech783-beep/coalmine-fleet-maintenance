@@ -1,3 +1,4 @@
+import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
 import assert from "node:assert/strict";
@@ -35,6 +36,18 @@ const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseReque
   TIME_24H_PATTERN: ".*",
   FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
   alert: message => { throw new Error(message); },
+});
+
+test("Maintenance User forms require both readings even for equipment; other roles retain defaults", () => {
+  const excavator={...tipper,equipmentGroup:"EXCAVATORS",meterType:"HMR",openingMeterReading:""};
+  for(const name of ["RequestEditForm","CloseRequestForm"]){
+    const html=renderToStaticMarkup(React.createElement(forms[name],{request:excavator,requireMeters:true}));
+    for(const type of ["HMR","KMR"])assert.match(html,new RegExp('<input(?=[^>]*name="opening'+type+'Reading")(?=[^>]*required)[^>]*>'));
+    if(name==="CloseRequestForm")for(const type of ["HMR","KMR"])assert.match(html,new RegExp('<input(?=[^>]*name="closing'+type+'Reading")(?=[^>]*required)[^>]*>'));
+    const optional=renderToStaticMarkup(React.createElement(forms[name],{request:excavator}));
+    assert.doesNotMatch(optional,/name="(?:opening|closing)KMRReading"/);
+    assert.doesNotMatch(optional,/<input(?=[^>]*name="(?:opening|closing)HMRReading")(?=[^>]*required)[^>]*>/);
+  }
 });
 
 test("tipper edit and close forms render both readings and exactly one trip-card file chooser", () => {
@@ -75,7 +88,7 @@ async function runRoute(action, body) {
   const start = `app.patch('/api/requests/:reference${action}'`;
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
   evaluate(route, {
-    ...workflow,
+    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {
