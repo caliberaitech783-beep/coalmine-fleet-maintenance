@@ -1,0 +1,34 @@
+.overlay.breakdown-reason-history-overlay {
+  padding: 20px;
+  place-items: center;
+  background: #10192d99;
+  z-index: 21010;
+}
+.overlay.breakdown-reason-history-overlay .modal.breakdown-reason-history-modal {
+  width: min(960px, 100%);
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 40px);
+  margin: 0;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: none;
+}
+.breakdown-reason-history-modal > header { flex-shrink: 0; }
+.breakdown-reason-history-modal > .breakdown-reason-history-content {
+  padding: 20px 24px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .overlay.breakdown-reason-history-overlay { padding: 12px; }
+  .overlay.breakdown-reason-history-overlay .modal.breakdown-reason-history-modal {
+    max-height: calc(100dvh - 24px);
+  }
+  .breakdown-reason-history-modal > .breakdown-reason-history-content { padding: 16px; }
+}
