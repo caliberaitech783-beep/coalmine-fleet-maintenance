@@ -27,6 +27,7 @@ import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import { TwelveHourDateTimeInput, TwelveHourTimeInput } from "./twelve-hour-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import { useTableLayouts, TableLayoutControls, TableLayoutSelect } from "./table-layouts.jsx";
+import { useColumnPreferences } from "./use-column-preferences.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
 import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
 import {ProtectedAttachment,ProtectedAudio} from "./protected-media.jsx";
@@ -4139,6 +4140,10 @@ function ActionsTable(props) {
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
   const {shifts}=useRequestShiftData();
   columns=requestShiftColumns(columns,rows,shifts);
+  const [appliedColumns, applyColumns] = useColumnPreferences(layoutKey || "report-table", columns, visibleColumnKeys);
+  const notifyColumnsChange = onVisibleColumnsChange;
+  visibleColumnKeys = appliedColumns;
+  onVisibleColumnsChange = keys => { applyColumns(keys); notifyColumnsChange?.(keys); };
   if(columns[0]?.key==='requestShift'&&visibleColumnKeys.length)visibleColumnKeys=['requestShift',...visibleColumnKeys.filter(key=>key!=='requestShift')];
   const [columnFilters, setColumnFilters] = useState({});
   const [savedReportDialog, setSavedReportDialog] = useState("");

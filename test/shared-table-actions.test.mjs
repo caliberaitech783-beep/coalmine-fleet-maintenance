@@ -173,9 +173,9 @@ test("Total Fleet lists sort Started oldest-to-latest from the heading instead o
 
 test("column arrangements are remembered per table and cleared by Reset table", async () => {
   const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
-  assert.match(shared, /const columnStorageKey = `nerveCenterTableColumns:\$\{exportTitle \|\| printTitle \|\| tableProps\.className \|\| "table"\}\$\{tableProps\["data-oem-column-layout"\] \? ":oem-reasons-meters-v1" : ""\}`;/);
+  assert.match(shared, /useColumnPreferences\("shared-table", columns\)/);
   assert.match(shared, /const allColumnKeys = columns\.map\(\(column\) => column\.key\);/);
-  assert.match(shared, /useState\(\(\) => ensureJobReferenceVisibleKeys\(restoreColumnOrder\(columnStorageKey, allColumnKeys\), columns\)\)/);
+  assert.match(shared, /ensureJobReferenceVisibleKeys\(storedVisible, columns\)/);
   assert.match(shared, /const next = ensureJobReferenceVisibleKeys\(keys, columns\);/);
   assert.match(shared, /const reset = \(\) => \{[^}]*setVisible\(allColumnKeys\); \};/, "Reset table restores and clears the saved arrangement");
   const {restoreColumnOrder, storeColumnOrder, ensureJobReferenceVisibleKeys} = await import("../src/table-actions-model.mjs");

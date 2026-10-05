@@ -77,6 +77,7 @@ async function harness(source, component, bindings) {
   const slots = [];
   const scope = { React, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], next => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, ...bindings };
+  scope.useColumnPreferences ||= (key, columns, fallback) => scope.useState(() => fallback?.length ? fallback : columns.map(column => column.key));
   const { code } = await transformWithOxc(source, "table-layout-test.jsx", { jsx: { runtime: "classic" } });
   const Component = new Function(...Object.keys(scope), `${code}; return ${component};`)(...Object.values(scope));
   return props => { cursor = 0; return Component(props); };
@@ -157,7 +158,7 @@ test("Shift can move back or be hidden without misaligning rows and exports", as
     assert.deepEqual(descendants(table, node => node.type === "td").map(tableModel.tableCellText), values);
     const exported = descendants(tree, node => node.props.title === props.exportTitle && node.props.smartPrintColumns)[0];
     assert.deepEqual(exported.props.columns.map(column => column.label), headings);
-    assert.deepEqual(tableModel.restoreColumnOrder(`nerveCenterTableColumns:${props.exportTitle}`, columns.map(column => column.key)), keys);
+    assert.deepEqual(descendants(tree, node => node.props.visibleKeys)[0].props.visibleKeys, keys);
   }
 });
 
@@ -169,6 +170,7 @@ test("Reports tables apply the same saved column order through their controlled 
     defaultDurationSort, reportTime12, mobileTablePageSize: () => 0, tableFilterText: value => String(value || ""),
     sortCollator: new Intl.Collator(), matchesSmartSearch: () => true, tableRowMatchesFilters: () => true,
     useSortableRows: rows => [rows, { key: "", direction: "asc" }, () => {}],
+    useColumnPreferences: (key, columns, fallback) => [fallback, () => {}],
     useTableLayouts: key => { capturedKey = key; return { layouts: [] }; }, TableLayoutSelect: Null,
     ensureJobReferenceVisibleKeys: tableModel.ensureJobReferenceVisibleKeys,
     ReportActionsMenu: Null, SavedReportsPanel: Null, FilterableHeader: Null, TableParameterFilter: Null,

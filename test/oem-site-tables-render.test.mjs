@@ -37,6 +37,7 @@ const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", orderO
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };
 const load = (file, extra = {}) => {
   const values = { ...bindings, ...extra };
+  values.useColumnPreferences = (table, columns) => values.useState(() => columns.map(column => column.key));
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
