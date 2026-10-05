@@ -17,6 +17,7 @@ import "./date-input.css";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, parseFilterValues, toggleFilterValue } from "./multi-value-filter.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
+import {canViewUserSessions,isSessionViewOnlyUser} from "../user-session-access.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
@@ -1240,16 +1241,16 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
         ))}
         {vehicleTransferDirectAccess&&<div className="nav-config-row"><button className={`header-nav-item${active==="Vehicle transfers"?" active":""}`} data-nav="transfers" onClick={()=>selectPage("Vehicle transfers")}><span className="header-nav-icon" aria-hidden="true"><ArrowRightLeft /></span><span className="nav-label">Vehicle Transfer</span></button></div>}
-        {canViewAdmin && <div
+        {(canViewAdmin||isSessionViewOnlyUser(session)) && <div
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
           <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);closeMenus(); setAdminOpen(!adminOpen);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
-            {adminNav.filter(([name])=>!backupAdminPages.has(name)).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
+            {adminNav.filter(([name])=>!backupAdminPages.has(name)&&(canViewAdmin||name==="User Sessions")).map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
             {/* Backup, export, import and schedule open from "Database", the last Admin entry. */}
-            <ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />
+            {canViewAdmin&&<ClockMenu label="Database" icon={Database} items={adminDatabaseNav} hours={adminDatabaseNav.map((_, index, all) => (22.5 + index * 135 / Math.max(1, all.length - 1)) / 30)} keyFor={(name) => adminMenuKeys[name] || "diagnostics"} active={active} workspace="backup" onSelect={(page, event) => selectDropdownPage(page, event, setAdminSelectionClosed)} />}
           </div>
         </div>}
         {(canViewDirectory || cdirMasterNav.length > 0) && <div
@@ -6991,6 +6992,7 @@ function SessionMessageInbox({session}) {
 }
 
 function UserSessionsPage({session}) {
+  const viewOnly=isSessionViewOnlyUser(session);
   const [historyTarget,setHistoryTarget]=useState(null);
   const [announcing,setAnnouncing]=useState(false);
   const [sessions,setSessions]=useState([]);
@@ -7058,7 +7060,7 @@ function UserSessionsPage({session}) {
       && matchesSmartSearch(query,row.name,row.login,row.roleLabel,row.location,row.ipAddress,row.deviceId,device.type,device.platform,device.browser);
   });
   return <section className="panel pagepanel user-sessions-page">
-    <header><div><h1>User Sessions</h1></div><div className="user-session-header-actions"><button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button><button type="button" className="secondary danger" onClick={()=>setActivityPurgeOpen(true)} disabled={loading||activityPurging}><Trash2 /> Delete old activity</button></div></header>
+    <header><div><h1>User Sessions</h1></div><div className="user-session-header-actions">{!viewOnly&&<button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button>}<button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button>{!viewOnly&&<button type="button" className="secondary danger" onClick={()=>setActivityPurgeOpen(true)} disabled={loading||activityPurging}><Trash2 /> Delete old activity</button>}</div></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
       <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>No inactivity logout</p></div></article>
@@ -7068,7 +7070,7 @@ function UserSessionsPage({session}) {
     <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, location, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Never logged in','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div>{status!=='Never logged in'&&<span className="user-session-visible"><b>{visible.length}</b> visible</span>}<div className="user-session-actions" ref={setActionsToolbarTarget} /></div>
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
-    {status==='Never logged in'?<UserLoginActivity token={session?.token||authToken} Table={ActionsTable} formatDate={formatTwelveHourDateTime} query={query} />:<div className="user-session-table-wrap" data-session-view={status}><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Assistance</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><button type="button" className={`session-state ${row.online?'online':'inactive'}`} disabled={!row.login} aria-label={`View last 24 hours of login sessions for ${row.name||row.login}`} onClick={()=>setHistoryTarget(row)}><i />{row.online?'Online':'Inactive'}</button></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><RemoteAssistanceAction row={row} token={session?.token||authToken} onChanged={()=>load({quiet:true})} /></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="12" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>}
+    {status==='Never logged in'?<UserLoginActivity token={session?.token||authToken} Table={ActionsTable} formatDate={formatTwelveHourDateTime} query={query} />:<div className="user-session-table-wrap" data-session-view={status}><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Assistance</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><button type="button" className={`session-state ${row.online?'online':'inactive'}`} disabled={!row.login} aria-label={`View last 24 hours of login sessions for ${row.name||row.login}`} onClick={()=>setHistoryTarget(row)}><i />{row.online?'Online':'Inactive'}</button></td><td>{viewOnly?"View only":<button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button>}</td><td>{viewOnly?<span>View only</span>:row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td>{viewOnly?"View only":<RemoteAssistanceAction row={row} token={session?.token||authToken} onChanged={()=>load({quiet:true})} />}</td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="12" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>}
     <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Inactivity does not sign users out.</span></footer>
     {historyTarget&&<UserLoginHistory token={session?.token||authToken} row={historyTarget} Modal={Modal} Table={ActionsTable} formatDate={formatTwelveHourDateTime} deviceDetails={auditDeviceDetails} onClose={()=>setHistoryTarget(null)} />}
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
@@ -11476,7 +11478,7 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
-    if(name==="User Sessions")return isAdministrator;
+    if(name==="User Sessions")return canViewUserSessions(session);
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Recovery guide")return isAdministrator;
@@ -11554,7 +11556,7 @@ function App() {
   }, []);
   const selectMenu = (name) => {
     if (name === "Report Setting") name = "Reports";
-    if (adminOnlyPages.has(name) && !isAdministrator) return;
+    if (adminOnlyPages.has(name) && !isAdministrator && !(name==='User Sessions'&&canViewUserSessions(session))) return;
     if (session?.role === "super" && !canOpenAdminPage(name)) return;
     if (name === "Dashboard") window.dispatchEvent(new CustomEvent("nerve-center:dashboard-home"));
     if (name === active) return;
@@ -11893,6 +11895,8 @@ function App() {
   if (session.role === "normal")
     return (
       <RequestShiftProvider token={session.token} requests={requests}>
+        {isSessionViewOnlyUser(session)&&<div className="panel"><button type="button" onClick={()=>selectMenu('User Sessions')}>Admin · User Sessions</button></div>}
+        {isSessionViewOnlyUser(session)&&active==='User Sessions'&&<Modal title="User Sessions" close={()=>selectMenu('Dashboard')}><UserSessionsPage session={session}/></Modal>}
         <Normal
           requests={requests}
           requestsLoaded={requestsLoaded}
