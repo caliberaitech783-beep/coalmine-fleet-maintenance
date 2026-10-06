@@ -12,13 +12,14 @@ const unique=values=>[...new Set(values.filter(Boolean))];
 /** Returns only display-safe scope information. User-master permissions never leave the server. */
 export function cdirViewerContext({session={},user={},sites=[]}={}){
   const adminLevel=normalizeAdminLevel(user.adminLevel||session.permissions?.adminLevel);
-  const allAccess=session.role==='super'&&adminLevel!=='Manager';
+  const isAdmin=session.role==='super'&&adminLevel!=='Manager';
+  const allAccess=true;
   const managerRoles=managerRoleSelection(user.managerRole||session.permissions?.managerRoles||session.permissions?.managerRole);
   const isManager=session.role==='super'&&adminLevel==='Manager';
   const isProjectManager=isManager&&managerRoles.includes('Project Manager');
   const assignedRole=String(session.assignedRole||user.userGroup||user.assignedRole||'').trim();
   let assignedSites=[];
-  if(allAccess)assignedSites=sites.map((site)=>site.label);
+  if(isAdmin)assignedSites=sites.map((site)=>site.label);
   else if(isManager){
     const scope=managerReportScope(user);
     assignedSites=scope.sites===null
@@ -28,18 +29,18 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
         : scope.sites||[];
   }else assignedSites=userSiteSelection(user);
 
-  const siteIds=allAccess?sites.map((site)=>site.id):directorySiteIds(sites,assignedSites);
+  const siteIds=isAdmin?sites.map((site)=>site.id):directorySiteIds(sites,assignedSites);
   const allowedSites=sites.filter((site)=>siteIds.includes(site.id));
   return {
-    profile:allAccess?'admin-user':isProjectManager?'project-manager':isManager?'manager-user':assignedRole==='General User'?'general-user':'site-user',
-    label:allAccess?(adminLevel==='Super Admin'?'Super Admin':'Admin'):isProjectManager?'Project Manager':managerRoles.join(' · ')||assignedRole||'Site User',
-    allAccess,mySitesEnabled:!allAccess,siteIds,
+    profile:isAdmin?'admin-user':isProjectManager?'project-manager':isManager?'manager-user':assignedRole==='General User'?'general-user':'site-user',
+    label:isAdmin?(adminLevel==='Super Admin'?'Super Admin':'Admin'):isProjectManager?'Project Manager':managerRoles.join(' · ')||assignedRole||'Site User',
+    allAccess,mySitesEnabled:false,siteIds,
     sites:allowedSites.map((site)=>site.label),
     regions:unique(allowedSites.map((site)=>site.group)),
   };
 }
 
-/** Restricts the actual API payload and aggregate totals to the viewer's assigned sites. */
+/** Every signed-in directory viewer receives the full roster; location is a browsing filter. */
 export function cdirDirectoryForViewer(directory={},viewer={}){
   if(viewer.allAccess)return directory;
   const allowed=new Set(viewer.siteIds||[]);

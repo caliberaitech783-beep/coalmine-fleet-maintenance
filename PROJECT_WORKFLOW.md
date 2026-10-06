@@ -551,3 +551,7 @@ Equipment requests require HMR only for Maintenance Users at opening and closing
 ### Admin workshop selected deletion
 
 Admin and Super Admin sessions can select and delete filtered requests in Production, Maintenance, MIS, first-trip, closed-history and Idle tables. Select all filtered covers the complete matching result; the count and review exclude selections hidden by the current filters. The review lists every selected request with equipment, site, status and lifecycle dates and requires an Audit Trail reason before confirmation. Admin deletion includes verified history and Idle records; operational users keep their existing single-record permissions and cannot delete verified or Idle requests. The bulk API removes linked corrections, WhatsApp workflow dispatches and cascading daily remarks in one transaction, locking the selected requests before applying deletion. Equipment Master entries are retained.
+
+### C-Directory visibility
+
+Every signed-in user can browse the complete C-Directory roster through the All tab, including General Users and users at Corporate Office, Nagpur or Head Office, Chandrapur. Office, WCL, NCL and site tabs filter the roster by location. The directory has no My access or My Sites tab. Account profiles and operational permissions remain role-specific.
