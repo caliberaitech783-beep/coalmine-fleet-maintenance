@@ -6,6 +6,7 @@ import {
 import {buildCdirOrganisation,cdirPersonId} from '../cdir-organisation.mjs';
 import './caliber-directory-page.css';
 import {directoryLeadership,directorySiteTabs} from './cdir-overview.mjs';
+import CdirEmployeeEdit from './cdir-employee-edit.jsx';
 
 const ALL='ALL';
 const SITE_LEADERSHIP=/\b(project manager|production manager|maintenance manager|manager mechanical|hr manager|site manager|store manager|manager|incharge|supervisor|head)\b/i;
@@ -50,11 +51,12 @@ function DirectoryTable({rows,onSelect,onOrganisation,organisationManagers,empty
   </table></div>;
 }
 
-function ProfileDrawer({person,onClose}){
+function ProfileDrawer({person,onClose,onEdit}){
   if(!person)return null;
   const details=[['Employee ID',person.empId],['Category',person.cat],['Designation',person.designation],['Department',person.department],['Site / Office',person.siteLabel],['Reports to',person.reportingTo],['Contact',person.contact],['WhatsApp',person.whatsapp],['Email',person.email],['Date of joining',person.doj],['Status',statusOf(person)]];
   return <div className="cdir-drawer-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}><aside className="cdir-profile-drawer" role="dialog" aria-modal="true" aria-label={`${person.name} profile`}>
     <header><div className="cdir-avatar">{clean(person.name).split(/\s+/).slice(0,2).map(part=>part[0]).join('')}</div><div><small>Employee profile</small><h2>{person.name}</h2><p>{person.designation||'Designation not recorded'}</p></div><button type="button" onClick={onClose} aria-label="Close employee profile"><X/></button></header>
+    {onEdit&&person.recordId&&<button type="button" onClick={()=>onEdit(person)}>Edit employee details</button>}
     <dl>{details.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl>
   </aside></div>;
 }
@@ -106,6 +108,7 @@ export function OrganisationView({model,rootPerson,rootIds,onSelect,onShowAll,fi
 }
 
 export default function CaliberDirectoryPage({token}){
+  const [editing,setEditing]=useState(null);
   const [state,setState]=useState({loading:true,error:'',directory:null});
   const [attempt,setAttempt]=useState(0),[scope,setScope]=useState('all'),[view,setView]=useState('dashboard'),[selected,setSelected]=useState(null),[organisationRoot,setOrganisationRoot]=useState(null);
   const [filters,setFilters]=useState({region:ALL,site:ALL,department:ALL,designation:ALL,category:ALL,name:''});
@@ -202,6 +205,7 @@ export default function CaliberDirectoryPage({token}){
     {view==='dashboard'&&<><SummaryHero meta={directory.meta||{}} rows={filteredRows} leadershipCount={leadership.length} scopeLabel={scopeLabel} mode={overviewMode}/><section className="cdir-section"><div className="cdir-section-head"><div><h2>{overviewMode==='corporate'?'Leadership roster':'Site leadership roster'}</h2><p>{leadership.length} {overviewMode==='corporate'?'leadership':'senior site'} profile{leadership.length===1?'':'s'} in the selected scope.</p></div></div><DirectoryTable rows={leadership} onSelect={setSelected} empty="No active employee profiles match these filters."/></section><div className="cdir-show-all"><button type="button" onClick={showAllPeople}>Show all people <span aria-hidden="true">→</span></button></div>{(viewer.allAccess||viewer.profile==='project-manager')&&<ProjectManagerLeaderboard rows={filteredRows}/>}</>}
     {view==='people'&&<section className="cdir-section"><div className="cdir-section-head"><div><h2>{filters.site===ALL?'Employee directory':siteOptions.find(site=>site.id===filters.site)?.label||'Employee directory'}</h2><p>{employeeRows.length} available employee{employeeRows.length===1?'':'s'} match the selected filters.</p></div><button type="button" onClick={()=>exportRows(employeeRows)}><Download/>Export current view</button></div><DirectoryTable rows={employeeRows} onSelect={setSelected} onOrganisation={openOrganisation} organisationManagers={organisation.managerIds} empty="No employees match these filters."/></section>}
     {view==='vacancies'&&<section className="cdir-section"><div className="cdir-section-head"><div><h2>Vacancies</h2><p>{vacancies.length} vacant sanctioned position{vacancies.length===1?'':'s'} in the selected scope.</p></div><button type="button" onClick={()=>exportRows(vacancies)}><Download/>Export vacancies</button></div><DirectoryTable rows={vacancies} onSelect={setSelected} empty="No vacancies match these filters."/></section>}
-    {view==='matrix'&&<MatrixView directory={directory} rows={filteredRows} onSite={site=>openFiltered({site})} onCategory={category=>openFiltered({category})}/>} {view==='organisation'&&<OrganisationView model={organisationRoot?organisation:organisationScope} rootPerson={organisationRoot} rootIds={organisationRoot?undefined:organisationFilterRoots} filtered={!organisationRoot&&(organisationFilterActive||organisationGeographyFiltered)} onSelect={setSelected} onShowAll={()=>setOrganisationRoot(null)}/>}<ProfileDrawer person={selected} onClose={()=>setSelected(null)}/>
+    {view==='matrix'&&<MatrixView directory={directory} rows={filteredRows} onSite={site=>openFiltered({site})} onCategory={category=>openFiltered({category})}/>} {view==='organisation'&&<OrganisationView model={organisationRoot?organisation:organisationScope} rootPerson={organisationRoot} rootIds={organisationRoot?undefined:organisationFilterRoots} filtered={!organisationRoot&&(organisationFilterActive||organisationGeographyFiltered)} onSelect={setSelected} onShowAll={()=>setOrganisationRoot(null)}/>}<ProfileDrawer person={editing?null:selected} onClose={()=>setSelected(null)} onEdit={viewer.canEditEmployees?setEditing:undefined}/>
+    {editing&&viewer.canEditEmployees&&<CdirEmployeeEdit person={editing} token={token} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelected(null);setOrganisationRoot(null);setAttempt(value=>value+1);}}/>}
   </section>;
 }

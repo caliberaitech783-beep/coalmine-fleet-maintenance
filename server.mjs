@@ -48,6 +48,7 @@ import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
 import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
+import {canEditCdirEmployee,registerCdirEmployeeEdit} from './cdir-employee-edit.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -3860,9 +3861,9 @@ async function cdirDuplicateError(master,records,excludeId=null){
   return '';
 }
 async function cdirMasterRecords(names=CDIR_MASTER_NAMES,client=pool){
-  const {rows}=await client.query('SELECT master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[names]);
+  const {rows}=await client.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[names]);
   const grouped=Object.fromEntries(names.map(name=>[name,[]]));
-  for(const row of rows)grouped[row.master_name].push(row.record_data||{});
+  for(const row of rows)grouped[row.master_name].push({...row.record_data,id:row.id});
   return grouped;
 }
 async function cdirEmployeeValidationError(records){
@@ -3913,6 +3914,7 @@ async function cdirDirectory(){
   return cdirDirectoryFromMasters(masters,{generated:`${formatDisplayDate(new Date())} (live from Masters)`});
 }
 
+registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters:cdirMasterRecords,auditChangedFields});
 app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
@@ -3923,7 +3925,7 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
     ]);
     const directoryWithSuperiors=mergeCdirReportingSuperiors(directory,userRows.map((row)=>row.record_data||{}));
     const viewer=cdirViewerContext({session:req.session,user,sites:directoryWithSuperiors.sites});
-    res.json({...cdirDirectoryForViewer(directoryWithSuperiors,viewer),viewer});
+    res.json({...cdirDirectoryForViewer(directoryWithSuperiors,viewer),viewer:{...viewer,canEditEmployees:canEditCdirEmployee(req.session)}});
   }catch(error){next(error)}
 });
 
