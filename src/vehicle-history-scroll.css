@@ -1,0 +1,14 @@
+.vehicle-history-top-scroll {
+  margin: 0 14px 4px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  height: 18px;
+  scrollbar-color: #7b699b #ece8f2;
+  scrollbar-width: auto;
+}
+.vehicle-history-top-scroll[hidden] { display: none; }
+.vehicle-history-top-scroll::-webkit-scrollbar { height: 16px; }
+.vehicle-history-top-scroll::-webkit-scrollbar-track { background: #ece8f2; }
+.vehicle-history-top-scroll::-webkit-scrollbar-thumb { background: #7b699b; border: 3px solid #ece8f2; border-radius: 8px; }
+@media (max-width: 650px) { .vehicle-history-top-scroll { margin-inline: 10px; } }
+@media print { .vehicle-history-top-scroll { display: none !important; } }
