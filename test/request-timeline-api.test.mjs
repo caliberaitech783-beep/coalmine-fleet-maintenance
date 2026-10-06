@@ -7,6 +7,7 @@ import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import * as timeline from '../request-timeline.mjs';
+import {requestHistorySnapshotSql,requestHistoryTimelineSql} from '../request-history-payload.mjs';
 import {validMeterReadings,validateClosingMeterReadings} from '../request-workflow.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
@@ -77,7 +78,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   const context={ maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
-    pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
+    pool:{query:client.query,connect:async()=>client},requestProjection:'*',requestHistorySnapshotSql,requestHistoryTimelineSql,canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
     validMeterReadings,validateClosingMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,approvedDelayedReason,
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
