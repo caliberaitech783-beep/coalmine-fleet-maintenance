@@ -5,12 +5,12 @@ import {oemExtraSendDue} from '../oem-breakdown-email.mjs';
 import {readFile} from 'node:fs/promises';
 import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails,OEM_TRIAL_CC} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
-test('extra batch opens only on October 5 at 7 PM IST and expires at midnight',()=>{
-  assert.equal(oemExtraSendDue(new Date('2026-10-05T13:29:59Z')),false);
-  assert.equal(oemExtraSendDue(new Date('2026-10-05T13:30:00Z')),true);
-  assert.equal(oemExtraSendDue(new Date('2026-10-05T18:29:59Z')),true);
-  assert.equal(oemExtraSendDue(new Date('2026-10-05T18:30:00Z')),false);
-  assert.equal(oemExtraSendDue(new Date('2026-10-06T13:30:00Z')),false);
+test('extra batch opens only on October 6 at 11 AM IST and expires at midnight',()=>{
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T05:29:59Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T05:30:00Z')),true);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T18:29:59Z')),true);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T18:30:00Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-05T13:30:00Z')),false);
 });
 test('Volvo Trucks includes Volvo tippers but never excavators, loaders, closed or other-site cases',()=>{
   const recipient=oemEmailRecipients([{...contact,oem:'Volvo Trucks'}])[0];
@@ -25,11 +25,11 @@ test('Volvo Trucks includes Volvo tippers but never excavators, loaders, closed 
   assert.deepEqual(oemEmailRows({recipient,equipment,requests}).map(row=>row.door),['T1','T3']);
   assert.equal(oemEmailRows({recipient,equipment,requests:requests.map(row=>({...row,closedAt:'2026-10-05'}))}).length,0);
 });
-test('extra batch sends every level with active cases exactly once, with attachments, without changing regular cadence',async()=>{
+test('11 AM batch sends active cases once with threaded confirmations; regular 5 PM remains separate',async()=>{
   const claims=new Set(),messages=[];
   const client={release(){},async query(sql,args){
     if(sql.includes('pg_try'))return {rows:[{locked:true}]};
-    if(sql.startsWith('SELECT activation'))return {rows:[{activation_date:'2026-10-04'}]};
+    if(sql.startsWith('SELECT activation'))return {rows:[{activation_date:'2026-10-05'}]};
     if(sql.startsWith('INSERT INTO oem_email_deliveries')){
       const id=args.slice(0,2).join('|');if(claims.has(id))return {rowCount:0};
       claims.add(id);return {rowCount:1};
@@ -40,21 +40,22 @@ test('extra batch sends every level with active cases exactly once, with attachm
     contacts:[...[1,2,3,4].map(level=>({...contact,level:`Level ${level}`,email:`l${level}@example.com`})),{...contact,oem:'No cases',email:'empty@example.com'}],
     equipment:[{door:'D1',make:'Scania',currentLocation:'Sasti OC'}],
     requests:[{ref:'ACTIVE-1',door:'D1',site:'Sasti OC',status:'Accepted',oemResponsibility:'OEM'}],
-  }),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:[message.to],messageId:'test'};}}}};
-  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T11:30:00Z')});
-  assert.equal(messages.length,2); // Existing regular L1 behaviour, including empty reports, is unchanged.
-  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T13:29:59Z')});
-  assert.equal(messages.length,2);
-  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T13:30:00Z')});
-  assert.equal(messages.length,6);
-  for(const message of messages.slice(2)){
-    assert.match(message.subject,/Additional 7 PM/);assert.match(message.text,/ACTIVE-1/);
+  }),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:Array.isArray(message.to)?message.to:[message.to],messageId:'test-id'};}}}};
+  const run=timestamp=>sendScheduledOemEmails({...options,now:new Date(timestamp)});
+  await run('2026-10-06T05:29:59Z');assert.equal(messages.length,0);
+  await run('2026-10-06T05:30:00Z');assert.equal(messages.length,8);
+  for(const message of messages){
+    assert.match(message.subject,/11 AM Test/);assert.match(message.text,/ACTIVE-1/);
     assert.equal(message.attachments.length,2);assert.notEqual(message.to,'empty@example.com');
+    if(message.subject.startsWith('Sending confirmation')){
+      assert.deepEqual(message.to,OEM_TRIAL_CC);assert.equal(message.inReplyTo,'test-id');assert.equal(message.references,'test-id');
+    }
   }
-  await sendScheduledOemEmails({...options,now:new Date('2026-10-05T14:00:00Z')});
-  assert.equal(messages.length,6);
-  await sendScheduledOemEmails({...options,now:new Date('2026-10-06T13:30:00Z')});
-  assert.equal(messages.length,8); // Only regular L1 on the next day, no repeat extra batch.
+  await run('2026-10-06T06:00:00Z');assert.equal(messages.length,8);
+  await run('2026-10-06T11:30:00Z');assert.equal(messages.length,9);
+  await run('2026-10-06T13:30:00Z');assert.equal(messages.length,9);
+  await run('2026-10-07T05:30:00Z');assert.equal(messages.length,9);
+  await run('2026-10-07T11:30:00Z');assert.equal(messages.length,10);
 });
 test('PDF and real Excel attachments include every selected case and match website workbook styling',async()=>{
   const rows=Array.from({length:75},(_,i)=>({ref:`CASE-${i}`,door:`D${i}`,site:'Sasti OC',complaint:'Parts pending',start:'2026-10-05 10:00:00'}));
@@ -106,7 +107,7 @@ test('persistent claims prevent repeat delivery and release scheduler lock',asyn
     if(sql.includes('pg_advisory_unlock'))unlocks++;
     return {rows:[],rowCount:1};
   }};
-  const options={pool:{connect:async()=>client},now:new Date('2026-10-05T13:30:00Z'),loadData:async()=>({contacts:[contact],requests:[],equipment:[]}),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async()=>{sends++;return {accepted:[contact.email],messageId:'test'};}}}};
+  const options={pool:{connect:async()=>client},now:new Date('2026-10-05T13:30:00Z'),loadData:async()=>({contacts:[contact],requests:[{door:'D1',site:'Sasti OC',status:'Accepted',oemResponsibility:'OEM'}],equipment:[{door:'D1',make:'Scania',currentLocation:'Sasti OC'}]}),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async()=>{sends++;return {accepted:[contact.email],messageId:'test'};}}}};
   await sendScheduledOemEmails(options);await sendScheduledOemEmails(options);
   assert.equal(sends,1);assert.equal(unlocks,2);
 });
@@ -129,9 +130,9 @@ test('only the first three reports globally get trial CC and sending confirmatio
     if(sql.startsWith('UPDATE oem_email_schedule SET trial_cc_used'))return {rows:used<3?[{trial_cc_used:++used}]:[]};
     return {rows:[],rowCount:1};
   }};
-  const options={pool:{connect:async()=>client},loadData:async()=>({contacts:[contact],requests:[],equipment:[]}),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:Array.isArray(message.to)?message.to:[message.to,...message.cc||[]],messageId:'test'};}}}};
-  for(let day=5;day<=8;day++){
-    const now=new Date(`2026-10-0${day}T11:30:00Z`);
+  const options={pool:{connect:async()=>client},loadData:async()=>({contacts:[contact],requests:[{door:'D1',site:'Sasti OC',status:'Accepted',oemResponsibility:'OEM'}],equipment:[{door:'D1',make:'Scania',currentLocation:'Sasti OC'}]}),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:Array.isArray(message.to)?message.to:[message.to,...message.cc||[]],messageId:'test'};}}}};
+  for(let day=15;day<=18;day++){
+    const now=new Date(`2026-10-${day}T11:30:00Z`);
     await sendScheduledOemEmails({...options,now});await sendScheduledOemEmails({...options,now});
   }
   const reports=messages.filter(message=>!message.subject.startsWith('Sending confirmation'));
