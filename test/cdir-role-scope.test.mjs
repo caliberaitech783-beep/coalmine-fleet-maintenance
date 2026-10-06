@@ -118,7 +118,7 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/rootIds=\{organisationRoot\?undefined:organisationFilterRoots\}/);
   assert.match(component,/filtered=\{!organisationRoot&&\(organisationFilterActive\|\|organisationGeographyFiltered\)\}/);
   assert.match(component,/rootPerson=\{organisationRoot\}[\s\S]*?onShowAll=\{\(\)=>setOrganisationRoot\(null\)\}/);
-  assert.match(component,/exportRows\(currentExportRows,redacted\)/);
+  assert.match(component,/exportRows\(currentExportRows\)/);
   assert.match(css,/\.cdir-site-chips,\.cdir-category-chips\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
   assert.match(css,/\.cdir-view-nav\{flex-wrap:wrap;[\s\S]*?overflow:visible/);
   assert.match(css,/\.cdir-scope-sites>div\{flex-wrap:wrap/);
