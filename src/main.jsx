@@ -2921,10 +2921,10 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     searchedRows = displayRows.filter((row) => matchesSmartSearch(deferredQuery, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model, row.expectedCompletionAt, showUserRole ? row.requesterRole : "") && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const [tableFilteredRefs, setTableFilteredRefs] = useState(null);
-  const trackFilteredRows = useCallback(tableRows => {
+  const trackFilteredRows = tableRows => {
     const refs = tableRows.map(row => row.props["data-request-reference"]).filter(Boolean);
     setTableFilteredRefs(current => current?.join("\n") === refs.join("\n") ? current : refs);
-  }, []);
+  };
   const deletionRows = sortedRows.filter(row => rowDeletable(row) && (!tableFilteredRefs || tableFilteredRefs.includes(row.ref)));
   const selectedRows = deletionRows.filter(row => selectedRefs.has(row.ref));
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
@@ -9858,13 +9858,13 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   useEffect(() => {
     setVisibleRowLimit(WORKFLOW_INITIAL_RENDER_ROWS);
   }, [deferredQuery, statusFilter, idleDateRange, parameterFilters, rows, sort.key, sort.direction]);
-  const visibleWorkflowRows = sortedRows.slice(0, visibleRowLimit);
+  const visibleWorkflowRows = onDeleteSelected ? sortedRows : sortedRows.slice(0, visibleRowLimit);
   const remainingWorkflowRows = Math.max(0, sortedRows.length - visibleWorkflowRows.length);
   const [tableFilteredRefs, setTableFilteredRefs] = useState(null);
-  const trackFilteredRows = useCallback(tableRows => {
+  const trackFilteredRows = tableRows => {
     const refs = tableRows.map(row => row.props["data-request-reference"]).filter(Boolean);
     setTableFilteredRefs(current => current?.join("\n") === refs.join("\n") ? current : refs);
-  }, []);
+  };
   const deletionRows = sortedRows.filter(row => rowDeletable(row) && (!tableFilteredRefs || tableFilteredRefs.includes(row.ref)));
   const selectedRows = deletionRows.filter(row => selectedRefs.has(row.ref));
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
