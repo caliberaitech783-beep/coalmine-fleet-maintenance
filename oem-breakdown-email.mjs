@@ -7,6 +7,7 @@ import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {buildXlsxSheetsWorkbook} from './report-xlsx.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {equipmentGroupValue} from './equipment-group.mjs';
+import {ensureOemDeliveryDetails,safeOemRetry,safeOemError} from './oem-email-delivery-state.mjs';
 
 const clean=value=>String(value??'').trim();
 const key=value=>clean(value).toLowerCase();
@@ -86,6 +87,7 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS trial_cc BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS acknowledgement_status TEXT`);
     await client.query('INSERT INTO oem_email_schedule(id,activation_date) VALUES(1,$1) ON CONFLICT DO NOTHING',[oemEmailDay(now)]);
+    await ensureOemDeliveryDetails(client);
     const activation=(await client.query('SELECT activation_date FROM oem_email_schedule WHERE id=1')).rows[0].activation_date;
     if(!oemEmailDue('L1',activation,now)&&!oemExtraSendDue(now))return {skipped:true};
     if(!mailer.transporter)throw new Error('OEM email schedule cannot send: SMTP is not configured');
@@ -105,18 +107,20 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       const trial=extraBatch?{rows:[]}:await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
       const trialCc=extraBatch||trial.rows.length?OEM_TRIAL_CC:[];
       if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey]);
-      let result,report;
+      let result,report,sendStarted=false;
       try{
         report=await buildOemEmailWithAttachments({recipient,rows,shifts:data.shifts,now,extraBatch});
+        await client.query('UPDATE oem_email_deliveries SET attachments=$3::jsonb,last_attempt_at=NOW(),retry_safe=FALSE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey,JSON.stringify(report.attachments.map(file=>({filename:file.filename,bytes:file.content.length})))]);
+        sendStarted=true;
         result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
         failed++;
         // Do not automatically resend ambiguous SMTP outcomes: delivery may already have occurred.
-        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,clean(error.message).slice(0,500)]);
+        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,retry_safe=$4,last_attempt_at=NOW(),updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,safeOemError(error),safeOemRetry(error,sendStarted)]);
         continue;
       }
-      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,result.messageId||'']);sent++;
+      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,sent_at=NOW(),retry_safe=FALSE,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,result.messageId||'']);sent++;
       if(trialCc.length){
         let acknowledgementStatus='SMTP accepted';
         try{

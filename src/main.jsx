@@ -1,5 +1,6 @@
 import { RequestDeleteReview } from "./workshop-selected-delete.jsx";
 import {ibossAccountsAllowed} from "../iboss-access.mjs";
+import OemEmailDeliveryStatus from './oem-email-delivery-status.jsx';
 import {requestShiftLabel,requestShiftColumns} from "../request-shift.mjs";
 import {RequestShiftProvider,useRequestShiftData,withRequestShiftCells} from "./request-shift-context.jsx";
 import {assignedUserRoles,ACCOUNT_PRIVILEGES,accountPrivileges} from "../account-role-access.mjs";
@@ -428,6 +429,7 @@ const nav = [
 // Administration menu (Admin and Super Admin). The four backup pages live here
 // beside the Recovery guide rather than in a header menu of their own.
 const adminNav = [
+  ["OEM Email Delivery Status", MessageCircle],
   ["User Sessions", UserRound],
   ["Access structure", Users],
   ["Reporting structure", Building2],
@@ -11485,6 +11487,7 @@ function App() {
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return canViewUserSessions(session);
+    if(name==="OEM Email Delivery Status")return isAdministrator;
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Recovery guide")return isAdministrator;
@@ -11848,6 +11851,8 @@ function App() {
     <RequestCorrections session={session} requests={requests} Dialog={Modal} />
   ) : renderedActive === "User Sessions" ? (
     <UserSessionsPage session={session} />
+  ) : renderedActive === "OEM Email Delivery Status" ? (
+    <OemEmailDeliveryStatus session={session} />
   ) : renderedActive === "Recovery guide" ? (
     <RecoveryGuide onNavigate={selectMenu} />
   ) : renderedActive === "Diagnostics" ? (

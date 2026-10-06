@@ -56,6 +56,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
+import {registerOemEmailAdmin} from './oem-email-admin.mjs';
 import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
 import {HOUSEKEEPING_CATEGORIES,housekeepingCategory,purgeRequestError} from './data-housekeeping.mjs';
@@ -2845,6 +2846,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
 });
 
 registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView,locationName:userSessionLocationName});
+registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData:loadOemEmailData,scheduledJobsEnabled});
 app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
   try{
     await sessionStore.pruneExpired();
@@ -8363,18 +8365,19 @@ async function initializeDatabase(){
   }
 }
 
+async function loadOemEmailData(){
+  const [{rows:requests},{rows:masters}]=await Promise.all([
+    pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND oem_responsibility='OEM' AND status NOT IN ('Closed','Idle','Ideal')`),
+    pool.query("SELECT master_name,record_data FROM master_records WHERE master_name IN ('OEM master','Equipment master','Shift master')"),
+  ]);
+  const records=name=>masters.filter(row=>row.master_name===name).map(row=>row.record_data);
+  return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:records('Equipment master'),contacts:records('OEM master'),shifts:records('Shift master')};
+}
 void initializeDatabase();
 if(scheduledJobsEnabled){
   setStaggeredInterval(()=>{
     if(!databaseReady)return;
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:async()=>{
-      const [{rows:requests},{rows:masters}]=await Promise.all([
-        pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND oem_responsibility='OEM' AND status NOT IN ('Closed','Idle','Ideal')`),
-        pool.query("SELECT master_name,record_data FROM master_records WHERE master_name IN ('OEM master','Equipment master','Shift master')"),
-      ]);
-      const records=name=>masters.filter(row=>row.master_name===name).map(row=>row.record_data);
-      return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:records('Equipment master'),contacts:records('OEM master'),shifts:records('Shift master')};
-    }})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:loadOemEmailData})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
   },60*1000,29_000);
   const whatsappTemplateStatusTimer=setStaggeredInterval(()=>{
     if(databaseReady)void syncStandardWhatsAppTemplates().catch(error=>console.error('WhatsApp template status refresh failed.',error.message));
