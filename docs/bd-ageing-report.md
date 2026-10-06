@@ -20,6 +20,9 @@ breakdown definition excludes closed, verified, and idle requests. Archived and
 globally retired requests are excluded. Each user's existing Info Pulse site
 scope is retained. Rows show oldest first within each group.
 
-This is a read-only report. Refresh reloads current status and ageing; each
-group uses the existing report search, column selection and export controls.
+This is a read-only report. Refresh reloads current status and ageing. One table
+has All ageing, 2–4 days, 4–6 days and More than 6 days tabs. Region and dependent
+site filters narrow the existing authorized data; changing region resets site.
+Tab counts respect the location filters. The same filtered rows feed the table
+and existing export controls. Search and column selection remain available.
 It does not change request workflows, scheduled reports or other users' access.
