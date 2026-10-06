@@ -18,5 +18,5 @@ test("production, maintenance, and MIS request tables use header filter popovers
   assert.match(source, /isMaintenance && tab === "close"[\s\S]*showMakeModel/);
   assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} exportTitle=\{workspaceReportTitles\.requests\} showMisPeople showMakeModel/);
   assert.match(source, /tab === "idle"[\s\S]*<MobileWorkflowTable rows=\{idleRows\} exportTitle=\{workspaceReportTitles\.idle\} showMakeModel/);
-  assert.match(source, /tab === "history"[\s\S]*<BreakdownTable rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}[\s\S]*<MobileWorkflowTable rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}/);
+  assert.match(source, /tab === "history"[\s\S]*<BreakdownTable \{\.\.\.adminDeleteProps\} rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}[\s\S]*<MobileWorkflowTable rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}/);
 });
