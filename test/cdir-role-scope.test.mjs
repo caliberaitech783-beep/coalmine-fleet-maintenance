@@ -81,9 +81,6 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/headOffice[\s\S]*?corporateOffice[\s\S]*?accessRegions\.map/);
   assert.match(component,/primaryScopeOptions[\s\S]*?regionalSiteOptions/);
   assert.match(component,/regionalSiteOptions\.map/);
-  assert.match(component,/const scopeRows=allRows/);
-  assert.match(component,/const scopedSites=directory\?\.sites\|\|\[\]/);
-  assert.match(component,/filters\.region===ALL\?officeSite\(site\):site\.group===filters\.region/);
   assert.match(component,/const categoryBaseRows=useMemo/);
   assert.match(component,/const browseCountRows=[\s\S]*?filteredRows/);
   assert.match(component,/const categoryCountRows=[\s\S]*?categoryBaseRows/);
@@ -136,6 +133,5 @@ test('office, General User, manager and unassigned accounts can view every direc
   }
   const component=fs.readFileSync(new URL('../src/caliber-directory-page.jsx',import.meta.url),'utf8');
   assert.match(component,/rootScopeKey='all'/);
-  assert.match(component,/label:'All',detail:'Every region and site'/);
-  assert.doesNotMatch(component,/My access|My site|All assigned/);
+  assert.doesNotMatch(component,/My access/);
 });

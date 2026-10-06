@@ -121,11 +121,14 @@ export function requestMeterTypesForRequest(request = {}, records = []) {
     const details = requestEquipmentDetails(record);
     return [details.chassis, details.door, details.reg].some((value) => value && keys.includes(text(value).toLowerCase()));
   });
-  if (["equipment", "equipments"].includes(text(equipment?.category || request.category).toLowerCase())) return ["HMR"];
   const isTipper = [request, equipment || {}].some((record) =>
     [record.equipmentGroup, record.group, record.equipment, record.equipmentName, record.itemName]
       .some((value) => /\btippers?\b/i.test(text(value))),
   );
+  // Tipper groups use both meters even when imported under Equipment.
+  // Master visibility must not hide KMR for the same tipper request.
+  if (isTipper) return ["HMR", "KMR"];
+  if (["equipment", "equipments"].includes(text(equipment?.category || request.category).toLowerCase())) return ["HMR"];
   // Wheeled vehicles record both hours and kilometres; equipment without
   // wheels has no odometer, so it records HMR only. The Equipment Master
   // category decides; a saved KMR meter type marks a vehicle when the master
