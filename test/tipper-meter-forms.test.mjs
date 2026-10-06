@@ -42,6 +42,7 @@ test("Maintenance User forms require HMR only for equipment; other roles retain 
   const excavator={...tipper,equipmentGroup:"EXCAVATORS",meterType:"HMR",openingMeterReading:"",openingMeterReadings:{HMR:"",KMR:""},closingMeterReadings:{HMR:"",KMR:""}};
   for(const name of ["RequestEditForm","CloseRequestForm"]){
     const html=renderToStaticMarkup(React.createElement(forms[name],{request:excavator,requireMeters:true}));
+    assert.doesNotMatch(html,/name="(?:opening|closing)KMRReading"/,"mandatory maintenance readings must not add an equipment KMR field");
     for(const type of ["HMR"])assert.match(html,new RegExp('<input(?=[^>]*name="opening'+type+'Reading")(?=[^>]*required)[^>]*>'));
     if(name==="CloseRequestForm")for(const type of ["HMR"])assert.match(html,new RegExp('<input(?=[^>]*name="closing'+type+'Reading")(?=[^>]*required)[^>]*>'));
     const optional=renderToStaticMarkup(React.createElement(forms[name],{request:excavator}));
@@ -58,6 +59,16 @@ test("tipper edit and close forms render both readings and exactly one trip-card
     assert.equal((html.match(/type="file"/g) || []).length, 1);
     assert.match(html, /Trip card upload/);
     assert.match(html, /accept="image\/jpeg,image\/png,image\/webp,application\/pdf"/);
+  }
+});
+
+test("Maintenance User vehicle forms require both HMR and KMR", () => {
+  const vehicle={...tipper,equipmentGroup:"WATER TANKER",openingMeterReading:"",openingMeterReadings:{HMR:"",KMR:""}};
+  for(const name of ["RequestEditForm","CloseRequestForm"]){
+    const html=renderToStaticMarkup(React.createElement(forms[name],{request:vehicle,requireMeters:true}));
+    for(const stage of name==="CloseRequestForm"?["opening","closing"]:["opening"]){
+      for(const type of ["HMR","KMR"])assert.match(html,new RegExp('<input(?=[^>]*name="'+stage+type+'Reading")(?=[^>]*required)[^>]*>'));
+    }
   }
 });
 
