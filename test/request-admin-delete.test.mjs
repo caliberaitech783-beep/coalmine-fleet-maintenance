@@ -6,7 +6,7 @@ import {requestDeletionBlocker,requestDeletable,requestStageLabel,requestDeletio
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 
-test('verified requests are never deletable; Idle only for an Admin; every other unverified stage for both',()=>{
+test('verified and Idle requests only for an Admin; every other unverified stage for both',()=>{
   const open={ref:'REQ-1',status:'Open'};
   const awaiting={ref:'REQ-2',status:'Open',acceptanceRequired:true};
   const inProgress={ref:'REQ-3',status:'In progress',acceptedAt:'2026-09-18 09:00:00',inProgressAt:'2026-09-18 10:00:00'};
@@ -20,10 +20,10 @@ test('verified requests are never deletable; Idle only for an Admin; every other
   assert.equal(requestDeletionBlocker(idle),'Idle requests can only be deleted by an Admin.');
   assert.equal(requestDeletionBlocker(idle,{administrator:true}),null);
   assert.equal(requestDeletionBlocker(verified),'Verified requests cannot be deleted.');
-  assert.equal(requestDeletionBlocker(verified,{administrator:true}),'Verified requests cannot be deleted.','Admins cannot delete verified requests either');
+  assert.equal(requestDeletionBlocker(verified,{administrator:true}),null,'Admins can delete verified history after review');
   assert.equal(requestDeletionBlocker(undefined,{administrator:true}),'The request no longer exists.');
   assert.equal(requestDeletable(closed),true);
-  assert.equal(requestDeletable(verified,{administrator:true}),false);
+  assert.equal(requestDeletable(verified,{administrator:true}),true);
   assert.deepEqual([open,awaiting,inProgress,idle,closed,verified].map(requestStageLabel),
     ['Open','Awaiting acceptance','In progress','Idle, awaiting on-road approval','Closed, awaiting MIS verification','Verified']);
 });
@@ -44,7 +44,7 @@ test('the API deletes in one transaction, keeps the Maintenance delete right, an
   assert.match(helper,/requestDeletionBlocker\(byRef\.get\(reference\),\{administrator\}\)/);
   assert.ok(helper.indexOf('DELETE FROM request_corrections WHERE request_reference=ANY')<helper.indexOf('DELETE FROM maintenance_requests'),'corrections go first so the RESTRICT foreign key never fails');
   assert.match(helper,/DELETE FROM whatsapp_workflow_dispatches WHERE request_reference=ANY/);
-  assert.match(helper,/DELETE FROM maintenance_requests WHERE reference=ANY\(\$1::text\[\]\) AND verified_at IS NULL AND \(\$2::boolean OR status NOT IN \('Idle','Ideal'\)\) RETURNING reference/);
+  assert.match(helper,/DELETE FROM maintenance_requests WHERE reference=ANY\(\$1::text\[\]\) AND \(\$2::boolean OR verified_at IS NULL\) AND \(\$2::boolean OR status NOT IN \('Idle','Ideal'\)\) RETURNING reference/);
   assert.match(helper,/ROLLBACK/);
   const single=server.slice(server.indexOf("app.delete('/api/requests/:reference',"),server.indexOf("app.post('/api/requests/bulk-delete',"));
   assert.match(single,/requirePermission\('deleteRequests',\{role:'Maintenance User'\}\)/,'Maintenance users keep their delete permission');
@@ -53,7 +53,7 @@ test('the API deletes in one transaction, keeps the Maintenance delete right, an
   const bulk=server.slice(server.indexOf("app.post('/api/requests/bulk-delete',"),server.indexOf("app.patch('/api/requests/:reference/mis-flag',"));
   assert.match(bulk,/requireSession,requireAdministrator,/,'only Admin / Super Admin');
   assert.match(bulk,/A deletion reason is required for the Audit Trail\./);
-  assert.match(bulk,/REQUEST_BULK_DELETE_LIMIT/);
+  assert.doesNotMatch(bulk,/references.length>REQUEST_BULK_DELETE_LIMIT/);
   assert.match(bulk,/deleteMaintenanceRequests\(references,\{administrator:true\}\)/);
   assert.match(bulk,/action:'Delete requests'/);
   assert.match(bulk,/res\.json\(\{deleted:deletedRefs,skipped:outcome\.skipped\}\)/);
@@ -71,16 +71,16 @@ test('Admin sessions get Delete and Delete selected in every workspace table; Ma
   assert.equal((normal.match(/onMisFlag=\{permissions\.verifyRequests \? setMisFlagging : null\}(?: showUserRole)? \{\.\.\.adminDeleteProps\} \/>/g)||[]).length,2,'MIS awaiting verification and Verify lists');
   assert.match(normal,/tab === "idle"[^\n]*rows=\{idleRows\}[^\n]*\{\.\.\.adminDeleteProps\} \/>/,'Idle vehicles (on-road approval queue)');
   assert.match(normal,/tab === "history"[^\n]*<MobileWorkflowTable rows=\{historyRows\}[^\n]*\{\.\.\.adminDeleteProps\} \/>/,'closed history for the MIS-verification stage');
-  assert.match(normal,/A deletion reason is required for the Audit Trail\./);
-  assert.match(normal,/Permanently delete \$\{references\.length\} request\$\{plural\}\?/);
+  assert.match(normal,/<RequestDeleteReview records=\{deletionReview\}/);
+  assert.match(normal,/setDeletionReview\(rows.map/);
   const table=client.slice(client.indexOf('function MobileWorkflowTable('),client.indexOf('function RequestEditForm('));
   assert.match(table,/if \(onDelete \|\| onDeleteSelected \|\| onProductionFirstTrip\) showActions = true;/);
   assert.match(table,/\{onDelete && rowDeletable\(row\) && <button type="button" className="danger" onClick=\{\(\) => onDelete\(row\)\}><Trash2 \/> Delete<\/button>\}/);
-  assert.match(table,/Delete selected \(\{selectedRefs\.size\}\)/);
-  assert.match(table,/Select all shown/);
+  assert.match(table,/Delete selected \(\{selectedRows\.length\}\)/);
+  assert.match(table,/Select all filtered/);
   const breakdown=client.slice(client.indexOf('function BreakdownTable('),client.indexOf('const masterFields ='));
   assert.match(breakdown,/const requestActions = \(onDelete \|\| onDeleteSelected \|\| onEdit \|\| onRemark\) \? \(row\) =>/);
-  assert.match(breakdown,/Delete selected \(\{selectedRefs\.size\}\)/);
+  assert.match(breakdown,/Delete selected \(\{selectedRows\.length\}\)/);
   assert.match(client,/case "requestAction": return showReadOnlyAction \? <td className="row-actions">\{requestActions \? requestActions\(r\) : <span>Read only<\/span>\}<\/td> : null;/);
   assert.match(client,/deleteRequestsBulk = async \(references, reason\) => \{\s*const response = await fetch\("\/api\/requests\/bulk-delete", \{method: "POST"/);
   assert.equal((client.match(/onDeleteRequest=\{deleteRequest\} onDeleteRequests=\{deleteRequestsBulk\}/g)||[]).length,2);

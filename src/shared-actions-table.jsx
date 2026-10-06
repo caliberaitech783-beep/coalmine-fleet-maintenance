@@ -19,7 +19,7 @@ const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && N
 const DESKTOP_TABLE_PAGE_SIZE = 100;
 const sharedTablePageSize = () => (typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0) || DESKTOP_TABLE_PAGE_SIZE;
 
-export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, defaultDateToday = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
+export default function SharedActionsTable({ onFilteredRows = null, toolbarAfterDate = null, toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, defaultDateToday = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -59,10 +59,10 @@ export default function SharedActionsTable({ toolbarAfterDate = null, toolbarAft
   const shiftColumn=columns.find(column=>column.key==='requestShift');
   if(shiftColumn)columns.splice(0,columns.length,shiftColumn,...columns.filter(column=>column!==shiftColumn));
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
 
-function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
+function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember applied columns per account/schema, independent of changing report titles.
   const allColumnKeys = useMemo(() => {
     const allColumnKeys = columns.map((column) => column.key);
@@ -147,6 +147,7 @@ function TableView({ sections, columns, toolbarAfterCount, toolbarAfterDate, gro
   const bodySelections = new Map([...availableBodySelections].map(([section, selected]) =>
     [section, activeSite ? selected.filter(row => isDataRow(row) && (activeBrand ? brandOf(row) === activeBrand : reportSite(row) === activeSite)) : selected]));
   const selectedRows = [...bodySelections.values()].flat().filter(isDataRow);
+  useEffect(() => { onFilteredRows?.(selectedRows); }, [onFilteredRows, selectedRows]);
   const summaryRegions = [...new Set(siteSummary.map(group => splitReportSite(group.label).region))];
   const reportTableRef = useRef(null);
   useEffect(() => { if (reportTableRef.current && groupBySite) reportTableRef.current.closest(".dashboard-asset-list")?.scrollTo({ top: 0, left: 0 }); }, [activeSite, groupBySite]);
