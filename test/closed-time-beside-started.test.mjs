@@ -55,7 +55,7 @@ test("every maintenance closed history view asks for the closing time beside Sta
   // Workspace "Closed history" tab (Maintenance, MIS and General users share the workflow table).
   assert.match(main, /tab === "history"[^\n]*<MobileWorkflowTable rows=\{historyRows\}[^\n]*showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\}[^\n]*closedTimeAfterStarted \{\.\.\.adminDeleteProps\} \/>/);
   // Production users see the breakdown table version of the same history.
-  assert.match(main, /tab === "history"[^\n]*<BreakdownTable rows=\{historyRows\}[^\n]*showClosedBy showBreakdownDays showClosedAt \/>/);
+  assert.match(main, /tab === "history"[^\n]*<BreakdownTable \{\.\.\.adminDeleteProps\} rows=\{historyRows\}[^\n]*showClosedBy showBreakdownDays showClosedAt \/>/);
   // Manager dashboard: the Closed history queue tab, the Completed card and the MIS Manager closed history drilldown.
   assert.match(main, /<BreakdownTable rows=\{visibleDetailRows\}[^>]*showClosedBy=\{queueTab==="history"\} showClosedAt=\{queueTab==="history"\}/);
   assert.match(main, /<BreakdownTable rows=\{managerRequestDrilldownRows\}[^\n]*showClosedAt=\{managerDrilldownAction\.key==="maintenance-completed"\}/);
