@@ -57,6 +57,7 @@ import EquipmentCombobox from "./equipment-combobox.jsx";
 import SearchableSelect from "./searchable-select.jsx";
 import {CDIR_MASTERS, CDIR_MASTER_FIELDS, isCdirMaster} from "../cdir-masters.mjs";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
+import VehicleHistoryScroll from "./vehicle-history-scroll.jsx";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import OemBreakdownChart from "./oem-breakdown-chart.jsx";
 import OemBreakdownDetails from "./oem-breakdown-details.jsx";
@@ -7248,6 +7249,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
   </section>;
 }
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", children }) {
+  const TableViewport = category === "vehicle-history" ? VehicleHistoryScroll : "div";
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [searchQuery, setSearchQuery] = useState(query);
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
@@ -7271,7 +7273,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
       {controls}
       {!children && showSearch && <div className="generated-report-search"><label><Search /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search this report" aria-label={`Search ${title}`} /></label><span>{rows.length.toLocaleString("en-IN")} record{rows.length === 1 ? "" : "s"}</span></div>}
       {children || (
-        <div className="reports-detail-table emptytable">
+        <TableViewport className="reports-detail-table emptytable">
           <ReportTable
             layoutKey={title}
             query={showSearch ? searchQuery : query}
@@ -7285,7 +7287,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
             toolbarTarget={tableToolbarTarget}
             toolbarPortal
           />
-        </div>
+        </TableViewport>
       )}
     </div>
   );
