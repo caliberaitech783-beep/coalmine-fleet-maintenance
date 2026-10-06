@@ -5,6 +5,10 @@ import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from '
 import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
+import {requestHistorySnapshotSql,requestHistoryTimelineSql} from './request-history-payload.mjs';
+import {retryDatabaseRead} from './database-read-retry.mjs';
+import {measureRequestHistoryPayload} from './request-history-diagnostics.mjs';
+import {applySchemaMigration} from './schema-migration.mjs';
 import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
 import {accountView,ACCOUNT_SECTIONS} from './iboss-accounts.mjs';
@@ -56,6 +60,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
+import {registerOemEmailAdmin} from './oem-email-admin.mjs';
 import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
 import {bdAgeingReportHandler} from './bd-ageing-report.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
@@ -424,7 +429,7 @@ async function publicWhatsAppSettings(){
 }
 
 async function migrate(){
-  await pool.query(`
+  await applySchemaMigration(pool,`
     CREATE TABLE IF NOT EXISTS maintenance_requests (
       id BIGSERIAL PRIMARY KEY,
       reference TEXT NOT NULL UNIQUE,
@@ -1084,9 +1089,7 @@ async function migrate(){
     $notification$;
     CREATE OR REPLACE TRIGGER crm_notification_inserted AFTER INSERT ON crm_notifications
       FOR EACH ROW EXECUTE FUNCTION signal_crm_notification();
-  `);
-  await repairLegacySessionDefaults(pool);
-  await initializeLoginHistory(pool);
+  `,[repairLegacySessionDefaults,initializeLoginHistory]);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -2846,6 +2849,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
 });
 
 registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView,locationName:userSessionLocationName});
+registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData:loadOemEmailData,scheduledJobsEnabled});
 app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
   try{
     await sessionStore.pruneExpired();
@@ -5791,7 +5795,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     // Subscribe before reading: an insert between the read and wait cannot be lost.
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
     const read=async()=>{
-      const {rows}=await pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
+      const {rows}=await retryDatabaseRead(()=>pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
         COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination','') AS site,
         COALESCE(r.door_number,transfer.record_data->>'door',transfer.record_data->>'equipment','') AS door,
         COALESCE(r.requester_role,'') AS "requesterRole",
@@ -5802,7 +5806,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
         LEFT JOIN crm_tickets t ON t.reference=n.ticket_reference
         LEFT JOIN master_records transfer ON transfer.master_name='Vehicle transfers'
           AND transfer.record_data->>'transferNo'=n.ticket_reference
-        WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]);
+        WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]));
       return rows;
     };
     let rows=await read();
@@ -5883,7 +5887,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestProjection=`archived_at AS "archivedAt", linked_request_references AS "linkedRequestReferences", issues, workflow_history AS "workflowHistory", to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
+const requestProjection=`archived_at AS "archivedAt", linked_request_references AS "linkedRequestReferences", issues, to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
@@ -6532,7 +6536,7 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
     if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request timelines.'});
     const reference=String(req.params.reference||'').trim();
-    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection},breakdown_reason_history AS "reasonHistory" FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1`,[reference]);
+    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection},${requestHistoryTimelineSql} AS "workflowHistory",breakdown_reason_history AS "reasonHistory" FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1`,[reference]);
     const request=rows[0];
     if(!request)return res.status(404).json({error:'Request not found.'});
     if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
@@ -6911,7 +6915,7 @@ app.patch('/api/requests/:reference/reopen-breakdown',requireSession,async(req,r
       const newer=await client.query(`SELECT reference FROM maintenance_requests WHERE archived_at IS NULL AND reference<>$1 AND created_at >= (SELECT created_at FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1)
         AND (($2<>'' AND lower(trim(door_number))=lower(trim($2))) OR ($3<>'' AND lower(trim(chassis_number))=lower(trim($3)))) LIMIT 1`,[reference,identity.door||'',identity.chassis||'']);
       if(newer.rowCount)throw Object.assign(new Error('A newer request exists for this vehicle. Additional review is required.'),{status:409});
-      await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests)-'workflow_history'-'first_trip_card_image'-'opening_meter_file'-'closing_meter_file'-'maintenance_audio'-'complaint_audio'-'complaint_media' || jsonb_build_object('time',NOW(),'action','Reopen breakdown','reason',$2::text,'actor',$3::text)) WHERE reference=$1`,[reference,reason,req.session.login]);
+      await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(${requestHistorySnapshotSql} || jsonb_build_object('time',NOW(),'action','Reopen breakdown','reason',$2::text,'actor',$3::text)) WHERE reference=$1`,[reference,reason,req.session.login]);
       const updated=await client.query(`UPDATE maintenance_requests SET status=CASE WHEN in_progress_at IS NOT NULL THEN 'In progress' ELSE 'Accepted' END,
         closed_at=NULL,closed_by=''
         WHERE reference=$1 RETURNING ${requestProjection}`,[reference]);
@@ -7077,7 +7081,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const issues=status==='Running BD'||before.issues?.length?resolveRequestIssues(before,req.body?.resolvedIssuesByReference?.[reference] ?? req.body?.resolvedIssues):[];
     if((ideal||status==='Closed')&&before.issues?.length&&hasOutstandingRequestIssues(issues))throw Object.assign(new Error('Resolve every outstanding issue before closing this ticket.'),{status:400});
     if(status==='Running BD'&&!hasOutstandingRequestIssues(issues))throw Object.assign(new Error('All issues are fixed. Use On road — maintenance completed.'),{status:400});
-    if(status==='Running BD'||before.issues?.length)await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(to_jsonb(maintenance_requests) - 'workflow_history' - 'first_trip_card_image' - 'opening_meter_file' - 'closing_meter_file' || jsonb_build_object('time',NOW())) WHERE reference=$1`,[reference]);
+    if(status==='Running BD'||before.issues?.length)await client.query(`UPDATE maintenance_requests SET workflow_history=workflow_history || jsonb_build_array(${requestHistorySnapshotSql} || jsonb_build_object('time',NOW())) WHERE reference=$1`,[reference]);
     const {rows}=ideal
       ? await client.query(`UPDATE maintenance_requests SET closed_at=$7,closed_by=$4,maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Closed',idle_reason=$3,delayed_reason=$8,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by='',vehicle_idle=TRUE
@@ -7219,14 +7223,14 @@ function administratorSession(session){
 
 // Removes requests together with everything that hangs off them (daily remarks
 // cascade; correction requests and WhatsApp dispatch records are removed here)
-// in one transaction. Verified requests are never removed; Idle requests only
+// in one transaction. Verified and Idle requests are removed only
 // for an Admin. Returns the removed rows (for the Audit Trail) and the skipped
 // references with the reason each one was kept.
 async function deleteMaintenanceRequests(references,{administrator=false}={}){
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    const {rows}=await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND reference=ANY($1::text[])`,[references]);
+    const {rows}=await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND reference=ANY($1::text[]) FOR UPDATE`,[references]);
     const byRef=new Map(rows.map(row=>[row.ref,row]));
     const skipped=[],eligible=[];
     for(const reference of references){
@@ -7237,7 +7241,7 @@ async function deleteMaintenanceRequests(references,{administrator=false}={}){
     if(eligible.length){
       await client.query(`DELETE FROM request_corrections WHERE request_reference=ANY($1::text[])`,[eligible]);
       await client.query(`DELETE FROM whatsapp_workflow_dispatches WHERE request_reference=ANY($1::text[])`,[eligible]);
-      const result=await client.query(`DELETE FROM maintenance_requests WHERE reference=ANY($1::text[]) AND verified_at IS NULL AND ($2::boolean OR status NOT IN ('Idle','Ideal')) RETURNING reference`,[eligible,administrator]);
+      const result=await client.query(`DELETE FROM maintenance_requests WHERE reference=ANY($1::text[]) AND ($2::boolean OR verified_at IS NULL) AND ($2::boolean OR status NOT IN ('Idle','Ideal')) RETURNING reference`,[eligible,administrator]);
       if(result.rowCount!==eligible.length)throw Object.assign(new Error('A request changed while it was being deleted. Refresh and try again.'),{status:409});
       deleted=eligible.map(ref=>byRef.get(ref));
     }
@@ -7258,12 +7262,11 @@ app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRe
 });
 
 // Admin / Super Admin only: remove several requests (for example demo or test
-// entries) from any stage before MIS verification in one go.
+// entries) from every operational stage, including verified history, in one go.
 app.post('/api/requests/bulk-delete',requireSession,requireAdministrator,async(req,res,next)=>{
   try{
     const references=normalizeDeletionReferences(req.body?.references);
     if(!references.length)return res.status(400).json({error:'Select at least one request to delete.'});
-    if(references.length>REQUEST_BULK_DELETE_LIMIT)return res.status(400).json({error:`Delete at most ${REQUEST_BULK_DELETE_LIMIT} requests at a time.`});
     const reason=String(req.body?.reason||req.get(AUDIT_REASON_HEADER)||'').trim();
     if(!reason)return res.status(400).json({error:'A deletion reason is required for the Audit Trail.'});
     const outcome=await deleteMaintenanceRequests(references,{administrator:true});
@@ -8352,6 +8355,7 @@ async function initializeDatabase(){
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
       const startupJobs=[
+        ()=>runAuditedBackendProcess({module:'Application performance',action:'Measure request history removed from polling feed'},()=>measureRequestHistoryPayload(pool)).catch(error=>console.error('Request history measurement failed.',error.message)),
         ()=>oracleConfigured&&runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers()).then(result=>console.log('Oracle request-driver sync completed.',result)).catch(error=>console.error('Oracle request-driver startup sync failed.',error)),
         ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports()).then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error)),
         ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports()).then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error)),
@@ -8375,18 +8379,19 @@ async function initializeDatabase(){
   }
 }
 
+async function loadOemEmailData(){
+  const [{rows:requests},{rows:masters}]=await Promise.all([
+    pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND oem_responsibility='OEM' AND status NOT IN ('Closed','Idle','Ideal')`),
+    pool.query("SELECT master_name,record_data FROM master_records WHERE master_name IN ('OEM master','Equipment master','Shift master')"),
+  ]);
+  const records=name=>masters.filter(row=>row.master_name===name).map(row=>row.record_data);
+  return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:records('Equipment master'),contacts:records('OEM master'),shifts:records('Shift master')};
+}
 void initializeDatabase();
 if(scheduledJobsEnabled){
   setStaggeredInterval(()=>{
     if(!databaseReady)return;
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:async()=>{
-      const [{rows:requests},{rows:masters}]=await Promise.all([
-        pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND oem_responsibility='OEM' AND status NOT IN ('Closed','Idle','Ideal')`),
-        pool.query("SELECT master_name,record_data FROM master_records WHERE master_name IN ('OEM master','Equipment master','Shift master')"),
-      ]);
-      const records=name=>masters.filter(row=>row.master_name===name).map(row=>row.record_data);
-      return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:records('Equipment master'),contacts:records('OEM master'),shifts:records('Shift master')};
-    }})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:loadOemEmailData})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
   },60*1000,29_000);
   const whatsappTemplateStatusTimer=setStaggeredInterval(()=>{
     if(databaseReady)void syncStandardWhatsAppTemplates().catch(error=>console.error('WhatsApp template status refresh failed.',error.message));

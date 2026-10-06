@@ -7,6 +7,7 @@ import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import * as timeline from '../request-timeline.mjs';
+import {requestHistorySnapshotSql,requestHistoryTimelineSql} from '../request-history-payload.mjs';
 import {validMeterReadings,validateClosingMeterReadings} from '../request-workflow.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
@@ -77,7 +78,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   const context={ maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
-    pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
+    pool:{query:client.query,connect:async()=>client},requestProjection:'*',requestHistorySnapshotSql,requestHistoryTimelineSql,canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
     validMeterReadings,validateClosingMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,approvedDelayedReason,
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
@@ -107,8 +108,8 @@ test('reason history appends server-side old/new values atomically, and scoped r
 
 test('Maintenance User API rejects incomplete opening and closing readings without committing',async()=>{
   for(const kind of ['edit','close']){
-    const app=harness(kind);
-    const response=await app.call(kind==='edit'?{openingMeterReadings:{HMR:'10'}}:{closingMeterReading:'',closingMeterReadings:{HMR:'20'}});
+    const app=harness(kind,{row:{...active,meterType:'KMR',meter_type:'KMR'}});
+    const response=await app.call(kind==='edit'?{meterType:'KMR',openingMeterReadings:{HMR:'10'}}:{meterType:'KMR',closingMeterReading:'',closingMeterReadings:{HMR:'20'}});
     assert.equal(response.status,400);
     assert.ok(app.queries.some(query=>query.sql==='ROLLBACK'));
     assert.ok(!app.queries.some(query=>query.sql==='COMMIT'));
@@ -292,4 +293,8 @@ test('timeline includes saved creator and scoped maintenance remarks without cha
   assert.equal(result.body.history.length,0);
   assert.deepEqual(app.saved,row);
   assert.equal(app.queries.every(({sql})=>sql.startsWith('SELECT ')),true);
+});
+
+test("Maintenance User equipment API accepts HMR without KMR at edit and close",async()=>{
+ for(const kind of ["edit","close"]){const app=harness(kind,{row:{...active,meterType:"HMR",openingMeterReadings:{HMR:"10",KMR:""}}});const response=await app.call({meterType:"HMR",openingMeterReadings:{HMR:"10"},closingMeterReadings:{HMR:"123"}});assert.equal(response.status,200);assert.ok(app.queries.some(query=>query.sql==="COMMIT"));}
 });

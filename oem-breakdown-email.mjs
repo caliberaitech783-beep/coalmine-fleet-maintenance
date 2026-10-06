@@ -7,15 +7,16 @@ import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {buildXlsxSheetsWorkbook} from './report-xlsx.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {equipmentGroupValue} from './equipment-group.mjs';
+import {ensureOemDeliveryDetails,safeOemRetry,safeOemError} from './oem-email-delivery-state.mjs';
 
 const clean=value=>String(value??'').trim();
 const key=value=>clean(value).toLowerCase();
 export const OEM_EMAIL_INTERVALS={L1:1,L2:3,L3:7,L4:10};
 export const OEM_TRIAL_CC=['anoop.p@cmll.in','stupalmoon2004@gmail.com'];
 // Explicitly authorized extra batch; expires at midnight IST and cannot recur.
-export const OEM_EXTRA_SEND_DAY='2026-10-05';
+export const OEM_EXTRA_SEND_DAY='2026-10-06';
 export function oemExtraSendDue(now=new Date()) {
-  return oemEmailDay(now)===OEM_EXTRA_SEND_DAY && new Date(now.getTime()+330*60000).getUTCHours()>=19;
+  return oemEmailDay(now)===OEM_EXTRA_SEND_DAY && new Date(now.getTime()+330*60000).getUTCHours()>=13;
 }
 export function oemEmailDay(now=new Date()) {return new Date(now.getTime()+330*60000).toISOString().slice(0,10);}
 export function oemEmailDue(level,activation,now=new Date()) {
@@ -59,7 +60,7 @@ export function oemEmailRows({requests=[],equipment=[],recipient}) {
 export function buildOemEmail({recipient,rows,shifts=[],now=new Date(),onTable,extraBatch=false}) {
   const days=OEM_EMAIL_INTERVALS[recipient.level];
   const label=days===1?'Daily Breakdown Report':`${days}-Day Breakdown ${recipient.level==='L2'?'Review':recipient.level==='L3'?'Escalation':'Management Review'}`;
-  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${extraBatch?'Additional 7 PM Breakdown Report':label} — ${oemEmailDay(now)}`;
+  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${extraBatch?'1 PM Test Breakdown Report':label} — ${oemEmailDay(now)}`;
   const actions={L1:'Please share the action taken, pending parts or support requirements, and expected restoration time.',L2:'Please coordinate pending service visits, parts availability and delays, and provide a case-wise action plan and expected restoration time.',L3:'Please arrange regional support and confirm responsible persons and target completion dates.',L4:'Please arrange management intervention where technical, parts or service support is needed and share a coordinated recovery plan.'};
   const headers=['Shift','Job Reference','Site','Door No','Model','BD Started','Days of BD','Reason of BD','Latest Update','Delay Reason','ETC'];
   const values=rows.map(row=>{
@@ -86,42 +87,46 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS trial_cc BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE oem_email_deliveries ADD COLUMN IF NOT EXISTS acknowledgement_status TEXT`);
     await client.query('INSERT INTO oem_email_schedule(id,activation_date) VALUES(1,$1) ON CONFLICT DO NOTHING',[oemEmailDay(now)]);
+    await ensureOemDeliveryDetails(client);
     const activation=(await client.query('SELECT activation_date FROM oem_email_schedule WHERE id=1')).rows[0].activation_date;
-    if(!oemEmailDue('L1',activation,now))return {skipped:true};
+    if(!oemEmailDue('L1',activation,now)&&!oemExtraSendDue(now))return {skipped:true};
     if(!mailer.transporter)throw new Error('OEM email schedule cannot send: SMTP is not configured');
     const data=await loadData();let sent=0,failed=0;
-    const batches=oemExtraSendDue(now)?['regular','extra-1900']:['regular'];
+    const batches=oemExtraSendDue(now)?['regular','test-1300']:['regular'];
     for(const batch of batches){
     for(const recipient of oemEmailRecipients(data.contacts)){
-      const extraBatch=batch==='extra-1900';
+      const extraBatch=batch==='test-1300';
       if(!extraBatch&&!oemEmailDue(recipient.level,activation,now))continue;
       const rows=oemEmailRows({...data,recipient});
-      if(extraBatch&&!rows.length)continue;
+      if(!rows.length)continue;
       // Keep regular delivery IDs intact; one independent claim per extra recipient/level.
-      const deliveryKey=extraBatch?`${recipient.recipientKey}:extra-1900`:recipient.recipientKey;
+      const deliveryKey=extraBatch?`${recipient.recipientKey}:test-1300`:recipient.recipientKey;
       const claim=await client.query(`INSERT INTO oem_email_deliveries(day,recipient_key,email,oem,level,status,case_count) VALUES($1,$2,$3,$4,$5,'Sending',$6) ON CONFLICT DO NOTHING RETURNING recipient_key`,[oemEmailDay(now),deliveryKey,recipient.email,recipient.oem,recipient.level,rows.length]);
       if(!claim.rowCount)continue;
       // Reserve before SMTP: crashes/ambiguous sends must never extend the three-email trial.
-      const trial=await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
-      const trialCc=trial.rows.length?OEM_TRIAL_CC:[];
+      const trial=extraBatch?{rows:[]}:await client.query('UPDATE oem_email_schedule SET trial_cc_used=trial_cc_used+1 WHERE id=1 AND trial_cc_used<3 RETURNING trial_cc_used');
+      const trialCc=extraBatch||trial.rows.length?OEM_TRIAL_CC:[];
       if(trialCc.length)await client.query('UPDATE oem_email_deliveries SET trial_cc=TRUE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey]);
-      let result,report;
+      let result,report,sendStarted=false;
       try{
         report=await buildOemEmailWithAttachments({recipient,rows,shifts:data.shifts,now,extraBatch});
+        await client.query('UPDATE oem_email_deliveries SET attachments=$3::jsonb,last_attempt_at=NOW(),retry_safe=FALSE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey,JSON.stringify(report.attachments.map(file=>({filename:file.filename,bytes:file.content.length})))]);
+        sendStarted=true;
         result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
         failed++;
         // Do not automatically resend ambiguous SMTP outcomes: delivery may already have occurred.
-        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,clean(error.message).slice(0,500)]);
+        await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,retry_safe=$4,last_attempt_at=NOW(),updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,safeOemError(error),safeOemRetry(error,sendStarted)]);
         continue;
       }
-      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,result.messageId||'']);sent++;
+      await client.query("UPDATE oem_email_deliveries SET status='SMTP accepted',message_id=$3,sent_at=NOW(),retry_safe=FALSE,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[oemEmailDay(now),deliveryKey,result.messageId||'']);sent++;
       if(trialCc.length){
         let acknowledgementStatus='SMTP accepted';
         try{
           const acknowledgement=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:trialCc,
             subject:`Sending confirmation — ${report.subject}`,
+            ...(result.messageId?{inReplyTo:result.messageId,references:result.messageId}:{}),
             attachments:report.attachments,
             text:`The mail server accepted the following OEM report for sending. This is not confirmation of inbox delivery or that the OEM has read it.\n\nFrom: ${mailer.config.user}\nTo: ${recipient.email}\nSubject: ${report.subject}\nMessage ID: ${result.messageId||'Not provided'}\nAccepted addresses: ${(result.accepted||[]).join(', ')}\nRejected addresses: ${(result.rejected||[]).join(', ')||'None'}\n\n${report.text}`});
           if(!trialCc.every(address=>acknowledgement.accepted?.some(value=>key(value)===address)))throw new Error('One or more confirmation recipients were not accepted by SMTP');

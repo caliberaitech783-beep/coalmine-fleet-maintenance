@@ -13,5 +13,5 @@ test('all manager closed histories enable completion details without changing ac
     assert.ok(source.includes(`workflowHeader("${key}", "Closing ${type}")`));
   }
   assert.ok(source.includes('text={r.maintenanceWork || "—"}'));
-  assert.equal(requestMeterReadingLabel({closingMeterReadings: {HMR: '0', KMR: '42000'}}, 'closing'), 'HMR 0 · KMR 42000');
+  assert.equal(requestMeterReadingLabel({meterType: "KMR", closingMeterReadings: {HMR: '0', KMR: '42000'}}, 'closing'), 'HMR 0 · KMR 42000');
 });

@@ -1,7 +1,7 @@
 // Which maintenance requests may be deleted, shared by the API and the
 // workspace tables so the Delete buttons and the server agree.
 //
-//   * Verified requests are never deleted.
+//   * Verified requests may only be deleted by an Admin or Super Admin.
 //   * Idle requests (awaiting on-road approval) may only be deleted by an Admin
 //     or Super Admin; Maintenance users keep their existing delete right for the
 //     other unverified stages (open, awaiting acceptance, in progress, closed
@@ -14,7 +14,7 @@ const text = (value) => String(value ?? "").trim();
 
 export function requestDeletionBlocker(request, { administrator = false } = {}) {
   if (!request || !text(request.ref || request.reference)) return "The request no longer exists.";
-  if (text(request.verifiedAt)) return "Verified requests cannot be deleted.";
+  if (text(request.verifiedAt) && !administrator) return "Verified requests cannot be deleted.";
   if (isIdleVehicleRequest(request) && !administrator) return "Idle requests can only be deleted by an Admin.";
   return null;
 }

@@ -8,7 +8,7 @@ const topbar=readFileSync(new URL('../src/topbar.css',import.meta.url),'utf8').r
 test('every backup page opens from the Administration menu, for Admin and Super Admin only',()=>{
   const nav=main.match(/const adminNav = \[[\s\S]*?\];/)[0];
   const entries=[...nav.matchAll(/\["([^"]+)", [A-Za-z0-9]+\]/g)].map(m=>m[1]);
-  assert.deepEqual(entries,['User Sessions','Access structure','Reporting structure','Print helper','Request corrections','Recovery guide','Backup','Export Backup','Import Backup','Backup Schedule','Audit Trail']);
+  assert.deepEqual(entries,['User Sessions','Access structure','Reporting structure','OEM Email Delivery Status','Print helper','Request corrections','Recovery guide','Backup','Export Backup','Import Backup','Backup Schedule','Audit Trail']);
 
   const pages=main.match(/const backupAdminPages = new Set\(\[([^\]]+)\]\)/)[1];
   for(const page of ['Backup','Export Backup','Import Backup','Backup Schedule']){
