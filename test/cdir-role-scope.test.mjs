@@ -80,9 +80,7 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.match(component,/accessRegions=\['WCL','NCL'\]/);
   assert.match(component,/headOffice[\s\S]*?corporateOffice[\s\S]*?accessRegions\.map/);
   assert.match(component,/primaryScopeOptions[\s\S]*?regionalSiteOptions/);
-  assert.match(component,/className="cdir-scope-sites"[\s\S]*?\{scopeRegion\} sites/);
   assert.match(component,/regionalSiteOptions\.map/);
-  assert.match(component,/accessRegions\.includes\(scopeRegion\)[\s\S]*?site\.group===scopeRegion/);
   assert.match(component,/const scopeRows=allRows/);
   assert.match(component,/const scopedSites=directory\?\.sites\|\|\[\]/);
   assert.match(component,/filters\.region===ALL\?officeSite\(site\):site\.group===filters\.region/);
