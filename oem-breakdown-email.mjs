@@ -16,7 +16,7 @@ export const OEM_TRIAL_CC=['anoop.p@cmll.in','stupalmoon2004@gmail.com'];
 // Explicitly authorized extra batch; expires at midnight IST and cannot recur.
 export const OEM_EXTRA_SEND_DAY='2026-10-06';
 export function oemExtraSendDue(now=new Date()) {
-  return oemEmailDay(now)===OEM_EXTRA_SEND_DAY && new Date(now.getTime()+330*60000).getUTCHours()>=11;
+  return oemEmailDay(now)===OEM_EXTRA_SEND_DAY && new Date(now.getTime()+330*60000).getUTCHours()>=13;
 }
 export function oemEmailDay(now=new Date()) {return new Date(now.getTime()+330*60000).toISOString().slice(0,10);}
 export function oemEmailDue(level,activation,now=new Date()) {
@@ -60,7 +60,7 @@ export function oemEmailRows({requests=[],equipment=[],recipient}) {
 export function buildOemEmail({recipient,rows,shifts=[],now=new Date(),onTable,extraBatch=false}) {
   const days=OEM_EMAIL_INTERVALS[recipient.level];
   const label=days===1?'Daily Breakdown Report':`${days}-Day Breakdown ${recipient.level==='L2'?'Review':recipient.level==='L3'?'Escalation':'Management Review'}`;
-  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${extraBatch?'11 AM Test Breakdown Report':label} — ${oemEmailDay(now)}`;
+  const subject=`[OEM BD | ${recipient.level}] ${recipient.oem} — ${extraBatch?'1 PM Test Breakdown Report':label} — ${oemEmailDay(now)}`;
   const actions={L1:'Please share the action taken, pending parts or support requirements, and expected restoration time.',L2:'Please coordinate pending service visits, parts availability and delays, and provide a case-wise action plan and expected restoration time.',L3:'Please arrange regional support and confirm responsible persons and target completion dates.',L4:'Please arrange management intervention where technical, parts or service support is needed and share a coordinated recovery plan.'};
   const headers=['Shift','Job Reference','Site','Door No','Model','BD Started','Days of BD','Reason of BD','Latest Update','Delay Reason','ETC'];
   const values=rows.map(row=>{
@@ -92,15 +92,15 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
     if(!oemEmailDue('L1',activation,now)&&!oemExtraSendDue(now))return {skipped:true};
     if(!mailer.transporter)throw new Error('OEM email schedule cannot send: SMTP is not configured');
     const data=await loadData();let sent=0,failed=0;
-    const batches=oemExtraSendDue(now)?['regular','test-1100']:['regular'];
+    const batches=oemExtraSendDue(now)?['regular','test-1300']:['regular'];
     for(const batch of batches){
     for(const recipient of oemEmailRecipients(data.contacts)){
-      const extraBatch=batch==='test-1100';
+      const extraBatch=batch==='test-1300';
       if(!extraBatch&&!oemEmailDue(recipient.level,activation,now))continue;
       const rows=oemEmailRows({...data,recipient});
       if(!rows.length)continue;
       // Keep regular delivery IDs intact; one independent claim per extra recipient/level.
-      const deliveryKey=extraBatch?`${recipient.recipientKey}:test-1100`:recipient.recipientKey;
+      const deliveryKey=extraBatch?`${recipient.recipientKey}:test-1300`:recipient.recipientKey;
       const claim=await client.query(`INSERT INTO oem_email_deliveries(day,recipient_key,email,oem,level,status,case_count) VALUES($1,$2,$3,$4,$5,'Sending',$6) ON CONFLICT DO NOTHING RETURNING recipient_key`,[oemEmailDay(now),deliveryKey,recipient.email,recipient.oem,recipient.level,rows.length]);
       if(!claim.rowCount)continue;
       // Reserve before SMTP: crashes/ambiguous sends must never extend the three-email trial.

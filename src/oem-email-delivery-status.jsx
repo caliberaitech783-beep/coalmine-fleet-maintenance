@@ -28,7 +28,7 @@ export default function OemEmailDeliveryStatus({session}) {
     <input type="search" aria-label="Search OEM email deliveries" placeholder="Search OEM, recipient, date or status" value={query} onChange={event=>setQuery(event.target.value)}/>
     <div style={{overflowX:'auto',marginTop:16}}><table><thead><tr>{['Scheduled (IST)','OEM / Level','Recipient','BD cases','Status','PDF / Excel','Last attempt (IST)','Accepted (IST)','Message ID','Acknowledgement','Error / Retry'].map(label=><th key={label}>{label}</th>)}</tr></thead>
       <tbody>{rows.map(row=><tr key={`${row.day}:${row.recipient_key}`}>
-        <td>{row.day} {row.recipient_key.includes(':test-1100')?'11:00 AM':row.recipient_key.includes(':extra-1900')?'7:00 PM':'5:00 PM'}</td>
+        <td>{row.day} {row.recipient_key.includes(':test-1300')?'1:00 PM':row.recipient_key.includes(':test-1100')?'11:00 AM':row.recipient_key.includes(':extra-1900')?'7:00 PM':'5:00 PM'}</td>
         <td>{row.oem} / {row.level}</td><td>{row.email}</td><td>{row.case_count}</td><td>{row.status}</td>
         <td>{row.attachments?.length?row.attachments.map(file=><div key={file.filename}>{file.filename} ({file.bytes} bytes)</div>):'Not recorded for this attempt'}</td>
         <td>{time(row.last_attempt_at)}</td><td>{time(row.sent_at)}</td><td>{row.message_id||'Not recorded'}</td><td>{row.acknowledgement_status||'Not recorded / not requested'}</td>

@@ -5,9 +5,10 @@ import {oemExtraSendDue} from '../oem-breakdown-email.mjs';
 import {readFile} from 'node:fs/promises';
 import {oemEmailDue,oemEmailRecipients,oemEmailRows,buildOemEmail,sendScheduledOemEmails,OEM_TRIAL_CC} from '../oem-breakdown-email.mjs';
 const contact={email:'person@example.com',oem:'Scania',level:'Level 1',location:'Sasti 2',contact:'Engineer'};
-test('extra batch opens only on October 6 at 11 AM IST and expires at midnight',()=>{
-  assert.equal(oemExtraSendDue(new Date('2026-10-06T05:29:59Z')),false);
-  assert.equal(oemExtraSendDue(new Date('2026-10-06T05:30:00Z')),true);
+test('extra batch opens only on October 6 at 1 PM IST and expires at midnight',()=>{
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T05:30:00Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T07:29:59Z')),false);
+  assert.equal(oemExtraSendDue(new Date('2026-10-06T07:30:00Z')),true);
   assert.equal(oemExtraSendDue(new Date('2026-10-06T18:29:59Z')),true);
   assert.equal(oemExtraSendDue(new Date('2026-10-06T18:30:00Z')),false);
   assert.equal(oemExtraSendDue(new Date('2026-10-05T13:30:00Z')),false);
@@ -25,7 +26,7 @@ test('Volvo Trucks includes Volvo tippers but never excavators, loaders, closed 
   assert.deepEqual(oemEmailRows({recipient,equipment,requests}).map(row=>row.door),['T1','T3']);
   assert.equal(oemEmailRows({recipient,equipment,requests:requests.map(row=>({...row,closedAt:'2026-10-05'}))}).length,0);
 });
-test('11 AM batch sends active cases once with threaded confirmations; regular 5 PM remains separate',async()=>{
+test('1 PM batch sends active cases once with threaded confirmations; regular 5 PM remains separate',async()=>{
   const claims=new Set(),messages=[];
   const client={release(){},async query(sql,args){
     if(sql.includes('pg_try'))return {rows:[{locked:true}]};
@@ -42,16 +43,18 @@ test('11 AM batch sends active cases once with threaded confirmations; regular 5
     requests:[{ref:'ACTIVE-1',door:'D1',site:'Sasti OC',status:'Accepted',oemResponsibility:'OEM'}],
   }),mailer:{config:{user:'sender@example.com'},transporter:{sendMail:async message=>{messages.push(message);return {accepted:Array.isArray(message.to)?message.to:[message.to],messageId:'test-id'};}}}};
   const run=timestamp=>sendScheduledOemEmails({...options,now:new Date(timestamp)});
-  await run('2026-10-06T05:29:59Z');assert.equal(messages.length,0);
-  await run('2026-10-06T05:30:00Z');assert.equal(messages.length,8);
+  await run('2026-10-06T05:30:00Z');assert.equal(messages.length,0);
+  await run('2026-10-06T07:29:59Z');assert.equal(messages.length,0);
+  await run('2026-10-06T07:30:00Z');assert.equal(messages.length,8);
+  assert.ok([...claims].every(id=>id.endsWith(':test-1300')));
   for(const message of messages){
-    assert.match(message.subject,/11 AM Test/);assert.match(message.text,/ACTIVE-1/);
+    assert.match(message.subject,/1 PM Test/);assert.match(message.text,/ACTIVE-1/);
     assert.equal(message.attachments.length,2);assert.notEqual(message.to,'empty@example.com');
     if(message.subject.startsWith('Sending confirmation')){
       assert.deepEqual(message.to,OEM_TRIAL_CC);assert.equal(message.inReplyTo,'test-id');assert.equal(message.references,'test-id');
     }
   }
-  await run('2026-10-06T06:00:00Z');assert.equal(messages.length,8);
+  await run('2026-10-06T08:00:00Z');assert.equal(messages.length,8);
   await run('2026-10-06T11:30:00Z');assert.equal(messages.length,9);
   await run('2026-10-06T13:30:00Z');assert.equal(messages.length,9);
   await run('2026-10-07T05:30:00Z');assert.equal(messages.length,9);
