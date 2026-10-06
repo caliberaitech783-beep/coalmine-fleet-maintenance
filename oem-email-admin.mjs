@@ -3,6 +3,7 @@ import {ensureOemDeliveryDetails,safeOemError,safeOemRetry} from './oem-email-de
 import {oemEmailRecipients,oemEmailRows,buildOemEmailWithAttachments,OEM_TRIAL_CC} from './oem-breakdown-email.mjs';
 
 export function registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData,scheduledJobsEnabled,mailerFactory=createTicketMailer}) {
+  // Deliberately use full Admin guards, never the User Sessions read-only exception.
   app.get('/api/oem-email-deliveries',requireSuper,requireAdministrator,async(req,res,next)=>{
     try {
       const mailer=mailerFactory();

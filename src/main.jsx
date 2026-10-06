@@ -429,10 +429,10 @@ const nav = [
 // Administration menu (Admin and Super Admin). The four backup pages live here
 // beside the Recovery guide rather than in a header menu of their own.
 const adminNav = [
-  ["OEM Email Delivery Status", MessageCircle],
   ["User Sessions", UserRound],
   ["Access structure", Users],
   ["Reporting structure", Building2],
+  ["OEM Email Delivery Status", MessageCircle],
   ["Print helper", Printer],
   ["Request corrections", Pencil],
   ["Recovery guide", LifeBuoy],
