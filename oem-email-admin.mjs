@@ -38,6 +38,7 @@ export function registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrato
       if(!locked)return res.status(409).json({error:'Another OEM send is in progress. Try again after it finishes.'});
       await ensureOemDeliveryDetails(client);
       const row=(await client.query('SELECT * FROM oem_email_deliveries WHERE day=$1 AND recipient_key=$2',[day,recipientKey])).rows[0];
+      // Older attempts default to retry_safe=false: never guess their delivery outcome.
       if(!row||row.status!=='Failed / review required'||!row.retry_safe||row.message_id)
         return res.status(409).json({error:'Retry is blocked: this email may already have been accepted, or the failure needs manual review.'});
       const data=await loadData();
