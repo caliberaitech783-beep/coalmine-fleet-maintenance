@@ -5,6 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { transformWithOxc } from "vite";
 import { isSessionViewOnlyUser } from "../user-session-access.mjs";
+import { canViewBdAgeingReport } from "../bd-ageing-report.mjs";
 import { ibossAccountsAllowed } from "../iboss-access.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -31,18 +32,25 @@ function harness(initialWidth) {
   const scope = {document: {getElementById:()=>null,addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
     masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
-    reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser,
+    reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser, canViewBdAgeingReport,
     profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(), databaseToolPages: new Set(),
     ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon", "FileBarChart", "Landmark"].map(name => [name, Null])),
   };
   const Side = new Function(...Object.keys(scope), `${code}; return Side;`)(...Object.values(scope));
   return {
-    render(open) {cursor = 0; return Side({active: "Dashboard", open, session: {name: "Fixture"}, setActive() {}, logout() {}});},
+    render(open,session = {name: "Fixture"}) {cursor = 0; return Side({active: "Dashboard", open, session, setActive() {}, logout() {}});},
     mountEffects() {const current = effects.splice(0); current.forEach(effect => effect());},
     dispatch(type, event) {listeners.get(type)?.(event);},
     resize(nextWidth) {width = nextWidth; for (const query of queries.values()) [...query.callbacks].forEach(callback => callback());},
   };
 }
+
+test('BD Ageing navigation is restricted to exact allowed accounts, including on mobile',()=>{
+  for (const width of [390,1920]) {
+    for (const login of ['MOHITCHADDA','MANISHCHADDA','RAHULCHADDA','THAKUR@1990']) assert.match(renderToStaticMarkup(harness(width).render(true,{login})),/BD Ageing Report/);
+    assert.doesNotMatch(renderToStaticMarkup(harness(width).render(true,{login:'admin',role:'super',name:'MOHITCHADDA'})),/BD Ageing Report/);
+  }
+});
 
 test("closed offscreen navigation is inert and hidden from assistive technology at tablet/mobile widths", () => {
   for (const width of [390, 900, 1024, 1250]) {

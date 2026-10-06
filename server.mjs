@@ -57,6 +57,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
 import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
+import {bdAgeingReportHandler} from './bd-ageing-report.mjs';
 import {backupDiagnostic,deliveryDiagnostic,diagnosticState,formatBytes,runDiagnostics} from './system-diagnostics.mjs';
 import {HOUSEKEEPING_CATEGORIES,housekeepingCategory,purgeRequestError} from './data-housekeeping.mjs';
 import {PURGEABLE_TABLES,deadRowShare,diskState,sharePercent,tableLabel} from './storage-management.mjs';
@@ -6107,6 +6108,16 @@ app.use('/api/requests/:reference',requireSession,async(req,res,next)=>{
     next();
   }catch(error){next(error);}
 });
+
+app.get('/api/reports/bd-ageing',requireSession,bdAgeingReportHandler({
+  loadRequests:async(session)=>{
+    const authorization=await currentDashboardAuthorization(session);
+    if(!authorization)throw Object.assign(new Error('This user account no longer exists. Please sign in again.'),{status:401});
+    const scope=infoPulseRequestScope(authorization.session,authorization.user);
+    const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);
+    return {requests:requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session),scope};
+  },
+}));
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{

@@ -18,6 +18,8 @@ import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRan
 import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, parseFilterValues, toggleFilterValue } from "./multi-value-filter.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import {canViewUserSessions,isSessionViewOnlyUser} from "../user-session-access.mjs";
+import {canViewBdAgeingReport} from "../bd-ageing-report.mjs";
+import BdAgeingReport from "./bd-ageing-report.jsx";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
@@ -1095,7 +1097,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
+  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
   const canViewReports = visibleReportNav.length > 0;
   const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
@@ -7299,7 +7301,11 @@ function withTimelineLinks(columns, token) {
     return column;
   });
 }
-function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
+function ReportsPage(props) {
+  if (props.activeReportCategory === 'bd-ageing') return <BdAgeingReport key={props.session?.token} session={props.session} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.('general')} />;
+  return <StandardReportsPage {...props} />;
+}
+function StandardReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
   const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
@@ -7773,6 +7779,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
+          {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
           {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
           <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!accessibleReportGroups.length}><Download /> Download reports ZIP</button>
