@@ -22,9 +22,11 @@ test('Bridge requires service authentication and validates current account state
   assert.equal((await request('authenticate',{username:'TENDERTEST',password:'wrong-password'})).status,401);
   const login=await request('authenticate',{username:'TENDERTEST',password:'test-password'});assert.equal(login.status,200);
   const session={id:'42',credentialVersion:login.data.credentialVersion};
+  const directory=await request('directory',{});assert.equal(directory.status,200);assert.equal(directory.data[0].id,'42');assert.equal(directory.data[0].credentialVersion,undefined);assert.equal(directory.data[0].passwordHash,undefined);
   assert.equal((await request('validate',session)).status,200);
   current.record_data.tenderRoles='Technical';assert.deepEqual((await request('validate',session)).data.roles,['Technical']);
   current.record_data.tenderAccess=false;assert.equal((await request('validate',session)).status,403);
+  assert.deepEqual((await request('directory',{})).data,[]);
   current.record_data.tenderAccess=true;current.record_data.passwordHash=hashPassword('changed-password');assert.equal((await request('validate',session)).status,401);
   current=null;assert.equal((await request('validate',session)).status,403);
  }finally{await new Promise(resolve=>server.close(resolve));}

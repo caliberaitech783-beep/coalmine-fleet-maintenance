@@ -16,6 +16,8 @@ export function installTenderIdentity(app,pool,env=process.env){
   res.set('Cache-Control','no-store');
   const supplied=Buffer.from(String(req.headers.authorization||'')),expected=Buffer.from(`Bearer ${key}`);
   if(key.length<32||supplied.length!==expected.length||!timingSafeEqual(supplied,expected))return res.status(401).json({error:'Integration authentication required.'});
+  // Validation and directory requests run frequently; they are not user edits.
+  if(req.params.action!=='authenticate')req.audit=false;
   try{
    if(!['authenticate','validate','directory'].includes(req.params.action))return res.sendStatus(404);
    if(req.params.action==='directory'){
@@ -39,6 +41,7 @@ export function installTenderIdentity(app,pool,env=process.env){
    const profile=tenderProfile(row,key);
    if(!profile)return res.status(403).json({error:'Tender access is not enabled for this BDMS account, or its password must be changed. Contact your BDMS administrator.'});
    if(req.params.action==='validate'&&profile.credentialVersion!==req.body.credentialVersion)return res.status(401).json({error:'Your BDMS credentials changed. Please sign in again.'});
+   if(req.params.action==='authenticate')req.audit={eventType:'Security',module:'Authentication',action:'Tender login',actorLogin:profile.login,actorName:profile.name,targetType:'User account',targetReference:profile.id,changedFields:[]};
    res.json(profile);
   }catch(error){next(error)}
  });
