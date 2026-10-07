@@ -37,7 +37,7 @@ test('edit saves responsibility atomically without changing request status', () 
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const route=source.slice(source.indexOf("app.patch('/api/requests/:reference',"),source.indexOf("app.patch('/api/requests/:reference/close',"));
   assert.ok(route.includes("!['OEM','NON OEM'].includes(oemResponsibility)"));
-  assert.ok(route.includes('oemResponsibility!==undefined&&!before.acceptedAt'));
+  assert.ok(route.includes("accepting&&!['OEM','NON OEM'].includes(oemResponsibility)"));
   assert.ok(route.includes('oem_responsibility=COALESCE($14::text,oem_responsibility)'));
   assert.ok(route.includes('revisingEtc,oemResponsibility??null'));
   assert.doesNotMatch(route,/SET status=|status=\$/);

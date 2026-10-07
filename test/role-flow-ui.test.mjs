@@ -1,4 +1,3 @@
-import {closeResponsibilityError} from '../close-responsibility.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {isIdleVehicleRequest} from '../request-idle.mjs';
@@ -55,7 +54,7 @@ function harness(name, extra = {}) {
     if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
     return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }];
   };
-  const scope = { closeResponsibilityError, isIdleVehicleRequest,
+  const scope = { isIdleVehicleRequest,
     ...requestEquipment,
     React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
@@ -335,7 +334,7 @@ test("every unaccepted request offers Accept vehicle, including legacy records w
     const saved = [];
     const tree = harness("RequestEditForm").render({request: {...accepted, acceptanceRequired, acceptedAt: ""}, close() {}, onSave(payload) { saved.push(payload); }});
     assert.ok(button(tree, "Accept vehicle"));
-    await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {category: "Breakdown", complaint: "Repair", expectedCompletionAt: "2026-09-08T18:30", openingHMRReading: ""}});
+    await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {oemResponsibility: "OEM", category: "Breakdown", complaint: "Repair", expectedCompletionAt: "2026-09-08T18:30", openingHMRReading: ""}});
     assert.equal(saved[0].acceptRequest, true);
   }
   const saved = [];

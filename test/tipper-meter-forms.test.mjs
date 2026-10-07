@@ -1,4 +1,3 @@
-import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
@@ -22,7 +21,7 @@ const snippet = source.slice(source.indexOf("function MeterReadingFields"), sour
 // Meter payload tests begin after the separately tested On road/Idle decision.
 const transformed = await transformWithOxc(snippet.replace('const idleDecision = useRef(false);','const idleDecision = useRef(true);'), "request-forms.jsx", {jsx: {runtime: "classic"}});
 const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseRequestForm};", {
-  React, closeResponsibilityError, ...equipment,
+  React, ...equipment,
   useState: value => [typeof value === "function" ? value() : value, () => {}],
   useRef: value => ({current: value}),
   useMemo: fn => fn(), useMasterRecords: () => [[]],
@@ -86,7 +85,7 @@ test("edit and close submissions send both readings and keep the legacy primary 
   for (const [name, stage] of [["RequestEditForm", "opening"], ["CloseRequestForm", "closing"]]) {
     let saved;
     const element = forms[name]({request: tipper, onSave: value => { saved = value; }});
-    await element.props.children.props.onSubmit({preventDefault() {}, currentTarget: {[`${stage}HMRReading`]: "12.25", [`${stage}KMRReading`]: "1001"}});
+    await element.props.children.props.onSubmit({preventDefault() {}, currentTarget: {oemResponsibility: "OEM", [`${stage}HMRReading`]: "12.25", [`${stage}KMRReading`]: "1001"}});
     assert.deepEqual(saved[`${stage}MeterReadings`], {HMR: "12.25", KMR: "1001"});
     assert.equal(saved[`${stage}MeterReading`], "1001");
     assert.equal(saved[`${stage}MeterFile`], "", "an existing file does not require another upload");
@@ -101,7 +100,7 @@ async function runRoute(action, body) {
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
   const linkedSelection=server.slice(server.indexOf('async function withLinkedMaintenanceSelection('),server.indexOf("app.post('/api/requests/:reference/daily-remarks'"));
   evaluate(linkedSelection+route, {
-    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,closeResponsibilityError,
+    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {

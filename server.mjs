@@ -1,6 +1,5 @@
 import {installTenderIdentity} from './tender-identity.mjs';
 import {accountPageNumber} from './iboss-account-pages.mjs';
-import {closeResponsibilityError} from './close-responsibility.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {canReopenBreakdown,reopenBreakdownError} from './reopen-breakdown.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
@@ -6978,14 +6977,14 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
       normalizedOpeningMeterReading=String(openingMeterReadings[normalizedMeterType] ?? before.openingMeterReadings?.[normalizedMeterType] ?? (before.meterType===normalizedMeterType?before.openingMeterReading:'') ?? '').trim();
     }
     requireMaintenanceMeters(req.session,before,{...req.body,openingMeterReadings:{...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}},['opening']);
-    if(oemResponsibility!==undefined&&!before.acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
+    const accepting=!before.acceptedAt&&(before.acceptanceRequired||explicitAcceptance);
+    if(accepting&&!['OEM','NON OEM'].includes(oemResponsibility))throw Object.assign(new Error('Select OEM or NON OEM before accepting the vehicle.'),{status:400});
     if(oemResponsibility!==undefined&&before.oemResponsibility&&before.oemResponsibility!==oemResponsibility&&!canEditBreakdownResponsibility(req.session))throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
     if(oemResponsibility!==undefined&&(req.body.previousResponsibility!==undefined||(before.oemResponsibility&&before.oemResponsibility!==oemResponsibility))&&req.body.previousResponsibility!==(before.oemResponsibility||''))throw Object.assign(new Error('Breakdown responsibility has changed. Refresh and review before saving.'),{status:409});
     const previousExpectedAt=parseRequestTimelineTimestamp(before.expectedCompletionAt);
     const nextExpectedAt=parseRequestTimelineTimestamp(expectedAt);
     const revisingEtc=Boolean(previousExpectedAt&&nextExpectedAt&&previousExpectedAt.getTime()!==nextExpectedAt.getTime());
     if(revisingEtc&&before.expectedCompletionChangedAt)throw etcChangeLimitError();
-    const accepting=!before.acceptedAt&&(before.acceptanceRequired||explicitAcceptance);
     validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
@@ -7044,8 +7043,6 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
-    const responsibilityError=closeResponsibilityError(before,status,ideal);
-    if(responsibilityError)throw Object.assign(new Error(responsibilityError),{status:400});
     // Each visit keeps its own opening evidence; only the on-road evidence is shared.
     const openingMeterReadings=reference===primaryReference ? (req.body?.openingMeterReadings??{}) : (before.openingMeterReadings||{});
     const openingMeterReading=reference===primaryReference ? String(req.body?.openingMeterReading||'').trim() : '';

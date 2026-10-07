@@ -1,4 +1,3 @@
-import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -71,7 +70,7 @@ function harness(name, extra = {}) {
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
-  const scope = { closeResponsibilityError, isIdleVehicleRequest,requestStatusLabel,
+  const scope = { isIdleVehicleRequest,requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,
@@ -321,9 +320,24 @@ for (const category of ["OTHERS", "Other", "AC SYSTEM", "Breakdown"]) test(`acce
   assert.equal(field(tree, "category").props.value, category);
   tree = app.render({...props, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "PREVENTIVE"}]});
   assert.ok(all(tree, node => node.type === "option" && node.props.value === category).length);
-  await submit(tree, submitValues({category: "PREVENTIVE"}));
+  await submit(tree, submitValues({category: "PREVENTIVE", oemResponsibility: "OEM"}));
   assert.equal(saved.length, 1);
   assert.equal(saved[0].category, category);
+});
+
+test("acceptance requires an explicit OEM or NON OEM choice", async () => {
+  const app=harness("RequestEditForm"), saved=[];
+  const props={...editProps({acceptedAt:null,oemResponsibility:''}),onSave:async value=>saved.push(value)};
+  let tree=app.render(props);
+  assert.equal(field(tree,'oemResponsibility').props.required,true);
+  await submit(tree,submitValues());
+  assert.equal(saved.length,0);
+  assert.match(alerts(app.render()),/Select OEM or NON OEM/);
+  for(const value of ['OEM','NON OEM']){
+    await submit(app.render(),submitValues({oemResponsibility:value}));
+    assert.equal(saved.at(-1).oemResponsibility,value);
+    assert.equal(saved.at(-1).acceptRequest,true);
+  }
 });
 
 test("intentional breakdown type changes survive master refresh and are saved", async () => {

@@ -58,8 +58,6 @@ export default function SharedActionsTable({ onFilteredRows = null, toolbarAfter
   if (columnTransform) columns.splice(0, columns.length, ...columnTransform(columns));
   const shiftColumn=columns.find(column=>column.key==='requestShift');
   if(shiftColumn)columns.splice(0,columns.length,shiftColumn,...columns.filter(column=>column!==shiftColumn));
-  const responsibilityColumn=columns.find(column=>column.key==='oemResponsibility');
-  if(responsibilityColumn){columns.splice(columns.indexOf(responsibilityColumn),1);columns.splice(shiftColumn?1:0,0,responsibilityColumn);}
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
@@ -72,8 +70,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   }, [columns]);
   const [storedVisible, setVisibleState] = useColumnPreferences("shared-table", columns);
   const visible = ensureJobReferenceVisibleKeys(storedVisible, columns);
-  const leadingCount=visible[0]==='requestShift'?(visible[1]==='oemResponsibility'?2:1):0;
-  const withNumberCell=(cells,number)=>[...cells.slice(0,leadingCount),number,...cells.slice(leadingCount)];
+  const withNumberCell=(cells,number)=>visible[0]==='requestShift'?[cells[0],number,...cells.slice(1)]:[number,...cells];
   const setVisible = (keys) => {
     const next = ensureJobReferenceVisibleKeys(keys, columns);
     setVisibleState(next);
@@ -197,8 +194,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
     const numberColumn = { key: SERIAL_COLUMN_KEY, label: SERIAL_COLUMN_LABEL, value: (row) => rowNumbers.get(row) };
     // Print can reuse the export model; decorate each distinct model just once.
     for (const data of new Set([exportData, printData, smartPrintData])) if (data) {
-      const leading=data.columns[0]?.key==='requestShift'?(data.columns[1]?.key==='oemResponsibility'?2:1):0;
-      data.columns = [...data.columns.slice(0,leading),numberColumn,...data.columns.slice(leading)];
+      data.columns = data.columns[0]?.key==='requestShift'?[data.columns[0],numberColumn,...data.columns.slice(1)]:[numberColumn, ...data.columns];
       data.rows = numberedRows;
     }
   }

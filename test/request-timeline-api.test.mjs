@@ -1,4 +1,3 @@
-import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestsWithDoorNumbers} from '../equipment-door.mjs';
@@ -76,7 +75,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     else if(!sql.includes('SET breakdown_reason_history=')) saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={ maintenanceMetersRequired,requireMaintenanceMeters,closeResponsibilityError,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={ maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',requestHistorySnapshotSql,requestHistoryTimelineSql,canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
@@ -88,21 +87,33 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   const remarksHelper=slice('async function attachDailyRemarks(', 'async function requestWorkflowWhatsAppLogins(');
   runInNewContext(`${remarksHelper}\n${common}\n${routes[kind]||''}`,context);
   return {queries,get saved(){return saved;},get audits(){return audits;},get released(){return released;},async call(body={}){
-    const req={session,params:{reference:'REQ-TIMELINE'},body:{openingMeterReadings:{HMR:'10',KMR:'20'},closingMeterReadings:{HMR:'123',KMR:'123'},complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
+    const req={session,params:{reference:'REQ-TIMELINE'},body:{...(kind==='edit'&&!saved.acceptedAt?{oemResponsibility:'OEM'}:{}),openingMeterReadings:{HMR:'10',KMR:'20'},closingMeterReadings:{HMR:'123',KMR:'123'},complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
     const res={statusCode:200,headers:{},set(key,value){this.headers[key]=value;},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
     for(const handler of registered){let next=false,error;await handler(req,res,value=>{next=true;error=value;});if(error)throw error;if(!next)break;}
     return {status:res.statusCode,body:res.body,headers:res.headers};
   }};
 }
 
-test('closure rejects missing responsibility before any write, even when supplied only in the close payload',async()=>{
-  const app=harness('close',{row:{...active,oemResponsibility:''}});
-  const response=await app.call({oemResponsibility:'OEM'});
+test('acceptance rejects missing responsibility before any write',async()=>{
+  const app=harness('edit',{row:{...active,acceptedAt:null,oemResponsibility:''}});
+  const response=await app.call({oemResponsibility:undefined});
   assert.equal(response.status,400);
-  assert.match(response.body.error,/Select and save OEM or NON OEM/);
+  assert.match(response.body.error,/Select OEM or NON OEM before accepting/);
   assert.equal(app.queries.filter(({sql})=>/^(UPDATE|INSERT)/.test(sql)).length,0);
   assert.equal(app.saved.status,active.status);
   assert.ok(app.released);
+});
+
+test('both responsibility choices are saved in the acceptance update; closure no longer requires one',async()=>{
+  for(const value of ['OEM','NON OEM']){
+    const app=harness('edit',{row:{...active,acceptedAt:null,oemResponsibility:''}});
+    assert.equal((await app.call({oemResponsibility:value})).status,200);
+    const write=app.queries.find(({sql})=>sql.includes('SET category='));
+    assert.equal(write.args[13],value);
+    assert.ok(app.saved.acceptedAt);
+  }
+  const app=harness('close',{row:{...active,oemResponsibility:''}});
+  assert.equal((await app.call()).status,200);
 });
 
 test('reason history appends server-side old/new values atomically, and scoped reads expose it',async()=>{

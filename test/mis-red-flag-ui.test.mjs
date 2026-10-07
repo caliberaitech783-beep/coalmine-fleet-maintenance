@@ -328,7 +328,7 @@ test('crossing one hour while editing blocks acceptance and retains draft fields
   let tree=app.render('ActualRequestEditForm',props);
   children(tree,node=>node.type==='input'&&node.props.name==='openingMeterFile')[0].props.onChange({target:{files:[{name:'meter.jpg',size:10,evidence:'saved-evidence'}]}});
   tree=app.render('ActualRequestEditForm',props);
-  const formValues={category:'Breakdown',complaint:'Draft repair details',expectedCompletionAt:'2026-09-09T12:00',openingMeterReading:'42'};
+  const formValues={oemResponsibility:'OEM',category:'Breakdown',complaint:'Draft repair details',expectedCompletionAt:'2026-09-09T12:00',openingMeterReading:'42'};
   now+=2*60*1000;
   await find(tree,'form').props.onSubmit({preventDefault(){},currentTarget:formValues});
   assert.equal(saves.length,0);
