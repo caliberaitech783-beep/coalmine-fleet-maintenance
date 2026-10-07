@@ -54,7 +54,9 @@ function harness(name, extra = {}) {
     if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
     return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }];
   };
-  const scope = { isIdleVehicleRequest,
+  const scope = {
+    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
+    closeResponsibilityError:()=>'', isIdleVehicleRequest,
     ...requestEquipment,
     React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],

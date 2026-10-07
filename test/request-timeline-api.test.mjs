@@ -75,7 +75,9 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     else if(!sql.includes('SET breakdown_reason_history=')) saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={ maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={
+    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
+    closeResponsibilityError:()=>'', maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',requestHistorySnapshotSql,requestHistoryTimelineSql,canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,

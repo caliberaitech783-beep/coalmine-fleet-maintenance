@@ -66,6 +66,8 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   };
   const register=(_path,...handlers)=>{chain=handlers;};
   const context={
+    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
+    closeResponsibilityError:()=>'',
     ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,

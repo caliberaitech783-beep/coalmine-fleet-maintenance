@@ -15,7 +15,7 @@ import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from 
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
-const evaluate = (code, dependencies) => new Function("DateInput", "isIdleVehicleRequest", ...Object.keys(dependencies), code)(DateInput, isIdleVehicleRequest, ...Object.values(dependencies));
+const evaluate = (code, dependencies) => new Function("closeResponsibilityError", "DateInput", "isIdleVehicleRequest", ...Object.keys(dependencies), code)(()=>'', DateInput, isIdleVehicleRequest, ...Object.values(dependencies));
 const tipper = {ref: "REQ-T1", equipmentGroup: "TIPPERS", meterType: "KMR", door: "T1", chassis: "CH1", site: "Sasti OB", status: "In progress", openingMeterReading: "1000", openingMeterFileUploaded: true, category: "Breakdown"};
 const snippet = source.slice(source.indexOf("function MeterReadingFields"), source.indexOf("function VerifyRequestForm"));
 // Meter payload tests begin after the separately tested On road/Idle decision.
