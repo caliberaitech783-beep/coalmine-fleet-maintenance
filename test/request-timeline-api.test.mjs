@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestsWithDoorNumbers} from '../equipment-door.mjs';
@@ -23,7 +24,7 @@ const routes={
   verify:slice("app.patch('/api/requests/:reference/verify',","app.get('/api/requests/:reference/trip-card',"),
 };
 const now=new Date('2026-09-08T12:00:00Z');
-const active={ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),expectedCompletionChangedAt:null,closedAt:null,firstTripAt:null,verifiedAt:null,productionFirstTripAt:'2026-09-08 16:45:00',meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
+const active={oemResponsibility:'OEM',ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),expectedCompletionChangedAt:null,closedAt:null,firstTripAt:null,verifiedAt:null,productionFirstTripAt:'2026-09-08 16:45:00',meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
 const maintenance={role:'normal',assignedRole:'Maintenance User',name:'Fixture maintenance',login:'maintenance',permissions:{editRequests:true,closeRequests:true}};
 const mis={role:'normal',assignedRole:'MIS User',name:'Fixture MIS',login:'mis',permissions:{verifyRequests:true}};
 const current=row=>({...structuredClone(row),timelineRecordedAt:now});
@@ -75,9 +76,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     else if(!sql.includes('SET breakdown_reason_history=')) saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={
-    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
-    closeResponsibilityError:()=>'', maintenanceMetersRequired,requireMaintenanceMeters,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={ maintenanceMetersRequired,requireMaintenanceMeters,closeResponsibilityError,isIdleVehicleRequest,...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',requestHistorySnapshotSql,requestHistoryTimelineSql,canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,requestsWithDoorNumbers,
@@ -95,6 +94,16 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     return {status:res.statusCode,body:res.body,headers:res.headers};
   }};
 }
+
+test('closure rejects missing responsibility before any write, even when supplied only in the close payload',async()=>{
+  const app=harness('close',{row:{...active,oemResponsibility:''}});
+  const response=await app.call({oemResponsibility:'OEM'});
+  assert.equal(response.status,400);
+  assert.match(response.body.error,/Select and save OEM or NON OEM/);
+  assert.equal(app.queries.filter(({sql})=>/^(UPDATE|INSERT)/.test(sql)).length,0);
+  assert.equal(app.saved.status,active.status);
+  assert.ok(app.released);
+});
 
 test('reason history appends server-side old/new values atomically, and scoped reads expose it',async()=>{
   const app=harness('edit',{row:{...active,complaint:'Original reason'}});
