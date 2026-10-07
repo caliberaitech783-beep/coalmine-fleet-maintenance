@@ -1,5 +1,6 @@
 import {installTenderIdentity} from './tender-identity.mjs';
 import {accountPageNumber} from './iboss-account-pages.mjs';
+import {closeResponsibilityError} from './close-responsibility.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {canReopenBreakdown,reopenBreakdownError} from './reopen-breakdown.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
@@ -7043,6 +7044,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
+    const responsibilityError=closeResponsibilityError(before,status,ideal);
+    if(responsibilityError)throw Object.assign(new Error(responsibilityError),{status:400});
     // Each visit keeps its own opening evidence; only the on-road evidence is shared.
     const openingMeterReadings=reference===primaryReference ? (req.body?.openingMeterReadings??{}) : (before.openingMeterReadings||{});
     const openingMeterReading=reference===primaryReference ? String(req.body?.openingMeterReading||'').trim() : '';
