@@ -1,3 +1,4 @@
+import {TENDER_PERMISSION_OPTIONS,TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from '../tender-permissions.mjs';
 import { RequestDeleteReview } from "./workshop-selected-delete.jsx";
 import {ibossAccountsAllowed} from "../iboss-access.mjs";
 import OemEmailDeliveryStatus from './oem-email-delivery-status.jsx';
@@ -3143,22 +3144,24 @@ const masterFields = {
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
-const mobileUserRoleOptions = [...MOBILE_USER_ROLES,"Account User"];
+const mobileUserRoleOptions = [...MOBILE_USER_ROLES,"Account User", "Tender User"];
 const mobileRoleAuthority = {
+  "Tender User":"Tender login with custom menus, submenus and actions",
   "Production User": "Create request only",
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
   "General User": "Choose from all menus",
   "Account User": "Accounts workspace only",
+  "Tender User": "Tender login with menus and actions customised for this user",
 };
 const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
 const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
-const tenderRoleOptions = ["BD Executive","Bid Manager","Document Controller","Estimation","Technical","Legal","Finance / Treasury","BU Head","Bid Committee / Director","System Administrator"];
 const userPrivilegeFields = [
   ["tenderAccess","Tender application access","checkbox"],
-  ["tenderRoles","Tender roles","multi-checkbox"],
+  ["tenderDesktopAccess","Tender desktop menus","multi-checkbox"],
+  ["tenderMobileAccess","Tender mobile menus","multi-checkbox"],
   ["tenderBusinessUnit","Tender business unit"],
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
@@ -3194,7 +3197,8 @@ const operationalRequestOptions={
   "General User":["View requests","Closed history"],
 };
 const userAccessOptions = {
-  tenderRoles:tenderRoleOptions,
+  tenderDesktopAccess:TENDER_ALL_PERMISSIONS,
+  tenderMobileAccess:TENDER_ALL_PERMISSIONS,
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_DEFAULT_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
@@ -4350,16 +4354,16 @@ function AccessSelectAll({label,options=[],selected=[],onChange}){
   return <label className="access-select-all"><input ref={control} type="checkbox" checked={allSelected} onChange={(event)=>onChange(event.target.checked?[...options]:[])} /><span>{label}</span></label>;
 }
 
-function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false,managerRequestPrivileges=false}){
+function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false,managerRequestPrivileges=false,hasTender=false,onTenderToggle}){
   const prefix=view==="mobile"?"mobile":"";
   const keyFor=(field)=>prefix?mobileAccessKey(field):field;
   const requiredTabs=["CD",...(isManager?["Dashboard","Tickets"]:[])];
-  const shownTabs=[...new Set([...visibleTabs,...requiredTabs])];
+  const shownTabs=[...new Set([...visibleTabs.filter(tab=>tab!=="Tender"),...requiredTabs,...(hasTender?["Tender"]:[])])];
   const [submenuSelections,setSubmenuSelections]=useState(()=>Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field,options})=>{
     const saved=selectedAccessValues(record,keyFor(field),prefix?field:"").filter((option)=>options.includes(option));
     return [field,saved];
   })));
-  const toggleTab=(tab,checked)=>setVisibleTabs((current)=>checked?[...new Set([...current,tab])]:current.filter((item)=>item!==tab));
+  const toggleTab=(tab,checked)=>tab==="Tender"?onTenderToggle?.(checked):setVisibleTabs((current)=>checked?[...new Set([...current,tab])]:current.filter((item)=>item!==tab));
   const setSubmenu=(field,selection)=>setSubmenuSelections((current)=>({...current,[field]:selection}));
   const toggleSubmenu=(field,option,checked)=>setSubmenuSelections((current)=>({...current,[field]:checked?[...new Set([...(current[field]||[]),option])]:(current[field]||[]).filter((item)=>item!==option)}));
   return <section className={`view-menu-access full ${view}-view-access`}>
@@ -4368,8 +4372,9 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
     <fieldset className="user-access-field access-section-card">
       <legend>Selected menus</legend>
       {requiredTabs.map((tab)=><input key={tab} type="hidden" name={keyFor("tabAccess")} value={tab} />)}
-      <div><AccessSelectAll label="Select all menus" options={ADMIN_TAB_OPTIONS} selected={shownTabs} onChange={setVisibleTabs} />{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div>
+      <div><AccessSelectAll label="Select all menus" options={ADMIN_TAB_OPTIONS} selected={shownTabs} onChange={selection=>{setVisibleTabs(selection.filter(tab=>tab!=="Tender"));onTenderToggle?.(selection.includes("Tender"));}} />{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div>
     </fieldset>
+    {hasTender&&<TenderSubmenuFields record={record} view={view}/>}
     {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field),selected=submenuSelections[submenu.field]||[],options=userPermissionOptions(submenu),retained=retainedHiddenPermissions(submenu,selected);return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
       <legend>{tab} · Submenus</legend>
       {retained.map(option=><input key={option} type="hidden" name={field} value={option} />)}
@@ -4378,34 +4383,37 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
   </section>;
 }
 
-function OperationalViewMenuFields({record={},view="desktop",role=""}){
+function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=false,onTenderToggle}){
   const menuField=view==="mobile"?"mobileUserMenuAccess":"desktopUserMenuAccess";
   const requestField=view==="mobile"?"mobileUserRequestAccess":"desktopUserRequestAccess";
   const isGeneral = role === GENERAL_USER_ROLE;
   const roleRecord = privilegeSelectionValue(record.userGroup) === role ? record : {};
-  const menuOptions = role === "Account User" ? ["CD"] : isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
+  const menuOptions = [...new Set([...(role === "Tender User"||role === "Account User" ? ["CD"] : isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions),"Tender"])];
   const [menus,setMenus]=useState(() => [...new Set([...(isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalDefaultMenuOptions),"CD"])]);
+  const shownMenus=[...menus.filter(menu=>menu!=="Tender"&&menuOptions.includes(menu)),...(hasTender?["Tender"]:[])];
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
-    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><input type="hidden" name={menuField} value="CD"/><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={menus} onChange={(selection)=>setMenus([...new Set([...selection,"CD"])])} />{menuOptions.map((option)=>{const required=option==="CD";return <label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} disabled={required} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div></fieldset>
-    {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div><AccessSelectAll label="Select all submenus" options={requestOptions} selected={selectedRequests} onChange={setSelectedRequests} />{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} checked={selectedRequests.includes(option)} onChange={(event)=>toggleRequest(option,event.target.checked)}/><span>{option}</span></label>)}</div></fieldset>}
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><input type="hidden" name={menuField} value="CD"/><div><AccessSelectAll label="Select all menus" options={menuOptions} selected={shownMenus} onChange={(selection)=>{setMenus([...new Set([...selection,"CD"])]);onTenderToggle?.(selection.includes("Tender"));}} />{menuOptions.map((option)=>{const required=option==="CD";return <label key={option}><input type="checkbox" name={menuField} value={option} checked={shownMenus.includes(option)} disabled={required} onChange={(event)=>option==="Tender"?onTenderToggle?.(event.target.checked):setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{userMenuOptionLabel(option)}{required?" · Required":""}</span></label>})}</div></fieldset>
+    {hasTender&&<TenderSubmenuFields record={record} view={view}/>}
+    {shownMenus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div><AccessSelectAll label="Select all submenus" options={requestOptions} selected={selectedRequests} onChange={setSelectedRequests} />{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} checked={selectedRequests.includes(option)} onChange={(event)=>toggleRequest(option,event.target.checked)}/><span>{option}</span></label>)}</div></fieldset>}
   </section>;
 }
 
+function TenderSubmenuFields({record={},view}){const field=view==='mobile'?'tenderMobileAccess':'tenderDesktopAccess';const previouslyEnabled=assignedUserRoles(record).includes('Tender User')||isCheckedValue(record.tenderAccess);const [selected,setSelected]=useState(()=>previouslyEnabled&&Object.hasOwn(record,field)?normalizedTenderSelection(record[field]):[...TENDER_ALL_PERMISSIONS]);return <fieldset className="user-access-field access-section-card access-submenu-card"><legend>Tender · Menus and submenus</legend><input type="hidden" name={field} value=""/><div><AccessSelectAll label="Select all Tender permissions" options={TENDER_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{TENDER_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={field} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div>{view==='desktop'&&<label>Business unit scope (blank allows all)<input name="tenderBusinessUnit" defaultValue={record.tenderBusinessUnit||''}/></label>}</fieldset>;}
 function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
     : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
-  const [selectedRoles,setSelectedRoles]=useState(()=>assignedUserRoles(record));
+  const [selectedRoles,setSelectedRoles]=useState(()=>[...new Set([...assignedUserRoles(record),...(isCheckedValue(record.tenderAccess)?['Tender User']:[])])]);
   const [selectedAccounts,setSelectedAccounts]=useState(()=>accountPrivileges(record));
   const toggleRole=(role,checked)=>{
     const next=checked?[...new Set([...selectedRoles,role])]:selectedRoles.filter(value=>value!==role);
     setSelectedRoles(next);
-    if(roleSection==='team')setAccountRole(next.find(value=>value!=='Account User')||next[0]||'');
+    if(roleSection==='team')setAccountRole(next.find(value=>!['Account User','Tender User'].includes(value))||next[0]||'');
   };
   const [roleSection, setRoleSection] = useState(initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
@@ -4422,15 +4430,16 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
   const isSuperAdmin = isDesktopUser && userAuthority === "Super Admin";
   const isManager = isDesktopUser && userAuthority === "Manager";
   return <>
-    <input type="hidden" name="userRoles" value={(isDesktopUser?selectedRoles.filter(role=>role==='Account User'):selectedRoles).join(' | ')} />
+    <input type="hidden" name="userRoles" value={(isDesktopUser?selectedRoles.filter(role=>['Account User','Tender User'].includes(role)):selectedRoles).join(' | ')} />
+    <input type="checkbox" name="tenderAccess" checked={selectedRoles.includes('Tender User')} readOnly hidden />
     {!selectedRoles.includes('Account User')&&<input type="hidden" name="accountAccess" value={accountPrivileges(record).join(' | ')} />}
     <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole === "Account User" ? "Account User" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
       <legend>User role *</legend>
-      <p>Select one or more team roles, or configure an Admin / Non Admin account with optional Accounts access.</p>
+      <p>Select one or more team roles, or configure an Admin / Non Admin account with optional Accounts and Tender access.</p>
       <div className="role-category-tabs" role="tablist" aria-label="User category">
         <button type="button" role="tab" aria-selected={roleSection === "manager"} className={roleSection === "manager" ? "active" : ""} onClick={() => { setRoleSection("manager"); setAccountRole("User"); }}>Manager User</button>
-        <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); setAccountRole(selectedRoles.find(role=>role!=='Account User')||selectedRoles[0]||''); }}>Team User</button>
+        <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); setAccountRole(selectedRoles.find(role=>!['Account User','Tender User'].includes(role))||selectedRoles[0]||''); }}>Team User</button>
       </div>
       {roleSection === "manager" && <input type="hidden" name="userGroup" value="User" />}
       {roleSection === "team" && <input type="hidden" name="userGroup" value={accountRole} />}
@@ -4439,7 +4448,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         <span><b>{option}</b><small>{mobileRoleAuthority[option]}</small></span>
       </label>)}</div>}
     </fieldset>
-    {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspace</legend><label><input type="checkbox" checked={selectedRoles.includes('Account User')} onChange={event=>toggleRole('Account User',event.target.checked)} /> Account User</label></fieldset>}
+    {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
       <legend>User authority *</legend>
@@ -4479,27 +4488,26 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         </label>)}</div>
       </div>}
     </fieldset>}
-    {accountRole && !isDesktopUser && <UserSiteFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && accountRole!=="Tender User" && <UserSiteFields record={record} siteOptions={siteOptions} />}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
-      <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager managerRequestPrivileges={isManager} />
-      <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager managerRequestPrivileges={isManager} />
+      <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager managerRequestPrivileges={isManager} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)} />
+      <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager managerRequestPrivileges={isManager} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)} />
     </>}
     {accountRole && !isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === "Account User" ? "Directory is required for every account. Accounts remains this role’s only additional workspace." : accountRole === GENERAL_USER_ROLE ? "Directory is required. Select any additional menus this General User should see." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
-      <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
-      <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
+      <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
+      <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
     </>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
-    <section className="full user-access-field"><h3>Tender application</h3><p>Use this BDMS user name and password at tender.cmll.in. Access is denied unless enabled here with at least one Tender role.</p><label><input type="checkbox" name="tenderAccess" defaultChecked={isCheckedValue(record.tenderAccess)} /> Allow Tender login</label><fieldset><legend>Tender roles</legend>{tenderRoleOptions.map(role=><label key={role}><input type="checkbox" name="tenderRoles" value={role} defaultChecked={String(record.tenderRoles||'').split(/\s*[|,]\s*/).includes(role)} />{role}</label>)}</fieldset><label>Business unit scope (blank allows all business units)<input name="tenderBusinessUnit" defaultValue={record.tenderBusinessUnit||''} /></label></section>
+    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
 function applyUserRoleDefaults(record) {
   if(Object.hasOwn(record,'userRoles')){
     const selected=assignedUserRoles(record);
-    if(record.userGroup!=='User')record.userGroup=selected.find(role=>role!=='Account User')||selected[0]||'';
+    if(record.userGroup!=='User')record.userGroup=selected.find(role=>!['Account User','Tender User'].includes(role))||selected[0]||'';
     record.userRoles=selected.join(' | ');
   }
   const role = privilegeSelectionValue(record.userGroup);
@@ -4568,8 +4576,8 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(role === "Account User"){
-        record[menuField]="CD";record[requestField]="";
+      if(role === "Account User"||role === "Tender User"){
+        record[menuField]=assignedUserRoles(record).includes("Tender User")?"CD | Tender":"CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
         record[menuField]=generalUserMenuSelection(record,view).join(" | ");
         if(!Object.hasOwn(record,requestField))record[requestField]=operationalRequestOptions[role].join(" | ");
@@ -4578,7 +4586,7 @@ function applyUserRoleDefaults(record) {
         if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
       }
     }
-    if(role === GENERAL_USER_ROLE || role === "Account User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
+    if(role === GENERAL_USER_ROLE || role === "Account User" || role === "Tender User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
   }
   return record;
 }
@@ -4679,7 +4687,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       applyUserRoleDefaults(record);
       if(!record.userType){alert('Select at least one user role.');return;}
     }
-    if (name === "Users & employees" && record.userType === "Mobile User" && !record.site) {
+    if (name === "Users & employees" && record.userType === "Mobile User" && assignedUserRoles(record).some(role=>!["Tender User","Account User"].includes(role)) && !record.site) {
       alert("Select at least one site for this user.");
       return;
     }

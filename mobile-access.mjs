@@ -101,7 +101,7 @@ export function resolveMobileAccess({ user = {}, privilege = {}, portal, selecte
     return {sessionRole:'normal',userType:'Account User',assignedRole:'Account User',permissions:{ibossAccounts:true,accountAccess:accountPrivileges(user),desktopUserMenuAccess:['CD'],mobileUserMenuAccess:['CD'],readRequests:false,viewDashboardRequests:false,viewEquipment:false,createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false}};
   }
   if(Object.hasOwn(user,'userRoles')&&!String(user.userType||'').toLowerCase().includes('super')){
-    const fleetRoles=roles.filter(role=>role!=='Account User');
+    const fleetRoles=roles.filter(role=>!['Account User','Tender User'].includes(role));
     const chosen=selectedRole||fleetRoles[0];
     if(selectedRole&&!fleetRoles.includes(selectedRole))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};
     if(!chosen&&!hasAccountRole(user))return {sessionRole:'normal',userType:'',assignedRole:'',permissions:{}};

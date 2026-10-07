@@ -2227,7 +2227,7 @@ app.post('/api/login',async(req,res,next)=>{
     const login=String(employee.login||userLoginCandidates(employee)[0]||username).trim();
     const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),username]);
     const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
-    const fleetRoles=assignedUserRoles(employee).filter(role=>role!=='Account User');
+    const fleetRoles=assignedUserRoles(employee).filter(role=>!['Account User','Tender User'].includes(role));
     const desktopAccount=String(employee.userType||'').toLowerCase().includes('super');
     if(req.body.portal==='accounts'&&!hasAccountRole(employee))return res.status(403).json({error:'This ID is not assigned to Accounts. Select Fleet operations.'});
     if(req.body.portal!=='accounts'&&!desktopAccount&&fleetRoles.length>1&&!req.body.selectedRole)return res.json({requiresRoleSelection:true,roles:fleetRoles});

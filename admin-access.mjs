@@ -24,7 +24,8 @@ export const ADMIN_TAB_OPTIONS = [
   "Audit Trail",
   "Tickets",
 ];
-export const ADMIN_DEFAULT_TAB_OPTIONS = [...ADMIN_TAB_OPTIONS];
+ADMIN_TAB_OPTIONS.push("Tender");
+export const ADMIN_DEFAULT_TAB_OPTIONS = ADMIN_TAB_OPTIONS.filter(tab=>tab!=="Tender");
 export const ADMIN_REPORT_OPTIONS = [
   "Reports",
   "General Report",

@@ -1,3 +1,5 @@
+import {TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from './tender-permissions.mjs';
+import {assignedUserRoles} from './account-role-access.mjs';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
 import {loginRecordCandidates,userLoginCandidates} from './mobile-access.mjs';
@@ -6,9 +8,11 @@ export const TENDER_ROLES=['BD Executive','Bid Manager','Document Controller','E
 const enabled=v=>v===true||['true','yes','1'].includes(String(v).toLowerCase());
 export function tenderProfile(row,key){
  const u=row?.record_data||{};
- const roles=[...new Set((Array.isArray(u.tenderRoles)?u.tenderRoles:String(u.tenderRoles||'').split(/\s*[|,]\s*/)).filter(r=>TENDER_ROLES.includes(r)))];
- if(!row||!enabled(u.tenderAccess)||!roles.length||u.active===false||String(u.active).toLowerCase()==='false'||['inactive','disabled','terminated'].includes(String(u.status||'').toLowerCase())||u.mustChangePassword===true||!u.passwordHash)return null;
- return {id:String(row.id),login:String(u.login||userLoginCandidates(u)[0]||''),name:u.employee||u.name||u.login,email:u.mail||u.email||'',phone:u.phone||'',roles,businessUnit:String(u.tenderBusinessUnit||''),credentialVersion:createHmac('sha256',key).update(`${row.id}:${u.passwordHash}`).digest('hex')};
+ const tenderUser=assignedUserRoles(u).includes('Tender User');
+ const permissions=tenderUser?{desktop:Object.hasOwn(u,'tenderDesktopAccess')?normalizedTenderSelection(u.tenderDesktopAccess):[...TENDER_ALL_PERMISSIONS],mobile:Object.hasOwn(u,'tenderMobileAccess')?normalizedTenderSelection(u.tenderMobileAccess):[...TENDER_ALL_PERMISSIONS]}:null;
+ const roles=tenderUser?['System Administrator']:[...new Set((Array.isArray(u.tenderRoles)?u.tenderRoles:String(u.tenderRoles||'').split(/\s*[|,]\s*/)).filter(r=>TENDER_ROLES.includes(r)))];
+ if(!row||!(tenderUser||enabled(u.tenderAccess))||!roles.length||u.active===false||String(u.active).toLowerCase()==='false'||['inactive','disabled','terminated'].includes(String(u.status||'').toLowerCase())||u.mustChangePassword===true||!u.passwordHash)return null;
+ return {tenderPermissions:permissions,id:String(row.id),login:String(u.login||userLoginCandidates(u)[0]||''),name:u.employee||u.name||u.login,email:u.mail||u.email||'',phone:u.phone||'',roles,businessUnit:String(u.tenderBusinessUnit||''),credentialVersion:createHmac('sha256',key).update(`${row.id}:${u.passwordHash}`).digest('hex')};
 }
 export function installTenderIdentity(app,pool,env=process.env){
  const key=String(env.TENDER_IDENTITY_KEY||'');

@@ -3,8 +3,17 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import {hashPassword} from '../password-auth.mjs';
 import {installTenderIdentity,tenderProfile} from '../tender-identity.mjs';
+import {TENDER_ALL_PERMISSIONS} from '../tender-permissions.mjs';
 const key='test-only-integration-key-32-characters-minimum';
 const row={id:42,record_data:{login:'TENDERTEST',employee:'Tender Test',passwordHash:hashPassword('test-password'),tenderAccess:true,tenderRoles:'Bid Manager | Finance / Treasury'}};
+test('Tender User defaults to full access, with independent per-user and view selections',()=>{
+ const selected={...row,record_data:{...row.record_data,tenderAccess:false,userRoles:'Tender User'}};
+ const profile=tenderProfile(selected,key);assert.deepEqual(profile.tenderPermissions.desktop,TENDER_ALL_PERMISSIONS);assert.deepEqual(profile.tenderPermissions.mobile,TENDER_ALL_PERMISSIONS);
+ const customised=tenderProfile({...selected,record_data:{...selected.record_data,tenderDesktopAccess:'menu.pipeline | overview.read',tenderMobileAccess:''}},key);
+ assert.deepEqual(customised.tenderPermissions.desktop,['menu.pipeline','overview.read']);assert.deepEqual(customised.tenderPermissions.mobile,[]);
+ assert.deepEqual(tenderProfile(selected,key).tenderPermissions.desktop,TENDER_ALL_PERMISSIONS);
+ assert.equal(tenderProfile({...selected,record_data:{...selected.record_data,userRoles:'Production User',tenderAccess:false}},key),null);
+});
 test('Tender entitlement is explicit, never inherited from BDMS administration',()=>{
  assert.equal(tenderProfile({...row,record_data:{...row.record_data,tenderAccess:false,userType:'Super Admin'}},key),null);
  for(const override of [{tenderRoles:''},{active:false},{status:'Inactive'},{mustChangePassword:true},{passwordHash:''}])assert.equal(tenderProfile({...row,record_data:{...row.record_data,...override}},key),null);
