@@ -34,9 +34,9 @@ test('every lifecycle phase appears in the appropriate reports regardless of emp
   }
 });
 
-test('all 30 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
+test('all 31 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
   const tables=buildDirectorReportTables({requests,equipmentRecords:equipment,now});
-  assert.equal(tables.length,30);
+  assert.equal(tables.length,31);
   for(const table of tables){
     // The /api/exports/pdf route accepts up to 48 report columns (server.mjs).
     assert.ok(table.columns.length>0 && table.columns.length<=48,`${table.title}: ${table.columns.length} columns`);
