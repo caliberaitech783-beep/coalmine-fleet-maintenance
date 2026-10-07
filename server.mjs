@@ -1,3 +1,4 @@
+import {installTenderIdentity} from './tender-identity.mjs';
 import {accountPageNumber} from './iboss-account-pages.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {canReopenBreakdown,reopenBreakdownError} from './reopen-breakdown.mjs';
@@ -2196,6 +2197,8 @@ app.post('/api/logout',requireSession,async(req,res,next)=>{
     res.status(204).end();
   }catch(error){next(error)}
 });
+
+installTenderIdentity(app,pool);
 
 app.post('/api/login',async(req,res,next)=>{
   try{

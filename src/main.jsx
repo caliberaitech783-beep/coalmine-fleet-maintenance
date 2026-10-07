@@ -3155,7 +3155,11 @@ const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
 const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
+const tenderRoleOptions = ["BD Executive","Bid Manager","Document Controller","Estimation","Technical","Legal","Finance / Treasury","BU Head","Bid Committee / Director","System Administrator"];
 const userPrivilegeFields = [
+  ["tenderAccess","Tender application access","checkbox"],
+  ["tenderRoles","Tender roles","multi-checkbox"],
+  ["tenderBusinessUnit","Tender business unit"],
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
   ["managerRole", "Manager role", "multi-checkbox"],
@@ -3190,6 +3194,7 @@ const operationalRequestOptions={
   "General User":["View requests","Closed history"],
 };
 const userAccessOptions = {
+  tenderRoles:tenderRoleOptions,
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_DEFAULT_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
@@ -4333,7 +4338,7 @@ function parseCsv(text, fields) {
 function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   return <>
     <div className="user-privilege-heading full"><h3>Additional privileges</h3><p>Fine-tune the operational authorities for this user. Core access is assigned automatically from the selected role.</p></div>
-    {userPrivilegeFields.filter(([, , type]) => type === "checkbox").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
+    {userPrivilegeFields.filter(([key, , type]) => type === "checkbox" && key !== "tenderAccess").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
   </>;
 }
 
@@ -4487,6 +4492,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
     </>}
     {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    <section className="full user-access-field"><h3>Tender application</h3><p>Use this BDMS user name and password at tender.cmll.in. Access is denied unless enabled here with at least one Tender role.</p><label><input type="checkbox" name="tenderAccess" defaultChecked={isCheckedValue(record.tenderAccess)} /> Allow Tender login</label><fieldset><legend>Tender roles</legend>{tenderRoleOptions.map(role=><label key={role}><input type="checkbox" name="tenderRoles" value={role} defaultChecked={String(record.tenderRoles||'').split(/\s*[|,]\s*/).includes(role)} />{role}</label>)}</fieldset><label>Business unit scope (blank allows all business units)<input name="tenderBusinessUnit" defaultValue={record.tenderBusinessUnit||''} /></label></section>
   </>;
 }
 

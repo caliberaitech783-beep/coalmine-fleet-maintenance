@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import express from 'express';
+import {hashPassword} from '../password-auth.mjs';
+import {installTenderIdentity,tenderProfile} from '../tender-identity.mjs';
+const key='test-only-integration-key-32-characters-minimum';
+const row={id:42,record_data:{login:'TENDERTEST',employee:'Tender Test',passwordHash:hashPassword('test-password'),tenderAccess:true,tenderRoles:'Bid Manager | Finance / Treasury'}};
+test('Tender entitlement is explicit, never inherited from BDMS administration',()=>{
+ assert.equal(tenderProfile({...row,record_data:{...row.record_data,tenderAccess:false,userType:'Super Admin'}},key),null);
+ for(const override of [{tenderRoles:''},{active:false},{status:'Inactive'},{mustChangePassword:true},{passwordHash:''}])assert.equal(tenderProfile({...row,record_data:{...row.record_data,...override}},key),null);
+ const profile=tenderProfile(row,key);assert.equal(profile.id,'42');assert.deepEqual(profile.roles,['Bid Manager','Finance / Treasury']);assert.equal(profile.passwordHash,undefined);
+ assert.notEqual(profile.credentialVersion,tenderProfile({...row,record_data:{...row.record_data,passwordHash:hashPassword('changed-password')}},key).credentialVersion);
+});
+test('Bridge requires service authentication and validates current account state',async()=>{
+ let current=structuredClone(row);const app=express();app.use(express.json());
+ installTenderIdentity(app,{query:async()=>({rows:current?[current]:[]})},{TENDER_IDENTITY_KEY:key});
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ const base=`http://127.0.0.1:${server.address().port}/api/integrations/tender/`;
+ const request=async(action,body,auth=key)=>{const r=await fetch(base+action,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth}`},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
+ try{
+  assert.equal((await request('authenticate',{username:'TENDERTEST',password:'test-password'},'invalid')).status,401);
+  assert.equal((await request('authenticate',{username:'TENDERTEST',password:'wrong-password'})).status,401);
+  const login=await request('authenticate',{username:'TENDERTEST',password:'test-password'});assert.equal(login.status,200);
+  const session={id:'42',credentialVersion:login.data.credentialVersion};
+  assert.equal((await request('validate',session)).status,200);
+  current.record_data.tenderRoles='Technical';assert.deepEqual((await request('validate',session)).data.roles,['Technical']);
+  current.record_data.tenderAccess=false;assert.equal((await request('validate',session)).status,403);
+  current.record_data.tenderAccess=true;current.record_data.passwordHash=hashPassword('changed-password');assert.equal((await request('validate',session)).status,401);
+  current=null;assert.equal((await request('validate',session)).status,403);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
