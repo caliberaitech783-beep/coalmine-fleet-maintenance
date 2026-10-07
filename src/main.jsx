@@ -10278,7 +10278,10 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
       try {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        const meterType = requestMeterTypeForRequest(request, equipmentRecords);
+        // Verification does not change the request's saved primary meter type.
+        // The master can classify a tipper as Equipment (HMR), while the saved
+        // request uses KMR. Keep the legacy scalar tied to the server's type.
+        const meterType = ["HMR", "KMR"].includes(request.meterType) ? request.meterType : "HMR";
         await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripRemark: String(form.get("firstTripRemark") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
       } catch (error) {
         setFormError(error?.message || "Could not verify this request. Please try again.");
