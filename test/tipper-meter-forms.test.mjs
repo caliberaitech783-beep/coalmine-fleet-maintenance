@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
@@ -16,12 +17,12 @@ import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 const evaluate = (code, dependencies) => new Function("DateInput", "isIdleVehicleRequest", ...Object.keys(dependencies), code)(DateInput, isIdleVehicleRequest, ...Object.values(dependencies));
-const tipper = {ref: "REQ-T1", equipmentGroup: "TIPPERS", meterType: "KMR", door: "T1", chassis: "CH1", site: "Sasti OB", status: "In progress", openingMeterReading: "1000", openingMeterFileUploaded: true, category: "Breakdown"};
+const tipper = {oemResponsibility: "OEM", ref: "REQ-T1", equipmentGroup: "TIPPERS", meterType: "KMR", door: "T1", chassis: "CH1", site: "Sasti OB", status: "In progress", openingMeterReading: "1000", openingMeterFileUploaded: true, category: "Breakdown"};
 const snippet = source.slice(source.indexOf("function MeterReadingFields"), source.indexOf("function VerifyRequestForm"));
 // Meter payload tests begin after the separately tested On road/Idle decision.
 const transformed = await transformWithOxc(snippet.replace('const idleDecision = useRef(false);','const idleDecision = useRef(true);'), "request-forms.jsx", {jsx: {runtime: "classic"}});
 const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseRequestForm};", {
-  React, ...equipment,
+  React, closeResponsibilityError, ...equipment,
   useState: value => [typeof value === "function" ? value() : value, () => {}],
   useRef: value => ({current: value}),
   useMemo: fn => fn(), useMasterRecords: () => [[]],
@@ -100,7 +101,7 @@ async function runRoute(action, body) {
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
   const linkedSelection=server.slice(server.indexOf('async function withLinkedMaintenanceSelection('),server.indexOf("app.post('/api/requests/:reference/daily-remarks'"));
   evaluate(linkedSelection+route, {
-    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,
+    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,closeResponsibilityError,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {
@@ -131,7 +132,7 @@ async function runRoute(action, body) {
 }
 
 test("edit API persists both opening readings with one shared attachment", async () => {
-  const result = await runRoute("", {...tipper, complaint: "Noise", expectedCompletionAt: "2026-09-09T18:00", openingMeterReading: "1000", openingMeterReadings: {HMR: "12", KMR: "1000"}});
+  const result = await runRoute("", {...tipper, oemResponsibility: undefined, complaint: "Noise", expectedCompletionAt: "2026-09-09T18:00", openingMeterReading: "1000", openingMeterReadings: {HMR: "12", KMR: "1000"}});
   assert.equal(result.status, 200);
   assert.deepEqual(JSON.parse(result.writes[0].values[9]), {HMR: "12", KMR: "1000"});
   assert.match(result.writes[0].sql, /ELSE opening_meter_file END/);

@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from '../maintenance-meter-required.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
@@ -18,7 +19,7 @@ const routes={
   daily:server.slice(server.indexOf("app.post('/api/requests/:reference/daily-remarks',"),server.indexOf("app.patch('/api/requests/:reference/arrival-flag',")),
 };
 const now=Date.parse('2026-09-08T13:00:00Z');
-const waiting={ref:'REQ-GATE',site:'Sasti OB',status:'Open',acceptanceRequired:true,start:'2026-09-08T11:00:00Z',acceptedAt:null,arrivalFlaggedAt:null,arrivalFlagRemark:'',opening_meter_reading:'100',meter_type:'HMR',expected_completion_at:null};
+const waiting={oemResponsibility:'OEM',ref:'REQ-GATE',site:'Sasti OB',status:'Open',acceptanceRequired:true,start:'2026-09-08T11:00:00Z',acceptedAt:null,arrivalFlaggedAt:null,arrivalFlagRemark:'',opening_meter_reading:'100',meter_type:'HMR',expected_completion_at:null};
 const acceptedLate={...waiting,acceptedAt:'2026-09-08T12:00:01Z'};
 const allowed={role:'normal',assignedRole:'Maintenance User',name:'Maintenance inspector',permissions:{editRequests:true,closeRequests:true}};
 const active=row=>row&&!['Closed','Idle','Ideal'].includes(row.status)&&!row.verifiedAt;
@@ -66,7 +67,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   };
   const register=(_path,...handlers)=>{chain=handlers;};
   const context={
-    ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
+    ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,closeResponsibilityError,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',
