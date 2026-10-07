@@ -21,7 +21,7 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
     equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OC',make:'Komatsu'}],
     transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OC',destination:'Jayant OC',transferDate:'2026-09-01'}],
   });
-  assert.equal(tables.length,30);
+  assert.equal(tables.length,31);
   const summary=tables.find(table=>table.title==='Summary Report');
   assert.equal(summary.department,'General');
   assert.equal(summary.rows.length,1);

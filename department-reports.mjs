@@ -14,7 +14,8 @@ import {STAGE_TIMING_GAPS,STAGE_TIMING_TOTALS,stageTimingRow,stageGapLabel,slowe
 import {withBreakdownMeterColumns} from './breakdown-meter-columns.mjs';
 
 const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report', 'Request Stage Timing'];
-export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
+export const TOTAL_SUMMARY_REPORT_TITLE = 'Total Summary Report';
+export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6).flatMap(title => title === 'Summary Report' ? [title,TOTAL_SUMMARY_REPORT_TITLE] : [title]);
 export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
 // Availability, fleet, transfer and In/Out reports list assets or daily counts, not breakdown requests.
 const NON_BREAKDOWN_REPORTS = new Set([REPORT_TITLES[2], REPORT_TITLES[6], REPORT_TITLES[7], REPORT_TITLES[8]]);
@@ -188,6 +189,15 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       ref,
     ],requests,r => r.start || r.createdAt),
   ];
+  // Reuse the exact summary schema and date semantics; only widen its rows.
+  // Closed-but-unverified and idle cases are not currently open breakdowns.
+  const summaryIndex=reports.findIndex(item=>item.title===REPORT_TITLES[14]);
+  const openRows=new Set(open);
+  reports.splice(summaryIndex+1,0,{
+    ...reports[summaryIndex],title:TOTAL_SUMMARY_REPORT_TITLE,
+    description:'MIS-verified requests and currently open breakdown requests with the same stage-wise TAT as Summary Report; filters use the production submission date. Unfinished stages remain not recorded.',
+    rows:requests.filter(row=>row.verifiedAt || openRows.has(row)),
+  });
   // Every breakdown report carries the HMR / KMR readings of each request.
   return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:requestShiftColumns(withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)}),item.rows,shiftRecords)});
 }
