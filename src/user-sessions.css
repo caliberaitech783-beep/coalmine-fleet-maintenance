@@ -117,7 +117,8 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .accounts-user-workspace > header button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:8px}
 .accounts-user-workspace > header button.active{border-color:#fff;background:#ffffff22;box-shadow:inset 0 -2px #fff}
 .accounts-user-workspace > main{padding:24px}
-@media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{margin-top:16px}.login-application-links > a,.login-application-links > button{min-width:0;flex:1;padding:12px}.accounts-user-workspace > main{padding:12px}}
+@media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;margin-top:16px;gap:12px}.login-application-links > a,.login-application-links > button{min-width:0;width:100%;height:auto;box-sizing:border-box;padding:12px;gap:8px;white-space:normal;line-height:1.35}.login-application-links > :is(a,button) > span{min-width:0;overflow-wrap:anywhere}.login-application-links strong{font-size:15px;line-height:1.3}.login-application-links svg{width:22px;height:22px}.accounts-user-workspace > main{padding:12px}}
+@media(max-width:360px){.login-application-links{grid-template-columns:minmax(0,1fr)}}
 /* Keep the archive outside navigation styling, with a single full-page scroll area. */
 .overlay.announcement-archive-overlay{padding:0;place-items:stretch}
 .overlay > .modal.announcement-archive-modal{width:100%;max-width:none;min-width:0;height:100dvh;max-height:100dvh;margin:0;padding:0;border-radius:0;resize:none;display:flex;flex-direction:column;overflow:hidden;background:#fff;color:#17233c;text-align:left}

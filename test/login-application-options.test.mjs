@@ -9,8 +9,16 @@ test('Fleet Operation is the default and portals have explicit selectors',()=>{
   assert.match(source,/<strong>Fleet Operation<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
 });
-test('Tender is coming soon without a destination and Accident link is preserved',()=>{
-  assert.match(source,/className="login-tender-link" disabled title="Tender — coming soon"/);
-  assert.match(source,/<strong>Tender<\/strong>Coming soon/);
+test('Tender opens its application and Accident link is preserved',()=>{
+  assert.match(source,/<a className="login-tender-link" href="https:\/\/tender.cmll.in" aria-label="Open Tender application"/);
+  assert.doesNotMatch(source,/className="login-tender-link" disabled/);
   assert.match(source,/className="login-accident-link" href="https:\/\/bdms.cmll.in"/);
+});
+
+test('mobile application tiles wrap in two columns, with a single column on narrow phones',()=>{
+  const css=readFileSync(new URL('../src/user-sessions.css',import.meta.url),'utf8');
+  assert.match(css,/grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css,/height:auto;box-sizing:border-box;padding:12px;gap:8px;white-space:normal/);
+  assert.match(css,/span\{min-width:0;overflow-wrap:anywhere\}/);
+  assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
