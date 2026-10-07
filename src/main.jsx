@@ -59,6 +59,8 @@ import SearchableSelect from "./searchable-select.jsx";
 import {CDIR_MASTERS, CDIR_MASTER_FIELDS, isCdirMaster} from "../cdir-masters.mjs";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import VehicleHistoryScroll from "./vehicle-history-scroll.jsx";
+import {closeResponsibilityError} from "../close-responsibility.mjs";
+import {withDashboardResponsibilityCells} from "./dashboard-responsibility-cells.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import OemBreakdownChart from "./oem-breakdown-chart.jsx";
 import OemBreakdownDetails from "./oem-breakdown-details.jsx";
@@ -4175,7 +4177,8 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
 const printSavedReport = ({ title, columns, rows, reportGrouping }) => openSmartPrint({ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
 function ActionsTable(props) {
   const shiftData=useRequestShiftData();
-  return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(props.children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
+  const children=props.className==='dashboard-location-dates'?withDashboardResponsibilityCells(props.children,shiftData.requests):props.children;
+  return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
   const {shifts}=useRequestShiftData();
@@ -10137,6 +10140,8 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       event.preventDefault();
       if (submitLock.current) return;
       if(linkedTickets.length>1 && !ticketDecision.current){setTicketPrompt(true);return;}
+      const responsibilityError=linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>closeResponsibilityError(row,status,ideal)).find(Boolean);
+      if(responsibilityError){setFormError(responsibilityError);return;}
       if (!idleDecision.current && status === "Closed") {
         const onRoadTime = requestStartParts("");
         setClosingDate(onRoadTime.date);
@@ -10185,6 +10190,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       {request.issues?.length>0 && <fieldset className="full"><legend>Outstanding issues — mark fixed issues</legend>{request.issues.map((issue,index)=><label key={index}><input type="checkbox" name="resolvedIssues" value={index} defaultChecked={issue.resolved} disabled={issue.resolved} />{issue.reason}{issue.resolved?" (fixed)":""}</label>)}</fieldset>}
         {status==="Running BD" && <p className="full">The vehicle will go to MIS for verification; the ticket remains open until all issues are fixed.</p>}
         <label>Status *<select name="status" disabled={submitting} value={status} onChange={event=>{setStatus(event.target.value);if(event.target.value==="Running BD")setIdeal(false)}}><option value="Closed">On road — maintenance completed</option><option value="Running BD">On road with breakdown — Running BD</option></select></label>
+        <label>Breakdown responsibility *<input readOnly value={request.oemResponsibility || "Not selected"} /><small>Select and save OEM or NON OEM in Edit request before closing.</small></label>
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
@@ -10279,7 +10285,10 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
       try {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        const meterType = requestMeterTypeForRequest(request, equipmentRecords);
+        // Verification does not change the request's saved primary meter type.
+        // The master can classify a tipper as Equipment (HMR), while the saved
+        // request uses KMR. Keep the legacy scalar tied to the server's type.
+        const meterType = ["HMR", "KMR"].includes(request.meterType) ? request.meterType : "HMR";
         await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripRemark: String(form.get("firstTripRemark") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
       } catch (error) {
         setFormError(error?.message || "Could not verify this request. Please try again.");
