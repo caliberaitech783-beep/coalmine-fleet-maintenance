@@ -198,7 +198,9 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
       data.rows = numberedRows;
     }
   }
-  if (groupBySite) for (const data of new Set([exportData, printData, smartPrintData])) if (data) data.rows = selectedRows;
+  // All formats use the final filtered selection, never the unfiltered source
+  // or the progressively rendered page. This also preserves per-body ordering.
+  for (const data of new Set([exportData, printData, smartPrintData])) if (data) data.rows = selectedRows;
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = useMemo(() => filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } }))), [filterableColumns]);
   const filterColumns = useMemo(() => filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) })), [filterableColumns]);

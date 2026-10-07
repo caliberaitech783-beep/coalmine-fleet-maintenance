@@ -1920,7 +1920,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
   const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey);
   const todayBreakdownDirection = todayBreakdownRows.length ? "up" : "flat";
-  const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
+  const trendAvailableSites = [...new Set((selectedRegion || dashboardSite !== "all" ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
   const trendRequests = activeTrendSite === "all" ? locationBreakdowns : locationBreakdowns.filter((record) => recordBelongsToSite(record, activeTrendSite));
@@ -2091,7 +2091,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       const regionRequests = liveBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
       return { ...region, sites, ...fleetChartCounts(records, regionRequests) };
-    });
+    }).filter(region => region.sites.length > 0);
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const showOemBreakdowns = fleetChartMode === "oem";
   const oemLive = !dashboardRangeActive || (dashboardFrom === todayKey && dashboardTo === todayKey);
@@ -2159,7 +2159,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   }
   const requestLifecycleRegions = (selectedRegion ? [selectedRegion] : availableRegions).map((region) => ({
     ...region,
-    sites: region.sites.filter((site) => (!normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({site: allowed}, site))) && (!selectedRegion || dashboardSite === "all" || recordBelongsToSite({site: dashboardSite}, site))),
+    sites: region.sites.filter((site) => (!normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({site: allowed}, site))) && (dashboardSite === "all" || recordBelongsToSite({site: dashboardSite}, site))),
   }));
   const requestLifecycleRegion = requestLifecycleRegions.find((region) => region.code === requestTrendRegion);
   const requestLifecycleSite = requestLifecycleRegions.flatMap((region) => region.sites).find((site) => `site:${site}` === requestTrendRegion);
@@ -2273,7 +2273,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return "";
   };
   const stagePipelineSelectedRegion = availableRegions.find((region) => region.code === stagePipelineRegion);
-  const stagePipelineRegionSites = stagePipelineSelectedRegion?.sites || trendAvailableSites;
+  const stagePipelineRegionSites = stagePipelineSelectedRegion ? stagePipelineSelectedRegion.sites.filter(site => trendAvailableSites.includes(site)) : trendAvailableSites;
   const stagePipelineSiteOptions = [...new Set(stagePipelineRegionSites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeStagePipelineSite = stagePipelineSite === "all" || stagePipelineSiteOptions.includes(stagePipelineSite) ? stagePipelineSite : "all";
   const stagePipelineScopeSites = activeStagePipelineSite === "all" ? stagePipelineSiteOptions : [activeStagePipelineSite];
@@ -2284,7 +2284,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (!date) return false;
     return (!stagePipelineFrom || date >= stagePipelineFrom) && (!stagePipelineTo || date <= stagePipelineTo);
   };
-  const stagePipelineRequests = scopedBreakdowns.filter((record) => {
+  const stagePipelineRequests = locationBreakdowns.filter((record) => {
     const stage = stagePipelineRequestStage(record);
     return stage
       && stagePipelineScopeSites.some((site) => recordBelongsToSite(record, site))
