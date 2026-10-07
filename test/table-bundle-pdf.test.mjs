@@ -6,7 +6,7 @@ const generatedAt=new Date('2026-09-15T13:30:00Z');
 const title='Sasti OB site report';
 const subtitle='Reporting window: 15-09-26 07:00 AM to 07:00 PM IST';
 const fragments=source=>[...source.matchAll(/<([0-9a-f]+)>/gi)].map((match)=>Buffer.from(match[1],'hex').toString('latin1')).join('');
-const pageStreams=pdf=>[...pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((match)=>match[1]);
+const pageStreams=pdf=>[...pdf.toString('latin1').matchAll(/\d+ \d+ obj\r?\n([\s\S]*?)\r?\nendobj/g)].filter((match)=>!match[1].includes('/Subtype /Image')).flatMap((match)=>[...match[1].matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((stream)=>stream[1]));
 const pageCount=pdf=>Number(pdf.toString('latin1').match(/\/Count (\d+)\b/)?.[1]);
 
 test('site PDF starts each selected report on a clear page with site, window and section headers',async()=>{
