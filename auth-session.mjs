@@ -34,6 +34,8 @@ export function createSessionStore(pool, {
            AND created_at > NOW() - make_interval(days => $2::int)`,
         [token, boundedMaxAgeDays]
       );
+      // Tender tracking credentials never authorize a BDMS application request.
+      if(rows[0]?.permissions?.application==='Tender')return null;
       return rows[0] || null;
     },
 

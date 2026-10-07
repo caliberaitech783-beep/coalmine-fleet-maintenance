@@ -1,3 +1,4 @@
+import {createTenderSession,currentTenderSession,touchTenderSession,endTenderSession} from './tender-sessions.mjs';
 import {TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from './tender-permissions.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
 import {createHmac,timingSafeEqual} from 'node:crypto';
@@ -23,7 +24,7 @@ export function installTenderIdentity(app,pool,env=process.env){
   // Validation and directory requests run frequently; they are not user edits.
   if(req.params.action!=='authenticate')req.audit=false;
   try{
-   if(!['authenticate','validate','directory'].includes(req.params.action))return res.sendStatus(404);
+   if(!['authenticate','validate','directory','logout','messages','dismiss'].includes(req.params.action))return res.sendStatus(404);
    if(req.params.action==='directory'){
     const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
     return res.json(rows.map(row=>tenderProfile(row,key)).filter(Boolean).map(({credentialVersion,...profile})=>profile));
@@ -42,10 +43,20 @@ export function installTenderIdentity(app,pool,env=process.env){
     if(!/^\d+$/.test(String(req.body?.id||'')))return res.sendStatus(401);
     row=(await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' AND id=$1",[req.body.id])).rows[0];
    }
+   if(req.params.action==='logout'){await endTenderSession(pool,{id:String(row?.id||req.body?.id||'')},req.body.sessionId);req.auditSessionId=req.body.sessionId;req.audit={eventType:'Security',module:'Authentication',action:'Tender logout',actorLogin:row?.record_data?.login||'',actorName:row?.record_data?.employee||'',actorRole:'Tender User',targetType:'User account',targetReference:String(row?.id||''),changedFields:[]};return res.json({ok:true});}
    const profile=tenderProfile(row,key);
    if(!profile)return res.status(403).json({error:'Tender access is not enabled for this BDMS account, or its password must be changed. Contact your BDMS administrator.'});
-   if(req.params.action==='validate'&&profile.credentialVersion!==req.body.credentialVersion)return res.status(401).json({error:'Your BDMS credentials changed. Please sign in again.'});
-   if(req.params.action==='authenticate')req.audit={eventType:'Security',module:'Authentication',action:'Tender login',actorLogin:profile.login,actorName:profile.name,targetType:'User account',targetReference:profile.id,changedFields:[]};
+   if(req.params.action!=='authenticate'&&profile.credentialVersion!==req.body.credentialVersion)return res.status(401).json({error:'Your BDMS credentials changed. Please sign in again.'});
+   // Existing deployed Tender clients can validate during the coordinated rollout.
+   // Session-aware Tender clients always supply a central ID; messages require it.
+   if(req.params.action==='validate'&&!req.body.sessionId)return res.json(profile);
+   if(req.params.action==='authenticate')profile.sessionId=await createTenderSession(pool,profile,req.body.details);
+   else {if(!await currentTenderSession(pool,profile,req.body.sessionId))return res.status(401).json({error:'Your Tender session was closed or expired in BDMS. Please sign in again.'});profile.sessionId=req.body.sessionId;}
+   req.auditSessionId=profile.sessionId;
+   await touchTenderSession(pool,profile,profile.sessionId,req.body.details);
+   if(req.params.action==='messages'){profile.messages=(await pool.query(`SELECT id,message,audio_data AS "audioData",sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt" FROM session_messages WHERE target_session_public_id=$1 AND dismissed_at IS NULL ORDER BY created_at,id`,[profile.sessionId])).rows;}
+   if(req.params.action==='dismiss'){const messageId=Number(req.body.messageId);if(!Number.isSafeInteger(messageId)||messageId<1)return res.status(400).json({error:'Invalid session message.'});await pool.query('UPDATE session_messages SET dismissed_at=NOW() WHERE id=$1 AND target_session_public_id=$2',[messageId,profile.sessionId]);}
+   if(req.params.action==='authenticate')req.audit={eventType:'Security',module:'Authentication',action:'Tender login',actorRole:'Tender User',actorLogin:profile.login,actorName:profile.name,targetType:'User account',targetReference:profile.id,changedFields:[]};
    res.json(profile);
   }catch(error){next(error)}
  });

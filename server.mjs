@@ -2861,7 +2861,7 @@ app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
     const {rows}=await pool.query(`SELECT sessions.token,sessions.session_public_id AS "sessionId",sessions.employee_name AS "name",sessions.login_name AS "login",
       COALESCE(NULLIF(sessions.permissions->>'adminLevel',''),NULLIF(sessions.assigned_role,''),NULLIF(sessions.user_type,''),sessions.role) AS "roleLabel",
-      sessions.user_type AS "userType",sessions.assigned_role AS "assignedRole",sessions.created_at AS "createdAt",sessions.last_seen_at AS "lastSeenAt",
+      COALESCE(sessions.permissions->>'application','BDMS') AS application,sessions.user_type AS "userType",sessions.assigned_role AS "assignedRole",sessions.created_at AS "createdAt",sessions.last_seen_at AS "lastSeenAt",
       sessions.ip_address AS "ipAddress",sessions.device_id AS "deviceId",sessions.user_agent AS "userAgent",user_master.record_data AS "userRecord",
       assistance.id AS "assistanceId",assistance.status AS "assistanceStatus",assistance.access_level AS "assistanceAccessLevel",
       assistance.reason AS "assistanceReason",assistance.duration_minutes AS "assistanceDurationMinutes",assistance.expires_at AS "assistanceExpiresAt"

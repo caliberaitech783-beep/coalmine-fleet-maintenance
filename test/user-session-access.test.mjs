@@ -18,7 +18,7 @@ test('only read routes receive the exception and management controls are hidden'
   assert.match(server,/registerLoginHistoryRoutes\(app,\{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView/);
   for(const route of ["app.post('/api/user-sessions/:sessionId/messages',requireSuper,requireAdministrator", "app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator", "app.post('/api/user-sessions/:sessionId/assistance',requireSuper,requireAdministrator", "app.delete('/api/user-login-history',requireSuper,requireAdministrator", "app.post('/api/announcements',requireSuper,requireAdministrator"])assert.ok(server.includes(route));
   assert.ok(ui.includes('canViewAdmin||name==="User Sessions"'));
-  assert.ok(ui.includes('{viewOnly?"View only":<RemoteAssistanceAction'));
+  assert.ok(ui.includes("{row.application==='Tender'?<span>BDMS workspace only</span>:viewOnly?\"View only\":<RemoteAssistanceAction"));
   assert.ok(ui.includes('{!viewOnly&&<button type="button" className="primary" onClick={()=>setAnnouncing(true)}'));
   assert.ok(ui.includes('{!viewOnly&&<button type="button" className="secondary danger"'));
 });
