@@ -846,7 +846,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(""); setNotice(""); }} />
           <small className="login-kicker"><LockKeyhole /> {accountsPortal?'SECURE ACCOUNTS PORTAL':'SECURE OPERATIONS PORTAL'}</small>
-          <h2>{accountsPortal?'Accounts sign in':'Welcome Front'}</h2>
+          <h2>{accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
           <p>{accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
           {!accountsPortal&&loginRoles.length>0&&<label>Choose your assigned workspace<select required value={selectedLoginRole} onChange={event=>setSelectedLoginRole(event.target.value)}><option value="">Select workspace</option>{loginRoles.map(role=><option key={role}>{role}</option>)}</select></label>}

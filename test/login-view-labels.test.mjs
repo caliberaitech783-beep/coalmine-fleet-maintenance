@@ -9,7 +9,7 @@ test("login uses one account form and lets the saved user type choose the worksp
   const login=source.slice(source.indexOf("function Login"),source.indexOf("function Side"));
   assert.doesNotMatch(login, /setRole|Choose your access role|Desktop View|Mobile View/);
   assert.match(source, /body: JSON\.stringify\(\{ username, password, portal:accountsPortal\?'accounts':'operations', selectedRole:selectedLoginRole \}\)/);
-  assert.match(login, /<h2>\{accountsPortal\?'Accounts sign in':'Welcome Front'\}<\/h2>/);
+  assert.match(login, /<h2>\{accountsPortal\?'Accounts sign in':'Welcome Back'\}<\/h2>/);
   assert.match(source, /<b>One secure login<\/b>/);
   assert.doesNotMatch(server, /filterRowsByRequestedRole|requestedRole/);
   assert.match(server, /const loginRows=loginRecordCandidates\(userRows,username\)/);
