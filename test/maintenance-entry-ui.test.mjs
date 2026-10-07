@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestShiftLabel} from '../request-shift.mjs';
 import test from 'node:test';
@@ -41,9 +42,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = {
-    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
-    closeResponsibilityError:()=>'', useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { closeResponsibilityError, useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }
@@ -278,7 +277,7 @@ function closeHarness(request = {}) {
   });
   return {
     saved, alerts,
-    render() { return app.render({ request: { ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value) }); },
+    render() { return app.render({ request: { oemResponsibility: 'OEM', ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value) }); },
     async submit(tree) {
       all(tree, node => node.type === 'button' && /^Close request/.test(textContent(node)))[0]?.props.onClick();
       await byType(tree, 'form').props.onSubmit({ preventDefault() {}, currentTarget: { maintenanceWork: 'Repair completed', closingDate: '2026-09-08', closingTime: '18:00:00' } });

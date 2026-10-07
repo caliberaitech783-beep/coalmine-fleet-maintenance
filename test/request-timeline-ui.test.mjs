@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -70,9 +71,7 @@ function harness(name, extra = {}) {
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
-  const scope = {
-    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
-    closeResponsibilityError:()=>'', isIdleVehicleRequest,requestStatusLabel,
+  const scope = { closeResponsibilityError, isIdleVehicleRequest,requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,
@@ -229,7 +228,7 @@ test("timeline renders genuine zero separately from missing or negative duration
   assert.match(text(ordinary), /No timestamp-change history is recorded/);
 });
 
-const editProps = (extra = {}) => ({request: {ref: "QA-EDIT", start: "2026-09-08 10:00:00", acceptedAt: "2026-09-08 10:10:00", expectedCompletionAt: "2026-09-08 12:00:17", category: "Breakdown", complaint: "Fixture only", ...extra}, close() {}, onSave: async () => {}, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "Breakdown"}]});
+const editProps = (extra = {}) => ({request: {oemResponsibility: "OEM", ref: "QA-EDIT", start: "2026-09-08 10:00:00", acceptedAt: "2026-09-08 10:10:00", expectedCompletionAt: "2026-09-08 12:00:17", category: "Breakdown", complaint: "Fixture only", ...extra}, close() {}, onSave: async () => {}, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "Breakdown"}]});
 test("numbered timeline cards distinguish pending stages and genuine missing legacy times", () => {
   const pending = {ref:"PENDING", start:request.start, status:"Open", acceptanceRequired:true};
   const tree = harness("RequestTimelineView").render({data:body(pending.ref,{request:pending,events:requestTimelineEvents(pending),durations:requestTimelineDurations(pending)})});

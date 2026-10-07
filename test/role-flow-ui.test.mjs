@@ -1,3 +1,4 @@
+import {closeResponsibilityError} from '../close-responsibility.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {isIdleVehicleRequest} from '../request-idle.mjs';
@@ -54,9 +55,7 @@ function harness(name, extra = {}) {
     if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial;
     return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }];
   };
-  const scope = {
-    // OEM responsibility is covered separately; these fixtures isolate other workflow guards.
-    closeResponsibilityError:()=>'', isIdleVehicleRequest,
+  const scope = { closeResponsibilityError, isIdleVehicleRequest,
     ...requestEquipment,
     React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
@@ -83,7 +82,7 @@ function harness(name, extra = {}) {
   return {render(props) { cursor = 0; return component(name === "ManagerDashboard" ? {requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props} : props); }};
 }
 
-const opened = {ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "stupal", door: "V1", chassis: "C1", status: "Open", site: "Sasti OB", category: "Breakdown"};
+const opened = {oemResponsibility: "OEM", ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "stupal", door: "V1", chassis: "C1", status: "Open", site: "Sasti OB", category: "Breakdown"};
 const accepted = {...opened, status: "In progress", acceptedBy: "Sanskar Manohare", acceptedAt: "2026-09-08 10:10:00"};
 const idle = {...accepted, status: "Idle", idealRequestedBy: "Sanskar Manohare", idleReason: "No work"};
 const closed = {...idle, status: "Closed", closedBy: "maimaintenance manager", idealApprovedBy: "maimaintenance manager", closedAt: "2026-09-08 12:00:00"};
