@@ -37,7 +37,7 @@ export const DAILY_UPDATES_DETAIL_COLUMNS = [
   "Updated by", "Daily update", "Delayed reason",
 ].map((label) => ({ label }));
 
-export function prepareDailyUpdatesLayout({ title = "Nerve Center report", sheet = {}, formatCell = (value) => empty(value) } = {}) {
+export function prepareDailyUpdatesLayout({ title = "Caliber Pulse report", sheet = {}, formatCell = (value) => empty(value) } = {}) {
   const columns = Array.isArray(sheet?.columns) ? sheet.columns : [];
   const sourceRows = Array.isArray(sheet?.rows) ? sheet.rows : [];
   const dailyIndex = columns.findIndex(dailyColumn);
@@ -67,7 +67,7 @@ export function prepareDailyUpdatesLayout({ title = "Nerve Center report", sheet
 
 // Keeps the ordinary report compact and appends one filterable workbook sheet containing every
 // saved update as its own row. The original report order and all unrelated sheets stay unchanged.
-export function prepareXlsxExportSheets({ title = "Nerve Center report", sheets = [], formatCell = (value) => empty(value) } = {}) {
+export function prepareXlsxExportSheets({ title = "Caliber Pulse report", sheets = [], formatCell = (value) => empty(value) } = {}) {
   const detailRows = [];
   const prepared = sheets.map((sheet) => {
     const layout = prepareDailyUpdatesLayout({ title, sheet, formatCell });

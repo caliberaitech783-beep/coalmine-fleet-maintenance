@@ -6,7 +6,7 @@ test('Director report email renders department links for PDF and Excel',()=>{
   const email=buildDirectorReportEmail({generatedAt:new Date('2026-09-01T13:30:00Z'),archiveUrl:'https://bdms.cmll.in/r/zip123',links:[
     {department:'General',title:'Loc. wise Open BD',pdfUrl:'https://bdms.cmll.in/r/pdf123',xlsxUrl:'https://bdms.cmll.in/r/xls123'},
   ]});
-  assert.match(email.subject,/Nerve Center - Director's Daily Report/);
+  assert.match(email.subject,/Caliber Pulse - Director's Daily Report/);
   assert.match(email.text,/Download ZIP: https:\/\/bdms\.cmll\.in\/r\/zip123/);
   assert.match(email.text,/General --/);
   assert.match(email.text,/PDF: https:\/\/bdms\.cmll\.in\/r\/pdf123/);
@@ -22,7 +22,7 @@ test('Director report email creates one zip attachment with separate PDF and Exc
     {filename:'general-open-bd.pdf',content:Buffer.from('%PDF sample')},
     {filename:'general-open-bd.xlsx',content:Buffer.from('PK sample')},
   ]});
-  assert.equal(attachment.filename,'nerve-center-director-reports-2026-09-01-director-19.zip');
+  assert.equal(attachment.filename,'caliber-pulse-director-reports-2026-09-01-director-19.zip');
   assert.equal(attachment.contentType,'application/zip');
   assert.equal(attachment.content.subarray(0,2).toString(),'PK');
   const zipText=attachment.content.toString('latin1');

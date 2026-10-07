@@ -593,3 +593,16 @@ input[type="radio"] {
    the brand is shown: admin header, operational header, login page. */
 .caliber-app-name strong { display: inline-flex; align-items: center; gap: 6px; }
 .caliber-pulse-icon { flex: 0 0 auto; width: 1.15em; height: 1.15em; color: #ffd6e6; }
+
+/* Caliber Pulse identity */
+.caliber-logo-frame { background: #fff; border-radius: 10px; padding: 5px; }
+.caliber-logo-frame img, .app > aside .caliber-logo-frame img, .normal > header .caliber-logo-frame img { width: 38px; height: 38px; object-fit: contain; }
+.login-brand .caliber-logo-frame img { width: 64px; height: 64px; }
+.login-mobile-brand .caliber-logo-frame { min-width: 0; padding: 5px; background: #fff; }
+.login-mobile-brand .caliber-logo-frame img { width: 40px; height: 40px; }
+.mine-brandmark { background: #fff; border-radius: 12px; padding: 7px; object-fit: contain; }
+.login-brand .caliber-logo-frame img, .login-mobile-brand .caliber-logo-frame img { width: 190px; height: auto; }
+.login-brand .caliber-logo-frame, .login-mobile-brand .caliber-logo-frame { padding: 8px 12px; }
+.login-brand, .login-mobile-brand { flex-wrap: wrap; }
+.login-brand .caliber-app-name strong, .login-mobile-brand .caliber-app-name strong { display: none; }
+.login-brand .caliber-app-name, .login-mobile-brand .caliber-app-name { padding-left: 0; border-left: 0; }

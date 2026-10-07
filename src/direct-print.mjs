@@ -25,7 +25,7 @@ export function directPrintOptions(page,jobName='',{duplex='one-sided',copies=1}
     ...directPrintPaper(page),scaleContent:true,colorType:'color',
     duplex:DUPLEX_VALUES.has(duplex)?duplex:'one-sided',
     copies:Math.min(99,Math.max(1,Math.trunc(Number(copies))||1)),
-    jobName:String(jobName||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,120)||'Nerve Center report',
+    jobName:String(jobName||'Caliber Pulse report').replace(/\s+/g,' ').trim().slice(0,120)||'Caliber Pulse report',
   };
 }
 /** The PDF data item for the helper; a page selection such as "1-3,5" limits the pages printed. */

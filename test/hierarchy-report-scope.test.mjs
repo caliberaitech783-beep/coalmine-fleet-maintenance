@@ -35,7 +35,7 @@ test('manager scopes preserve explicit sites, region assignments and custom QA s
   assert.equal(wcl.sites.length,5);
   assert.equal(reportScopeIncludesSite(wcl,'Jayant OB'),false);
   assert.deepEqual(scope(manager({managerRegion:'WCL'}),'Jayant OB'),{sites:[]});
-  assert.deepEqual(scope(manager({managerSites:'QA BDMS UNIQUE'})),{sites:['qa bdms unique']});
+  assert.deepEqual(scope(manager({managerSites:'QA Caliber Pulse UNIQUE'})),{sites:['qa bdms unique']});
   assert.deepEqual(scope(manager({managerRegion:'All'})),{sites:null});
   assert.deepEqual(scope(manager({managerRegion:'All'}),'Sasti OB'),{sites:['sasti ob']});
 });

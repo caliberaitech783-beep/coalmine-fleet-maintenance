@@ -18,16 +18,16 @@ export const LEGACY_WORKFLOW_TEMPLATES={
     {type:'FOOTER',code_expiration_minutes:10},
     {type:'BUTTONS',buttons:[{type:'OTP',otp_type:'COPY_CODE',text:'Copy Code'}]},
   ]},
-  consolidatedRequestReport:{name:'nerve_consolidated_request_report',body:'Nerve Center scheduled fleet report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 26 Aug 2026, 10:00 PM - 27 Aug 2026, 6:00 AM\nOFF ROAD / OPEN: 2\nON ROAD / CLOSED: 1']},
-  consolidatedTicketReport:{name:'nerve_consolidated_crm_ticket_report',body:'Nerve Center scheduled CRM ticket report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 27 Aug 2026, 8:00 AM - 27 Aug 2026, 3:00 PM\nOPEN TICKETS: 3\nCLOSED TICKETS: 2']},
-  ticketCreated:{name:'nerve_ticket_created',body:'Nerve Center: Ticket {{1}} was created by {{2}} at {{3}}. Please open Nerve Center to review it.',example:['TIC/MAJRI-OB/240826/000001','Anoop Paul','Majri OB']},
-  ticketResolved:{name:'nerve_ticket_resolved',body:'Nerve Center: Ticket {{1}} was resolved by {{2}}. Please open Nerve Center to view the resolution.',example:['TIC/MAJRI-OB/240826/000001','Administrator']},
-  maintenanceReminder:{name:'nerve_maintenance_reminder',body:'Nerve Center reminder: Please add the {{1}} maintenance update and delay reason for request {{2}}. This update is due now.',example:['9:00 AM','REQ-1787566831835']},
-  dailyUpdate:{name:'nerve_daily_update',body:'Nerve Center: {{1}} added a daily maintenance update for request {{2}}. Please open Nerve Center to review it.',example:['Maintenance User','REQ-1787566831835']},
-  requestOpened:{name:'bdms_offroad_request_opened_v1',body:'BDMS Off Road Alert\nRequest {{1}} has been opened at {{2}}. Equipment: {{3}}, Door No.: {{4}}. Breakdown type: {{5}}. Reported by {{6}} at {{7}}. ETC: {{8}}.\nOpen request: {{9}}',example:['REQ-1787566831835','Majri OB','VOLVO TIPPERS','V257 - MH34BZ5560','Breakdown','Production User','24 Aug 2026, 3:49 PM','24 Aug 2026, 8:00 PM','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestClosed:{name:'bdms_onroad_request_closed_v1',body:'BDMS On Road Update\nRequest {{1}} for {{2}} at {{3}} has been closed by {{4}} at {{5}}. Total downtime: {{6}}. Status: On Road.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','Maintenance User','24 Aug 2026, 6:10 PM','0d 2h 21m','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestVerified:{name:'bdms_mis_verification_completed_v1',body:'BDMS MIS Verification\nRequest {{1}} for {{2}} at {{3}} was verified by {{4}} at {{5}}. Closing meter: {{6}}. Final status: Verified.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','MIS User','24 Aug 2026, 6:30 PM','HMR 12456','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestIdle:{name:'bdms_vehicle_idle_v1',body:'BDMS Idle Vehicle Alert\n{{1}} at {{2}} was marked Idle at {{3}}. Reason: {{4}}. Request: {{5}}. Approval action: {{6}}.\nOpen request: {{7}}',example:['VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','24 Aug 2026, 6:10 PM','No driver','REQ-1787566831835','Project Manager or Production Manager must approve Make On Road','https://bdms.cmll.in/?request=REQ-1787566831835']},
+  consolidatedRequestReport:{name:'nerve_consolidated_request_report',body:'Caliber Pulse scheduled fleet report:\n\n{{1}}\n\nGenerated automatically. Open Caliber Pulse for the complete live view.',example:['SCOPE: WCL\nWINDOW: 26 Aug 2026, 10:00 PM - 27 Aug 2026, 6:00 AM\nOFF ROAD / OPEN: 2\nON ROAD / CLOSED: 1']},
+  consolidatedTicketReport:{name:'nerve_consolidated_crm_ticket_report',body:'Caliber Pulse scheduled CRM ticket report:\n\n{{1}}\n\nGenerated automatically. Open Caliber Pulse for the complete live view.',example:['SCOPE: WCL\nWINDOW: 27 Aug 2026, 8:00 AM - 27 Aug 2026, 3:00 PM\nOPEN TICKETS: 3\nCLOSED TICKETS: 2']},
+  ticketCreated:{name:'nerve_ticket_created',body:'Caliber Pulse: Ticket {{1}} was created by {{2}} at {{3}}. Please open Caliber Pulse to review it.',example:['TIC/MAJRI-OB/240826/000001','Anoop Paul','Majri OB']},
+  ticketResolved:{name:'nerve_ticket_resolved',body:'Caliber Pulse: Ticket {{1}} was resolved by {{2}}. Please open Caliber Pulse to view the resolution.',example:['TIC/MAJRI-OB/240826/000001','Administrator']},
+  maintenanceReminder:{name:'nerve_maintenance_reminder',body:'Caliber Pulse reminder: Please add the {{1}} maintenance update and delay reason for request {{2}}. This update is due now.',example:['9:00 AM','REQ-1787566831835']},
+  dailyUpdate:{name:'nerve_daily_update',body:'Caliber Pulse: {{1}} added a daily maintenance update for request {{2}}. Please open Caliber Pulse to review it.',example:['Maintenance User','REQ-1787566831835']},
+  requestOpened:{name:'bdms_offroad_request_opened_v1',body:'Caliber Pulse Off Road Alert\nRequest {{1}} has been opened at {{2}}. Equipment: {{3}}, Door No.: {{4}}. Breakdown type: {{5}}. Reported by {{6}} at {{7}}. ETC: {{8}}.\nOpen request: {{9}}',example:['REQ-1787566831835','Majri OB','VOLVO TIPPERS','V257 - MH34BZ5560','Breakdown','Production User','24 Aug 2026, 3:49 PM','24 Aug 2026, 8:00 PM','https://bdms.cmll.in/?request=REQ-1787566831835']},
+  requestClosed:{name:'bdms_onroad_request_closed_v1',body:'Caliber Pulse On Road Update\nRequest {{1}} for {{2}} at {{3}} has been closed by {{4}} at {{5}}. Total downtime: {{6}}. Status: On Road.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','Maintenance User','24 Aug 2026, 6:10 PM','0d 2h 21m','https://bdms.cmll.in/?request=REQ-1787566831835']},
+  requestVerified:{name:'bdms_mis_verification_completed_v1',body:'Caliber Pulse MIS Verification\nRequest {{1}} for {{2}} at {{3}} was verified by {{4}} at {{5}}. Closing meter: {{6}}. Final status: Verified.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','MIS User','24 Aug 2026, 6:30 PM','HMR 12456','https://bdms.cmll.in/?request=REQ-1787566831835']},
+  requestIdle:{name:'bdms_vehicle_idle_v1',body:'Caliber Pulse Idle Vehicle Alert\n{{1}} at {{2}} was marked Idle at {{3}}. Reason: {{4}}. Request: {{5}}. Approval action: {{6}}.\nOpen request: {{7}}',example:['VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','24 Aug 2026, 6:10 PM','No driver','REQ-1787566831835','Project Manager or Production Manager must approve Make On Road','https://bdms.cmll.in/?request=REQ-1787566831835']},
 };
 
 export const LEGACY_TEMPLATE_FIELD_LABELS = {
@@ -72,12 +72,12 @@ const examples={
 const standardTitles={requestOpened:'Off Road Alert',requestClosed:'On Road Update',requestVerified:'MIS Verified',requestIdle:'Idle Vehicle',ticketCreated:'New CRM Ticket',ticketResolved:'CRM Ticket Resolved',dailyUpdate:'Maintenance Update',maintenanceReminder:'Maintenance Reminder',consolidatedRequestReport:'Fleet Report',consolidatedTicketReport:'CRM Report'};
 export const V2_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(LEGACY_WORKFLOW_TEMPLATES).map(([key,legacy])=>[key,key==='passwordResetOtp'?legacy:{
   name:`nerve_${key.toLowerCase()}_site_v2`,
-  body:`*SITE: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${V2_TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
+  body:`*SITE: {{1}}*\n*Caliber Pulse | ${standardTitles[key]}*\n\n${V2_TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Caliber Pulse for complete details.`,
   example:examples[key],
 }]));
 export const META_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(V2_WORKFLOW_TEMPLATES).map(([key,previous])=>[key,previous.otpButton?previous:{
   name:`nerve_${key.toLowerCase()}_${isReportKey(key)?'locations':'site'}_v3`,
-  body:`*${isReportKey(key)?'LOCATIONS':'SITE'}: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
+  body:`*${isReportKey(key)?'LOCATIONS':'SITE'}: {{1}}*\n*Caliber Pulse | ${standardTitles[key]}*\n\n${TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Caliber Pulse for complete details.`,
   example:TEMPLATE_FIELD_LABELS[key].map(label=>previous.example[V2_TEMPLATE_FIELD_LABELS[key].indexOf(label==='Locations'?'Site':label)]),
 }]));
 const aliases={offRoadEscalation:'requestOpened',idleReminder:'requestIdle',manualReports:'consolidatedRequestReport'};
@@ -88,22 +88,22 @@ export const baseTemplateKey = purpose => isSingleReportPurpose(purpose)?'consol
 export const templateScopeHeader=purpose=>`*${isReportKey(baseTemplateKey(purpose))?'LOCATIONS':'SITE'}: {{1}}*`;
 const titles={requestOpened:'OFF ROAD ALERT',requestClosed:'ON ROAD UPDATE',requestVerified:'MIS VERIFIED',requestIdle:'IDLE VEHICLE',offRoadEscalation:'OFF ROAD ESCALATION',idleReminder:'IDLE REMINDER',consolidatedRequestReport:'FLEET REPORTS',consolidatedTicketReport:'CRM TICKET REPORT',ticketCreated:'NEW CRM TICKET',ticketResolved:'CRM TICKET RESOLVED',dailyUpdate:'MAINTENANCE UPDATE'};
 const purposeNotes={
-  requestOpened:{intro:'A breakdown request has been opened.',action:'Review the reported breakdown and update the acceptance or repair plan in Nerve Center.'},
-  requestClosed:{intro:'A request has been closed and marked On Road.',action:'Review the closure record and follow the applicable verification steps in Nerve Center.'},
-  requestVerified:{intro:'MIS verification has been recorded for this request.',action:'Review the verified record and recorded closing meter in Nerve Center.'},
+  requestOpened:{intro:'A breakdown request has been opened.',action:'Review the reported breakdown and update the acceptance or repair plan in Caliber Pulse.'},
+  requestClosed:{intro:'A request has been closed and marked On Road.',action:'Review the closure record and follow the applicable verification steps in Caliber Pulse.'},
+  requestVerified:{intro:'MIS verification has been recorded for this request.',action:'Review the verified record and recorded closing meter in Caliber Pulse.'},
   requestIdle:{intro:'A vehicle has been marked Idle.',action:'Review the idle reason and follow the approval action shown in this message.'},
-  offRoadEscalation:{intro:'This request remains Off Road at the escalation check.',action:'Review the repair progress and update the expected completion time in Nerve Center.'},
-  idleReminder:{intro:'This vehicle remains Idle at the reminder check.',action:'Review the idle reason and complete the applicable approval action in Nerve Center.'},
+  offRoadEscalation:{intro:'This request remains Off Road at the escalation check.',action:'Review the repair progress and update the expected completion time in Caliber Pulse.'},
+  idleReminder:{intro:'This vehicle remains Idle at the reminder check.',action:'Review the idle reason and complete the applicable approval action in Caliber Pulse.'},
   consolidatedRequestReport:{intro:'Your consolidated fleet report bundle is ready.',action:'Review the included reports and use their download links for the detailed records.'},
   consolidatedTicketReport:{intro:'Your consolidated CRM report files are ready.',action:'Open the PDF or Excel download link for complete ticket details.'},
-  ticketCreated:{intro:'A new CRM ticket has been created.',action:'Open the ticket to review its description and record the next action in Nerve Center.'},
-  ticketResolved:{intro:'A CRM ticket has been resolved.',action:'Open the ticket to review the recorded resolution in Nerve Center.'},
-  dailyUpdate:{intro:'A daily maintenance update has been recorded.',action:'Review the latest maintenance remarks and recorded progress in Nerve Center.'},
-  manualReports:{intro:'A report has been shared with you from Nerve Center.',action:'Review the shared report details and any included download links.'},
+  ticketCreated:{intro:'A new CRM ticket has been created.',action:'Open the ticket to review its description and record the next action in Caliber Pulse.'},
+  ticketResolved:{intro:'A CRM ticket has been resolved.',action:'Open the ticket to review the recorded resolution in Caliber Pulse.'},
+  dailyUpdate:{intro:'A daily maintenance update has been recorded.',action:'Review the latest maintenance remarks and recorded progress in Caliber Pulse.'},
+  manualReports:{intro:'A report has been shared with you from Caliber Pulse.',action:'Review the shared report details and any included download links.'},
 };
 export function reportTemplateContext(purpose) {
   const report=singleReportsByKey.get(purpose);
-  if(report)return {title:report.label,intro:`Your ${report.label} is ready.`,action:'Open the report links to review the records and follow up in Nerve Center.'};
+  if(report)return {title:report.label,intro:`Your ${report.label} is ready.`,action:'Open the report links to review the records and follow up in Caliber Pulse.'};
   return {title:titles[purpose]||titles[baseTemplateKey(purpose)]||'REPORT',...purposeNotes[purpose]};
 }
 export const REPORT_TEMPLATE_VARIANTS = ['standard','brief','detailed','executive','action','handover','checklist','formal','numbered','dashboard'];
@@ -125,17 +125,17 @@ export function reportTemplateChoices(purpose) {
   const styles=[
     ['standard','Site-first standard','Site heading and clearly labelled details.',null],
     ['brief','Compact summary','Short introduction for quick reading.',`*${title}*`],
-    ['detailed','Structured detail','Event context and complete facts.',`*NERVE CENTER | ${title}*\n${intro}`],
+    ['detailed','Structured detail','Event context and complete facts.',`*CALIBER PULSE | ${title}*\n${intro}`],
     ['executive','Executive brief','Key facts for review.',`*${title} | MANAGEMENT BRIEF*`],
     ['action','Action focused','Highlight the required follow-up.',`*ACTION REVIEW | ${title}*`],
     ['handover','Team handover','Pass the event details to the next team.',`*TEAM HANDOVER | ${title}*`],
     ['checklist','Review checklist','Facts for a complete review.',`*${title} | REVIEW CHECKLIST*`],
-    ['formal','Formal notice','Professional operational wording.',`*Nerve Center | ${title}*\nDear colleague, ${intro}`],
+    ['formal','Formal notice','Professional operational wording.',`*Caliber Pulse | ${title}*\nDear colleague, ${intro}`],
     ['numbered','Numbered facts','Numbered fields for reference.',`*${title} | FACTS AT A GLANCE*`],
     ['dashboard','Status card','A clear operational status card.',`*${title} | STATUS CARD*`],
   ];
   return styles.map(([variant,label,description,heading])=>({variant,label,description,
-    body:variant==='standard'?base.body:`${header}\n${heading}\n\n${variant==='numbered'?fields.slice(1).map((field,index)=>`${index+1}. *${field}:* {{${index+2}}}`).join('\n'):lines}\n\n${variant==='action'?action:'Open Nerve Center for complete details.'}`,
+    body:variant==='standard'?base.body:`${header}\n${heading}\n\n${variant==='numbered'?fields.slice(1).map((field,index)=>`${index+1}. *${field}:* {{${index+2}}}`).join('\n'):lines}\n\n${variant==='action'?action:'Open Caliber Pulse for complete details.'}`,
   }));
 }
 

@@ -92,12 +92,12 @@ export async function sendMetaWhatsAppText({to,message,purpose=''},{env=process.
   return {sent:true,recipient,messageId:details?.messages?.[0]?.id||''};
 }
 
-export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center-report.pdf',caption='',purpose=''},{env=process.env,fetchImpl=fetch}={}){
+export async function sendMetaWhatsAppDocument({to,buffer,filename='caliber-pulse-report.pdf',caption='',purpose=''},{env=process.env,fetchImpl=fetch}={}){
   await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
-  const safeFilename=clean(filename).replace(/[\\/:*?"<>|]+/g,'-').slice(0,120)||'nerve-center-report.pdf';
+  const safeFilename=clean(filename).replace(/[\\/:*?"<>|]+/g,'-').slice(0,120)||'caliber-pulse-report.pdf';
   const safeCaption=clean(caption);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
   if(!documentBuffer.length)throw new Error('A PDF document is required.');

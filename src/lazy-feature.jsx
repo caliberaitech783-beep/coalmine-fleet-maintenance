@@ -39,7 +39,7 @@ export class ApplicationErrorBoundary extends Component {
   componentDidCatch(error) {
     const recovering = recoverStaleChunk(error);
     if (recovering) this.setState({ recovering: true });
-    console.error("Nerve Center screen rendering failed.", error);
+    console.error("Caliber Pulse screen rendering failed.", error);
   }
 
   reload = () => {
@@ -60,7 +60,7 @@ export class ApplicationErrorBoundary extends Component {
     return <main className="application-recovery" role="alert">
       <div className="application-recovery-card">
         <span className="application-recovery-mark" aria-hidden="true">!</span>
-        <h1>{this.state.recovering ? "Updating Nerve Center…" : "This screen could not be displayed"}</h1>
+        <h1>{this.state.recovering ? "Updating Caliber Pulse…" : "This screen could not be displayed"}</h1>
         <p>{this.state.recovering
           ? "A newer application file is available. Your signed-in session is being preserved while the screen reloads."
           : "Your data is safe. Refresh the application to load a clean copy of this screen."}</p>

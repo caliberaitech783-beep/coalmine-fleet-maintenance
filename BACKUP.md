@@ -1,6 +1,6 @@
-# BDMS backup and restore guide
+# Caliber Pulse backup and restore guide
 
-BDMS disaster recovery requires four independent backup layers. A database file alone cannot rebuild the complete service.
+Caliber Pulse disaster recovery requires four independent backup layers. A database file alone cannot rebuild the complete service.
 
 | Recovery layer | What must be protected | Current method |
 |---|---|---|
@@ -13,7 +13,7 @@ BDMS disaster recovery requires four independent backup layers. A database file 
 
 - **Backup** shows recovery coverage and the last 100 backup operations.
 - **Export Backup** creates a complete compressed PostgreSQL archive and asks where to save it on the administrator's computer.
-- **Import Backup** checks the whole archive before restore. Only a Super Admin can restore, exact confirmation is required, and BDMS creates a safety backup first.
+- **Import Backup** checks the whole archive before restore. Only a Super Admin can restore, exact confirmation is required, and Caliber Pulse creates a safety backup first.
 - **Backup Schedule** controls weekdays, a 12-hour IST schedule, protected storage folder, retention days, and maximum stored files.
 
 Scheduled application backups are stored below `BACKUP_STORAGE_ROOT`. The default is `backups/` on Windows and `/home/data/bdms-backups` in Azure App Service. Set `BACKUP_STORAGE_ROOT` to a mounted persistent volume when a different protected server location is required. Folder names entered in the UI are kept inside this root.
@@ -31,7 +31,7 @@ powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1
 Choose another destination when required:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1 -Destination "D:\BDMS-Backups"
+powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1 -Destination "D:\Caliber Pulse-Backups"
 ```
 
 The local set contains:
@@ -41,7 +41,7 @@ The local set contains:
 | `app-repository.bundle` | Complete Git repository, including branches and history |
 | `app-source-<commit>.zip` | Source of the currently checked-out commit |
 | `app-working-folder.zip` | Working files such as `work/` and `outputs/`; secrets, `.git`, `node_modules`, and `dist` are excluded |
-| `bdms-data-<stamp>.ndjson.gz` | Every PostgreSQL public table in the portable BDMS format |
+| `bdms-data-<stamp>.ndjson.gz` | Every PostgreSQL public table in the portable Caliber Pulse format |
 | `bdms-database-<stamp>.dump` | Optional native archive when `pg_dump` is installed |
 | `table-counts.json`, `manifest.json`, `SHA256SUMS.txt` | Row-count and file-integrity evidence |
 

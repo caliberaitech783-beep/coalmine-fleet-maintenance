@@ -70,14 +70,14 @@ test("records session activity without changing the session token", async () => 
 
   await store.touch("token-3", {
     ipAddress: "10.0.0.8",
-    deviceId: "BDMS-DEVICE01",
+    deviceId: "Caliber Pulse-DEVICE01",
     userAgent: "Test Browser",
   });
 
   assert.match(calls[0].sql, /UPDATE auth_sessions/);
   assert.match(calls[0].sql, /last_seen_at = NOW\(\)/);
   assert.doesNotMatch(calls[0].sql, /make_interval\(mins/);
-  assert.deepEqual(calls[0].params, ["token-3", "10.0.0.8", "BDMS-DEVICE01", "Test Browser"]);
+  assert.deepEqual(calls[0].params, ["token-3", "10.0.0.8", "Caliber Pulse-DEVICE01", "Test Browser"]);
 });
 
 test("prunes only sessions that exceed the absolute lifetime", async () => {

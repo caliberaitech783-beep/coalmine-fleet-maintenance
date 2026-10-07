@@ -1,5 +1,5 @@
 /**
- * Diagnostics: a one-page health check of everything BDMS depends on. Each
+ * Diagnostics: a one-page health check of everything Caliber Pulse depends on. Each
  * check runs with its own time limit so one slow service cannot hang the page,
  * and reports one of four states:
  *   ok   - working

@@ -11,7 +11,7 @@ export const whatsappValue=(value,fallback='Not recorded',limit=240)=>{
   return text.length>limit?`${text.slice(0,limit-1).trimEnd()}…`:text;
 };
 const date=value=>value?formatDisplayDateTime(value):'Not recorded';
-const evidence=(text,audio)=>text||(audio?'Audio recorded — open Nerve Center to listen':'Not recorded');
+const evidence=(text,audio)=>text||(audio?'Audio recorded — open Caliber Pulse to listen':'Not recorded');
 
 export function siteReportMessageContext({kind='Fleet',site,window,count,pdfUrl,xlsxUrl,summary=''}){
   return {site:displaySiteName(site)||'Not recorded',title:`${kind} consolidated report`,
@@ -32,7 +32,7 @@ export function recipientReportMessage({kind='Fleet',window,reports=[]}){
     summary:sites.map(row=>`${row.site}: ${row.summary}`).join(' | '),
     pdfUrl:sites.map(row=>`${row.site}: ${row.pdfUrl}`).join(' | '),
     xlsxUrl:sites.map(row=>`${row.site}: ${row.xlsxUrl}`).join(' | ')};
-  const message=[`*LOCATIONS: ${locations}*`,`*Nerve Center | ${report.title}*`,`*Period:* ${period} IST`,
+  const message=[`*LOCATIONS: ${locations}*`,`*Caliber Pulse | ${report.title}*`,`*Period:* ${period} IST`,
     ...sites.flatMap(row=>[`\n*SITE: ${row.site}*`,row.summary,`*PDF - ${row.site}:* ${row.pdfUrl}`,`*Excel - ${row.site}:* ${row.xlsxUrl}`]),
   ].join('\n');
   return {message,reportContext:report};

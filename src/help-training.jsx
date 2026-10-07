@@ -64,7 +64,7 @@ export default function HelpTraining({role = "", roles = [], location = ""}) {
         <span>Help &amp; Training</span>
       </button>
       {showCoachmark && <span className="help-training-coachmark" role="status">
-        <b>New to Nerve Center?</b>
+        <b>New to Caliber Pulse?</b>
         <small>Watch your short {guide.role.replace(" User", "")} guide in English or Hindi.</small>
         <span><button type="button" onClick={dismissCoachmark}>Not now</button><button type="button" className="primary" onClick={openGuide}><PlayCircle /> Watch guide</button></span>
       </span>}

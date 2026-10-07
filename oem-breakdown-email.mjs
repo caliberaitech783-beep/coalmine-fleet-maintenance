@@ -70,7 +70,7 @@ export function buildOemEmail({recipient,rows,shifts=[],now=new Date(),onTable,e
     return [requestShiftLabel(row,shifts),row.ref,row.site,row.door,row.model,row.start,minutes===null?'—':`${Math.floor(minutes/1440)}d ${Math.floor(minutes%1440/60)}h ${minutes%60}m`,row.complaint,latest.remark,latest.delayedReason||latest.delayReason||row.delayedReason,row.expectedCompletionAt].map(value=>clean(value)||'—');
   });
   const intro=`Dear ${recipient.name},\n\nConsolidated active OEM BD cases for ${recipient.oem} across your assigned locations.\nActive OEM BD cases: ${rows.length}\nReport generated: ${oemEmailDay(now)}, ${new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'}).format(now)} IST\n\n${actions[recipient.level]}`;
-  const footer='Regards,\nCaliber — Nerve Center\nAutomated OEM Breakdown Reporting';
+  const footer='Regards,\nCaliber — Caliber Pulse\nAutomated OEM Breakdown Reporting';
   onTable?.({columns:headers.map(label=>({label})),rows:values});
   const cell=(value,tag='td')=>`<${tag} style="border:1px solid #000;padding:8px;text-align:left">${escape(value)}</${tag}>`;
   return {subject,text:`${intro}\n\n${headers.join(' | ')}\n${values.map(row=>row.join(' | ')).join('\n')||'No active OEM BD cases.'}\n\n${footer}`,html:`<div style="font-family:Arial;color:#17233c"><p>${escape(intro).replaceAll('\n','<br>')}</p><table style="border-collapse:collapse"><thead><tr>${headers.map(value=>cell(value,'th')).join('')}</tr></thead><tbody>${values.map((row,index)=>`<tr style="background:${index%2?'#fff':'#eee'}">${row.map(value=>cell(value)).join('')}</tr>`).join('')}</tbody></table>${rows.length?'':'<p>No active OEM BD cases.</p>'}<p>${escape(footer).replaceAll('\n','<br>')}</p></div>`};
@@ -112,7 +112,7 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
         report=await buildOemEmailWithAttachments({recipient,rows,shifts:data.shifts,now,extraBatch});
         await client.query('UPDATE oem_email_deliveries SET attachments=$3::jsonb,last_attempt_at=NOW(),retry_safe=FALSE WHERE day=$1 AND recipient_key=$2',[oemEmailDay(now),deliveryKey,JSON.stringify(report.attachments.map(file=>({filename:file.filename,bytes:file.content.length})))]);
         sendStarted=true;
-        result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
+        result=await mailer.transporter.sendMail({from:`Caliber Pulse <${mailer.config.user}>`,to:recipient.email,...(trialCc.length?{cc:trialCc.filter(address=>address!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(address=>key(address)===recipient.email))throw new Error('SMTP did not accept the recipient');
       }catch(error){
         failed++;
@@ -124,7 +124,7 @@ export async function sendScheduledOemEmails({pool,loadData,now=new Date(),maile
       if(trialCc.length){
         let acknowledgementStatus='SMTP accepted';
         try{
-          const acknowledgement=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:trialCc,
+          const acknowledgement=await mailer.transporter.sendMail({from:`Caliber Pulse <${mailer.config.user}>`,to:trialCc,
             subject:`Sending confirmation — ${report.subject}`,
             ...(result.messageId?{inReplyTo:result.messageId,references:result.messageId}:{}),
             attachments:report.attachments,

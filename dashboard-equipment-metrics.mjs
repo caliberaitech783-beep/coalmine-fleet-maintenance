@@ -168,7 +168,7 @@ function matchingRoadStatus(record, requests, matches) {
     (normalize(request.status) !== "closed" || isIdleVehicleRequest(request)) && matches(request, record));
   if (matchingRequests.some((request) => normalize(request.status)!=="running bd" && !isIdleVehicleRequest(request))) return "offroad";
   if (matchingRequests.some(isIdleVehicleRequest)) return "idle";
-  // Live BDMS availability follows the request lifecycle, not a stale master
+  // Live Caliber Pulse availability follows the request lifecycle, not a stale master
   // snapshot. Keep equipmentRoadStatus/equipmentMetrics for snapshot consumers.
   return "onroad";
 }

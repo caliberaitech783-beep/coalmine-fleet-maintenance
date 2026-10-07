@@ -89,7 +89,7 @@ export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,ope
   const sites=[...new Set([...openRequests,...closedRequests].map(({site})=>displaySiteName(site)||'Not assigned'))].sort();
   const header=[
     `*SITE: ${displaySiteName(scopeLabel)}*`,
-    '🚨 *NERVE CENTER CONSOLIDATED REPORT*',
+    '🚨 *CALIBER PULSE CONSOLIDATED REPORT*',
     `*SCOPE:* ${displaySiteName(scopeLabel)}`,
     `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
     `*GENERATED:* ${indiaDateTime(end)}`,
@@ -106,6 +106,6 @@ export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,ope
     sections.push(closed.length?closed.map((row,index)=>recordLines(row,index,true)).join('\n'):'No closed requests.');
   }
   let message=[header,...sections].join('\n');
-  if(message.length>maxLength)message=`${message.slice(0,maxLength-105).trimEnd()}\n\n*Additional records omitted.* Open Nerve Center for the complete list.`;
+  if(message.length>maxLength)message=`${message.slice(0,maxLength-105).trimEnd()}\n\n*Additional records omitted.* Open Caliber Pulse for the complete list.`;
   return message;
 }

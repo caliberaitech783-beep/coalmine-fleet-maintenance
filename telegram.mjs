@@ -61,7 +61,7 @@ export async function sendTelegramText({message,purpose='',settings,chatId,priva
   return {sent:true,chatId:target,messageId:result?.message_id};
 }
 
-export async function sendTelegramDocument({buffer,filename='nerve-center-report.pdf',caption='',purpose='',settings,chatId},{env=process.env,fetchImpl=fetch}={}){
+export async function sendTelegramDocument({buffer,filename='caliber-pulse-report.pdf',caption='',purpose='',settings,chatId},{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(env);
   assertReady(config,purpose,settings);
   const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
@@ -72,7 +72,7 @@ export async function sendTelegramDocument({buffer,filename='nerve-center-report
   form.append('chat_id',target);
   const text=telegramPlainText(caption).slice(0,TELEGRAM_CAPTION_LIMIT);
   if(text)form.append('caption',text);
-  const safeFilename=clean(filename).replace(/[\\/:*?"<>|]+/g,'-').slice(0,120)||'nerve-center-report.pdf';
+  const safeFilename=clean(filename).replace(/[\\/:*?"<>|]+/g,'-').slice(0,120)||'caliber-pulse-report.pdf';
   form.append('document',new Blob([documentBuffer],{type:'application/pdf'}),safeFilename);
   const result=await telegramRequest('sendDocument',{env,fetchImpl,form});
   return {sent:true,chatId:target,messageId:result?.message_id};
@@ -136,7 +136,7 @@ export async function telegramBotUsername({env=process.env,fetchImpl=fetch}={}){
   return cachedBotUsername;
 }
 
-// Join requests let the bot admit only BDMS administrators to the admin group.
+// Join requests let the bot admit only Caliber Pulse administrators to the admin group.
 export const TELEGRAM_WEBHOOK_UPDATES=['message','my_chat_member','chat_join_request'];
 
 export async function ensureTelegramWebhook(baseUrl,{env=process.env,fetchImpl=fetch}={}){
@@ -161,7 +161,7 @@ export async function telegramStatus({env=process.env,fetchImpl=fetch}={}){
 }
 
 // The admin group invite asks to join; the bot then approves administrators only.
-export async function createTelegramJoinRequestLink(chatId,{env=process.env,fetchImpl=fetch,name='BDMS administrators'}={}){
+export async function createTelegramJoinRequestLink(chatId,{env=process.env,fetchImpl=fetch,name='Caliber Pulse administrators'}={}){
   const result=await telegramRequest('createChatInviteLink',{env,fetchImpl,json:{chat_id:chatId,name:name.slice(0,32),creates_join_request:true}});
   return clean(result?.invite_link);
 }
@@ -180,6 +180,6 @@ export async function telegramSiteGroupDetails(chatId,{env=process.env,fetchImpl
   const chat=await telegramRequest('getChat',{env,fetchImpl,json:{chat_id:chatId}});
   if(!['group','supergroup'].includes(chat?.type))throw new Error('Choose a Telegram group.');
   const member=await telegramRequest('getChatMember',{env,fetchImpl,json:{chat_id:chatId,user_id:bot.id}});
-  if(member?.status!=='administrator'||member.can_invite_users!==true)throw new Error('Make the BDMS bot a group administrator with permission to invite users first.');
+  if(member?.status!=='administrator'||member.can_invite_users!==true)throw new Error('Make the Caliber Pulse bot a group administrator with permission to invite users first.');
   return {title:clean(chat.title)};
 }

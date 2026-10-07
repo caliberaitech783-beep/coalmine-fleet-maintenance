@@ -143,3 +143,6 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .announcement-image-picker figure>button{border-style:solid;border-color:#f0c9c5;color:#9d3932;background:#fff4f3}
 [data-theme="dark"] .announcement-image img,[data-theme="dark"] .announcement-image-picker figure img{border-color:#44536c}
 [data-theme="dark"] .announcement-image-picker>button{border-color:#4a5b76;color:#d6e0ee;background:#17243a}
+
+/* The responsive login banner already carries the full Pulse logo. */
+.login > main .login-mobile-brand { display: none; }

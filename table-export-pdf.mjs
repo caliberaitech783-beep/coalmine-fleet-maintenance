@@ -1,4 +1,6 @@
 import PDFDocument from 'pdfkit';
+import {readFileSync} from 'node:fs';
+const pulseReportLogo=readFileSync(new URL('./public/pulse-logo.png',import.meta.url));
 import {reportTime12} from './report-time-format.mjs';
 import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
@@ -64,7 +66,8 @@ function footer(doc,generatedAt){
   const pages=doc.bufferedPageRange();
   for(let index=0;index<pages.count;index++){
     doc.switchToPage(index);
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${formatDisplayDateTime(generatedAt??new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
+    doc.image(pulseReportLogo,doc.page.margins.left,doc.page.height-62,{fit:[72,28]});
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Caliber Pulse | Generated ${formatDisplayDateTime(generatedAt??new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
   }
 }
 
@@ -104,7 +107,7 @@ function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>
 }
 
 function createTableDocument(title,generatedAt,pageSize){
-  const info={Title:clean(title),Author:'Nerve Center'};
+  const info={Title:clean(title),Author:'Caliber Pulse'};
   if(generatedAt!==undefined)info.CreationDate=new Date(generatedAt);
   // A3 stays the default; Smart Print exports may ask for A4 and the columns are fitted to that width.
   const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info,...(String(pageSize).toUpperCase()==='A4'?{size:'A4'}:{})});
@@ -112,14 +115,14 @@ function createTableDocument(title,generatedAt,pageSize){
   return doc;
 }
 
-export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[],pageSize='A3'}={}){
+export async function buildTableExportPdf({title='Caliber Pulse report',columns=[],rows=[],highlights=[],pageSize='A3'}={}){
   const doc=createTableDocument(title,undefined,pageSize),result=collect(doc);
   drawTable(doc,{title,columns,rows,highlights});
   footer(doc);doc.end();return result;
 }
 
 /** One site PDF: title identifies the site; subtitle carries its reporting window. */
-export async function buildTableBundlePdf({title='Nerve Center report',subtitle='',tables=[],generatedAt=new Date(),pageSize='A3'}={}){
+export async function buildTableBundlePdf({title='Caliber Pulse report',subtitle='',tables=[],generatedAt=new Date(),pageSize='A3'}={}){
   const sections=tables.length?tables.filter((table,index)=>index===0||table.rows?.length):[{title:'Report',columns:[],rows:[]}];
   const doc=createTableDocument(title,generatedAt,pageSize),result=collect(doc);
   sections.forEach((table,index)=>{

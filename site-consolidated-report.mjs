@@ -115,12 +115,12 @@ export function buildSiteFleetReportTables({source,site,window,reportTitles=[]})
 }
 export function siteReportFilename(kind,site,slotKey,extension){
   const part=value=>clean(value).replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,90)||'site';
-  return `Nerve-Center-${part(kind)}-${part(displaySiteName(site))}-${part(slotKey)}.${extension}`;
+  return `Caliber-Pulse-${part(kind)}-${part(displaySiteName(site))}-${part(slotKey)}.${extension}`;
 }
 export function buildSiteReportMessage({kind='Fleet',site,window,count,pdfUrl,xlsxUrl}){
   if(!pdfUrl||!xlsxUrl)throw new Error('A site report requires both PDF and Excel links.');
   const siteLabel=displaySiteName(site)||'Not assigned';
-  return [`*SITE: ${siteLabel}*`, `*Nerve Center | ${kind} consolidated report*`,
+  return [`*SITE: ${siteLabel}*`, `*Caliber Pulse | ${kind} consolidated report*`,
     `*FROM:* ${dateLabel(window.start)}`,`*TO:* ${dateLabel(window.end)} IST`,
     `*${kind==='CRM'?'Tickets':'Cases'} with activity:* ${count}`,
     `*PDF - ${siteLabel}:* ${pdfUrl}`,`*Excel - ${siteLabel}:* ${xlsxUrl}`,

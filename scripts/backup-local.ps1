@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Creates a complete local backup of the BDMS application and its data.
+  Creates a complete local backup of the Caliber Pulse application and its data.
 
 .DESCRIPTION
   Produces one dated folder containing:
@@ -17,7 +17,7 @@
   environment variable, then the project's .env file. It is never printed.
 
 .PARAMETER Destination
-  Folder that receives the dated backup folder. Default: %USERPROFILE%\BDMS-Backups
+  Folder that receives the dated backup folder. Default: %USERPROFILE%\Caliber Pulse-Backups
   Point it at a OneDrive folder to get an automatic cloud copy.
 
 .PARAMETER DatabaseUrl
@@ -28,11 +28,11 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1 -Destination "D:\Backups\BDMS"
+  powershell -ExecutionPolicy Bypass -File scripts\backup-local.ps1 -Destination "D:\Backups\Caliber Pulse"
 #>
 [CmdletBinding()]
 param(
-  [string]$Destination = (Join-Path $env:USERPROFILE 'BDMS-Backups'),
+  [string]$Destination = (Join-Path $env:USERPROFILE 'Caliber Pulse-Backups'),
   [string]$DatabaseUrl = '',
   [switch]$SkipDatabase
 )
@@ -71,7 +71,7 @@ function Invoke-Checked {
 }
 
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-Write-Host "BDMS local backup"
+Write-Host "Caliber Pulse local backup"
 Write-Host "  Project : $projectRoot"
 Write-Host "  Target  : $target"
 Write-Host ''

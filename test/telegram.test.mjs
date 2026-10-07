@@ -229,7 +229,7 @@ test("The webhook subscribes to join requests and re-registers when the list cha
   assert.deepEqual(set.body.allowed_updates, ["message", "my_chat_member", "chat_join_request"]);
 });
 
-test("Only BDMS administrators are invited to and admitted into the admin group", () => {
+test("Only Caliber Pulse administrators are invited to and admitted into the admin group", () => {
   assert.ok(server.includes("return profile.sessionRole==='super'&&['admin','super admin'].includes("));
   assert.ok(server.includes("if(isBdmsAdministrator(user))await inviteAdministratorToTelegramGroup(rows[0].login,update.chatId)"));
   assert.ok(server.includes("const approved=users.some(user=>user&&isBdmsAdministrator(user));"));

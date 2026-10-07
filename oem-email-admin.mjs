@@ -59,7 +59,7 @@ export function registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrato
         report.subject=`Retry — ${report.subject}`;
         await client.query('UPDATE oem_email_deliveries SET attachments=$3::jsonb WHERE day=$1 AND recipient_key=$2',[day,recipientKey,JSON.stringify(report.attachments.map(file=>({filename:file.filename,bytes:file.content.length})))]);
         sendStarted=true;
-        result=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:recipient.email,...(row.trial_cc?{cc:OEM_TRIAL_CC.filter(email=>email!==recipient.email)}:{}),...report});
+        result=await mailer.transporter.sendMail({from:`Caliber Pulse <${mailer.config.user}>`,to:recipient.email,...(row.trial_cc?{cc:OEM_TRIAL_CC.filter(email=>email!==recipient.email)}:{}),...report});
         if(!result.accepted?.some(email=>String(email).toLowerCase()===recipient.email))throw new Error('SMTP did not accept the OEM recipient; manual review required.');
       }catch(error){
         await client.query("UPDATE oem_email_deliveries SET status='Failed / review required',error=$3,retry_safe=$4,updated_at=NOW() WHERE day=$1 AND recipient_key=$2",[day,recipientKey,safeOemError(error),safeOemRetry(error,sendStarted)]);
@@ -69,7 +69,7 @@ export function registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrato
       if(row.trial_cc){
         let acknowledgement='SMTP accepted';
         try {
-          const ack=await mailer.transporter.sendMail({from:`Nerve Center <${mailer.config.user}>`,to:OEM_TRIAL_CC,subject:`Sending confirmation — ${report.subject}`,
+          const ack=await mailer.transporter.sendMail({from:`Caliber Pulse <${mailer.config.user}>`,to:OEM_TRIAL_CC,subject:`Sending confirmation — ${report.subject}`,
             inReplyTo:result.messageId,references:result.messageId,attachments:report.attachments,
             text:`SMTP accepted the retry for ${recipient.email}. This is not proof of inbox delivery or reading.\nMessage ID: ${result.messageId||'Not provided'}\n\n${report.text}`});
           if(!OEM_TRIAL_CC.every(email=>ack.accepted?.includes(email)))throw new Error('Confirmation not accepted for all recipients.');

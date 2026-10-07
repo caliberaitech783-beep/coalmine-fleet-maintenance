@@ -1,6 +1,6 @@
-# Nerve Center project workflow
+# Caliber Pulse project workflow
 
-This is the maintainer guide for the Nerve Center breakdown and fleet-management application. It describes the current source in this repository, the production flow, and the rules that connect users, masters, requests, reports, and deployment.
+This is the maintainer guide for the Caliber Pulse breakdown and fleet-management application. It describes the current source in this repository, the production flow, and the rules that connect users, masters, requests, reports, and deployment.
 
 Production URL: [https://bdms.cmll.in/](https://bdms.cmll.in/)
 
@@ -8,7 +8,7 @@ Production URL: [https://bdms.cmll.in/](https://bdms.cmll.in/)
 
 Vehicle transfers shows the standard **Sync Oracle** button without a date field and retains full-history sync behavior. The protected transfer-sync API still accepts an optional `fromDate` as `YYYY-MM-DD` for explicitly requested one-time syncs; it is inclusive and preserves earlier Oracle transfer records. Equipment Master sync remains unchanged.
 
-Nerve Center is a mining-operations portal for:
+Caliber Pulse is a mining-operations portal for:
 
 - equipment and vehicle records;
 - regions, sites, hierarchy, OEM, repair-type, privilege, and employee masters;
@@ -518,7 +518,7 @@ Relevant tests include `whatsapp-workflow-policy`, `generic-whatsapp-alerts`, `w
 
 ### WhatsApp message layout and template rollout (September 2026)
 
-Operational WhatsApp templates begin with a bold `SITE` heading on its own line. Each template has separate labelled fields so provider parameter whitespace normalization cannot collapse the entire message. The saved request or ticket supplies the equipment, breakdown category, complaint, repair work, delay/idle reason, CRM priority/resolution, timestamps, meter and first-trip status as applicable. Individual notifications and reminders omit the Next step field. Audio-only details point users to the recording in Nerve Center; long prose is summarized, with the request link retained.
+Operational WhatsApp templates begin with a bold `SITE` heading on its own line. Each template has separate labelled fields so provider parameter whitespace normalization cannot collapse the entire message. The saved request or ticket supplies the equipment, breakdown category, complaint, repair work, delay/idle reason, CRM priority/resolution, timestamps, meter and first-trip status as applicable. Individual notifications and reminders omit the Next step field. Audio-only details point users to the recording in Caliber Pulse; long prose is summarized, with the request link retained.
 
 Scheduled fleet and CRM reports pass structured site, reporting window, activity count and PDF/Excel links. Each scheduled delivery consolidates all selected permitted locations into one message while retaining site-specific files and the exact interval. Manual reports and WhatsApp share text also lead with the site or an explicit multi-site scope. Account password-reset OTPs retain their authentication format.
 

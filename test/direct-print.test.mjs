@@ -18,7 +18,7 @@ test('the chosen Smart Print page becomes the printer paper size',()=>{
   assert.throws(()=>directPrintPaper({}),/valid page size/);
   const options=directPrintOptions(a3,'  BD Balance ·  All regions ');
   assert.deepEqual(options,{size:{width:297,height:420},units:'mm',scaleContent:true,colorType:'color',duplex:'one-sided',copies:1,jobName:'BD Balance · All regions'});
-  assert.equal(directPrintOptions(a4,'').jobName,'Nerve Center report');
+  assert.equal(directPrintOptions(a4,'').jobName,'Caliber Pulse report');
   const twoSided=directPrintOptions(a4,'Report',{duplex:'long-edge',copies:'3'});
   assert.deepEqual([twoSided.duplex,twoSided.copies],['long-edge',3],'sides and copies reach the printer');
   assert.deepEqual([directPrintOptions(a4,'R',{duplex:'upside-down',copies:500}).duplex,directPrintOptions(a4,'R',{copies:500}).copies],['one-sided',99]);
@@ -173,7 +173,7 @@ test('the helper is started through its qz: link in a hidden frame, leaving the 
 test('the application creates and keeps its own signing pair, so nobody handles a private key',async()=>{
   const created=await generatePrintHelperSigning();
   const certificate=new X509Certificate(created.certificate);
-  assert.match(certificate.subject,/CN=Nerve Center Smart Print/);
+  assert.match(certificate.subject,/CN=Caliber Pulse Smart Print/);
   assert.equal(certificate.ca,true,'a CA-style self-signed certificate, as QZ Tray expects for its override');
   assert.ok(new Date(certificate.validTo).getFullYear()-new Date().getFullYear()>=19,'valid for about twenty years');
   const signature=signPrintRequest('request-hash',created.privateKey);
@@ -185,7 +185,7 @@ test('the application creates and keeps its own signing pair, so nobody handles 
   assert.equal(resolvePrintHelperSigning({env:{QZ_SIGNING_CERTIFICATE:publicKey,QZ_SIGNING_PRIVATE_KEY:privateKey},stored:created}).source,'environment','explicit server settings win');
 
   const summary=certificateSummary(created.certificate);
-  assert.match(summary.subject,/Nerve Center Smart Print/);
+  assert.match(summary.subject,/Caliber Pulse Smart Print/);
   assert.match(summary.fingerprint,/^[0-9A-F:]+$/);
   assert.doesNotMatch(JSON.stringify(summary),/PRIVATE|BEGIN/,'the summary holds no key material');
   assert.deepEqual(certificateSummary('nonsense'),{subject:'',validTo:'',fingerprint:''});

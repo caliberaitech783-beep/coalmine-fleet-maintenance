@@ -6,7 +6,7 @@ import {auditRouteDetails} from '../audit-trail.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const client=readFileSync(new URL('../src/backup-administration.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
-const script=readFileSync(new URL('../public/pc-backup/Nerve-Center-Backup-Setup.ps1',import.meta.url),'utf8');
+const script=readFileSync(new URL('../public/pc-backup/Caliber-Pulse-Backup-Setup.ps1',import.meta.url),'utf8');
 
 test('PC keys are random, stored only as hashes, matched in constant time and revocable',()=>{
   const {key,record}=createPcBackupKey({label:'  Head office <desktop> ',createdBy:'Anoop',now:new Date('2026-09-19T10:00:00Z'),random:()=>Buffer.alloc(32,7),makeId:()=> 'id-1'});
@@ -57,16 +57,16 @@ test('server: admin-only key management and a keyed download of the latest compl
 test('the setup script schedules a daily verified copy and never stores the key in plain text',()=>{
   assert.ok(!/[^\x00-\x7F]/.test(script),'plain ASCII for Windows PowerShell 5.1');
   assert.match(client,/\.replace\(\/\\r\?\\n\/g,'\\r\\n'\);/,'the page hands out Windows line endings whatever the checkout used');
-  assert.match(script,/\$AppUrl = 'https:\/\/bdms\.cmll\.in'/);
-  assert.match(script,/Read-Host 'Paste the PC backup key from Nerve Center, then press Enter' -AsSecureString/);
+  assert.match(script,/\$AppUrl = 'https:\/\/pulse\.cmll\.in'/);
+  assert.match(script,/Read-Host 'Paste the PC backup key from Caliber Pulse, then press Enter' -AsSecureString/);
   assert.match(script,/ConvertFrom-SecureString \| Set-Content -Path \(Join-Path \$WorkDir 'key\.dat'\)/,'DPAPI-encrypted for this Windows user');
   assert.match(script,/\/api\/backups\/pc-download\/latest'\) -Headers @\{ 'X-Backup-Key' = \$key \}/);
   assert.match(script,/Get-FileHash -LiteralPath \$tmp -Algorithm SHA256/);
   assert.match(script,/New-ScheduledTaskSettingsSet -StartWhenAvailable/,'runs later if the PC was off');
   assert.match(script,/Register-ScheduledTask -TaskName \$TaskName/);
   assert.doesNotMatch(script,/ncbk_[A-Za-z0-9_-]{20}/,'no key is baked into the script');
-  assert.match(client,/fetch\('\/pc-backup\/Nerve-Center-Backup-Setup\.ps1'/);
-  assert.match(client,/\.replace\("\$AppUrl = 'https:\/\/bdms\.cmll\.in'",`\$AppUrl = '\$\{window\.location\.origin\}'`\)/);
+  assert.match(client,/fetch\('\/pc-backup\/Caliber-Pulse-Backup-Setup\.ps1'/);
+  assert.match(client,/\.replace\("\$AppUrl = 'https:\/\/pulse\.cmll\.in'",`\$AppUrl = '\$\{window\.location\.origin\}'`\)/);
   assert.match(client,/<PcBackupCopy session=\{session\} \/><\/div>\}/);
   assert.match(client,/It is shown only once/);
 });

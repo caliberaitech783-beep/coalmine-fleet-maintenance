@@ -23,9 +23,9 @@ test('lists every protected backup page in the Administration menu',()=>{
 test('requires Super Admin inspection and exact confirmation before restore',()=>{
   assert.match(server,/app\.post\('\/api\/backups\/import\/inspect',requireSuper,requireTrueSuperAdmin/);
   assert.match(server,/app\.post\('\/api\/backups\/import\/restore',requireSuper,requireTrueSuperAdmin/);
-  assert.match(server,/confirmation\|\|''\)\.trim\(\)!=='RESTORE BDMS'/);
+  assert.match(server,/confirmation\|\|''\)\.trim\(\)!=='RESTORE Caliber Pulse'/);
   assert.match(server,/triggerType:'Pre-restore'/);
-  assert.match(client,/Type <b>RESTORE BDMS<\/b>/);
+  assert.match(client,/Type <b>RESTORE Caliber Pulse<\/b>/);
 });
 
 test('manual export asks for a computer location and scheduled backup uses protected storage',()=>{

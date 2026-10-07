@@ -546,10 +546,10 @@ function CaliberBrand({ subtitle = "Breakdown management system", className = ""
   return (
     <div className={`caliber-app-brand ${className}`.trim()}>
       <span className="caliber-logo-frame">
-        <img src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" />
+        <img src={className.includes("login-") ? "/pulse-logo.png" : "/pulse-symbol.png"} alt="Caliber Pulse" />
       </span>
       <span className="caliber-app-name">
-        <strong><PulseIcon className="caliber-pulse-icon" />Nerve Center</strong>
+        <strong><PulseIcon className="caliber-pulse-icon" />Caliber Pulse</strong>
         <small>{subtitle}</small>
       </span>
     </div>
@@ -749,7 +749,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   };
   return (
     <div className={`login${accountsPortal?' accounts-login':''}`}>
-      <section className="login-visual" aria-label="Nerve Center fleet operations">
+      <section className="login-visual" aria-label="Caliber Pulse fleet operations">
         <div className="login-grid" aria-hidden="true" />
         <div className="login-schematic" aria-hidden="true">
           <i /><i /><i /><i />
@@ -3532,14 +3532,14 @@ function exportCellText(value) {
   return reportTime12(text) || "—";
 }
 function exportFileName(title, extension) {
-  const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
+  const safeTitle = String(title || "caliber-pulse-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "caliber-pulse-report";
   return `${safeTitle}-${formatDisplayDate(new Date())}.${extension}`;
 }
 function CaliberActivityMark({ size = "medium" }) {
   return (
     <span className={`caliber-activity-mark ${size}`} aria-hidden="true">
       <span className="caliber-activity-ring" />
-      <img src="/app-icon.png" alt="" />
+      <img src="/pulse-icon-192.png" alt="" />
     </span>
   );
 }
@@ -3550,7 +3550,7 @@ function CaliberActivityOverlay({ message = "", className = "" }) {
       <div className="caliber-activity-panel">
         <CaliberActivityMark size="large" />
         <strong>{message}</strong>
-        <span>Please wait while Nerve Center prepares your file.</span>
+        <span>Please wait while Caliber Pulse prepares your file.</span>
       </div>
     </div>,
     document.body,
@@ -3660,7 +3660,7 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
       usedLabels.add(label.toLowerCase());
       return label;
     });
-    const summaryRows = [[sheetTitle || title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
+    const summaryRows = [[sheetTitle || title || "Caliber Pulse report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
     const firstDataRow = summaryRows.length + 1;
     const worksheetRows = [...summaryRows, labels, ...serial.rows];
     const sheetData = worksheetRows.map((row, rowIndex) => {
@@ -3679,12 +3679,12 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     // discard) the complete worksheet when these otherwise valid elements are reversed.
     return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, tableRange: filterRange, tableLabels: labels, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lastCell}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>${widths}</cols><sheetData>${sheetData}</sheetData><autoFilter ref="${filterRange}"/>${labels.length > 1 ? `<mergeCells count="2"><mergeCell ref="A1:${mergedTo}1"/><mergeCell ref="A2:${mergedTo}2"/></mergeCells>` : ""}<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>` };
   });
-  const workbookTitle = escapeXlsxText(title || "Nerve Center report");
+  const workbookTitle = escapeXlsxText(title || "Caliber Pulse report");
   return zipStoredFiles([
     { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${worksheets.map((sheet) => `<Override PartName="/${sheet.part}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}${worksheets.map((_, index) => `<Override PartName="/xl/tables/table${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
     { name: "_rels/.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
-    { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
-    { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
+    { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Caliber Pulse</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
+    { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Caliber Pulse</Application></Properties>` },
     { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${worksheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${worksheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
     { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF10284C"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FF000000"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF65758B"/><name val="Calibri"/></font></fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="0" fillId="2" borderId="1" applyBorder="1" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="1" applyBorder="1" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="1" applyBorder="1" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><tableStyles count="0" defaultTableStyle="TableStyleLight15" defaultPivotStyle="PivotStyleLight16"/></styleSheet>` },
     { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeXlsxText(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
@@ -7084,7 +7084,7 @@ function UserSessionsPage({session}) {
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
     {status==='Never logged in'?<UserLoginActivity token={session?.token||authToken} Table={ActionsTable} formatDate={formatTwelveHourDateTime} query={query} />:<div className="user-session-table-wrap" data-session-view={status}><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Assistance</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><button type="button" className={`session-state ${row.online?'online':'inactive'}`} disabled={!row.login} aria-label={`View last 24 hours of login sessions for ${row.name||row.login}`} onClick={()=>setHistoryTarget(row)}><i />{row.online?'Online':'Inactive'}</button></td><td>{viewOnly?"View only":<button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button>}</td><td>{viewOnly?<span>View only</span>:row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td>{viewOnly?"View only":<RemoteAssistanceAction row={row} token={session?.token||authToken} onChanged={()=>load({quiet:true})} />}</td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="12" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>}
-    <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Inactivity does not sign users out.</span></footer>
+    <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the Caliber Pulse tab, and ends automatically after the selected duration. Inactivity does not sign users out.</span></footer>
     {historyTarget&&<UserLoginHistory token={session?.token||authToken} row={historyTarget} Modal={Modal} Table={ActionsTable} formatDate={formatTwelveHourDateTime} deviceDetails={auditDeviceDetails} onClose={()=>setHistoryTarget(null)} />}
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
     {announcing&&<AnnouncementComposer session={session} onClose={()=>setAnnouncing(false)} onSent={()=>{setAnnouncing(false);setMessageNotice('Announcement sent to all users. Each user will see it until they close it.');}} />}
@@ -8844,8 +8844,8 @@ function WhatsAppReport({type, requests = []}) {
     ? rows.filter((row) => locationMatchesRegion(row.locations, oemRegion))
     : rows;
   const reportText = isSite
-    ? [`*SITE: ${visibleRows.map(r=>r.name).join(", ") || "No sites selected"}*`, `*Nerve Center | Daily site report*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*${r.name}*\n*Total:* ${r.total} | *On Road:* ${r.onRoad} | *Off Road:* ${r.offRoad}\n*Idle:* ${r.idle} | *Open breakdowns:* ${r.breakdowns}`)].join("\n")
-    : [`*SITE: ${[...new Set(visibleRows.flatMap(r=>String(r.locations||"").split(", ")).filter(Boolean))].join(", ") || "Not assigned"}*`, `*Nerve Center | Daily OEM report${oemRegion === "all" ? "" : ` - ${oemRegion}`}*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*OEM:* ${r.name}\n*Contacts:* ${r.contacts} | *Levels:* ${r.levels || "N/A"}\n*Sites:* ${r.locations || "Not assigned"}`)].join("\n");
+    ? [`*SITE: ${visibleRows.map(r=>r.name).join(", ") || "No sites selected"}*`, `*Caliber Pulse | Daily site report*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*${r.name}*\n*Total:* ${r.total} | *On Road:* ${r.onRoad} | *Off Road:* ${r.offRoad}\n*Idle:* ${r.idle} | *Open breakdowns:* ${r.breakdowns}`)].join("\n")
+    : [`*SITE: ${[...new Set(visibleRows.flatMap(r=>String(r.locations||"").split(", ")).filter(Boolean))].join(", ") || "Not assigned"}*`, `*Caliber Pulse | Daily OEM report${oemRegion === "all" ? "" : ` - ${oemRegion}`}*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*OEM:* ${r.name}\n*Contacts:* ${r.contacts} | *Levels:* ${r.levels || "N/A"}\n*Sites:* ${r.locations || "Not assigned"}`)].join("\n");
   const share = () => window.open(`https://wa.me/?text=${encodeURIComponent(reportText)}`, "_blank", "noopener,noreferrer");
   const dummyReportTypes = ["A/B", "B/C", "C/D"];
   const oemReportLevels = ["Daily", "L1", "L2", "L3", "L4"];
@@ -8884,7 +8884,7 @@ function WhatsAppReport({type, requests = []}) {
     if (phone.length === 10) phone = `91${phone}`;
     const message = [
       `*SITE: ${site.name}*`,
-      "*Nerve Center | Daily site report*",
+      "*Caliber Pulse | Daily site report*",
       `*Date:* ${today}`,
       `*Report:* ${reportType}`,
       `*Total equipment:* ${site.total}`,
@@ -8920,12 +8920,12 @@ function WhatsAppReport({type, requests = []}) {
     if (phone.length === 10) phone = `91${phone}`;
     const message = [
       `*SITE: ${oem.locations || "Not assigned"}*`,
-      "*Nerve Center | Daily OEM report*",
+      "*Caliber Pulse | Daily OEM report*",
       `*Date:* ${today}`,
       `*OEM:* ${oem.name}`,
       `*Level:* ${reportLevel}`,
       `*Contacts:* ${oem.contacts}`,
-      "Generated from the current Nerve Center fleet data.",
+      "Generated from the current Caliber Pulse fleet data.",
     ].join("\n");
     try{
       if(!phone)throw new Error(`No WhatsApp phone number is assigned for ${oem.name} ${reportLevel}.`);

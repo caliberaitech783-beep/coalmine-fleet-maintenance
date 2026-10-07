@@ -6,9 +6,9 @@ const CHECK_ICONS = { app: Server, database: Database, backups: HardDrive, oracl
 const STATE_LABELS = { ok: "Working", warn: "Needs attention", fail: "Not working", off: "Not set up" };
 const STATE_ICONS = { ok: CheckCircle2, warn: AlertTriangle, fail: XCircle, off: CircleOff };
 const OVERALL = {
-  ok: "Everything BDMS depends on is working.",
-  warn: "BDMS is working, but some items need attention.",
-  fail: "Some services BDMS depends on are not working.",
+  ok: "Everything Caliber Pulse depends on is working.",
+  warn: "Caliber Pulse is working, but some items need attention.",
+  fail: "Some services Caliber Pulse depends on are not working.",
 };
 
 // Admin > Database > Diagnostics: one health check of the app server, database,
@@ -34,7 +34,7 @@ export default function DiagnosticsPage({ token }) {
   useEffect(() => { run(); }, []);
   return <section className="panel pagepanel generic diagnostics-page">
     <header>
-      <div><h1><Stethoscope aria-hidden="true" /> Diagnostics</h1><p>Health check of every service BDMS depends on</p></div>
+      <div><h1><Stethoscope aria-hidden="true" /> Diagnostics</h1><p>Health check of every service Caliber Pulse depends on</p></div>
       <button type="button" className="primary" onClick={run} disabled={running}>
         <RefreshCw className={running ? "spin" : ""} aria-hidden="true" />{running ? "Checking…" : "Run checks again"}
       </button>

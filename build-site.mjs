@@ -70,7 +70,7 @@ export async function buildSite({ cwd = process.cwd(), env = process.env, buildC
   await mkdir(path.join(cwd, "dist", "server"), { recursive: true });
   await mkdir(path.join(cwd, "dist", ".openai"), { recursive: true });
   await writeFile(path.join(cwd, "dist", "app-version.txt"), appVersion);
-  await writeFile(path.join(cwd, "dist", "server", "index.js"), `export default { async fetch(request, env) { if (env.ASSETS) return env.ASSETS.fetch(request); return new Response("Nerve Center"); } };\n`);
+  await writeFile(path.join(cwd, "dist", "server", "index.js"), `export default { async fetch(request, env) { if (env.ASSETS) return env.ASSETS.fetch(request); return new Response("Caliber Pulse"); } };\n`);
   await writeFile(path.join(cwd, "dist", ".openai", "hosting.json"), JSON.stringify({ project_id: "appgprj_6a75aeab589c8191ad09746148ea8ead", d1: null, r2: null }));
   return appVersion;
 }

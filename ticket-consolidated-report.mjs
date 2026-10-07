@@ -62,7 +62,7 @@ export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=
 export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTickets=[],closedTickets=[],pdfUrl,xlsxUrl}){
   for(const link of [pdfUrl,xlsxUrl])if(!link||!/^https?:\/\//.test(link))throw new Error('CRM consolidated reports require PDF and Excel download links.');
   return [
-    `*SITE: ${displaySiteName(scopeLabel)}*`,'*NERVE CENTER CRM CONSOLIDATED REPORT*',
+    `*SITE: ${displaySiteName(scopeLabel)}*`,'*CALIBER PULSE CRM CONSOLIDATED REPORT*',
     `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
     `*OPEN TICKETS:* ${openTickets.length} | *CLOSED TICKETS:* ${closedTickets.length}`,
     `*PDF:* ${pdfUrl}`,`*Excel:* ${xlsxUrl}`,

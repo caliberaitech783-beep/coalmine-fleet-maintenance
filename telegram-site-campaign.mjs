@@ -27,7 +27,7 @@ export function telegramCampaignRecipients(users,groups){
   return [...accounts.values()];
 }
 export function telegramCampaignMessage(recipient){
-  return `BDMS site group invitations\n\n${recipient.links.map(link=>`${link.site}\n${link.invitationLink}`).join('\n\n')}\n\nTap each assigned site link, then Request to Join. BDMS checks your connected Telegram account and current site assignment. Production, Maintenance, MIS and the site head can reply and share site updates here.`;
+  return `Caliber Pulse site group invitations\n\n${recipient.links.map(link=>`${link.site}\n${link.invitationLink}`).join('\n\n')}\n\nTap each assigned site link, then Request to Join. Caliber Pulse checks your connected Telegram account and current site assignment. Production, Maintenance, MIS and the site head can reply and share site updates here.`;
 }
 export async function telegramCampaignBatch({campaign=TELEGRAM_SITE_CAMPAIGN,recipients,read,claim,send,finish}){
   const records=await read();

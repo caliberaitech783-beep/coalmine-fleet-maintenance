@@ -61,12 +61,12 @@ export default function TelegramGate({ token, logout }) {
     <section className="telegram-gate" role="alertdialog" aria-modal="true" aria-labelledby="telegram-gate-title">
       <header><span><Send /></span><div><small>Required by your administrator</small><h2 id="telegram-gate-title">Connect Telegram to continue</h2></div></header>
       <div className="telegram-gate-body">
-        <p>Nerve Center alerts, reports and password OTPs are sent on Telegram. Connect once to keep using the app.</p>
+        <p>Caliber Pulse alerts, reports and password OTPs are sent on Telegram. Connect once to keep using the app.</p>
         <ol>
           <li><b>Install Telegram</b> and sign up with your mobile number. Skip this if you already have it.
             <div className="telegram-gate-links">{install.map(([label, href, Icon]) => <a key={href} href={href} target="_blank" rel="noreferrer"><Icon />{label}</a>)}</div>
           </li>
-          <li><b>Connect</b> your Nerve Center login:
+          <li><b>Connect</b> your Caliber Pulse login:
             <div className="telegram-gate-links"><button type="button" className="telegram-gate-connect" onClick={connect}><Send />Connect Telegram</button></div>
           </li>
           <li>In Telegram, tap <b>Start</b>. This screen closes automatically.</li>

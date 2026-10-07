@@ -15,7 +15,7 @@
   if (hostRoot) new MutationObserver(apply).observe(hostRoot, { attributes: true, attributeFilter: ['data-theme'] });
   window.addEventListener('storage', event => { if (event.key === 'nerveCenterTheme') apply(); });
 
-  // In BDMS the directory should participate in the application's page scroll,
+  // In Caliber Pulse the directory should participate in the application's page scroll,
   // rather than looking like a second scrollable website inside it.
   if (embedded && window.parent !== window) {
     let lastHeight = 0;

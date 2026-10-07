@@ -64,7 +64,7 @@ test("remote assistance is consent based, time limited, and restricted to admini
   assert.match(server, /access_level='control'/);
   assert.match(server, /requester_login=\$2/);
   assert.match(server, /action:`Remote \$\{commandType\}`/);
-  assert.match(server, /action:'End BDMS assistance'/);
+  assert.match(server, /action:'End Caliber Pulse assistance'/);
 });
 
 test("the browser agent masks protected controls and keeps user disconnect available", () => {
@@ -74,9 +74,9 @@ test("the browser agent masks protected controls and keeps user disconnect avail
   assert.match(remoteAssistance, /blockSelector:'\[data-remote-assistance-ui\],input\[type="file"\]'/);
   assert.match(remoteAssistance, /maskInputOptions:\{password:true\}/);
   assert.match(remoteAssistance, /input\[type="password"\]/);
-  assert.match(remoteAssistance, /Approve BDMS assistance/);
+  assert.match(remoteAssistance, /Approve Caliber Pulse assistance/);
   assert.match(remoteAssistance, /End assistance/);
-  assert.match(remoteAssistance, /This BDMS tab only/);
+  assert.match(remoteAssistance, /This Caliber Pulse tab only/);
 });
 
 test("administrators can delete user activity older than N days from the User Sessions page, and the purge is audited", () => {

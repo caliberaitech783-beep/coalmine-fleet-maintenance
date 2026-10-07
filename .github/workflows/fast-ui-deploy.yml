@@ -1,4 +1,4 @@
-name: Fast UI deploy to BDMS production
+name: Fast UI deploy to Caliber Pulse production
 
 on:
   push:
@@ -18,7 +18,7 @@ permissions:
 env:
   AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
   AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
-  LIVE_URL: https://bdms.cmll.in
+  LIVE_URL: https://pulse.cmll.in
 
 jobs:
   classify:

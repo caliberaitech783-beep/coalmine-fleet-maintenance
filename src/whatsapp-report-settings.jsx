@@ -103,7 +103,7 @@ export function WhatsAppReportSettingsDialog({token,onClose,onOpenReportSchedule
   const validation=selection?.variant==='custom'?validateCustomTemplate(purpose,body):'';
   const preview=previewReportTemplate(purpose,body).split(/(\*[^*\n]+\*)/g).map((text,index)=>text.startsWith('*')&&text.endsWith('*')?<strong key={index}>{text.slice(1,-1)}</strong>:text);
   const selectedLabel=selection?.variant==='inherit'?'Follow consolidated choice':selection?.variant==='custom'?'Custom wording':choices.find(choice=>choice.variant===selection?.variant)?.label;
-  const editableSample=/\}\}\s*$/.test(body)?`${body}\n\nOpen Nerve Center for the latest status.`:body;
+  const editableSample=/\}\}\s*$/.test(body)?`${body}\n\nOpen Caliber Pulse for the latest status.`:body;
   const purposeGroups=[...new Set(PURPOSE_OPTIONS.map(option=>option.group))];
   const displayChoices=[...(isSingleReportPurpose(purpose)?[{variant:'inherit',label:'Follow consolidated choice',description:'Keep the same style as the fleet bundle.'}]:[]),...choices,{variant:'custom',label:'Custom wording',description:'Adapt a sample or write your own.'}];
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Exports every table of the BDMS PostgreSQL database to a gzipped NDJSON file.
+// Exports every table of the Caliber Pulse PostgreSQL database to a gzipped NDJSON file.
 //
 //   node scripts/backup-database.mjs [--output <file>] [--summary <json-file>] [--database-url <url>] [--no-ssl]
 //

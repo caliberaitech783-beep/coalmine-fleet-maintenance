@@ -42,7 +42,7 @@ test('consolidated report uses Equipment Master OEM and sorts elapsed time high 
   assert.equal(rows[0].oem,'Komatsu');
   assert.ok(rows.every(({site})=>site==='Sasti OC'));
   const message=buildConsolidatedWhatsAppReport({scopeLabel:'WCL',start:new Date('2026-08-26T16:30:00Z'),end:reportTime,openRequests:rows,closedRequests:[]});
-  assert.match(message,/\*NERVE CENTER CONSOLIDATED REPORT\*/);
+  assert.match(message,/\*CALIBER PULSE CONSOLIDATED REPORT\*/);
   assert.match(message,/🔴 \*OFF ROAD \/ OPEN \(2\)\*/);
   assert.match(message,/🟢 \*ON ROAD \/ CLOSED \(0\)\*/);
   assert.ok(message.indexOf('REQ-OLD')<message.indexOf('REQ-NEW'));

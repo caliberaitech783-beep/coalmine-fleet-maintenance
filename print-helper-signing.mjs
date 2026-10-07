@@ -55,7 +55,7 @@ export function certificateSummary(certificate){
  */
 export async function generatePrintHelperSigning({now=new Date(),generate}={}){
   const create=generate||(await import('selfsigned')).default.generate;
-  const pems=await create([{name:'commonName',value:'Nerve Center Smart Print'},{name:'organizationName',value:'Caliber Mining and Logistics Limited'}],{
+  const pems=await create([{name:'commonName',value:'Caliber Pulse Smart Print'},{name:'organizationName',value:'Caliber Mining and Logistics Limited'}],{
     keySize:2048,algorithm:'sha256',notBeforeDate:new Date(now.getTime()-86400000),notAfterDate:new Date(now.getTime()+20*365*86400000),
     extensions:[{name:'basicConstraints',cA:true,critical:true},{name:'keyUsage',digitalSignature:true,keyCertSign:true,critical:true}],
   });

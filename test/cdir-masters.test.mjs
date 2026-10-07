@@ -90,7 +90,7 @@ test("only Admin and Super Admin can see or change the C-Dir masters", () => {
   assert.equal((server.match(/const cdirError=cdirWriteError\(req,master\);/g) || []).length, 5, "create, update, delete, delete selected and delete all");
   assert.ok(server.includes("const cdirInUse=isCdirMaster(master)?await cdirReferenceCount(master,deletedRecord):0;"));
   assert.ok(server.includes("const cascaded=isCdirMaster(master)?await cascadeCdirRename(master,previousRecord,storedRecord):0;"));
-  assert.ok(server.includes("if(isCdirMaster(master))return cdirCleanRecord(master,record);"), "C-Dir sites are not rewritten to BDMS site names");
+  assert.ok(server.includes("if(isCdirMaster(master))return cdirCleanRecord(master,record);"), "C-Dir sites are not rewritten to Caliber Pulse site names");
 });
 
 test("the directory is seeded once and C-Dir reads it live", () => {

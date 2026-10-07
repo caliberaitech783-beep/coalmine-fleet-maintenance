@@ -57,11 +57,11 @@ export async function sendTicketRaisedEmail(ticket, env = process.env) {
   ];
   const rows = details.map(([label, value]) => `<tr><th style="padding:8px 12px;text-align:left;background:#f4f7fb;border:1px solid #dbe3ef">${escapeHtml(label)}</th><td style="padding:8px 12px;border:1px solid #dbe3ef">${escapeHtml(value || "—")}</td></tr>`).join("");
   const result = await transporter.sendMail({
-    from: `Nerve Center Tickets <${config.user}>`,
+    from: `Caliber Pulse Tickets <${config.user}>`,
     to: config.recipients,
     subject: `[${clean(ticket.priority || "Medium")}] New ticket ${reference} — ${clean(ticket.site || "Unassigned site")}`,
     text: details.map(([label, value]) => `${label}: ${clean(value || "—")}`).join("\n"),
-    html: `<div style="font-family:Arial,sans-serif;color:#10213d"><h2>New support ticket raised</h2><table style="border-collapse:collapse;width:100%;max-width:720px">${rows}</table><p style="color:#66758d">Open Nerve Center → Tickets to review the complete ticket and its media.</p></div>`,
+    html: `<div style="font-family:Arial,sans-serif;color:#10213d"><h2>New support ticket raised</h2><table style="border-collapse:collapse;width:100%;max-width:720px">${rows}</table><p style="color:#66758d">Open Caliber Pulse → Tickets to review the complete ticket and its media.</p></div>`,
   });
   return {sent: true, messageId: result.messageId, accepted: result.accepted};
 }

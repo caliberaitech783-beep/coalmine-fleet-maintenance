@@ -44,7 +44,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiv
   const generated=emailDate(generatedAt);
   const archiveLine=cleanEmailText(archiveUrl);
   const text=[
-    'Nerve Center',
+    'Caliber Pulse',
     "Director's Daily Report",
     'Schedule: Daily 07:00:00 PM IST',
     `Generated: ${generated}`,
@@ -57,7 +57,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiv
   ].join('\n');
   const html=`<div style="font-family:Arial,sans-serif;color:#10213d;line-height:1.45">
     <div style="max-width:940px">
-      <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800;letter-spacing:.04em">NERVE CENTER</p>
+      <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800;letter-spacing:.04em">CALIBER PULSE</p>
       <h2 style="margin:0;color:#10213d">Director's Daily Report</h2>
       <p style="margin:6px 0 0;color:#61708a">Schedule: Daily 07:00:00 PM IST</p>
       <p style="margin:0 0 20px;color:#61708a">Generated: ${escapeEmailHtml(generated)}</p>
@@ -66,7 +66,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiv
       ${sections.join('')}
     </div>
   </div>`;
-  return {subject:`Nerve Center - Director's Daily Report - ${generated}`,text,html};
+  return {subject:`Caliber Pulse - Director's Daily Report - ${generated}`,text,html};
 }
 
 export function buildDirectorReportZipAttachment(bundle={}){
@@ -74,7 +74,7 @@ export function buildDirectorReportZipAttachment(bundle={}){
   if(!files.length)return null;
   const slotKey=cleanEmailText(bundle.slotKey||'director-daily-report');
   return {
-    filename:`nerve-center-director-reports-${slotKey}.zip`,
+    filename:`caliber-pulse-director-reports-${slotKey}.zip`,
     content:buildDirectorReportArchiveBuffer(files),
     contentType:'application/zip',
   };
@@ -88,7 +88,7 @@ export async function sendDirectorReportEmail({to,bundle,attachZip=false},env=pr
   const email=buildDirectorReportEmail(bundle);
   const zipAttachment=attachZip?buildDirectorReportZipAttachment(bundle):null;
   const result=await transporter.sendMail({
-    from:`Nerve Center Reports <${config.user}>`,
+    from:`Caliber Pulse Reports <${config.user}>`,
     to:recipients,
     subject:email.subject,
     text:email.text,

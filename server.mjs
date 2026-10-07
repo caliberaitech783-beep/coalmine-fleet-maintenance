@@ -228,8 +228,8 @@ const databaseSsl=String(process.env.DATABASE_SSL||'').trim().toLowerCase()==='f
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>formatDisplayDateTime(value);
-const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
-const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
+const reportFilename=(kind,scope,slot)=>`Caliber-Pulse-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
+const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'pulse.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
 const WHATSAPP_REPORT_SETTING_KEY='whatsapp_report_settings';
 const WHATSAPP_APPROVAL_SETTING_KEY='whatsapp_template_approvals';
@@ -1875,7 +1875,7 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     // A bundled export uses one compact report plus a complete detail appendix.
     // Keep a small section ceiling so a print request cannot become unbounded.
     const maxReportSections=6;
-    const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,2000)||'Nerve Center report';
+    const title=String(req.body?.title||'Caliber Pulse report').replace(/\s+/g,' ').trim().slice(0,2000)||'Caliber Pulse report';
     let reportCharacters=0;
     const pageSize=String(req.body?.pageSize||'').trim().toUpperCase()==='A4'?'A4':'A3';
     let reportRows=0;
@@ -2065,7 +2065,7 @@ async function inspectBackupFile(filePath){
   for await(const record of readBackupRecords(filePath)){
     if(record.type==='header'){
       if(header)throw new Error('The backup contains more than one header.');
-      if(record.format!==BACKUP_FORMAT)throw new Error('This is not a supported BDMS backup file.');
+      if(record.format!==BACKUP_FORMAT)throw new Error('This is not a supported Caliber Pulse backup file.');
       header=record;
     }else if(record.type==='table'){
       if(!header)throw new Error('The backup file does not begin with a valid header.');
@@ -2111,7 +2111,7 @@ async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=nu
   const rootPrefix=`${backupStorageRoot}${path.sep}`;
   if(destination!==backupStorageRoot&&!destination.startsWith(rootPrefix))throw Object.assign(new Error('The backup destination is outside protected backup storage.'),{status:400});
   await fs.mkdir(destination,{recursive:true});
-  const fileName=fileNameOverride||backupFileName(new Date(),{prefix:'BDMS-Full-Backup'});
+  const fileName=fileNameOverride||backupFileName(new Date(),{prefix:'Caliber Pulse-Full-Backup'});
   const filePath=path.join(destination,fileName);
   const insert=await pool.query(`INSERT INTO backup_runs
     (file_name,status,trigger_type,schedule_slot,storage_path,created_by_login,created_by_name,expires_at)
@@ -2320,7 +2320,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
     // (never a group), so a reset still works when WhatsApp is paused.
     const telegramChat=await linkedTelegramChat(user.record_data.login);
     const telegramOtp=telegramChat?await sendTelegramText({chatId:telegramChat,purpose:'passwordResetOtp',privateChat:true,
-      message:`Nerve Center password reset OTP: ${otp}\nIt expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})
+      message:`Caliber Pulse password reset OTP: ${otp}\nIt expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})
       .then(()=>true,error=>{console.error('Password reset OTP Telegram delivery failed:',error.message);return false}):false;
     try{
       if(!phone)throw Object.assign(new Error('Phone number missing'),{code:'NO_PHONE'});
@@ -2329,7 +2329,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
       try{
         if(['WHATSAPP_POLICY_PAUSED','NO_PHONE'].includes(templateError.code))throw templateError;
-        await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv});
+        await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Caliber Pulse password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv});
         // Meta accepts free-form text but only delivers it inside an open 24-hour
         // conversation, so flag it clearly instead of reporting a plain "Sent".
         status=`Sent as plain text (delivered only if the user messaged the business number in the last 24 hours). Template failed: ${templateError.message}`;
@@ -2703,7 +2703,7 @@ app.post('/api/user-sessions/:sessionId/assistance',requireSuper,requireAdminist
     const accessLevel=String(req.body?.accessLevel||'control').trim().toLowerCase();
     const durationMinutes=Number(req.body?.durationMinutes||15);
     if(reason.length<5||reason.length>500)return res.status(400).json({error:'Enter an assistance reason between 5 and 500 characters.'});
-    if(!['view','control'].includes(accessLevel))return res.status(400).json({error:'Select view-only or BDMS control access.'});
+    if(!['view','control'].includes(accessLevel))return res.status(400).json({error:'Select view-only or Caliber Pulse control access.'});
     if(!REMOTE_ASSISTANCE_DURATIONS.has(durationMinutes))return res.status(400).json({error:'Assistance duration must be 5, 10, or 15 minutes.'});
     const {rows:targets}=await pool.query(`SELECT token,session_public_id AS "sessionId",employee_name AS name,login_name AS login,
       last_seen_at>NOW()-INTERVAL '2 minutes' AS online
@@ -2711,7 +2711,7 @@ app.post('/api/user-sessions/:sessionId/assistance',requireSuper,requireAdminist
     const target=targets[0];
     if(!target)return res.status(404).json({error:'This user session is no longer active.'});
     if(target.token===currentToken)return res.status(400).json({error:'You cannot request control of your current session.'});
-    if(!target.online)return res.status(409).json({error:'Assistance can only be requested while the user is online in BDMS.'});
+    if(!target.online)return res.status(409).json({error:'Assistance can only be requested while the user is online in Caliber Pulse.'});
     const existing=await pool.query(`SELECT id FROM remote_assistance_sessions
       WHERE target_session_public_id=$1 AND status=ANY($2::text[]) AND expires_at>NOW() LIMIT 1`,[targetSessionId,REMOTE_ASSISTANCE_LIVE_STATUSES]);
     if(existing.rowCount)return res.status(409).json({error:'This user already has an active or pending assistance request.'});
@@ -2723,7 +2723,7 @@ app.post('/api/user-sessions/:sessionId/assistance',requireSuper,requireAdminist
         requested_at AS "requestedAt",responded_at AS "respondedAt",started_at AS "startedAt",expires_at AS "expiresAt"`,[
           target.sessionId,target.login,target.name,String(req.session.login||''),String(req.session.name||''),accessLevel,reason,durationMinutes
         ]);
-    req.audit={eventType:'Security',module:'Remote assistance',action:'Request BDMS assistance',targetType:'User session',targetReference:target.login||target.name||targetSessionId,reason:`${accessLevel==='control'?'BDMS control':'View only'} for ${durationMinutes} minutes: ${reason}`,changedFields:[]};
+    req.audit={eventType:'Security',module:'Remote assistance',action:'Request Caliber Pulse assistance',targetType:'User session',targetReference:target.login||target.name||targetSessionId,reason:`${accessLevel==='control'?'Caliber Pulse control':'View only'} for ${durationMinutes} minutes: ${reason}`,changedFields:[]};
     res.status(201).json({assistance:remoteAssistancePayload(rows[0])});
   }catch(error){next(error)}
 });
@@ -2745,7 +2745,7 @@ app.patch('/api/remote-assistance/:assistanceId/respond',requireSession,async(re
         ]);
     if(!rows.length)return res.status(409).json({error:'This assistance request has expired or was already answered.'});
     const assistance=rows[0];
-    req.audit={eventType:'Security',module:'Remote assistance',action:decision==='approve'?'Approve BDMS assistance':'Decline BDMS assistance',targetType:'Remote assistance',targetReference:assistanceId,reason:assistance.reason,changedFields:[]};
+    req.audit={eventType:'Security',module:'Remote assistance',action:decision==='approve'?'Approve Caliber Pulse assistance':'Decline Caliber Pulse assistance',targetType:'Remote assistance',targetReference:assistanceId,reason:assistance.reason,changedFields:[]};
     res.json({assistance:remoteAssistancePayload(assistance)});
   }catch(error){next(error)}
 });
@@ -2799,12 +2799,12 @@ app.post('/api/remote-assistance/:assistanceId/commands',requireSuper,requireAdm
       WHERE id=$1 AND requester_login=$2 AND access_level='control' AND status=ANY($3::text[]) AND expires_at>NOW()`,[
         assistanceId,String(req.session.login||''),['Approved','Active']
       ]);
-    if(!active.rowCount)return res.status(409).json({error:'BDMS control is not active for this session.'});
+    if(!active.rowCount)return res.status(409).json({error:'Caliber Pulse control is not active for this session.'});
     const {rows}=await pool.query(`INSERT INTO remote_assistance_commands (assistance_id,command_type,payload)
       VALUES ($1,$2,$3::jsonb) RETURNING id`,[assistanceId,commandType,JSON.stringify(payload)]);
     const target=active.rows[0];
     // Scroll and input are sent per event and keystroke; only clicks are audited.
-    req.audit=commandType!=='click'?false:{eventType:'Security',module:'Remote assistance',action:`Remote ${commandType}`,targetType:'User session',targetReference:target.target_login||target.target_name||assistanceId,reason:'Action performed inside the approved BDMS tab',changedFields:[]};
+    req.audit=commandType!=='click'?false:{eventType:'Security',module:'Remote assistance',action:`Remote ${commandType}`,targetType:'User session',targetReference:target.target_login||target.target_name||assistanceId,reason:'Action performed inside the approved Caliber Pulse tab',changedFields:[]};
     res.status(201).json({commandId:rows[0].id});
   }catch(error){next(error)}
 });
@@ -2844,7 +2844,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
       pool.query('DELETE FROM remote_assistance_commands WHERE assistance_id=$1',[assistanceId]),
     ]);
     const target=rows[0];
-    req.audit={eventType:'Security',module:'Remote assistance',action:'End BDMS assistance',targetType:'User session',targetReference:target.targetLogin||target.targetName||assistanceId,changedFields:[]};
+    req.audit={eventType:'Security',module:'Remote assistance',action:'End Caliber Pulse assistance',targetType:'User session',targetReference:target.targetLogin||target.targetName||assistanceId,changedFields:[]};
     res.status(204).end();
   }catch(error){next(error)}
 });
@@ -3114,7 +3114,7 @@ app.post('/api/backups/import/inspect',requireSuper,requireTrueSuperAdmin,async(
     const maxBytes=2*1024*1024*1024;
     if(contentLength>maxBytes)return res.status(413).json({error:'Backup files larger than 2 GB must be restored with the server restore script.'});
     const originalName=String(req.get('x-backup-file-name')||'').replace(/[^a-z0-9._-]+/gi,'-').slice(0,180);
-    if(!originalName.toLowerCase().endsWith('.ndjson.gz'))return res.status(400).json({error:'Select a BDMS .ndjson.gz backup file.'});
+    if(!originalName.toLowerCase().endsWith('.ndjson.gz'))return res.status(400).json({error:'Select a Caliber Pulse .ndjson.gz backup file.'});
     await fs.mkdir(backupImportRoot,{recursive:true});
     const token=randomUUID();
     filePath=path.join(backupImportRoot,`${token}.ndjson.gz`);
@@ -3141,7 +3141,7 @@ app.post('/api/backups/import/restore',requireSuper,requireTrueSuperAdmin,async(
   const token=String(req.body?.token||'').trim();
   const pending=pendingBackupImports.get(token);
   try{
-    if(String(req.body?.confirmation||'').trim()!=='RESTORE BDMS')return res.status(400).json({error:'Type RESTORE BDMS exactly to confirm the recovery operation.'});
+    if(String(req.body?.confirmation||'').trim()!=='RESTORE Caliber Pulse')return res.status(400).json({error:'Type RESTORE Caliber Pulse exactly to confirm the recovery operation.'});
     if(!pending||pending.expiresAt<Date.now()||pending.login!==String(req.session.login||''))return res.status(410).json({error:'This inspected backup has expired. Inspect the file again.'});
     const safety=await createStoredBackup({triggerType:'Pre-restore',actor:req.session,folderOverride:path.join(backupStorageRoot,'pre-restore')});
     const client=await pool.connect();
@@ -3604,7 +3604,7 @@ app.post('/api/telegram/site-groups/test',requireSuper,requireWhatsAppAdministra
   try{
     const group=(await telegramSiteGroups()).find(value=>value.site===telegramSiteName(req.body?.site));
     if(!group)return res.status(409).json({error:'Register this site group in Telegram first.'});
-    await sendTelegramText({chatId:group.chatId,message:`BDMS • ${group.site}\nProduction, Maintenance, MIS and the site head can share updates and reply here.`});
+    await sendTelegramText({chatId:group.chatId,message:`Caliber Pulse • ${group.site}\nProduction, Maintenance, MIS and the site head can share updates and reply here.`});
     req.audit={eventType:'Integration',module:'Telegram',action:'Send site group test',targetReference:group.site};
     res.json({sent:true});
   }catch(error){next(error)}
@@ -3644,7 +3644,7 @@ app.post('/api/telegram/admin-group/invite',requireSuper,requireWhatsAppAdminist
   try{
     await telegramAdminGroupInviteLink();
   }catch(error){
-    return res.status(409).json({error:`The bot could not create the group invite. In Telegram, make CALIBER BDMS an admin of the group with "Invite users via link" allowed. (${error.message})`});
+    return res.status(409).json({error:`The bot could not create the group invite. In Telegram, make CALIBER PULSE an admin of the group with "Invite users via link" allowed. (${error.message})`});
   }
   const {rows}=await pool.query('SELECT login,chat_id AS "chatId" FROM telegram_user_links');
   const results={invited:0,alreadyMember:0,notAdmin:0,failed:0};
@@ -3662,7 +3662,7 @@ app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator,async(re
   req.audit={eventType:'Integration',module:'WhatsApp Integration',action:'Send Telegram test message',targetType:'Telegram group',changedFields:[]};
   if(!telegramConfiguration().configured)return res.status(400).json({error:'Telegram is not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_DEFAULT_CHAT_ID in Azure.'});
   try{
-    const result=await sendTelegramText({chatId:(await telegramGroupSettings()).chatId,message:`Nerve Center test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
+    const result=await sendTelegramText({chatId:(await telegramGroupSettings()).chatId,message:`Caliber Pulse test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
     res.status(201).json(result);
   }catch(error){res.status(502).json({error:error instanceof Error?error.message:'Telegram delivery failed.'})}
 });
@@ -3776,10 +3776,10 @@ app.post('/api/telegram/webhook',async(req,res)=>{
     if(update.kind==='blocked')await disconnectTelegramChat(update.chatId);
     else if(update.kind==='stop'){
       await disconnectTelegramChat(update.chatId);
-      await reply(update.chatId,'Nerve Center alerts are turned off for this Telegram account. To turn them on again, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
+      await reply(update.chatId,'Caliber Pulse alerts are turned off for this Telegram account. To turn them on again, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
     }else if(update.kind==='start'&&update.token){
       const {rows}=await pool.query(`DELETE FROM telegram_link_tokens WHERE token=$1 AND expires_at>NOW() RETURNING login`,[update.token]);
-      if(!rows[0])return await reply(update.chatId,'This connection link has expired. Open bdms.cmll.in, click your profile icon and choose Connect Telegram again.');
+      if(!rows[0])return await reply(update.chatId,'This connection link has expired. Open pulse.cmll.in, click your profile icon and choose Connect Telegram again.');
       await pool.query(`INSERT INTO telegram_user_links (login,chat_id,telegram_username,linked_at) VALUES ($1,$2,$3,NOW())
         ON CONFLICT (login) DO UPDATE SET chat_id=EXCLUDED.chat_id,telegram_username=EXCLUDED.telegram_username,linked_at=NOW()`,[rows[0].login,update.chatId,update.username]);
       const user=await saveTelegramOnUserRecord(rows[0].login,{chatId:update.chatId,username:update.username})||{};
@@ -3787,7 +3787,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       const profile=resolveMobileAccess({user});
       const role=profile.sessionRole==='super'?user.designation||profile.permissions?.adminLevel||'Administrator':profile.assignedRole||'User';
       const location=String(user.site||user.location||'').replace(/\s*\|\s*/g,', ')||'All locations';
-      await reply(update.chatId,`Connected to Nerve Center.\nName: ${user.employee||rows[0].login}\nLogin: ${String(user.login||rows[0].login).toUpperCase()}\nRole: ${role}\nLocation: ${location}\n\nYou will now receive your BDMS alerts here, as on WhatsApp.\nSend /stop at any time to turn them off.`);
+      await reply(update.chatId,`Connected to Caliber Pulse.\nName: ${user.employee||rows[0].login}\nLogin: ${String(user.login||rows[0].login).toUpperCase()}\nRole: ${role}\nLocation: ${location}\n\nYou will now receive your Caliber Pulse alerts here, as on WhatsApp.\nSend /stop at any time to turn them off.`);
       if(isBdmsAdministrator(user))await inviteAdministratorToTelegramGroup(rows[0].login,update.chatId)
         .catch(error=>console.error('Telegram admin group invite failed.',error.message));
     }else if(update.kind==='registerSite'){
@@ -3795,16 +3795,16 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       const users=await Promise.all(rows.map(({login})=>bdmsUserRecord(login)));
       const member=await telegramChatMemberStatus(update.groupChatId,update.userId);
       if(!users.some(user=>user&&isBdmsAdministrator(user))||!['creator','administrator'].includes(member))
-        return await reply(update.groupChatId,'A connected BDMS administrator who administers this Telegram group must register it.');
+        return await reply(update.groupChatId,'A connected Caliber Pulse administrator who administers this Telegram group must register it.');
       const site=telegramSiteName(update.site);
-      if(!site)return await reply(update.groupChatId,`Choose a BDMS site: ${TELEGRAM_SITES.join(', ')}.`);
-      if(update.groupChatId===(await telegramGroupSettings()).chatId)return await reply(update.groupChatId,'Keep BDMS Admin Alert for management. Register a separate site group.');
+      if(!site)return await reply(update.groupChatId,`Choose a Caliber Pulse site: ${TELEGRAM_SITES.join(', ')}.`);
+      if(update.groupChatId===(await telegramGroupSettings()).chatId)return await reply(update.groupChatId,'Keep Caliber Pulse Admin Alert for management. Register a separate site group.');
       try{
         const details=await telegramSiteGroupDetails(update.groupChatId);
-        const inviteLink=await createTelegramJoinRequestLink(update.groupChatId,{name:`BDMS ${site}`});
+        const inviteLink=await createTelegramJoinRequestLink(update.groupChatId,{name:`Caliber Pulse ${site}`});
         await registerTelegramSiteGroup({site,chatId:update.groupChatId,title:details.title,inviteLink});
         await appendBackendProcessAudit({module:'Telegram',action:'Register site group',targetReference:site,reason:`Registered by ${rows.map(row=>row.login).join(', ')}`});
-        await reply(update.groupChatId,`Linked to ${site}. In BDMS → Meta API setup → Site groups, choose Invite assigned users. Join requests are checked against current BDMS site assignments.`);
+        await reply(update.groupChatId,`Linked to ${site}. In Caliber Pulse → Meta API setup → Site groups, choose Invite assigned users. Join requests are checked against current Caliber Pulse site assignments.`);
       }catch(error){await reply(update.groupChatId,error.message)}
     }else if(update.kind==='joinRequest'){
       const siteGroup=(await telegramSiteGroups()).find(group=>group.chatId===update.groupChatId);
@@ -3815,10 +3815,10 @@ app.post('/api/telegram/webhook',async(req,res)=>{
         await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);
         await appendBackendProcessAudit({module:'Telegram',action:approved?'Approve site group join request':'Decline site group join request',
           targetReference:siteGroup.site,reason:approved?'Connected user assigned to this site':'No connected account assigned to this site'}).catch(()=>{});
-        if(!approved)await reply(update.userChatId,`You must connect Telegram from your BDMS profile and be assigned to ${siteGroup.site} to join this group.`);
+        if(!approved)await reply(update.userChatId,`You must connect Telegram from your Caliber Pulse profile and be assigned to ${siteGroup.site} to join this group.`);
         return;
       }
-      // Only BDMS administrators who connected their Telegram may join the admin group.
+      // Only Caliber Pulse administrators who connected their Telegram may join the admin group.
       const group=await telegramGroupSettings();
       if(update.groupChatId!==group.chatId)return;
       const {rows}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.userId]);
@@ -3826,13 +3826,13 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       const approved=users.some(user=>user&&isBdmsAdministrator(user));
       await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);
       await appendBackendProcessAudit({module:'Telegram',action:approved?'Approve admin group join request':'Decline admin group join request',
-        targetReference:rows.map(({login})=>login).join(', ')||`Telegram user ${update.userId}`,reason:approved?'BDMS administrator':'Not a connected BDMS administrator'}).catch(()=>{});
-      if(!approved)await reply(update.userChatId,'The BDMS ADMIN ALERT group is only for BDMS administrators. Your request was declined.');
+        targetReference:rows.map(({login})=>login).join(', ')||`Telegram user ${update.userId}`,reason:approved?'Caliber Pulse administrator':'Not a connected Caliber Pulse administrator'}).catch(()=>{});
+      if(!approved)await reply(update.userChatId,'The Caliber Pulse ADMIN ALERT group is only for Caliber Pulse administrators. Your request was declined.');
     }else if(update.kind==='migrated'){
       await followTelegramGroupMigration(update.groupChatId,update.newChatId);
       await migrateTelegramSiteGroup(update.groupChatId,update.newChatId);
     }else if(update.kind==='start'||update.kind==='text'){
-      await reply(update.chatId,'To receive Nerve Center alerts here, open bdms.cmll.in, click your profile icon and choose Connect Telegram.');
+      await reply(update.chatId,'To receive Caliber Pulse alerts here, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
     }
   }catch(error){console.error('Telegram webhook update failed.',error.message)}
 });
@@ -3956,7 +3956,7 @@ async function cdirReferenceCount(master,record){
   return count;
 }
 
-// ---------- Diagnostics: one health check of everything BDMS depends on ----------
+// ---------- Diagnostics: one health check of everything Caliber Pulse depends on ----------
 async function messageDeliveryCounts(channel){
   const telegram=channel==='Telegram';
   const {rows}=await pool.query(`SELECT
@@ -3978,7 +3978,7 @@ function diagnosticChecks(){
       return {detail:`Running version ${deploymentSha?deploymentSha.slice(0,8):'(local build)'} for ${hours<1?plural(Math.max(1,Math.round(hours*60)),'minute'):plural(Math.round(hours),'hour')}.`,
         facts:[['Node.js',process.version],['Memory in use',formatBytes(memory)],['Scheduled jobs',scheduledJobsEnabled?'Running':'Switched off on this server']]};
     }},
-    {key:'database',label:'BDMS database',run:async()=>{
+    {key:'database',label:'Caliber Pulse database',run:async()=>{
       if(!databaseReady)diagnosticState('fail',databaseError||'The database is not ready.');
       const started=Date.now();
       const {rows}=await pool.query('SELECT pg_database_size(current_database())::bigint AS size');
@@ -4454,7 +4454,7 @@ async function updateTelegramSiteGroups(change){
 async function registerTelegramSiteGroup(group){
   await updateTelegramSiteGroups(groups=>{
     if(groups.some(value=>(value.site===group.site&&value.chatId!==group.chatId)||(value.chatId===group.chatId&&value.site!==group.site)))
-      throw new Error('This site or group is already linked. Ask the BDMS administrator to review its existing mapping.');
+      throw new Error('This site or group is already linked. Ask the Caliber Pulse administrator to review its existing mapping.');
     return [...groups.filter(value=>value.site!==group.site),group];
   });
 }
@@ -4472,10 +4472,10 @@ async function inviteUserToTelegramSite(group,chatId){
   const status=await telegramChatMemberStatus(group.chatId,chatId).catch(()=>'');
   if(['creator','administrator','member','restricted'].includes(status))return 'Already in the group';
   if(!group.inviteLink){
-    group.inviteLink=await createTelegramJoinRequestLink(group.chatId,{name:`BDMS ${group.site}`});
+    group.inviteLink=await createTelegramJoinRequestLink(group.chatId,{name:`Caliber Pulse ${group.site}`});
     await registerTelegramSiteGroup(group);
   }
-  await sendTelegramText({chatId,message:`Your BDMS site is ${group.site}. Join its group to receive site updates and reply with your Production, Maintenance, MIS and site head colleagues.\nTap to request membership: ${group.inviteLink}\nYour current BDMS site assignment is checked before approval.`});
+  await sendTelegramText({chatId,message:`Your Caliber Pulse site is ${group.site}. Join its group to receive site updates and reply with your Production, Maintenance, MIS and site head colleagues.\nTap to request membership: ${group.inviteLink}\nYour current Caliber Pulse site assignment is checked before approval.`});
   return 'Invited';
 }
 async function deliverToTelegramSite({site,message,purpose}){
@@ -4560,7 +4560,7 @@ async function inviteAdministratorToTelegramGroup(login,chatId){
   const status=await telegramChatMemberStatus(group.chatId,chatId).catch(()=>'');
   if(['creator','administrator','member','restricted'].includes(status))return 'Already in the group';
   const inviteLink=await telegramAdminGroupInviteLink();
-  await sendTelegramText({chatId,message:`You are a BDMS administrator, so you are invited to the BDMS ADMIN ALERT group. Request lifecycle alerts and reminders are disabled for administrators.\nTap to join: ${inviteLink}\nThe bot approves your request automatically.`});
+  await sendTelegramText({chatId,message:`You are a Caliber Pulse administrator, so you are invited to the Caliber Pulse ADMIN ALERT group. Request lifecycle alerts and reminders are disabled for administrators.\nTap to join: ${inviteLink}\nThe bot approves your request automatically.`});
   return 'Invited';
 }
 
@@ -4630,7 +4630,7 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   const reportSettings=await storedWhatsAppReportSettings();
   const messagePurpose=purpose||workflowTemplate?.templateKey||'';
-  const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nNerve Center notification\n${message}`;
+  const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nCaliber Pulse notification\n${message}`;
   if(telegramGroup)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,message:telegramText});
   if(telegramGroup&&telegramSiteName(site))setImmediate(()=>{
     deliverToTelegramSite({site,message:telegramText,purpose:messagePurpose}).catch(error=>console.error('Telegram site delivery failed.',error.message));
@@ -4672,10 +4672,10 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
       if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate,purpose:messagePurpose,context},{env:whatsappEnv})}
       catch(templateError){
         if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
-        const fallback=reportTemplateFallback(messagePurpose,workflowTemplate.parameters,whatsappEnv.WHATSAPP_REPORT_SETTINGS,whatsappEnv.WHATSAPP_TEMPLATE_APPROVALS,`*SITE: ${site||'Not recorded'}*\n*Nerve Center notification*\n${message}`,context);
+        const fallback=reportTemplateFallback(messagePurpose,workflowTemplate.parameters,whatsappEnv.WHATSAPP_REPORT_SETTINGS,whatsappEnv.WHATSAPP_TEMPLATE_APPROVALS,`*SITE: ${site||'Not recorded'}*\n*Caliber Pulse notification*\n${message}`,context);
         await sendMetaWhatsAppText({to:contact.phone,message:fallback,purpose:messagePurpose},{env:whatsappEnv});
       }
-      else await sendMetaWhatsAppText({to:contact.phone,message:`*SITE: ${String(site||'Not recorded').replace(/[*\r\n]/g,' ')}*\n*Nerve Center notification*\n${message}`,purpose:messagePurpose},{env:whatsappEnv});
+      else await sendMetaWhatsAppText({to:contact.phone,message:`*SITE: ${String(site||'Not recorded').replace(/[*\r\n]/g,' ')}*\n*Caliber Pulse notification*\n${message}`,purpose:messagePurpose},{env:whatsappEnv});
     }
     catch(error){status=`${error.code==='WHATSAPP_POLICY_PAUSED'?'Skipped':'Failed'} - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
@@ -5044,7 +5044,7 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
         try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[summary],context:{report:{site:scope.label,title:'Fleet consolidated report',period:`${reportDateTime(window.start)} to ${reportDateTime(window.end)}`,summary}}},{env:whatsappEnv})}
         catch(templateError){console.warn('Consolidated WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
         const pdf=await buildFleetConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openRequests:scopedOpen,closedRequests:scopedClosed});
-        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('Fleet',scope.key,window.slotKey),caption:`*SITE: ${scope.label}*\n*Nerve Center | Fleet consolidated report*\n*Period:* ${reportDateTime(window.start)} to ${reportDateTime(window.end)} IST\nOpen the attached PDF for complete details.`},{env:whatsappEnv});
+        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('Fleet',scope.key,window.slotKey),caption:`*SITE: ${scope.label}*\n*Caliber Pulse | Fleet consolidated report*\n*Period:* ${reportDateTime(window.start)} to ${reportDateTime(window.end)} IST\nOpen the attached PDF for complete details.`},{env:whatsappEnv});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -5330,7 +5330,7 @@ async function publishDirectorReportArchive({baseUrl,slotKey,files=[]}){
   if(!files.length)return null;
   const archive=buildDirectorReportArchiveBuffer(files);
   const archiveId=randomUUID(),archiveCode=randomUUID().replace(/-/g,'').slice(0,10);
-  const filename=`nerve-center-director-reports-${slotKey}.zip`;
+  const filename=`caliber-pulse-director-reports-${slotKey}.zip`;
   await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at)
     VALUES ($1,$2,$3,'application/zip',$4,NOW()+INTERVAL '14 days')`,
     [archiveId,archiveCode,filename,archive]);
@@ -8157,14 +8157,14 @@ async function sendScheduledAuditLogExports(now=new Date()){
     if(!configuredEmails.length)throw new Error('No Admin or Super Admin email address is configured. Audit records were retained.');
     const activityRows=buildUserActivitySummary(eventRows,{sessions:sessionRows});
     const totalWorkedMinutes=totalUserWorkedMinutes(activityRows);
-    const auditWorkbook=buildXlsxWorkbookBuffer('Nerve Center Audit Trail',AUDIT_EXPORT_COLUMNS,eventRows.map((event)=>AUDIT_EXPORT_COLUMNS.map(({key})=>auditExportCell(event,key))));
-    const activityWorkbook=buildXlsxWorkbookBuffer('Nerve Center User Activity',USER_ACTIVITY_EXPORT_COLUMNS,activityRows.map((row)=>USER_ACTIVITY_EXPORT_COLUMNS.map(({key})=>userActivityExportCell(row,key))));
+    const auditWorkbook=buildXlsxWorkbookBuffer('Caliber Pulse Audit Trail',AUDIT_EXPORT_COLUMNS,eventRows.map((event)=>AUDIT_EXPORT_COLUMNS.map(({key})=>auditExportCell(event,key))));
+    const activityWorkbook=buildXlsxWorkbookBuffer('Caliber Pulse User Activity',USER_ACTIVITY_EXPORT_COLUMNS,activityRows.map((row)=>USER_ACTIVITY_EXPORT_COLUMNS.map(({key})=>userActivityExportCell(row,key))));
     const auditShortCode=randomUUID().replace(/-/g,'').slice(0,16);
     const activityShortCode=randomUUID().replace(/-/g,'').slice(0,16);
     await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
     const [auditUrl,userActivityUrl]=await Promise.all([
-      publishAuditWorkbook({shortCode:auditShortCode,filename:`BDMS-Audit-Trail-${slotKey}.xlsx`,workbook:auditWorkbook}),
-      publishAuditWorkbook({shortCode:activityShortCode,filename:`BDMS-User-Activity-${slotKey}.xlsx`,workbook:activityWorkbook}),
+      publishAuditWorkbook({shortCode:auditShortCode,filename:`Caliber Pulse-Audit-Trail-${slotKey}.xlsx`,workbook:auditWorkbook}),
+      publishAuditWorkbook({shortCode:activityShortCode,filename:`Caliber Pulse-User-Activity-${slotKey}.xlsx`,workbook:activityWorkbook}),
     ]);
     await pool.query(`UPDATE audit_log_export_runs SET audit_report_short_code=$1,user_activity_report_short_code=$2,
       exported_event_count=$3,updated_at=NOW() WHERE slot_key=$4`,[auditShortCode,activityShortCode,eventRows.length,slotKey]);
@@ -8202,7 +8202,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
           try{
             await sendMetaWhatsAppTemplate({
               to:recipient.phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',
-              parameters:[`Nerve Center two-day reports. Audit Trail: ${auditUrl} User Activity: ${userActivityUrl} Links expire in 30 days.`],
+              parameters:[`Caliber Pulse two-day reports. Audit Trail: ${auditUrl} User Activity: ${userActivityUrl} Links expire in 30 days.`],
               context:{report:{site:'All sites — organisation audit',title:'Two-day audit and user activity',period:`Latest two days, generated ${formatDisplayDateTime(now)}`,summary:`${eventRows.length} audit entries | ${activityRows.length} users`,pdfUrl:auditUrl,xlsxUrl:userActivityUrl,notes:'Audit Trail and User Activity downloads. Links expire in 30 days.'}},
             },{env:whatsappEnv});
             whatsappSent++;
@@ -8277,7 +8277,7 @@ app.use((error,req,res,next)=>{
 // with a message that tells the user what to do next.
 app.use(serverErrorHandler());
 
-app.listen(port,()=>console.log(`Nerve Center listening on port ${port}`));
+app.listen(port,()=>console.log(`Caliber Pulse listening on port ${port}`));
 
 function backendResultSummary(result){
   if(result===undefined||result===null)return 'Completed';

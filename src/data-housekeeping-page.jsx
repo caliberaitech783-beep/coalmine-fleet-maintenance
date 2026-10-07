@@ -62,7 +62,7 @@ export function RetentionRulesPage({ token }) {
   const retention = overview?.retention;
   return <section className="panel pagepanel generic housekeeping-page">
     <header>
-      <div><h1><CalendarClock aria-hidden="true" /> Retention rules</h1><p>How long BDMS keeps logs and old media before the daily automatic clean-up removes them</p></div>
+      <div><h1><CalendarClock aria-hidden="true" /> Retention rules</h1><p>How long Caliber Pulse keeps logs and old media before the daily automatic clean-up removes them</p></div>
       <div className="housekeeping-actions">
         <button type="button" onClick={runNow} disabled={!overview || Boolean(busy) || changed} title={changed ? "Save the changes first" : "Apply the saved rules now"}>
           <Play aria-hidden="true" />{busy === "run" ? "Cleaning…" : "Run clean-up now"}

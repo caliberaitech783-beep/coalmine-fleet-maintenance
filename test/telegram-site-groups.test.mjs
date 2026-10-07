@@ -23,13 +23,13 @@ test('site eligibility uses explicit current assignments without widening by rol
 });
 test('group mappings reject private chats, unknown sites and duplicate site/chat bindings',()=>{
   assert.deepEqual(normalizeTelegramSiteGroups([
-    {site:'Sasti OB',chatId:'-123',title:'BDMS Sasti'},
+    {site:'Sasti OB',chatId:'-123',title:'Caliber Pulse Sasti'},
     {site:'Sasti OC',chatId:'-456'},
     {site:'Majri OC',chatId:'-123'},
     {site:'Majri OC',chatId:'789'},
     {site:'unknown',chatId:'-999'},
     {site:'Jayant OC',chatId:'-100999',inviteLink:'https://t.me/+example'},
-  ]),[{site:'Sasti OC',chatId:'-123',title:'BDMS Sasti',inviteLink:''},
+  ]),[{site:'Sasti OC',chatId:'-123',title:'Caliber Pulse Sasti',inviteLink:''},
     {site:'Jayant OC',chatId:'-100999',title:'',inviteLink:'https://t.me/+example'}]);
 });
 test('registration commands preserve multiword site names and reject anonymous messages',()=>{
@@ -49,7 +49,7 @@ test('site registration requires a group and bot invitation administrator rights
 });
 test('site invitation always requires approval and keeps site label within Telegram limits',async()=>{
   const calls=[];
-  assert.equal(await createTelegramJoinRequestLink('-123',{env,name:'BDMS Gauri Pauni OC (2nd)',fetchImpl:apiFetch([{invite_link:'https://t.me/+example'}],calls)}),'https://t.me/+example');
+  assert.equal(await createTelegramJoinRequestLink('-123',{env,name:'Caliber Pulse Gauri Pauni OC (2nd)',fetchImpl:apiFetch([{invite_link:'https://t.me/+example'}],calls)}),'https://t.me/+example');
   assert.equal(calls[0].creates_join_request,true);
   assert.equal(calls[0].chat_id,'-123');
   assert.ok(calls[0].name.length<=32);
@@ -65,7 +65,7 @@ function webhookHarness(user){
     telegramGroupSettings:async()=>({chatId:'-999'}),telegramUserHasSite,telegramSiteName,TELEGRAM_SITES,
     answerTelegramJoinRequest:async(...args)=>{decisions.push(args)},appendBackendProcessAudit:async()=>{},
     isBdmsAdministrator:value=>value.adminLevel==='Admin',telegramChatMemberStatus:async()=> 'creator',
-    telegramSiteGroupDetails:async()=>({title:'BDMS Sasti'}),createTelegramJoinRequestLink:async()=> 'invite',
+    telegramSiteGroupDetails:async()=>({title:'Caliber Pulse Sasti'}),createTelegramJoinRequestLink:async()=> 'invite',
     registerTelegramSiteGroup:async group=>{registered.push(group)},console:{error:()=>{}}};
   new Function(...Object.keys(bindings),snippet)(...Object.values(bindings));
   return {decisions,messages,registered,run:async(body,secret='secret')=>{
@@ -85,12 +85,12 @@ test('actual webhook admits only connected users assigned to the requested site'
   await api.run({chat_join_request:{chat:{id:-200},from:{id:123}}});
   assert.equal(api.decisions.length,0);
 });
-test('actual webhook registers site mappings only for a connected BDMS administrator',async()=>{
+test('actual webhook registers site mappings only for a connected Caliber Pulse administrator',async()=>{
   const message={chat:{type:'group',id:-100},from:{id:123},text:'/bdms_site Sasti OC'};
   const denied=webhookHarness({site:'Sasti OC'});await denied.run({message});
   assert.equal(denied.registered.length,0);
   const allowed=webhookHarness({adminLevel:'Admin'});await allowed.run({message});
-  assert.deepEqual(allowed.registered,[{site:'Sasti OC',chatId:'-100',title:'BDMS Sasti',inviteLink:'invite'}]);
+  assert.deepEqual(allowed.registered,[{site:'Sasti OC',chatId:'-100',title:'Caliber Pulse Sasti',inviteLink:'invite'}]);
   await allowed.run({message:{...message,chat:{type:'group',id:-999}}});
   assert.equal(allowed.registered.length,1);
 });

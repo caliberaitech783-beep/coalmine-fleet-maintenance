@@ -31,9 +31,9 @@ export function buildAuditLogExportEmail({url,auditUrl=url,userActivityUrl='',ge
   const users=Number(userCount||0).toLocaleString('en-IN');
   const worked=Number(totalWorkedMinutes||0).toLocaleString('en-IN',{maximumFractionDigits:2});
   return {
-    subject:`Nerve Center - Two-day Audit Trail export and User Activity report - ${generated}`,
+    subject:`Caliber Pulse - Two-day Audit Trail export and User Activity report - ${generated}`,
     text:[
-      'Nerve Center Audit Trail and User Activity reports',
+      'Caliber Pulse Audit Trail and User Activity reports',
       `Generated: ${generated}`,
       `Recorded events: ${count}`,
       `Users: ${users}`,
@@ -46,7 +46,7 @@ export function buildAuditLogExportEmail({url,auditUrl=url,userActivityUrl='',ge
       'This protected link expires after 30 days.',
     ].join('\n'),
     html:`<div style="font-family:Arial,sans-serif;color:#10213d;line-height:1.5;max-width:720px">
-      <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>NERVE CENTER</p>
+      <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>CALIBER PULSE</p>
       <h2 style="margin:0 0 8px">Two-day Audit Trail and User Activity reports</h2>
       <p style="margin:0;color:#61708a">Generated: ${escapeEmailHtml(generated)}</p>
       <p style="margin:4px 0 20px;color:#61708a">${escapeEmailHtml(count)} recorded events for ${escapeEmailHtml(users)} users; ${escapeEmailHtml(worked)} calculated active minutes</p>
@@ -64,7 +64,7 @@ export async function sendAuditLogExportEmail({to,url,auditUrl,userActivityUrl,g
   if(!transporter)return {sent:false,reason:'Email is not configured'};
   const message=buildAuditLogExportEmail({url,auditUrl,userActivityUrl,generatedAt,rowCount,userCount,totalWorkedMinutes});
   const result=await transporter.sendMail({
-    from:`Nerve Center Audit Trail <${config.user}>`,
+    from:`Caliber Pulse Audit Trail <${config.user}>`,
     to:recipient,
     ...message,
   });

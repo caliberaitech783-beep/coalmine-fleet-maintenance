@@ -17,7 +17,7 @@ test('Recovery guide is an Administration page before Audit Trail, for Admin and
 });
 
 test('the guide explains the four parts, three layers, the trial and each disaster case',()=>{
-  for(const text of ['The database','The application code','The Azure settings','The Azure resources','Server backup every night','Copy to your PC every day','Azure PostgreSQL automatic backups','Practise a restore without changing anything','RESTORE BDMS','node scripts/restore-database.mjs --input'])
+  for(const text of ['The database','The application code','The Azure settings','The Azure resources','Server backup every night','Copy to your PC every day','Azure PostgreSQL automatic backups','Practise a restore without changing anything','RESTORE Caliber Pulse','node scripts/restore-database.mjs --input'])
     assert.ok(guide.includes(text),text);
   assert.match(guide,/const open = \(page, label\) => <button type="button" className="recovery-link" onClick=\{go\(page\)\}>/,'links jump to the backup pages');
   for(const page of ['Backup Schedule','Backup','Import Backup','Audit Trail'])assert.ok(guide.includes(`open("${page}"`),page);

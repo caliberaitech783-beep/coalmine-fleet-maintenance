@@ -1,5 +1,5 @@
 # coalmine-fleet-maintenance
-Nerve Center breakdown management dashboard
+Caliber Pulse breakdown management dashboard
 
 ## Project guide
 

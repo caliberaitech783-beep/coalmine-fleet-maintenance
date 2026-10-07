@@ -1,4 +1,6 @@
 import PDFDocument from 'pdfkit';
+import {readFileSync} from 'node:fs';
+const pulseReportLogo=readFileSync(new URL('./public/pulse-logo.png',import.meta.url));
 import {canonicalSiteName} from './site-location.mjs';
 import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
@@ -84,19 +86,20 @@ function footer(doc){
   const pages=doc.bufferedPageRange();
   for(let index=0;index<pages.count;index++){
     doc.switchToPage(index);
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${indiaDateTime(new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
+    doc.image(pulseReportLogo,doc.page.margins.left,doc.page.height-62,{fit:[72,28]});
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Caliber Pulse | Generated ${indiaDateTime(new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
   }
 }
 
 function createDocument(title){
-  const doc=new PDFDocument({size:'A4',margin:36,bufferPages:true,compress:false,info:{Title:title,Author:'Nerve Center'}});
+  const doc=new PDFDocument({size:'A4',margin:36,bufferPages:true,compress:false,info:{Title:title,Author:'Caliber Pulse'}});
   registerReportPdfFonts(doc);
   return doc;
 }
 
 export async function buildFleetConsolidatedReportPdf({scopeLabel='Site',start,end,openRequests=[],closedRequests=[]}){
-  const doc=createDocument('Nerve Center Fleet Report'),result=collect(doc);
-  header(doc,{title:'Nerve Center Fleet Report',scopeLabel,start,end,openLabel:'OFF ROAD / OPEN',openCount:openRequests.length,closedLabel:'ON ROAD / CLOSED',closedCount:closedRequests.length});
+  const doc=createDocument('Caliber Pulse Fleet Report'),result=collect(doc);
+  header(doc,{title:'Caliber Pulse Fleet Report',scopeLabel,start,end,openLabel:'OFF ROAD / OPEN',openCount:openRequests.length,closedLabel:'ON ROAD / CLOSED',closedCount:closedRequests.length});
   const sites=groupedSites(openRequests,closedRequests);
   if(!sites.length)doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(12).text('No request activity in this reporting window.');
   for(const site of sites){
@@ -114,8 +117,8 @@ export async function buildFleetConsolidatedReportPdf({scopeLabel='Site',start,e
 }
 
 export async function buildTicketConsolidatedReportPdf({scopeLabel='Site',start,end,openTickets=[],closedTickets=[]}){
-  const doc=createDocument('Nerve Center CRM Ticket Report'),result=collect(doc);
-  header(doc,{title:'Nerve Center CRM Ticket Report',scopeLabel,start,end,openLabel:'OPEN TICKETS',openCount:openTickets.length,closedLabel:'CLOSED TICKETS',closedCount:closedTickets.length});
+  const doc=createDocument('Caliber Pulse CRM Ticket Report'),result=collect(doc);
+  header(doc,{title:'Caliber Pulse CRM Ticket Report',scopeLabel,start,end,openLabel:'OPEN TICKETS',openCount:openTickets.length,closedLabel:'CLOSED TICKETS',closedCount:closedTickets.length});
   const sites=groupedSites(openTickets,closedTickets);
   if(!sites.length)doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(12).text('No CRM ticket activity in this reporting window.');
   for(const site of sites){
