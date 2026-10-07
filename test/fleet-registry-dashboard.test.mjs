@@ -113,7 +113,7 @@ test("Total Fleet provides a persistent Caliber watermark option", () => {
   assert.match(source, /nerveCenterFleetWatermark/);
   assert.match(source, /className="mine-fleet-watermark-toggle"/);
   assert.match(source, /mine-fleet-region-chart\$\{showFleetWatermark \? " watermarked" : ""\}/);
-  assert.match(css, /\.mine-fleet-region-chart\.watermarked::before[\s\S]*caliber-logo-reverse\.png[\s\S]*88% 88%/);
+  assert.match(css, /\.mine-fleet-region-chart\.watermarked::before[\s\S]*pulse-symbol\.png[\s\S]*88% 88%/);
 });
 
 test("Total Fleet fits every site evenly across the available width", () => {
