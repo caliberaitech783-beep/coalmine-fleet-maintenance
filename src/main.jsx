@@ -4,6 +4,7 @@ import {ibossAccountsAllowed} from "../iboss-access.mjs";
 import OemEmailDeliveryStatus from './oem-email-delivery-status.jsx';
 import {requestShiftLabel,requestShiftColumns} from "../request-shift.mjs";
 import {RequestShiftProvider,useRequestShiftData,withRequestShiftCells} from "./request-shift-context.jsx";
+import {withDashboardResponsibilityCells} from "./dashboard-responsibility-cells.mjs";
 import {assignedUserRoles,ACCOUNT_PRIVILEGES,accountPrivileges} from "../account-role-access.mjs";
 import { siteReportHtml } from "./site-report.mjs";
 import { isIdleVehicleRequest } from "../request-idle.mjs";
@@ -2974,7 +2975,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         <tbody>
           {sortedRows.length ? (
             sortedRows.map((r) => (
-              <tr data-request-reference={r.ref} key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
+              <tr data-oem-responsibility={r.oemResponsibility} data-request-reference={r.ref} key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
                 {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction: showActionColumn, onApproveIdeal, onCancelIdeal, requestActions })}</React.Fragment>) : <>
                 {showActionColumn && <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td>}
                 <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>
@@ -4175,7 +4176,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
 const printSavedReport = ({ title, columns, rows, reportGrouping }) => openSmartPrint({ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
 function ActionsTable(props) {
   const shiftData=useRequestShiftData();
-  const children=props.children;
+  const children=/\b(dashboard-location-dates|workflow-table|breakdown-table-auto-fit)\b/.test(props.className || "")?withDashboardResponsibilityCells(props.children,shiftData.requests):props.children;
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
@@ -9958,7 +9959,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
             const days = calculateBreakdownDaysUntilClose(row.start, row.closedAt, now);
             const etcLabel = row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
             const lockedIdeal = isIdleVehicleRequest(row);
-            return <tr data-request-reference={row.ref} key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
+            return <tr data-oem-responsibility={row.oemResponsibility} data-request-reference={row.ref} key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} /></td>
