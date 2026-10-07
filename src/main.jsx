@@ -601,7 +601,16 @@ function AuthModeTabs({ mode, onModeChange }) {
 // the login form jump on load; only desktop browsers get the username field focused automatically.
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 function Login({ onLogin, theme, toggleTheme }) {
-  const [accountsPortal,setAccountsPortal]=useState(()=>new URLSearchParams(window.location.search).get('portal')==='accounts');
+  const [accountsPortal,setAccountsPortal]=useState(false);
+  const selectLoginPortal = (accounts) => {
+    setAccountsPortal(accounts);
+    setLoginRoles([]);
+    setSelectedLoginRole('');
+    setError('');
+    setPassword('');
+    setPasswordChange(null);
+    setLoginMode('signin');
+  };
   const [loginRoles,setLoginRoles]=useState([]);
   const [selectedLoginRole,setSelectedLoginRole]=useState('');
   const [username, setUsername] = useState("");
@@ -756,8 +765,10 @@ function Login({ onLogin, theme, toggleTheme }) {
         </div>
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
+          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet Operation</strong>Open Fleet sign in</span></button>
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
-          <button type="button" className="login-accounts-link" onClick={()=>{setAccountsPortal(!accountsPortal);setLoginRoles([]);setSelectedLoginRole('');setError('');setPassword('');setPasswordChange(null);setLoginMode('signin');}}><Landmark /><span><strong>{accountsPortal?'Fleet operations':'Accounts'}</strong>{accountsPortal?'Back to sign in':'Open Accounts sign in'}</span></button>
+          <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
+          <button type="button" className="login-tender-link" disabled title="Tender — coming soon"><FileBarChart /><span><strong>Tender</strong>Coming soon</span></button>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>

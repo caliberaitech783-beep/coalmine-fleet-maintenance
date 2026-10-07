@@ -110,6 +110,8 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .login-application-links svg{width:28px;height:28px;flex:none}
 .login-application-links > :hover{background:#ffffff2e}
 .login-application-links > :focus-visible{outline:3px solid white;outline-offset:3px}
+.login-application-links > [aria-pressed="true"]{background:#ffffff30;border-color:#fff;box-shadow:0 0 0 1px #fff}
+.login-application-links > button:disabled{opacity:.7;cursor:not-allowed;background:#ffffff16}
 .accounts-user-workspace > header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:20px 28px;background:linear-gradient(110deg,#522e90,#ef4960);color:#fff}
 .accounts-user-workspace > header nav{display:flex;flex-wrap:wrap;min-width:0;max-width:100%;gap:12px}
 .accounts-user-workspace > header button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:8px}
