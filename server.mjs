@@ -1,6 +1,7 @@
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
+import {telegramBdmsAccountChoice} from './telegram-bdms-account.mjs';
 import {sendTelegramWelcomeAudio} from './telegram.mjs';
 import {oracleAccountLedger} from './oracle-db.mjs';
 import {companyCode} from './iboss-company-scope.mjs';
@@ -3860,8 +3861,14 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       await migrateTelegramSiteGroup(update.groupChatId,update.newChatId);
     }else if(update.kind==='start'||update.kind==='text'){
       if(process.env.TELEGRAM_BDMS_CHATBOT_ENABLED!=='false'){
-        const {rows:links}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.chatId]);
-        if(links.length!==1)return await reply(update.chatId,'Connect exactly one BDMS account to this private Telegram chat before using the pilot.');
+        const {rows:linkedAccounts}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.chatId]);
+        const accountKey=`telegram_bdms_chat_account:${update.chatId}`;
+        const {rows:accountSettings}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[accountKey]);
+        const choice=telegramBdmsAccountChoice({links:linkedAccounts,text:req.body.message?.text,selectedLogin:accountSettings[0]?.setting_value?.login});
+        if(choice.kind==='unlinked')return await reply(update.chatId,'This Telegram chat has no connected BDMS account. Open pulse.cmll.in, click your profile and choose Connect Telegram, then open the supplied bot link and tap Start.');
+        if(choice.kind==='choose')return await sendTelegramText({chatId:update.chatId,message:'Select your linked BDMS account to use for chatbot queries. / चैटबॉट के लिए अपना BDMS खाता चुनें।',replyMarkup:{keyboard:choice.logins.map(login=>[`/account ${login}`]),resize_keyboard:true}});
+        const links=[{login:choice.login}];
+        await pool.query(`INSERT INTO app_settings (setting_key,setting_value) VALUES ($1,$2::jsonb) ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`,[accountKey,JSON.stringify({login:choice.login})]);
         const allowed=String(process.env.TELEGRAM_BDMS_CHATBOT_PILOT_LOGINS||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
         if(allowed.length&&!allowed.includes(String(links[0].login).toLowerCase()))return await reply(update.chatId,'The BDMS chatbot is not enabled for your login yet.');
         const user=await bdmsUserRecord(links[0].login);
@@ -3872,7 +3879,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
         const {rows:settings}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[key]);
         const authorization=await currentDashboardAuthorization(session);
         if(!authorization||!bdmsChatCanRead(authorization.session))return await reply(update.chatId,'Your current BDMS role does not permit breakdown queries.');
-        const flow=bdmsChatFlow(req.body.message?.text||'/menu',settings[0]?.setting_value?.language,authorization.session);
+        const flow=bdmsChatFlow(choice.changed||/^\/account\s/i.test(req.body.message?.text||'')?'/start':req.body.message?.text||'/menu',settings[0]?.setting_value?.language,authorization.session);
         const result=flow.query?await telegramBdmsPilotAnswer(session,req.body.message?.text,flow.language,settings[0]?.setting_value?.context):{text:flow.text,keyboard:flow.keyboard,context:{}};
         await pool.query(`INSERT INTO app_settings (setting_key,setting_value) VALUES ($1,$2::jsonb) ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`,[key,JSON.stringify({language:flow.language,context:result.context})]);
         await sendTelegramText({chatId:update.chatId,message:result.text,replyMarkup:result.keyboard});
