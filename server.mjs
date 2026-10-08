@@ -8265,6 +8265,8 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
 // browsers may keep these for a year. index.html is still revalidated.
 registerBreakdownResponsibilityRoute();
 registerReopenBreakdownRoute();
+// Legacy directory snapshots embed unfiltered phone numbers. Use the protected API.
+app.get(['/cd/directory-data.json','/cd/caliber-directory.html'],(_req,res)=>res.status(404).end());
 app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutable:true,maxAge:'1y'}));
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));

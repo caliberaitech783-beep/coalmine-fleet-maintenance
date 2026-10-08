@@ -35,6 +35,7 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
     profile:isAdmin?'admin-user':isProjectManager?'project-manager':isManager?'manager-user':assignedRole==='General User'?'general-user':'site-user',
     label:isAdmin?(adminLevel==='Super Admin'?'Super Admin':'Admin'):isProjectManager?'Project Manager':managerRoles.join(' · ')||assignedRole||'Site User',
     allAccess,mySitesEnabled:false,siteIds,
+    canViewAContacts:isAdmin||isProjectManager||/\bdirector\b/i.test(String(user.designation||user.employeeDesignation||'')),
     sites:allowedSites.map((site)=>site.label),
     regions:unique(allowedSites.map((site)=>site.group)),
   };
@@ -42,6 +43,14 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
 
 /** Every signed-in directory viewer receives the full roster; location is a browsing filter. */
 export function cdirDirectoryForViewer(directory={},viewer={}){
+  if(!viewer.canViewAContacts){
+    directory={...directory,matrix:Object.fromEntries(Object.entries(directory.matrix||{}).map(([key,rows])=>[key,rows.map(person=>{
+      if(String(person.cat||key.slice(key.lastIndexOf('|')+1)).trim().toUpperCase()!=='A')return person;
+      const masked={...person};
+      for(const field of ['contact','whatsapp','emergencyContact'])if(masked[field])masked[field]='**********';
+      return masked;
+    })]))};
+  }
   if(viewer.allAccess)return directory;
   const allowed=new Set(viewer.siteIds||[]);
   const sites=(directory.sites||[]).filter((site)=>allowed.has(site.id));

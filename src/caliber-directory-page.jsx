@@ -45,7 +45,7 @@ function DirectoryTable({rows,onSelect,onOrganisation,organisationManagers,empty
     <tbody>{rows.map((person,index)=><tr key={rowKey(person,index)}>
       <td>{index+1}</td><td>{activePerson(person)?<button className="cdir-person-link" type="button" onClick={()=>onSelect(person)}>{person.name}</button>:<span className="cdir-vacant-name">Vacant position</span>}</td>
       <td><span className="cdir-cat">{person.cat||'—'}</span></td><td>{person.designation||'—'}</td><td>{person.department||'—'}</td><td>{person.siteLabel||'—'}</td><td>{person.reportingTo||'—'}</td>
-      <td>{person.contact?(<a href={`tel:${person.contact}`}>{person.contact}</a>):'—'}</td><td><span className={`cdir-status ${statusOf(person).toLowerCase()}`}>{statusOf(person)}</span></td>
+      <td>{person.contact?(person.contact.includes('*')?person.contact:<a href={`tel:${person.contact}`}>{person.contact}</a>):'—'}</td><td><span className={`cdir-status ${statusOf(person).toLowerCase()}`}>{statusOf(person)}</span></td>
       {onOrganisation&&<td>{organisationManagers?.has(cdirPersonId(person))?<button className="cdir-org-link" type="button" onClick={()=>onOrganisation(person)}><Network/>View team</button>:<span className="cdir-no-team">—</span>}</td>}
     </tr>)}</tbody>
   </table></div>;

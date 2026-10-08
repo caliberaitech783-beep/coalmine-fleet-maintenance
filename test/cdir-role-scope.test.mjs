@@ -18,7 +18,7 @@ test('C-Dir gives Project Managers and General Users a site-scoped profile witho
     session:{role:'super',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}},
     user:{adminLevel:'Manager',managerRole:'Project Manager',managerRegion:'WCL',managerSites:'Sasti OC | Dhoptala OC (2nd)'},sites,
   });
-  assert.deepEqual(projectManager,{profile:'project-manager',label:'Project Manager',allAccess:true,mySitesEnabled:false,
+  assert.deepEqual(projectManager,{profile:'project-manager',label:'Project Manager',allAccess:true,mySitesEnabled:false,canViewAContacts:true,
     siteIds:['sasti-oc','dhoptala-oc'],sites:['Sasti OC','Dhoptala OC'],regions:['WCL']});
 
   const general=cdirViewerContext({session:{role:'normal',assignedRole:'General User'},user:{userGroup:'General User',site:'Dudhichua OC | Dudhichua East OC'},sites});
@@ -28,7 +28,7 @@ test('C-Dir gives Project Managers and General Users a site-scoped profile witho
   assert.equal('permissions' in general,false);
 
   const mis=cdirViewerContext({session:{role:'normal',assignedRole:'MIS User'},user:{userGroup:'MIS User',site:'Sasti OC'},sites});
-  assert.deepEqual(mis,{profile:'site-user',label:'MIS User',allAccess:true,mySitesEnabled:false,siteIds:['sasti-oc'],sites:['Sasti OC'],regions:['WCL']});
+  assert.deepEqual(mis,{profile:'site-user',label:'MIS User',allAccess:true,mySitesEnabled:false,canViewAContacts:false,siteIds:['sasti-oc'],sites:['Sasti OC'],regions:['WCL']});
 });
 
 test('C-Dir gives every role global All and preserves all API rows and totals',()=>{
@@ -39,7 +39,7 @@ test('C-Dir gives every role global All and preserves all API rows and totals',(
   const row={name:'Employee',department:'Operations',status:'ACTIVE'};
   const directory={meta:{generated:'today',totalStaffSanctioned:2,totalFilled:2,totalVacant:0,totalSitesOffices:2,totalDepartments:2},sites,categories:['A'],matrix:{'sasti-oc|A':[row],'dudhicua-east-oc|A':[{...row,name:'Hidden'}]},siteTotals:{'sasti-oc':1,'dudhicua-east-oc':1},siteStats:{'sasti-oc':{sanctioned:1,filled:1,vacant:0},'dudhicua-east-oc':{sanctioned:1,filled:1,vacant:0}},categoryTotalsUnique:{A:2}};
   const scoped=cdirDirectoryForViewer(directory,viewer);
-  assert.equal(scoped,directory);
+  assert.deepEqual(scoped,directory);
   assert.deepEqual(scoped.sites,sites);
   assert.deepEqual(Object.keys(scoped.matrix),['sasti-oc|A','dudhicua-east-oc|A']);
   assert.equal(scoped.meta.totalStaffSanctioned,2);
@@ -128,7 +128,7 @@ test('office, General User, manager and unassigned accounts can view every direc
       assert.equal(viewer.allAccess,true);
       assert.equal(viewer.mySitesEnabled,false);
       const directory={sites,matrix:{'sasti-oc|A':[{name:'WCL employee'}],'dudhicua-east-oc|A':[{name:'NCL employee'}]}};
-      assert.equal(cdirDirectoryForViewer(directory,viewer),directory);
+      assert.deepEqual(cdirDirectoryForViewer(directory,viewer),directory);
     }
   }
   const component=fs.readFileSync(new URL('../src/caliber-directory-page.jsx',import.meta.url),'utf8');
