@@ -9,6 +9,8 @@ const bank=(column,step)=>({chain:'bank-position',step,key:row=>row[column]});
 const own=(chain,step,key=recordId)=>({chain,step,key});
 
 export const ACCOUNT_DRILLS={
+ 'trade-payable':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book')},
+ 'trade-receivable':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book')},
  'bank-reconciliation':{VOUCHER_NO:own('voucher','voucher'),BANK_CODE:bank('BANK_CODE','bank'),BANK_NAME:bank('BANK_CODE','bank')},
  'account-master':{ACCOUNT_CODE:party('ACCOUNT_CODE','party'),ACCOUNT_NAME:party('ACCOUNT_CODE','party'),PARENT_CODE:party('PARENT_CODE','party'),PARENT_ACCOUNT:party('PARENT_CODE','party')},
  'chart-of-accounts':{ACCOUNT_CODE:party('ACCOUNT_CODE','party'),ACCOUNT_NAME:party('ACCOUNT_CODE','party'),PARENT_CODE:party('PARENT_CODE','party'),PARENT_ACCOUNT:party('PARENT_CODE','party')},

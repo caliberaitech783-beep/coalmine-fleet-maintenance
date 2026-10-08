@@ -1,3 +1,4 @@
+import {TRADE_REPORTS,tradeCard} from './iboss-trade-ledger.mjs';
 import {BANK_RECONCILIATION_SUMMARY_SQL,reconciliationFilter} from './iboss-bank-reconciliation.mjs';
 import {companyCode,companyScopedSql} from './iboss-company-scope.mjs';
 import {bankLedgerSql} from './iboss-bank-ledger.mjs';
@@ -11,6 +12,8 @@ export const DASHBOARD_QUERIES={
  masters:{sql:`SELECT (SELECT COUNT(*) FROM cmpl.party WHERE partytypecode<>'ACCOUNTGROUP') AS accounts,(SELECT COUNT(*) FROM cmpl.vendor) AS vendors,(SELECT COUNT(*) FROM cmpl.costcentre) AS cost_centres,(SELECT COUNT(*) FROM cmpl.workcentre) AS work_centres,(SELECT COUNT(*) FROM cmpl.asset) AS assets FROM dual`},
  bank:{sql:bank},
  reconciliation:{sql:BANK_RECONCILIATION_SUMMARY_SQL},
+ 'trade-payable':{sql:TRADE_REPORTS['trade-payable'].sql},
+ 'trade-receivable':{sql:TRADE_REPORTS['trade-receivable'].sql},
  payable:{sql:`SELECT a.vendorcode AS party_code,MAX(a.vendorname) AS party_name,${age('TRUNC(SYSDATE)-TRUNC(a.documentdate)')} AS age_band,COUNT(*) AS bills,SUM(a.outstanding) AS balance FROM cmpl.ap_bill_payable_v a WHERE NVL(a.outstanding,0)<>0 GROUP BY a.vendorcode,${age('TRUNC(SYSDATE)-TRUNC(a.documentdate)')}`},
  receivable:{sql:`SELECT a.accountcode AS party_code,MAX(a.partyname) AS party_name,${age('a.billage')} AS age_band,COUNT(*) AS bills,SUM(a.totalbalance) AS balance FROM cmpl.bi_receivable a WHERE NVL(a.totalbalance,0)<>0 GROUP BY a.accountcode,${age('a.billage')}`},
  advice:{sql:`SELECT CASE WHEN UPPER(TRIM(NVL(a.paymentdone,'N'))) IN ${yes} THEN 'Completed' ELSE 'Pending' END AS state,COUNT(*) AS records,SUM(NVL(a.amount,0)) AS amount FROM cmpl.paymentadvice a WHERE a.paymentadvicedate>=TO_DATE(:from_date,'YYYY-MM-DD') AND a.paymentadvicedate<TO_DATE(:to_date,'YYYY-MM-DD')+1 GROUP BY CASE WHEN UPPER(TRIM(NVL(a.paymentdone,'N'))) IN ${yes} THEN 'Completed' ELSE 'Pending' END`},
@@ -29,6 +32,8 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
  const cards=[
   {key:'bank',title:'Bank ledger balance',amount:sum(groups.bank||[],'BALANCEAMOUNT'),count:(groups.bank||[]).length,note:'Ledger closing through To date · Cr positive / Dr negative',kind:'bank'},
   {key:'bank-reconciliation',title:'Bank Reconciliation',amount:sum(groups.reconciliation||[],'PASSBOOK_BALANCE'),count:sum(groups.reconciliation||[],'UNRECONCILED_COUNT'),note:'Calculated pass-book balance · current ERP reconciliation status',kind:'bank'},
+  tradeCard('trade-payable',groups['trade-payable']),
+  tradeCard('trade-receivable',groups['trade-receivable']),
   {key:'payable',title:'Current payables',amount:sum(groups.payable||[],'BALANCE'),count:sum(groups.payable||[],'BILLS'),note:'All open bills · current signed outstanding',kind:'payable'},
   {key:'receivable',title:'Current receivables',amount:sum(groups.receivable||[],'BALANCE'),count:sum(groups.receivable||[],'BILLS'),note:'All open customer bills · current signed balances',kind:'receivable'},
   {key:'aged-receivable',title:'Receivables older than 180 days',amount:sum(old,'BALANCE'),count:sum(old,'BILLS'),note:'Bill age · current balance, not a due-date estimate',kind:'risk'},
@@ -54,6 +59,8 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
 }
 
 export const DASHBOARD_METRICS={
+ 'trade-payable':{view:'trade-payable',dates:'period'},
+ 'trade-receivable':{view:'trade-receivable',dates:'period'},
  'bank-reconciliation':{view:'bank-reconciliation',dates:'period'},
  bank:{view:'bank-balance',dates:'period'},payable:{view:'payable-receivable',where:"r.side='Payable'"},receivable:{view:'payable-receivable',where:"r.side='Receivable'"},
  'aged-receivable':{view:'outstanding-180',where:"r.side='Receivable'"},loan:{view:'emi-details',where:'NVL(r.balanceamount,0)<>0'},
