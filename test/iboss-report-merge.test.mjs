@@ -15,9 +15,9 @@ test('selections above 10 reports are refused, and vehicles match on letters and
  assert.match(anchor.sql,/SELECT k AS anchor,k AS doc_no FROM \(SELECT REGEXP_REPLACE\(UPPER\(NVL\(e\.doorno,''\)\),'\[\^A-Z0-9\]',''\) AS k .* UNION SELECT REGEXP_REPLACE\(UPPER\(NVL\(x\.vehicleno/);
  assert.match(emi.sql,/REGEXP_REPLACE\(UPPER\(NVL\(e\.doorno,''\)\),'\[\^A-Z0-9\]',''\) AS anchor/);
  const [bank,balance]=mergeStatements('bank-position',['bank','balance'],range);
- assert.match(bank.sql,/p\.partytypecode='BANK' AND p\.partycode IN \(SELECT b\.accountcode FROM cmpl\.accountbalance b/);
- assert.deepEqual(balance.binds,{to_date:range.to});
- assert.match(balance.sql,/PARTITION BY b\.companycode,b\.accountcode ORDER BY b\.fordate DESC/);
+ assert.match(bank.sql,/p\.partytypecode='BANK' AND p\.partycode IN \(SELECT DISTINCT d\.accountcode FROM cmpl\.voucher v/);
+ assert.deepEqual(balance.binds,{from_date:range.from,to_date:range.to});
+ assert.match(balance.sql,/GROUP BY v.companycode,d.accountcode/);
 });
 
 test('only master lookups and the unlinked asset reports stay outside Report Merge',()=>{

@@ -9,6 +9,8 @@ export function chatOptions(allowed){
  {view:'chat-payment-done',prompt:'Payments marked done in ERP',keywords:'payment release released paid completed'},
  {view:'chat-payment-pending',prompt:'Payments not done in ERP',keywords:'payment pending unpaid not done outstanding'},
  {view:'chat-emi-summary',prompt:'How many EMI are paid and pending?',keywords:'emi instalment installment paid unpaid pending count preclosed loan'},
+ {view:'chat-account-balances',prompt:'All account ledger closing balances',keywords:'all ledger closing balance accounts'},
+ {view:'chat-account-closing',prompt:'Closing balance for any account ledger',keywords:'account ledger bank customer employee balance',needsVendor:true},
  {view:'chat-vendor-closing',prompt:'Closing balance for a vendor',keywords:'vendor supplier contractor transporter closing balance ledger',needsVendor:true}
  );
  return options.map(option=>({...option,title:option.title||ACCOUNT_VIEWS[option.view].title}));
@@ -28,5 +30,5 @@ export function filterChatOptions(question,options){
  return options.map(option=>{const terms=normalize(`${option.prompt} ${option.title} ${option.keywords||''}`).split(' ');return {option,score:words.reduce((sum,word)=>sum+(terms.includes(word)?4:terms.some(term=>term.includes(word))?2:terms.some(term=>near(word,term))?1:0),0)};}).filter(hit=>hit.score>0).sort((a,b)=>b.score-a.score).map(hit=>hit.option);
 }
 export function vendorSearchText(question){
- return String(question).replace(/\b(closing|balance|vendor|supplier|ledger|for|of|show|me|the|please)\b/gi,'').trim().slice(0,120);
+ return String(question).replace(/\b(closing|balance|vendor|supplier|ledger|account|any|for|of|show|me|the|please)\b/gi,'').trim().slice(0,120);
 }

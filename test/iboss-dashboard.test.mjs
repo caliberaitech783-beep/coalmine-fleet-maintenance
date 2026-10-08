@@ -20,9 +20,9 @@ test('Overdue and upcoming commitments remain distinct and advice uses native pe
  assert.match(DASHBOARD_QUERIES.emi.sql,/e.emistatus='UNPAID'/);
  assert.match(result.note,/not unpaid tax liability/);
 });
-test('Bank source chooses latest snapshot per company/account without summing history',()=>{
- assert.match(DASHBOARD_QUERIES.bank.sql,/PARTITION BY b.companycode,b.accountcode/);
- assert.match(DASHBOARD_QUERIES.bank.sql,/b.rn=1/);
+test('Bank source calculates closing from voucher history through the selected date',()=>{
+ assert.match(DASHBOARD_QUERIES.bank.sql,/GROUP BY v.companycode,d.accountcode/);
+ assert.match(DASHBOARD_QUERIES.bank.sql,/SUM\(NVL\(d.amount,0\)\)/);
  assert.match(DASHBOARD_QUERIES.bank.sql,/p.partytypecode='BANK'/);
 });
 test('Closure and withdrawal checks exclude completed instruments from expiry alerts',()=>{

@@ -1,3 +1,4 @@
+import {ledgerSql} from './iboss-bank-ledger.mjs';
 // Accounts Report Merge: joins up to 10 Accounts reports that belong to one
 // business process into a single row per anchor document (or party), without
 // repeating shared columns, and builds the document trail used for drill-down.
@@ -26,15 +27,14 @@ const sum=(rows,key)=>rows.reduce((total,row)=>total+(Number(row[key])||0),0);
 // Vehicle numbers are matched the same way as the fleet log-book lookup: letters and digits only.
 const vehicle=column=>`REGEXP_REPLACE(UPPER(NVL(${column},'')),'[^A-Z0-9]','')`;
 const INTERNAL_PARTIES="p.partytypecode<>'ACCOUNTGROUP' AND p.partycode IN (SELECT partycode FROM cmpl.party START WITH partycode='BRANCHDIVISIONS' CONNECT BY NOCYCLE PRIOR partycode=parentcode)";
-// Latest stored balance on or before the To date, per company and account (same rule as the balance reports).
+// Calculate each ledger through To date from vouchers, including brought-forward entries.
 function balanceStep(key,title,condition){
- const snapshotDate="b.fordate < TO_DATE(:to_date,'YYYY-MM-DD')+1";
- return {key,title,role:'many',docLabel:`${title} Rows`,dateLabel:`${title} Stored On`,sums:[amount('BALANCEAMOUNT',`${title} (Signed)`)],
-  fields:[f('COMPANYCODE','Company Code'),f('FINANCIALYEARCODE','Financial Year'),amount('DEBITAMOUNT','Debit Amount'),amount('CREDITAMOUNT','Credit Amount'),amount('BALANCEAMOUNT','Signed Balance')],
-  keys:`SELECT b.accountcode FROM cmpl.accountbalance b JOIN cmpl.party p ON p.partycode=b.accountcode WHERE ${snapshotDate} AND ${condition}`,
-  sql:s=>`WITH snapshots AS (SELECT b.*,ROW_NUMBER() OVER(PARTITION BY b.companycode,b.accountcode ORDER BY b.fordate DESC NULLS LAST,b.lastupdatedate DESC NULLS LAST,b.financialyearcode DESC) AS rn FROM cmpl.accountbalance b WHERE ${snapshotDate}${s.key?' AND b.accountcode = :anchor_key':''}) SELECT b.accountcode AS anchor,'Balance '||b.companycode AS doc_no,${day('b.fordate')} AS doc_date,b.companycode,b.financialyearcode,b.debitamount,b.creditamount,b.balanceamount FROM snapshots b JOIN cmpl.party p ON p.partycode=b.accountcode WHERE b.rn=1 AND ${condition} ORDER BY b.companycode`};
+ return {key,title,role:'many',docLabel:`${title} Rows`,dateLabel:`${title} Closing As Of`,
+  sums:[amount('BALANCEAMOUNT',`${title} (Cr + / Dr −)`)],
+  fields:[f('COMPANYCODE','Company Code'),amount('OPENING_BALANCE','Opening (Cr + / Dr −)'),amount('DEBITAMOUNT','Period Debit'),amount('CREDITAMOUNT','Period Credit'),amount('CLOSING_DEBIT','Closing Dr'),amount('CLOSING_CREDIT','Closing Cr'),amount('BALANCEAMOUNT','Closing (Cr + / Dr −)')],
+  keys:`SELECT DISTINCT d.accountcode FROM cmpl.voucher v JOIN cmpl.voucherdetail d ON d.tno=v.tno JOIN cmpl.party p ON p.partycode=d.accountcode WHERE ${condition} AND v.voucherdate<TO_DATE(:to_date,'YYYY-MM-DD')+1`,
+  sql:s=>`SELECT b.*,b.account_code AS anchor,'Balance '||b.companycode AS doc_no,b.snapshot_date AS doc_date FROM (${ledgerSql(condition,s.key?'anchor_key':'')}) b ORDER BY b.companycode,b.account_code`};
 }
-
 export const MERGE_CHAINS={
  'bank-guarantee':{
   title:'Bank Guarantee Lifecycle',
@@ -174,8 +174,8 @@ export const MERGE_CHAINS={
  },
  'bank-position':{
   title:'Bank Position',
-  description:'Bank account → stored balance → interest → FDs → BGs issued → loans, one row per bank.',
-  dateLabel:'Document date (balances: latest on / before To date)',
+  description:'Bank account → ledger closing → interest → FDs → BGs issued → loans, one row per bank.',
+  dateLabel:'Document date (bank closing: through To date)',
   keyed:true,rowLabel:'bank',
   steps:[
    {key:'bank',title:'Account Master (Banks)',role:'anchor',docLabel:'Bank Account Code',fields:[f('BANK_NAME','Bank'),f('STATUS','Account Status')],

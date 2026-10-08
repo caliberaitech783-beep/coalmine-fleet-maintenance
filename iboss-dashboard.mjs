@@ -1,9 +1,10 @@
+import {bankLedgerSql} from './iboss-bank-ledger.mjs';
 import {accountView} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
 export const DASHBOARD_PAGE_SIZE=200;
 const yes="('Y','YES','1','T','TRUE','PAID','DONE')";
 const age=expression=>`CASE WHEN ${expression}<=30 THEN '0–30' WHEN ${expression}<=60 THEN '31–60' WHEN ${expression}<=90 THEN '61–90' WHEN ${expression}<=180 THEN '91–180' ELSE '180+' END`;
-const bank=`WITH snapshots AS (SELECT b.*,ROW_NUMBER() OVER(PARTITION BY b.companycode,b.accountcode ORDER BY b.fordate DESC NULLS LAST,b.lastupdatedate DESC NULLS LAST,b.financialyearcode DESC) rn FROM cmpl.accountbalance b WHERE b.fordate<TO_DATE(:to_date,'YYYY-MM-DD')+1) SELECT b.companycode,b.financialyearcode,b.accountcode AS account_code,p.partyname AS account_name,TO_CHAR(b.fordate,'YYYY-MM-DD') AS snapshot_date,b.balanceamount FROM snapshots b JOIN cmpl.party p ON p.partycode=b.accountcode WHERE b.rn=1 AND p.partytypecode='BANK' ORDER BY ABS(b.balanceamount) DESC,b.companycode,b.accountcode`;
+const bank=bankLedgerSql();
 export const DASHBOARD_QUERIES={
  masters:{sql:`SELECT (SELECT COUNT(*) FROM cmpl.party WHERE partytypecode<>'ACCOUNTGROUP') AS accounts,(SELECT COUNT(*) FROM cmpl.vendor) AS vendors,(SELECT COUNT(*) FROM cmpl.costcentre) AS cost_centres,(SELECT COUNT(*) FROM cmpl.workcentre) AS work_centres,(SELECT COUNT(*) FROM cmpl.asset) AS assets FROM dual`},
  bank:{sql:bank},
@@ -23,7 +24,7 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
  const overdue=(groups.emi||[]).filter(row=>row.BUCKET==='Overdue'),upcoming=(groups.emi||[]).filter(row=>row.BUCKET!=='Overdue');
  const old=(groups.receivable||[]).filter(row=>row.AGE_BAND==='180+');
  const cards=[
-  {key:'bank',title:'Bank ledger balance',amount:sum(groups.bank||[],'BALANCEAMOUNT'),count:(groups.bank||[]).length,note:'Signed stored balances · latest on / before To date',kind:'bank'},
+  {key:'bank',title:'Bank ledger balance',amount:sum(groups.bank||[],'BALANCEAMOUNT'),count:(groups.bank||[]).length,note:'Ledger closing through To date · Cr positive / Dr negative',kind:'bank'},
   {key:'payable',title:'Current payables',amount:sum(groups.payable||[],'BALANCE'),count:sum(groups.payable||[],'BILLS'),note:'All open bills · current signed outstanding',kind:'payable'},
   {key:'receivable',title:'Current receivables',amount:sum(groups.receivable||[],'BALANCE'),count:sum(groups.receivable||[],'BILLS'),note:'All open customer bills · current signed balances',kind:'receivable'},
   {key:'aged-receivable',title:'Receivables older than 180 days',amount:sum(old,'BALANCE'),count:sum(old,'BILLS'),note:'Bill age · current balance, not a due-date estimate',kind:'risk'},
@@ -45,11 +46,11 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
    {key:'expiring-bg',title:'Renew guarantees expiring in 30 days',count:num(guarantees?.RECORDS),amount:num(guarantees?.AMOUNT),tone:'upcoming'},
    {key:'expired-bg',title:'Review expired guarantees without closure',count:num(expired?.RECORDS),amount:num(expired?.AMOUNT),tone:'urgent'},
    {key:'maturing-fd',title:'Plan deposits maturing in 30 days',count:num(fd?.RECORDS),amount:num(fd?.AMOUNT),tone:'upcoming'}],from,to,checkedAt,
-  note:'Current bill balances follow Oracle’s current settlement views and do not reconstruct historical outstanding. Bank balances are stored snapshots. EMI and expiry dates use To as the planning date. Tax figures are recorded TDS/TCS, not unpaid tax liability. Amounts remain in the ERP reporting basis; signed credits are retained.'};
+  note:'Current bill balances follow Oracle’s current settlement views and do not reconstruct historical outstanding. Bank balances are calculated from voucher history through To date. EMI and expiry dates use To as the planning date. Tax figures are recorded TDS/TCS, not unpaid tax liability. Amounts remain in the ERP reporting basis; signed credits are retained.'};
 }
 
 export const DASHBOARD_METRICS={
- bank:{view:'bank-balance'},payable:{view:'payable-receivable',where:"r.side='Payable'"},receivable:{view:'payable-receivable',where:"r.side='Receivable'"},
+ bank:{view:'bank-balance',dates:'period'},payable:{view:'payable-receivable',where:"r.side='Payable'"},receivable:{view:'payable-receivable',where:"r.side='Receivable'"},
  'aged-receivable':{view:'outstanding-180',where:"r.side='Receivable'"},loan:{view:'emi-details',where:'NVL(r.balanceamount,0)<>0'},
  'overdue-emi':{view:'emi-schedule',where:"r.emistatus='UNPAID'",dates:'overdue'},'upcoming-emi':{view:'emi-schedule',where:"r.emistatus='UNPAID'",dates:'upcoming'},
  'pending-advice':{view:'payment-advice',where:`UPPER(TRIM(NVL(r.paymentdone,'N'))) NOT IN ${yes}`,dates:'period'},

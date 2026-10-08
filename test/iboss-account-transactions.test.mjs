@@ -25,12 +25,10 @@ test('registers preserve stored financial fields and use inclusive start / exclu
  assert.match(TRANSACTION_VIEWS['fixed-deposit-interest'].sql,/a\.interestamount/i);
  assert.match(TRANSACTION_VIEWS['asset-details'].sql,/d\.amount/);
 });
-test('balances pick a single latest snapshot for each company and account without summing days',()=>{
+test('all ledger balance reports use voucher history through the requested closing date',()=>{
  for(const key of ['imprest-balance','internal-balance','bank-balance']){
-  const view=TRANSACTION_VIEWS[key];assert.equal(view.asOf,true);
-  assert.match(view.sql,/PARTITION BY b\.companycode,b\.accountcode ORDER BY b\.fordate DESC/);
-  assert.match(view.sql,/WHERE b\.rn=1/);assert.doesNotMatch(view.sql,/SUM\(/);
-  assert.match(view.sql,/b\.fordate < TO_DATE\(:to_date,'YYYY-MM-DD'\)\+1/);
+  const view=TRANSACTION_VIEWS[key];assert.equal(view.dated,true);assert.equal(view.ledger,true);
+  assert.match(view.sql,/GROUP BY v.companycode,d.accountcode/);assert.match(view.sql,/:to_date AS snapshot_date/);assert.doesNotMatch(view.sql,/accountbalance/);
  }
  assert.match(TRANSACTION_VIEWS['internal-balance'].sql,/CONNECT BY NOCYCLE/);
 });

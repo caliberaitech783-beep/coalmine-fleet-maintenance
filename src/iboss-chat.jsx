@@ -21,27 +21,27 @@ export default function IbossChat({token,allowed,ReportSection}){
   return ()=>{active.dispose();loader.current=null;};
  },[request,token]);
  const filtered=filterChatOptions(question,options);
- const lookup=vendorQuery||((!filtered.length||/\b(vendor|supplier)\b/i.test(question))?vendorSearchText(question):'');
+ const lookup=vendorQuery||((!filtered.length||/\b(vendor|supplier|ledger|account)\b/i.test(question))?vendorSearchText(question):'');
  const canLookup=allowed.includes('Transactions')&&lookup.length>=2;
  useEffect(()=>{
   if(!canLookup){setVendors({rows:[],loading:false,error:''});return;}
   const controller=new AbortController();setVendors({rows:[],loading:true,error:''});
   const timer=setTimeout(async()=>{try{
-   const response=await fetch(`/api/reports/iboss-accounts/chat-vendor-search?${new URLSearchParams({search:lookup,page:'0'})}`,{headers:{Authorization:`Bearer ${token}`},signal:controller.signal,cache:'no-store'});
-   if(!response.ok)throw new Error('Vendor search is unavailable. Please try again.');
+   const response=await fetch(`/api/reports/iboss-accounts/chat-account-search?${new URLSearchParams({search:lookup,page:'0'})}`,{headers:{Authorization:`Bearer ${token}`},signal:controller.signal,cache:'no-store'});
+   if(!response.ok)throw new Error('Account search is unavailable. Please try again.');
    const body=await response.json();if(!controller.signal.aborted)setVendors({rows:body.rows||[],loading:false,error:''});
   }catch(e){if(!controller.signal.aborted)setVendors({rows:[],loading:false,error:e.message});}},350);
   return ()=>{clearTimeout(timer);controller.abort();};
  },[canLookup,lookup,token]);
  const ask=option=>{
-  if(option.needsVendor){setVendorOpen(true);setError('Enter at least two letters of the vendor name or code, then choose its ledger below.');return;}
+  if(option.needsVendor){setVendorOpen(true);setError('Enter at least two letters of the account name or code, then choose its ledger below.');return;}
   try{
    const selected=/^Today's /.test(option.prompt)?{from:today,to:today}:range;
    purchaseOrderRange(selected.from,selected.to);setRange(selected);setQuestion(option.prompt);setError('');
    setData({rows:[],loading:true});setRequest({view:option.view,prompt:option.prompt,range:{...selected},search:option.search});
   }catch(e){setError(e.message);}
  };
- const submit=event=>{event.preventDefault();const option=matchChatQuestion(question,options);if(option)ask(option);else setError('Choose a matching suggestion or vendor ledger below to confirm what you want to check.');};
+ const submit=event=>{event.preventDefault();const option=matchChatQuestion(question,options);if(option)ask(option);else setError('Choose a matching suggestion or account ledger below to confirm what you want to check.');};
  return <div className="iboss-chat">
   <h2>Accounts Chat Bot</h2>
   <p>Choose a question or search for an Accounts report. Answers use your connected ERP records.</p>
@@ -54,13 +54,13 @@ export default function IbossChat({token,allowed,ReportSection}){
   <p>Questions starting with “Today's” use today in India. Other reports use the selected dates where supported.</p>
   {error&&<p role="alert">{error}</p>}
   <div className="iboss-chat-suggestions" aria-label="Suggested Accounts questions">{filtered.map(option=><button type="button" className="secondary" key={`${option.view}-${option.prompt}`} onClick={()=>ask(option)}>{option.prompt}</button>)}</div>
-  {!filtered.length&&<p>No matching report suggestion. Matching vendor ledgers appear below; otherwise try payment, EMI, bank or balance.</p>}
+  {!filtered.length&&<p>No matching report suggestion. Matching account ledgers appear below; otherwise try payment, EMI, bank or balance.</p>}
   {allowed.includes('Transactions')&&(vendorOpen||canLookup)&&<div className="iboss-chat-answer">
-   <label>Find vendor ledger<input aria-label="Vendor name or code" value={vendorQuery} onChange={event=>setVendorQuery(event.target.value)} placeholder="At least two letters of name or code" maxLength={120}/></label>
-   {vendors.loading&&<p role="status">Searching vendor ledgers…</p>}
+   <label>Find account ledger<input aria-label="Account name or code" value={vendorQuery} onChange={event=>setVendorQuery(event.target.value)} placeholder="At least two letters of name or code" maxLength={120}/></label>
+   {vendors.loading&&<p role="status">Searching account ledgers…</p>}
    {vendors.error&&<p role="alert">{vendors.error}</p>}
-   {!vendors.loading&&canLookup&&!vendors.error&&!vendors.rows.length&&<p>No matching supplier, contractor or transporter ledger found.</p>}
-   <div className="iboss-chat-suggestions">{vendors.rows.map(row=><button type="button" className="secondary" key={row.ACCOUNT_CODE} onClick={()=>ask({view:'chat-vendor-closing',prompt:`Closing balance: ${row.ACCOUNT_NAME} (${row.ACCOUNT_CODE})`,search:row.ACCOUNT_CODE})}>Closing balance — {row.ACCOUNT_NAME} ({row.ACCOUNT_CODE})</button>)}</div>
+   {!vendors.loading&&canLookup&&!vendors.error&&!vendors.rows.length&&<p>No matching account ledger found.</p>}
+   <div className="iboss-chat-suggestions">{vendors.rows.map(row=><button type="button" className="secondary" key={row.ACCOUNT_CODE} onClick={()=>ask({view:'chat-account-closing',prompt:`Closing balance: ${row.ACCOUNT_NAME} (${row.ACCOUNT_CODE})`,search:row.ACCOUNT_CODE})}>Closing balance — {row.ACCOUNT_NAME} ({row.ACCOUNT_CODE})</button>)}</div>
    {vendors.rows.length===20&&<p>Showing the first 20 matching ledgers. Type more letters to narrow the search.</p>}
   </div>}
   {request&&<section className="iboss-chat-answer" aria-label="ERP answer" aria-busy={!!data.loading}>
