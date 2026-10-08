@@ -64,17 +64,23 @@ export const DASHBOARD_METRICS={
  'expired-bg':{view:'bank-guarantee',where:"r.expirydate<:planning_date AND NOT EXISTS (SELECT 1 FROM cmpl.bankgaurantycloser c WHERE c.bankgaurantytno=TO_NUMBER(r.id) AND c.bankgaurantycloserdate<TO_DATE(:planning_date,'YYYY-MM-DD')+1)"}
 };
 const shift=(day,days)=>new Date(Date.parse(day+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
-export function dashboardMetric(key,{from,to,company='',bank='',status='unreconciled',page=0}={}){
+export function dashboardMetric(key,{from,to,company='',bank='',status='unreconciled',search='',page=0}={}){
  purchaseOrderRange(from,to);companyCode(company);
  if(!Object.hasOwn(DASHBOARD_METRICS,key)||!Number.isInteger(page)||page<0||page>5000)throw new Error('Choose a valid dashboard card and page.');
  const metric={...DASHBOARD_METRICS[key]},reconcile=key==='bank-reconciliation'?reconciliationFilter(bank,status):null;if(reconcile)metric.where=reconcile.where;
  const definition=accountView(metric.view);
+ if(typeof search!=='string'||search.length>120)throw new Error('Search must contain at most 120 characters.');
+ const terms=[metric.where];
+ if(search.trim())terms.push('('+definition.columns.map(column=>'INSTR(LOWER(CAST(r.'+column.key+' AS VARCHAR2(4000))),LOWER(:search_text))>0').join(' OR ')+')');
+ metric.where=terms.filter(Boolean).map(term=>'('+term+')').join(' AND ');
+ // Current outstanding cards include undated open bills, as their summary does.
+ const sourceSql=metric.view==='payable-receivable'&&!metric.dates?definition.sql.replace(/a\.(documentdate|voucherdate) >= TO_DATE\(:from_date,'YYYY-MM-DD'\) AND a\.\1 < TO_DATE\(:to_date,'YYYY-MM-DD'\)\+1/g,'1=1'):definition.sql;
  const dates=metric.dates==='period'?{from,to}:metric.dates==='overdue'?{from:'1900-01-01',to:shift(to,-1)}:metric.dates==='upcoming'?{from:to,to:shift(to,30)}:{from:'1900-01-01',to:'2999-12-31'};
- const values={...reconcile?.binds,company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
- const sql=`SELECT * FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${key==='bank-reconciliation'?'r.voucher_date,r.id':definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
+ const values={search_text:search.trim(),...reconcile?.binds,company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
+ const sql=`SELECT * FROM (${companyScopedSql(sourceSql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${key==='bank-reconciliation'?'r.voucher_date,r.id':definition.columns.map(column=>`r.${column.key}`).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
  if(definition.asOf)values.to_date=to;
  const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
- const countSql=`SELECT COUNT(*) AS TOTAL_COUNT FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''}`;
+ const countSql=`SELECT COUNT(*) AS TOTAL_COUNT FROM (${companyScopedSql(sourceSql,company)}) r ${metric.where?'WHERE '+metric.where:''}`;
  const countBinds=Object.fromEntries(Object.entries(binds).filter(([name])=>!['row_offset','row_limit'].includes(name)));
  return {sql,binds,countSql,countBinds,view:metric.view,columns:definition.columns,from:dates.from,to:definition.asOf?to:dates.to,page};
 }

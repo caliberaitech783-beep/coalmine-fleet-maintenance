@@ -103,3 +103,6 @@
 .iboss-date-calendar::-webkit-calendar-picker-indicator{margin:0;cursor:pointer}
 
 .iboss-dash-controls select{max-width:380px;min-width:210px;padding:12px;border:1px solid #dbe3ef;border-radius:8px;background:white;color:inherit;font:inherit;}
+.iboss-dash-dialog .iboss-detail-link{border:0;background:transparent;padding:0;color:#245fa8;font:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:3px;white-space:normal;overflow-wrap:anywhere}
+.iboss-dash-dialog .iboss-detail-link:hover{color:#6037a4}
+.iboss-dash-dialog input[type="search"]{width:min(540px,70vw);padding:12px;border:1px solid #b8cce0;border-radius:8px;font:inherit}

@@ -20,7 +20,8 @@ const metricViews={'bank-reconciliation':'bank-reconciliation',bank:'bank-balanc
 
 function MetricDetails({metric,range,token,ReportSection,preview,close,reconciliation=[]}){
  const [bank,setBank]=useState(''),[status,setStatus]=useState('unreconciled');
- const requestRange=useMemo(()=>metric.key==='bank-reconciliation'?{...range,bank,status}:range,[range,bank,status,metric.key]);
+ const [searchDraft,setSearchDraft]=useState(''),[search,setSearch]=useState('');
+ const requestRange=useMemo(()=>({...range,search,...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,bank,status,metric.key]);
  const [count,setCount]=useState({totalCount:null});
  useEffect(()=>{
   if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
@@ -41,6 +42,7 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
    .catch(error=>{if(!controller.signal.aborted)setData({loading:false,rows:[],error:error.message});});
   return ()=>controller.abort();
  },[metric,requestRange,token,page,preview]);
+ useEffect(()=>{const timer=setTimeout(()=>{setPage(0);setSearch(searchDraft.trim());},400);return ()=>clearTimeout(timer);},[searchDraft]);
  const columns=useMemo(()=>(data.columns||[]).map(column=>{
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
   return {...column,value,sortValue:row=>row[column.key],drilldown:true,render:row=>value(row)===''?'—':<button type="button" className="iboss-detail-link" onClick={()=>{const target=accountDrill(data.view,column.key,row)||ACCOUNT_VIEWS[data.view].columns.map(item=>accountDrill(data.view,item.key,row)).find(Boolean);if(preview||target)setDetail({target,row,from:data.from,to:data.to,label:String(value(row))});}}>{value(row)}</button>};
@@ -49,9 +51,10 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
   {metric.key==='bank-reconciliation'&&<p>Voucher period: {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)} · {range.companyName||range.company||'All companies'}</p>}
   {metric.key==='bank-reconciliation'&&<ReconciliationControls rows={reconciliation} bank={bank} status={status} onBank={value=>{setPage(0);setBank(value);}} onStatus={value=>{setPage(0);setStatus(value);}}/>}
+  <div className="iboss-dash-controls"><label>Search all matching Oracle records<input type="search" maxLength={120} value={searchDraft} onChange={event=>setSearchDraft(event.target.value)} placeholder="Account code, account / party name, bill or voucher…"/></label><button type="button" onClick={()=>{setSearchDraft('');setSearch('');setPage(0);}}>Clear search</button></div>
   {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
    <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
-   <ReportSection title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search and export apply to this page. Click a value for the full record.'}/>
+   <ReportSection showSearch={false} title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search covers all matching Oracle records. Export includes loaded records only. Click an account or party for its ledger details.'}/>
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
   </>}
   {detail&&(preview?<section className="iboss-dash-example"><h3>Example record · {detail.label}</h3><p>Live records open their linked Oracle document trail, including recorded audit details where available.</p><dl>{Object.entries(detail.row).map(([key,value])=><React.Fragment key={key}><dt>{key.replace(/_/g,' ')}</dt><dd>{String(value??'—')}</dd></React.Fragment>)}</dl><button type="button" onClick={()=>setDetail(null)}>Back to records</button></section>:<DrillPanel target={detail.target} range={{...range,from:detail.from,to:detail.to}} token={token} close={()=>setDetail(null)}/>)}

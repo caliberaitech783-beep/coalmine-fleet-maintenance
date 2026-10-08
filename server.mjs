@@ -4062,7 +4062,7 @@ app.get('/api/reports/iboss-accounts/:view/count',requireSession,async(req,res)=
 app.get('/api/reports/iboss-accounts-dashboard/:metric/count',requireSession,async(req,res)=>{
  res.set('Cache-Control','no-store');
  if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
- const input={from:req.query.from,to:req.query.to,company:req.query.company??'',bank:req.query.bank??'',status:req.query.status??'unreconciled'};
+ const input={from:req.query.from,to:req.query.to,company:req.query.company??'',bank:req.query.bank??'',status:req.query.status??'unreconciled',search:req.query.search??''};
  try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
  if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
  try{res.json(await oracleDashboardCount(req.params.metric,input));}
@@ -4108,7 +4108,7 @@ app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
 app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
-  const input={from:req.query.from,to:req.query.to,company:req.query.company??'',bank:req.query.bank??'',status:req.query.status??'unreconciled',page:Number(req.query.page||0)};
+  const input={from:req.query.from,to:req.query.to,company:req.query.company??'',bank:req.query.bank??'',status:req.query.status??'unreconciled',search:req.query.search??'',page:Number(req.query.page||0)};
   try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
   try{res.json(await oracleAccountsDashboardMetric(req.params.metric,input));}
