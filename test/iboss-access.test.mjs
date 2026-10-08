@@ -31,7 +31,7 @@ test('Manager profiles are denied even with matching assignments or older sessio
 test('all Accounts endpoints and navigation share the eligibility gate',()=>{
  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  const section=server.slice(server.indexOf("app.get('/api/reports/iboss-accounts/:view'"),server.indexOf("app.get('/api/reports/po-grn-reconciliation'"));
- assert.equal((section.match(/if\(!await accountsMergeAllowed\(req\)\)/g)||[]).length,5);
+ assert.equal((section.match(/if\(!await accountsMergeAllowed\(req\)\)/g)||[]).length,6);
  assert.match(section,/currentUserRecord\(req.session\)/);
  assert.match(section,/resolveMobileAccess\(\{user,portal:/);
  assert.match(section,/accountSectionAllowed/);

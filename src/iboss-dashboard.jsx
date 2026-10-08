@@ -1,3 +1,4 @@
+import AccountLedger from './iboss-account-ledger.jsx';
 import {TRADE_AGE_BANDS} from '../trade-age-bands.mjs';
 import ReconciliationControls from './iboss-bank-reconciliation.jsx';
 import {recordCountLabel} from './iboss-record-count.mjs';
@@ -23,6 +24,7 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
  const [bank,setBank]=useState(''),[status,setStatus]=useState('unreconciled');
  const [searchDraft,setSearchDraft]=useState(''),[search,setSearch]=useState('');
  const [ageing,setAgeing]=useState('ledger');
+ const [ledger,setLedger]=useState(null);
  const requestRange=useMemo(()=>({...range,search,...(metric.key.startsWith('trade-')?{ageing}:{}),...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,ageing,bank,status,metric.key]);
  const [count,setCount]=useState({totalCount:null});
  useEffect(()=>{
@@ -47,8 +49,8 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
  useEffect(()=>{const timer=setTimeout(()=>{setPage(0);setSearch(searchDraft.trim());},400);return ()=>clearTimeout(timer);},[searchDraft]);
  const columns=useMemo(()=>(data.columns||[]).map(column=>{
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
-  return {...column,value,sortValue:row=>row[column.key],drilldown:true,render:row=>value(row)===''?'—':<button type="button" className="iboss-detail-link" onClick={()=>{const target=accountDrill(data.view,column.key,row)||ACCOUNT_VIEWS[data.view].columns.map(item=>accountDrill(data.view,item.key,row)).find(Boolean);if(preview||target)setDetail({target,row,from:data.from,to:data.to,label:String(value(row))});}}>{value(row)}</button>};
- }),[data]);
+  return {...column,value,sortValue:row=>row[column.key],drilldown:true,render:row=>value(row)===''?'—':<button type="button" className="iboss-detail-link" onClick={()=>{if(!preview&&metric.key.startsWith('trade-')&&['ACCOUNT_NAME','ACCOUNT_CODE'].includes(column.key)){setLedger({account:String(row.ACCOUNT_CODE),company:String(row.COMPANYCODE||range.company||'')});return;}const target=accountDrill(data.view,column.key,row)||ACCOUNT_VIEWS[data.view].columns.map(item=>accountDrill(data.view,item.key,row)).find(Boolean);if(preview||target)setDetail({target,row,from:data.from,to:data.to,label:String(value(row))});}}>{value(row)}</button>};
+ }),[data,metric.key,range.company,preview]);
  return <dialog ref={dialog} className="iboss-dash-dialog" aria-labelledby="dashboard-card-title" onCancel={event=>{event.preventDefault();if(detail)setDetail(null);else close();}}>
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
   {['bank-reconciliation','trade-payable','trade-receivable'].includes(metric.key)&&<p>Voucher period: {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)} · {range.companyName||range.company||'All companies'}</p>}
@@ -63,6 +65,7 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
   </>}
   {detail&&(preview?<section className="iboss-dash-example"><h3>Example record · {detail.label}</h3><p>Live records open their linked Oracle document trail, including recorded audit details where available.</p><dl>{Object.entries(detail.row).map(([key,value])=><React.Fragment key={key}><dt>{key.replace(/_/g,' ')}</dt><dd>{String(value??'—')}</dd></React.Fragment>)}</dl><button type="button" onClick={()=>setDetail(null)}>Back to records</button></section>:<DrillPanel target={detail.target} range={{...range,from:detail.from,to:detail.to}} token={token} close={()=>setDetail(null)}/>)}
+ {ledger&&<AccountLedger {...ledger} range={range} token={token} close={()=>setLedger(null)}/>}
  </dialog>;
 }
 

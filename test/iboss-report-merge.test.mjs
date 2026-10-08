@@ -39,7 +39,7 @@ test('six processes each have one anchor, valid 10-report defaults and read-only
   const all=chain.steps.map(step=>step.key);
   for(const mode of [{...range},{...range,anchorKey:'42'}])for(const statement of mergeStatements(key,all,mode)){
    assert.doesNotMatch(statement.sql,/\b(?:INSERT|UPDATE|DELETE|CREATE|DROP|MERGE|ALTER|GRANT)\b/i);
-   const used=[...statement.sql.matchAll(/:(\w+)/g)].map(match=>match[1]);
+   const used=[...statement.sql.replace(/'(?:''|[^'])*'/g,'').matchAll(/:(\w+)/g)].map(match=>match[1]);
    assert.deepEqual(Object.keys(statement.binds).sort(),[...new Set(used)].sort(),`${key}/${statement.step} binds exactly what it uses`);
    assert.match(statement.sql,/\bAS anchor\b/i);
   }

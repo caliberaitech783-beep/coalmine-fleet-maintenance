@@ -1,3 +1,5 @@
+import {accountLedgerQueries} from './iboss-account-ledger.mjs';
+import {oracleAccountLedger} from './oracle-db.mjs';
 import {companyCode} from './iboss-company-scope.mjs';
 import {installTenderIdentity} from './tender-identity.mjs';
 import {accountPageQuery,accountPageNumber} from './iboss-account-pages.mjs';
@@ -4095,6 +4097,14 @@ const accountsMergeFailed=(res,error)=>{
   res.status(502).json({error:'Could not load Report Merge data from Oracle. Please retry.'});
 };
 
+app.get('/api/reports/iboss-account-ledger',requireSession,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+ const input={account:req.query.account,company:req.query.company??'',from:req.query.from,to:req.query.to,page:Number(req.query.page||0)};
+ try{accountLedgerQueries(input);}catch(error){return res.status(400).json({error:error.message});}
+ if(!oracleConfigured)return res.status(503).json({error:'Oracle database is not configured.'});
+ try{res.json(await oracleAccountLedger(input));}catch(error){console.error('Account ledger failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load the Oracle ledger. Please retry.'});}
+});
 app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});

@@ -1,3 +1,4 @@
+import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {companyCode,companyScopedSql,COMPANY_LIST_SQL} from './iboss-company-scope.mjs';
 import {accountPageQuery,accountPageResult,ACCOUNT_PAGE_SIZE} from './iboss-account-pages.mjs';
 import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
@@ -470,4 +471,12 @@ export async function oracleHealth() {
   } finally {
     await connection.close();
   }
+}
+
+export async function oracleAccountLedger(input){
+ const queries=accountLedgerQueries(input),pool=await oraclePool(),connection=await pool.getConnection();
+ try{connection.callTimeout=60000;await connection.execute('SET TRANSACTION READ ONLY');const data={};
+ for(const [name,q] of Object.entries(queries))data[name]=(await connection.execute(q.sql,q.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:name==='rows'?201:50000})).rows;
+ return {account:data.account[0]||null,balances:data.balances,totalCount:Number(data.count[0].TOTAL_COUNT),rows:data.rows.slice(0,200),hasMore:data.rows.length>200,page:input.page};
+ }finally{await connection.close();}
 }
