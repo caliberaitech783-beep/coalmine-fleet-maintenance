@@ -3883,6 +3883,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
         const result=flow.query?await telegramBdmsPilotAnswer(session,req.body.message?.text,flow.language,settings[0]?.setting_value?.context):{text:flow.text,keyboard:flow.keyboard,context:{}};
         await pool.query(`INSERT INTO app_settings (setting_key,setting_value) VALUES ($1,$2::jsonb) ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`,[key,JSON.stringify({language:flow.language,context:result.context})]);
         await sendTelegramText({chatId:update.chatId,message:result.text,replyMarkup:result.keyboard});
+        if(flow.welcome)await sendTelegramText({chatId:update.chatId,message:'Open BDMS Assistant for the interactive language menu and guided queries. Sign in with your BDMS account if asked.',replyMarkup:{inline_keyboard:[[{text:'Open BDMS Assistant',url:`${process.env.PUBLIC_APP_URL||'https://pulse.cmll.in'}/?bdmsAssistant=1`}]]}});
         if(flow.welcome)await sendTelegramWelcomeAudio({chatId:update.chatId,buffer:await fs.readFile(path.join(root,'public','caliber-pulse-welcome.mp3'))});
       }else await reply(update.chatId,'To receive Caliber Pulse alerts here, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
     }

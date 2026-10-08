@@ -30,7 +30,7 @@ function harness(initialWidth, transferAllowed=false) {
     return queries.get(query);
   };
   const scope = {document: {getElementById:()=>null,addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
-    masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
+    BdmsAssistant: Null, masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser, canViewBdAgeingReport, useEmployeeTransferAccess:()=>transferAllowed,
     profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(), databaseToolPages: new Set(),
