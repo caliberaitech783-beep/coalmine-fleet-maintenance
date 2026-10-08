@@ -9,6 +9,8 @@ const bank=(column,step)=>({chain:'bank-position',step,key:row=>row[column]});
 const own=(chain,step,key=recordId)=>({chain,step,key});
 
 export const ACCOUNT_DRILLS={
+ 'trade-payable-ageing':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book'),VOUCHER_NO:own('voucher','voucher')},
+ 'trade-receivable-ageing':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book'),VOUCHER_NO:own('voucher','voucher')},
  'trade-payable':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book')},
  'trade-receivable':{ACCOUNT_CODE:party('ACCOUNT_CODE','day-book'),ACCOUNT_NAME:party('ACCOUNT_CODE','day-book')},
  'bank-reconciliation':{VOUCHER_NO:own('voucher','voucher'),BANK_CODE:bank('BANK_CODE','bank'),BANK_NAME:bank('BANK_CODE','bank')},

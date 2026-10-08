@@ -49,7 +49,7 @@ export async function oracleDashboardCount(key,input) {
 }
 async function oracleReportCount(sql,binds) {
  const pool=await oraclePool(),connection=await pool.getConnection();
- try{connection.callTimeout=60000;const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:1});return {totalCount:Number(result.rows[0].TOTAL_COUNT)};}
+ try{connection.callTimeout=60000;const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:1});const row=result.rows[0];return {totalCount:Number(row.TOTAL_COUNT),...(Object.hasOwn(row,'SIGNED_TOTAL')?{totalDr:Number(row.TOTAL_DR||0),totalCr:Number(row.TOTAL_CR||0),signedTotal:Number(row.SIGNED_TOTAL||0)}:{})};}
  finally{await connection.close();}
 }
 

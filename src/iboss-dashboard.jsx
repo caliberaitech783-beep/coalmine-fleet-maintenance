@@ -1,3 +1,4 @@
+import {TRADE_AGE_BANDS} from '../trade-age-bands.mjs';
 import ReconciliationControls from './iboss-bank-reconciliation.jsx';
 import {recordCountLabel} from './iboss-record-count.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
@@ -21,13 +22,14 @@ const metricViews={'trade-payable':'trade-payable','trade-receivable':'trade-rec
 function MetricDetails({metric,range,token,ReportSection,preview,close,reconciliation=[]}){
  const [bank,setBank]=useState(''),[status,setStatus]=useState('unreconciled');
  const [searchDraft,setSearchDraft]=useState(''),[search,setSearch]=useState('');
- const requestRange=useMemo(()=>({...range,search,...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,bank,status,metric.key]);
+ const [ageing,setAgeing]=useState('ledger');
+ const requestRange=useMemo(()=>({...range,search,...(metric.key.startsWith('trade-')?{ageing}:{}),...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,ageing,bank,status,metric.key]);
  const [count,setCount]=useState({totalCount:null});
  useEffect(()=>{
   if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
   fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
    .then(async response=>{const body=await response.json();if(!response.ok||!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
-   .then(body=>{if(!controller.signal.aborted)setCount({totalCount:body.totalCount});})
+   .then(body=>{if(!controller.signal.aborted)setCount(body);})
    .catch(()=>{if(!controller.signal.aborted)setCount({totalCount:null,countError:'Total count unavailable — reopen to retry.'});});
   return ()=>controller.abort();
  },[metric,requestRange,token,preview]);
@@ -51,11 +53,13 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
   {['bank-reconciliation','trade-payable','trade-receivable'].includes(metric.key)&&<p>Voucher period: {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)} · {range.companyName||range.company||'All companies'}</p>}
   {metric.key==='bank-reconciliation'&&<ReconciliationControls rows={reconciliation} bank={bank} status={status} onBank={value=>{setPage(0);setBank(value);}} onStatus={value=>{setPage(0);setStatus(value);}}/>}
-  {metric.key.startsWith('trade-')&&<p>ERP trade-group ledgers and their child accounts. Opening + period credits − period debits = closing. Closing credit is positive; closing debit is negative. Click an account to view its vouchers.</p>}
+  {metric.key.startsWith('trade-')&&ageing==='ledger'&&<p>ERP trade-group ledgers and their child accounts. Opening + period credits − period debits = closing. Closing credit is positive; closing debit is negative. Click an account to view its vouchers.</p>}
+  {metric.key.startsWith('trade-')&&<div className="iboss-dash-controls"><label>Ageing / report view<select value={ageing} onChange={event=>{setPage(0);setAgeing(event.target.value);}}><option value="ledger">Ledger balances</option>{TRADE_AGE_BANDS.map(band=><option key={band.value} value={band.value}>{band.label}</option>)}</select></label></div>}
+  {metric.key.startsWith('trade-')&&ageing!=='ledger'&&<><p>Ageing is measured from the bill/document date to {formatDisplayDate(range.to)}; voucher date is used where the bill date is missing. Includes older opening items regardless of Activity from. Advances and opposite balances remain visible. This is document age, not days overdue.</p><p className="iboss-dash-note">Settlement uses current ERP allocation links with both vouchers dated through the selected closing date. Later edits to allocation links cannot be reconstructed.</p>{count.totalDr!=null&&<p>All matching entries: Dr {Number(count.totalDr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Cr {Number(count.totalCr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Net {Math.abs(count.signedTotal).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} {count.signedTotal<0?'Dr':'Cr'}</p>}</>}
   <div className="iboss-dash-controls"><label>Search all matching Oracle records<input type="search" maxLength={120} value={searchDraft} onChange={event=>setSearchDraft(event.target.value)} placeholder="Account code, account / party name, bill or voucher…"/></label><button type="button" onClick={()=>{setSearchDraft('');setSearch('');setPage(0);}}>Clear search</button></div>
   {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
    <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
-   <ReportSection showSearch={false} title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search covers all matching Oracle records. Export includes loaded records only. Click an account or party for its ledger details.'}/>
+   <ReportSection key={data.view} showSearch={false} title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search covers all matching Oracle records. Export includes loaded records only. Click an account or party for its ledger details.'}/>
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
   </>}
   {detail&&(preview?<section className="iboss-dash-example"><h3>Example record · {detail.label}</h3><p>Live records open their linked Oracle document trail, including recorded audit details where available.</p><dl>{Object.entries(detail.row).map(([key,value])=><React.Fragment key={key}><dt>{key.replace(/_/g,' ')}</dt><dd>{String(value??'—')}</dd></React.Fragment>)}</dl><button type="button" onClick={()=>setDetail(null)}>Back to records</button></section>:<DrillPanel target={detail.target} range={{...range,from:detail.from,to:detail.to}} token={token} close={()=>setDetail(null)}/>)}
