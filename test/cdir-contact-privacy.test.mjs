@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {cdirViewerContext,cdirDirectoryForViewer} from '../cdir-access.mjs';
 const directory={matrix:{'office|A':[{cat:'A',name:'Director',contact:'1234567890',whatsapp:'1234567890',emergencyContact:'9988776655'}],'mine|A1':[{cat:'A1',contact:'1111111111'}]}};
-test('only admins, directors and project managers see category A numbers',()=>{
- const profiles=[{session:{role:'super'},user:{adminLevel:'Admin'}},{session:{role:'super'},user:{adminLevel:'Super Admin'}},{session:{role:'super'},user:{adminLevel:'Manager',managerRole:'Project Manager'}},{session:{role:'normal'},user:{designation:'DIRECTOR'}},{session:{role:'normal'},user:{designation:'CHAIRMAN & MANAGING DIRECTOR'}}];
+test('admins, directors, project managers and HR users see category A numbers',()=>{
+ const profiles=[{session:{role:'normal',assignedRole:'HR User'},user:{}},{session:{role:'normal'},user:{userRoles:'HR User | MIS User'}},{session:{role:'super'},user:{adminLevel:'Admin'}},{session:{role:'super'},user:{adminLevel:'Super Admin'}},{session:{role:'super'},user:{adminLevel:'Manager',managerRole:'Project Manager'}},{session:{role:'normal'},user:{designation:'DIRECTOR'}},{session:{role:'normal'},user:{designation:'CHAIRMAN & MANAGING DIRECTOR'}}];
  for(const profile of profiles)assert.equal(cdirDirectoryForViewer(directory,cdirViewerContext(profile)).matrix['office|A'][0].contact,'1234567890');
 });
 test('other roles receive only stars in every A phone field; A1 and shared source stay intact',()=>{

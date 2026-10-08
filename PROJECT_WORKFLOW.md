@@ -558,4 +558,4 @@ Every signed-in user can browse the complete C-Directory roster through the All 
 
 ### HR User
 
-Team User includes HR User. Selecting it provides the complete C-Directory, Employee Tenure Report and all C-Dir Masters on desktop and mobile views. HR cannot access unrelated masters or maintenance actions. Category A contact numbers remain masked, and HR cannot edit protected A employee or Contact Master records.
+Team User includes HR User. Selecting it provides the complete C-Directory, Employee Tenure Report and all C-Dir Masters on desktop and mobile views. HR cannot access unrelated masters or maintenance actions. HR users are exempt from category A contact masking. Only HR users, directors and administrators may edit employee details using the profile edit icon.

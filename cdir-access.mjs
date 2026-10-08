@@ -1,3 +1,4 @@
+import {assignedUserRoles} from './account-role-access.mjs';
 import {managerRoleSelection,normalizeAdminLevel} from './admin-access.mjs';
 import {displaySiteSelection,managerReportScope,userSiteSelection} from './region-scope.mjs';
 import {canonicalSiteName} from './site-location.mjs';
@@ -35,7 +36,7 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
     profile:isAdmin?'admin-user':isProjectManager?'project-manager':isManager?'manager-user':assignedRole==='General User'?'general-user':'site-user',
     label:isAdmin?(adminLevel==='Super Admin'?'Super Admin':'Admin'):isProjectManager?'Project Manager':managerRoles.join(' · ')||assignedRole||'Site User',
     allAccess,mySitesEnabled:false,siteIds,
-    canViewAContacts:isAdmin||isProjectManager||/\bdirector\b/i.test(String(user.designation||user.employeeDesignation||'')),
+    canViewAContacts:isAdmin||isProjectManager||assignedRole==='HR User'||assignedUserRoles(user).includes('HR User')||/\bdirector\b/i.test(String(user.designation||user.employeeDesignation||'')),
     sites:allowedSites.map((site)=>site.label),
     regions:unique(allowedSites.map((site)=>site.group)),
   };
@@ -69,18 +70,4 @@ export function cdirDirectoryForViewer(directory={},viewer={}){
       totalSitesOffices:sites.filter((site)=>siteTotals[site.id]>0).length,
       totalDepartments:new Set(rows.map((row)=>row.department).filter(Boolean)).size},
     sites,matrix,siteTotals,siteStats,categoryTotalsUnique};
-}
-
-export function isProtectedDirectoryContact(record={},directory={}){
-  const normalized=value=>String(value||'').trim().toLowerCase();
-  return Object.entries(directory.matrix||{}).some(([key,rows])=>rows.some(person=>
-    String(person.cat||key.slice(key.lastIndexOf('|')+1)).trim().toUpperCase()==='A' &&
-    ((record.empId&&normalized(record.empId)===normalized(person.empId))||(!record.empId&&record.name&&normalized(record.name)===normalized(person.name)))));
-}
-export function maskHRContactMasters(grouped={},directory={}){
-  for(const record of grouped['C-Dir Contact master']||[]){
-    if(!isProtectedDirectoryContact(record,directory))continue;
-    for(const field of ['contact','whatsapp','emergencyContact'])if(record[field])record[field]='**********';
-  }
-  return grouped;
 }

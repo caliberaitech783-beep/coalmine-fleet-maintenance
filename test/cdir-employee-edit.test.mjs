@@ -4,9 +4,13 @@ import {PGlite} from '@electric-sql/pglite';
 import {canEditCdirEmployee,registerCdirEmployeeEdit} from '../cdir-employee-edit.mjs';
 import {CDIR_MASTERS,cdirDirectoryFromMasters} from '../cdir-masters.mjs';
 
-test('only explicit administrators and the exact MAHAKDUDANI login can edit',()=>{
- for(const session of [{role:'super',permissions:{adminLevel:'Admin'}},{role:'super',permissions:{adminLevel:'Super Admin'}},{login:'MAHAKDUDANI'},{login:' mahakdudani '}])assert.equal(canEditCdirEmployee(session),true);
+test('only HR users, directors and administrators can edit',()=>{
+ for(const session of [{role:'super',permissions:{adminLevel:'Admin'}},{role:'super',permissions:{adminLevel:'Super Admin'}},{assignedRole:'HR User'}])assert.equal(canEditCdirEmployee(session),true);
  for(const session of [null,{}, {role:'super'}, {role:'super',permissions:{adminLevel:'Manager'}},{login:'mahakdudani2',name:'MAHAKDUDANI'},{role:'normal',permissions:{adminLevel:'Admin'}}])assert.equal(canEditCdirEmployee(session),false);
+ assert.equal(canEditCdirEmployee({role:'normal'},{designation:'Director'}),true);
+ assert.equal(canEditCdirEmployee({role:'normal'},{userRoles:'HR User | MIS User'}),true);
+ assert.equal(canEditCdirEmployee({login:'MAHAKDUDANI'}),false);
+ assert.equal(canEditCdirEmployee({role:'super',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}}),false);
 });
 test('profile employee edit uses exact master id and persists atomically with stale-write protection',async()=>{
  const db=new PGlite();await db.exec('CREATE TABLE master_records(id SERIAL PRIMARY KEY, master_name TEXT, record_data JSONB)');
@@ -20,7 +24,7 @@ test('profile employee edit uses exact master id and persists atomically with st
  const routes={};const sessionMiddleware=()=>{};
  registerCdirEmployeeEdit({get:(path,...handlers)=>routes.get=handlers,patch:(path,...handlers)=>routes.patch=handlers},{pool,requireSession:sessionMiddleware,loadMasters,auditChangedFields:()=>['name','contact']});
  assert.equal(routes.patch[0],sessionMiddleware);
- let forbidden;routes.patch[1]({session:{login:'other'}},{status:code=>({json:()=>forbidden=code})},()=>assert.fail('Unauthorized access'));
+ let forbidden;await routes.patch[1]({session:{login:'other'}},{status:code=>({json:()=>forbidden=code})},()=>assert.fail('Unauthorized access'));
  assert.equal(forbidden,403);
  const response=()=>({set(){},json(value){this.body=value;}});
  const get=response();await routes.get[2]({params:{id:String(id)}},get,error=>{throw error;});

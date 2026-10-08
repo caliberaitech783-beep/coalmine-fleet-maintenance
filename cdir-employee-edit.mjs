@@ -1,8 +1,10 @@
+import {assignedUserRoles} from './account-role-access.mjs';
 import {createHash} from 'node:crypto';
 import {CDIR_MASTERS,CDIR_MASTER_FIELDS,cdirNormalizeRecord,cdirEmployeeError} from './cdir-masters.mjs';
 
-export function canEditCdirEmployee(session={}) {
-  return String(session?.login||'').trim().toLowerCase()==='mahakdudani'
+export function canEditCdirEmployee(session={},user={}) {
+  return session?.assignedRole==='HR User'||assignedUserRoles(user).includes('HR User')
+    || /\bdirector\b/i.test(String(user.designation||user.employeeDesignation||''))
     || (session?.role==='super'&&['admin','super admin'].includes(String(session.permissions?.adminLevel||'').trim().toLowerCase()));
 }
 const contactKeys=['contact','whatsapp','emergencyContact','email'];
@@ -25,8 +27,8 @@ async function loadRecord(client,id,lock=false){
   return {employee,contact:contacts[0]||null};
 }
 
-export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,auditChangedFields}){
-  const guard=(req,res,next)=>canEditCdirEmployee(req.session)?next():res.status(403).json({error:'Only administrators and MAHAKDUDANI can edit C-Dir employee details.'});
+export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,auditChangedFields,loadViewer=async()=>({})}){
+  const guard=async(req,res,next)=>{try{const user=await loadViewer(req.session);return canEditCdirEmployee(req.session,user)?next():res.status(403).json({error:'Only HR users, directors and administrators can edit employee details.'});}catch(error){next(error);}};
   app.get('/api/cdir/employees/:id/edit',requireSession,guard,async(req,res,next)=>{
     try{
       res.set('Cache-Control','no-store');

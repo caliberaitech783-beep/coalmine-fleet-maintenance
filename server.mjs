@@ -48,7 +48,7 @@ import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
-import {cdirDirectoryForViewer,cdirViewerContext,isProtectedDirectoryContact,maskHRContactMasters} from './cdir-access.mjs';
+import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
 import {canEditCdirEmployee,registerCdirEmployeeEdit} from './cdir-employee-edit.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
@@ -2503,17 +2503,6 @@ async function requireSuper(req,res,next){
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
     if(session.assignedRole==='HR User'&&isCdirMaster(req.params?.master?decodeURIComponent(req.params.master):'')){
-      if([CDIR_MASTERS.contact,CDIR_MASTERS.employee].includes(decodeURIComponent(req.params.master))){
-        const protectedMaster=decodeURIComponent(req.params.master);
-        const directory=await cdirDirectory();
-        const submitted=Array.isArray(req.body)?req.body:[req.body||{}];
-        const {rows}=await pool.query('SELECT record_data FROM master_records WHERE master_name=$1',[protectedMaster]);
-        const candidates=req.params.id&&!['all','selected'].includes(req.params.id)
-          ?(await pool.query('SELECT record_data FROM master_records WHERE master_name=$1 AND id=$2',[protectedMaster,req.params.id])).rows
-          :req.method==='DELETE'?rows:[];
-        if([...submitted,...candidates.map(row=>row.record_data)].some(record=>isProtectedDirectoryContact(record,directory)))
-          return res.status(403).json({error:'Protected category A records can only be changed by authorized leadership roles.'});
-      }
       req.session=session;return next();
     }
     if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
@@ -3932,7 +3921,7 @@ async function cdirDirectory(){
   return cdirDirectoryFromMasters(masters,{generated:`${formatDisplayDate(new Date())} (live from Masters)`});
 }
 
-registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters:cdirMasterRecords,auditChangedFields});
+registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters:cdirMasterRecords,auditChangedFields,loadViewer:currentUserRecord});
 app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
@@ -3943,7 +3932,7 @@ app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
     ]);
     const directoryWithSuperiors=mergeCdirReportingSuperiors(directory,userRows.map((row)=>row.record_data||{}));
     const viewer=cdirViewerContext({session:req.session,user,sites:directoryWithSuperiors.sites});
-    res.json({...cdirDirectoryForViewer(directoryWithSuperiors,viewer),viewer:{...viewer,canEditEmployees:canEditCdirEmployee(req.session)}});
+    res.json({...cdirDirectoryForViewer(directoryWithSuperiors,viewer),viewer:{...viewer,canEditEmployees:canEditCdirEmployee(req.session,user)}});
   }catch(error){next(error)}
 });
 
@@ -7649,7 +7638,6 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }
       (grouped[row.master_name]??=[]).push({id:row.id,...record});
     }
-    if(req.session.assignedRole==='HR User')maskHRContactMasters(grouped,await cdirDirectory());
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped,{etag});
     res.json(grouped);
   }catch(error){next(error)}

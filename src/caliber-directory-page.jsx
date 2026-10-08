@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
   BookUser,Building2,Download,FilterX,LayoutDashboard,
-  Network,RefreshCw,Search,TableProperties,TriangleAlert,UsersRound,X,
+  Network,Pencil,RefreshCw,Search,TableProperties,TriangleAlert,UsersRound,X,
 } from 'lucide-react';
 import {buildCdirOrganisation,cdirPersonId} from '../cdir-organisation.mjs';
 import './caliber-directory-page.css';
@@ -55,8 +55,8 @@ function ProfileDrawer({person,onClose,onEdit}){
   if(!person)return null;
   const details=[['Employee ID',person.empId],['Category',person.cat],['Designation',person.designation],['Department',person.department],['Site / Office',person.siteLabel],['Reports to',person.reportingTo],['Contact',person.contact],['WhatsApp',person.whatsapp],['Email',person.email],['Date of joining',person.doj],['Status',statusOf(person)]];
   return <div className="cdir-drawer-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}><aside className="cdir-profile-drawer" role="dialog" aria-modal="true" aria-label={`${person.name} profile`}>
-    <header><div className="cdir-avatar">{clean(person.name).split(/\s+/).slice(0,2).map(part=>part[0]).join('')}</div><div><small>Employee profile</small><h2>{person.name}</h2><p>{person.designation||'Designation not recorded'}</p></div><button type="button" onClick={onClose} aria-label="Close employee profile"><X/></button></header>
-    {onEdit&&person.recordId&&<button type="button" onClick={()=>onEdit(person)}>Edit employee details</button>}
+    <header><div className="cdir-avatar">{clean(person.name).split(/\s+/).slice(0,2).map(part=>part[0]).join('')}</div><div><small>Employee profile</small><h2>{person.name}</h2><p>{person.designation||'Designation not recorded'}</p></div><div className="cdir-profile-actions">{onEdit&&person.recordId&&<button className="cdir-profile-edit" type="button" onClick={()=>onEdit(person)} aria-label="Edit employee details" title="Edit employee details"><Pencil/></button>}<button type="button" onClick={onClose} aria-label="Close employee profile"><X/></button></div></header>
+
     <dl>{details.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl>
   </aside></div>;
 }
