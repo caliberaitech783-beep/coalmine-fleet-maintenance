@@ -20,10 +20,10 @@ test('selections above 10 reports are refused, and vehicles match on letters and
  assert.match(balance.sql,/GROUP BY v.companycode,d.accountcode/);
 });
 
-test('only master lookups and the unlinked asset reports stay outside Report Merge',()=>{
+test('master lookups, asset reports and the dedicated bank reconciliation report stay outside Report Merge',()=>{
  const merged=new Set(Object.values(MERGE_CHAINS).flatMap(chain=>chain.steps.map(step=>step.title.replace(' (Banks)',''))));
  const outside=Object.values(ACCOUNT_SECTIONS).flat().map(key=>ACCOUNT_VIEWS[key].title).filter(title=>!merged.has(title));
- assert.deepEqual(outside.sort(),['Asset Details Report','Asset Register','Chart Of Accounts','Cost Centre Master','Work Centre Master']);
+ assert.deepEqual(outside.sort(),['Asset Details Report','Asset Register','Bank Reconciliation','Chart Of Accounts','Cost Centre Master','Work Centre Master']);
 });
 
 test('six processes each have one anchor, valid 10-report defaults and read-only SQL',()=>{

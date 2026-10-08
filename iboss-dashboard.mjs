@@ -1,3 +1,4 @@
+import {BANK_RECONCILIATION_SUMMARY_SQL,reconciliationFilter} from './iboss-bank-reconciliation.mjs';
 import {companyCode,companyScopedSql} from './iboss-company-scope.mjs';
 import {bankLedgerSql} from './iboss-bank-ledger.mjs';
 import {accountView} from './iboss-accounts.mjs';
@@ -9,6 +10,7 @@ const bank=bankLedgerSql();
 export const DASHBOARD_QUERIES={
  masters:{sql:`SELECT (SELECT COUNT(*) FROM cmpl.party WHERE partytypecode<>'ACCOUNTGROUP') AS accounts,(SELECT COUNT(*) FROM cmpl.vendor) AS vendors,(SELECT COUNT(*) FROM cmpl.costcentre) AS cost_centres,(SELECT COUNT(*) FROM cmpl.workcentre) AS work_centres,(SELECT COUNT(*) FROM cmpl.asset) AS assets FROM dual`},
  bank:{sql:bank},
+ reconciliation:{sql:BANK_RECONCILIATION_SUMMARY_SQL},
  payable:{sql:`SELECT a.vendorcode AS party_code,MAX(a.vendorname) AS party_name,${age('TRUNC(SYSDATE)-TRUNC(a.documentdate)')} AS age_band,COUNT(*) AS bills,SUM(a.outstanding) AS balance FROM cmpl.ap_bill_payable_v a WHERE NVL(a.outstanding,0)<>0 GROUP BY a.vendorcode,${age('TRUNC(SYSDATE)-TRUNC(a.documentdate)')}`},
  receivable:{sql:`SELECT a.accountcode AS party_code,MAX(a.partyname) AS party_name,${age('a.billage')} AS age_band,COUNT(*) AS bills,SUM(a.totalbalance) AS balance FROM cmpl.bi_receivable a WHERE NVL(a.totalbalance,0)<>0 GROUP BY a.accountcode,${age('a.billage')}`},
  advice:{sql:`SELECT CASE WHEN UPPER(TRIM(NVL(a.paymentdone,'N'))) IN ${yes} THEN 'Completed' ELSE 'Pending' END AS state,COUNT(*) AS records,SUM(NVL(a.amount,0)) AS amount FROM cmpl.paymentadvice a WHERE a.paymentadvicedate>=TO_DATE(:from_date,'YYYY-MM-DD') AND a.paymentadvicedate<TO_DATE(:to_date,'YYYY-MM-DD')+1 GROUP BY CASE WHEN UPPER(TRIM(NVL(a.paymentdone,'N'))) IN ${yes} THEN 'Completed' ELSE 'Pending' END`},
@@ -26,6 +28,7 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
  const old=(groups.receivable||[]).filter(row=>row.AGE_BAND==='180+');
  const cards=[
   {key:'bank',title:'Bank ledger balance',amount:sum(groups.bank||[],'BALANCEAMOUNT'),count:(groups.bank||[]).length,note:'Ledger closing through To date · Cr positive / Dr negative',kind:'bank'},
+  {key:'bank-reconciliation',title:'Bank Reconciliation',amount:sum(groups.reconciliation||[],'PASSBOOK_BALANCE'),count:sum(groups.reconciliation||[],'UNRECONCILED_COUNT'),note:'Calculated pass-book balance · current ERP reconciliation status',kind:'bank'},
   {key:'payable',title:'Current payables',amount:sum(groups.payable||[],'BALANCE'),count:sum(groups.payable||[],'BILLS'),note:'All open bills · current signed outstanding',kind:'payable'},
   {key:'receivable',title:'Current receivables',amount:sum(groups.receivable||[],'BALANCE'),count:sum(groups.receivable||[],'BILLS'),note:'All open customer bills · current signed balances',kind:'receivable'},
   {key:'aged-receivable',title:'Receivables older than 180 days',amount:sum(old,'BALANCE'),count:sum(old,'BILLS'),note:'Bill age · current balance, not a due-date estimate',kind:'risk'},
@@ -40,7 +43,7 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
   return [...map.values()].sort((a,b)=>Math.abs(b.balance)-Math.abs(a.balance)).slice(0,5);
  };
  const guarantees=(groups.guarantee||[]).find(row=>row.BUCKET==='Next 30 days'),expired=(groups.guarantee||[]).find(row=>row.BUCKET==='Expired');
- return {cards,aging,parties:{payable:parties('payable'),receivable:parties('receivable')},bank:(groups.bank||[]).slice(0,6),masters:groups.masters?.[0]||{},advice:groups.advice||[],tax:groups.tax||[],
+ return {reconciliation:groups.reconciliation||[],cards,aging,parties:{payable:parties('payable'),receivable:parties('receivable')},bank:(groups.bank||[]).slice(0,6),masters:groups.masters?.[0]||{},advice:groups.advice||[],tax:groups.tax||[],
   tasks:[{key:'overdue-emi',title:'Review unpaid EMI past its due date',count:sum(overdue,'INSTALMENTS'),amount:sum(overdue,'AMOUNT'),tone:'urgent'},
    {key:'pending-advice',title:'Complete or review payment advice',count:num(advice?.RECORDS),amount:num(advice?.AMOUNT),tone:'urgent'},
    {key:'aged-receivable',title:'Follow up customer bills older than 180 days',count:sum(old,'BILLS'),amount:sum(old,'BALANCE'),tone:'urgent'},
@@ -51,6 +54,7 @@ export function buildDashboard(groups,{from,to,checkedAt=new Date().toISOString(
 }
 
 export const DASHBOARD_METRICS={
+ 'bank-reconciliation':{view:'bank-reconciliation',dates:'period'},
  bank:{view:'bank-balance',dates:'period'},payable:{view:'payable-receivable',where:"r.side='Payable'"},receivable:{view:'payable-receivable',where:"r.side='Receivable'"},
  'aged-receivable':{view:'outstanding-180',where:"r.side='Receivable'"},loan:{view:'emi-details',where:'NVL(r.balanceamount,0)<>0'},
  'overdue-emi':{view:'emi-schedule',where:"r.emistatus='UNPAID'",dates:'overdue'},'upcoming-emi':{view:'emi-schedule',where:"r.emistatus='UNPAID'",dates:'upcoming'},
@@ -60,13 +64,14 @@ export const DASHBOARD_METRICS={
  'expired-bg':{view:'bank-guarantee',where:"r.expirydate<:planning_date AND NOT EXISTS (SELECT 1 FROM cmpl.bankgaurantycloser c WHERE c.bankgaurantytno=TO_NUMBER(r.id) AND c.bankgaurantycloserdate<TO_DATE(:planning_date,'YYYY-MM-DD')+1)"}
 };
 const shift=(day,days)=>new Date(Date.parse(day+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
-export function dashboardMetric(key,{from,to,company='',page=0}={}){
+export function dashboardMetric(key,{from,to,company='',bank='',status='unreconciled',page=0}={}){
  purchaseOrderRange(from,to);companyCode(company);
  if(!Object.hasOwn(DASHBOARD_METRICS,key)||!Number.isInteger(page)||page<0||page>5000)throw new Error('Choose a valid dashboard card and page.');
- const metric=DASHBOARD_METRICS[key],definition=accountView(metric.view);
+ const metric={...DASHBOARD_METRICS[key]},reconcile=key==='bank-reconciliation'?reconciliationFilter(bank,status):null;if(reconcile)metric.where=reconcile.where;
+ const definition=accountView(metric.view);
  const dates=metric.dates==='period'?{from,to}:metric.dates==='overdue'?{from:'1900-01-01',to:shift(to,-1)}:metric.dates==='upcoming'?{from:to,to:shift(to,30)}:{from:'1900-01-01',to:'2999-12-31'};
- const values={company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
- const sql=`SELECT * FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
+ const values={...reconcile?.binds,company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
+ const sql=`SELECT * FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${key==='bank-reconciliation'?'r.voucher_date,r.id':definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
  if(definition.asOf)values.to_date=to;
  const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
  const countSql=`SELECT COUNT(*) AS TOTAL_COUNT FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''}`;

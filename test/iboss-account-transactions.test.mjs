@@ -8,11 +8,11 @@ import {transformWithOxc} from 'vite';
 import {ACCOUNT_VIEWS,ACCOUNT_SECTIONS,accountView} from '../iboss-accounts.mjs';
 import {TRANSACTION_VIEWS} from '../iboss-account-transactions.mjs';
 import {indiaDateTimeInputValue} from '../report-date-range.mjs';
-const titles=['Payment Advice Register','Asset Register','Debit Note Register','Credit Note Register','Bill Receipt Register','Payable/Receivable Report','Bill Outstanding More than 180 Days','TDS Payable Summary','TDS Receivable','Party Wise TCS Summary','Cash Purchase Register','Emi Details','Fixed Deposit Register','Bank Guaranty Report','Bank Guaranty Closer','Bank Guaranty Nature','Bank Guaranty Type','Bank Guaranty Commission','Fixed Deposit Interest','Fixed Deposit Withdrawl','Asset Details Report','Imprest Balance','Internal Balance Details','Bank Balance Details','Expense Vehiclewise','EMI Schedule','Combined and Individual EMI Schedule'];
+const titles=['Payment Advice Register','Asset Register','Debit Note Register','Credit Note Register','Bill Receipt Register','Payable/Receivable Report','Bill Outstanding More than 180 Days','TDS Payable Summary','TDS Receivable','Party Wise TCS Summary','Cash Purchase Register','Emi Details','Fixed Deposit Register','Bank Guaranty Report','Bank Guaranty Closer','Bank Guaranty Nature','Bank Guaranty Type','Bank Guaranty Commission','Fixed Deposit Interest','Fixed Deposit Withdrawl','Asset Details Report','Imprest Balance','Internal Balance Details','Bank Balance Details','Bank Reconciliation','Expense Vehiclewise','EMI Schedule','Combined and Individual EMI Schedule'];
 test('Masters and Transactions contain exactly the reference links without mixing the sections',()=>{
  assert.equal(ACCOUNT_SECTIONS.masters.length,8);
  assert.deepEqual(ACCOUNT_SECTIONS.transactions.map(key=>accountView(key).title),titles);
- assert.equal(new Set([...ACCOUNT_SECTIONS.masters,...ACCOUNT_SECTIONS.transactions]).size,35);
+ assert.equal(new Set([...ACCOUNT_SECTIONS.masters,...ACCOUNT_SECTIONS.transactions]).size,36);
  for(const key of ACCOUNT_SECTIONS.transactions)assert.equal(accountView(key).section,'transactions');
 });
 test('registers preserve stored financial fields and use inclusive start / exclusive next-day ranges',()=>{

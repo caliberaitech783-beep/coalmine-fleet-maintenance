@@ -1,3 +1,4 @@
+import ReconciliationControls from './iboss-bank-reconciliation.jsx';
 import {recordCountLabel} from './iboss-record-count.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Landmark,Wallet,BookOpen,Clock,FileText,Shield,Users,ArrowUpRight,RefreshCw,ChevronRight,Calendar,AlertTriangle,Percent,Building2} from 'lucide-react';
@@ -13,37 +14,41 @@ import './iboss-dashboard.css';
 
 export const dashboardAmount=value=>{if(value==null)return '—';const number=Number(value);if(!Number.isFinite(number))return '—';const sign=number<0?'−':'';const absolute=Math.abs(number);return sign+(absolute>=1e7?`${(absolute/1e7).toFixed(2)} Cr`:absolute>=1e5?`${(absolute/1e5).toFixed(2)} L`:absolute.toLocaleString('en-IN',{maximumFractionDigits:2}));};
 const iconByKind={bank:Landmark,payable:Wallet,receivable:BookOpen,risk:AlertTriangle,loan:Building2,calendar:Calendar,advice:FileText};
-const units={bank:'accounts',loan:'loans','overdue-emi':'instalments','upcoming-emi':'instalments','pending-advice':'advice records'};
+const units={'bank-reconciliation':'unreconciled entries',bank:'accounts',loan:'loans','overdue-emi':'instalments','upcoming-emi':'instalments','pending-advice':'advice records'};
 const linkedReports=[['payment-advice','Payment Advice'],['emi-schedule','EMI Schedule'],['payable-receivable','Party Balances'],['bank-balance','Bank Balances'],['fixed-deposit','Fixed Deposits'],['bank-guarantee','Bank Guarantees']];
-const metricViews={bank:'bank-balance',payable:'payable-receivable',receivable:'payable-receivable','aged-receivable':'outstanding-180',loan:'emi-details','overdue-emi':'emi-schedule','upcoming-emi':'emi-schedule','pending-advice':'payment-advice','maturing-fd':'fixed-deposit','expiring-bg':'bank-guarantee','expired-bg':'bank-guarantee'};
+const metricViews={'bank-reconciliation':'bank-reconciliation',bank:'bank-balance',payable:'payable-receivable',receivable:'payable-receivable','aged-receivable':'outstanding-180',loan:'emi-details','overdue-emi':'emi-schedule','upcoming-emi':'emi-schedule','pending-advice':'payment-advice','maturing-fd':'fixed-deposit','expiring-bg':'bank-guarantee','expired-bg':'bank-guarantee'};
 
-function MetricDetails({metric,range,token,ReportSection,preview,close}){
+function MetricDetails({metric,range,token,ReportSection,preview,close,reconciliation=[]}){
+ const [bank,setBank]=useState(''),[status,setStatus]=useState('unreconciled');
+ const requestRange=useMemo(()=>metric.key==='bank-reconciliation'?{...range,bank,status}:range,[range,bank,status,metric.key]);
  const [count,setCount]=useState({totalCount:null});
  useEffect(()=>{
   if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(range)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
    .then(async response=>{const body=await response.json();if(!response.ok||!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
    .then(body=>{if(!controller.signal.aborted)setCount({totalCount:body.totalCount});})
    .catch(()=>{if(!controller.signal.aborted)setCount({totalCount:null,countError:'Total count unavailable — reopen to retry.'});});
   return ()=>controller.abort();
- },[metric,range,token,preview]);
+ },[metric,requestRange,token,preview]);
  const dialog=useRef(null),[page,setPage]=useState(0),[detail,setDetail]=useState(null),[data,setData]=useState({loading:true,rows:[]});
  useEffect(()=>{const opener=document.activeElement;dialog.current.showModal();return ()=>{if(opener?.isConnected)opener.focus();};},[]);
  useEffect(()=>{
   if(preview){const view=metricViews[metric.key];setData({view,columns:ACCOUNT_VIEWS[view].columns,rows:preview.metricRows?.[metric.key]||[],loading:false,...range});return;}
   const controller=new AbortController();setData({loading:true,rows:[]});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...range,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...requestRange,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
    .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load card details.');return body;})
    .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false});})
    .catch(error=>{if(!controller.signal.aborted)setData({loading:false,rows:[],error:error.message});});
   return ()=>controller.abort();
- },[metric,range,token,page,preview]);
+ },[metric,requestRange,token,page,preview]);
  const columns=useMemo(()=>(data.columns||[]).map(column=>{
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
   return {...column,value,sortValue:row=>row[column.key],drilldown:true,render:row=>value(row)===''?'—':<button type="button" className="iboss-detail-link" onClick={()=>{const target=accountDrill(data.view,column.key,row)||ACCOUNT_VIEWS[data.view].columns.map(item=>accountDrill(data.view,item.key,row)).find(Boolean);if(preview||target)setDetail({target,row,from:data.from,to:data.to,label:String(value(row))});}}>{value(row)}</button>};
  }),[data]);
  return <dialog ref={dialog} className="iboss-dash-dialog" aria-labelledby="dashboard-card-title" onCancel={event=>{event.preventDefault();if(detail)setDetail(null);else close();}}>
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
+  {metric.key==='bank-reconciliation'&&<p>Voucher period: {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)} · {range.companyName||range.company||'All companies'}</p>}
+  {metric.key==='bank-reconciliation'&&<ReconciliationControls rows={reconciliation} bank={bank} status={status} onBank={value=>{setPage(0);setBank(value);}} onStatus={value=>{setPage(0);setStatus(value);}}/>}
   {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
    <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
    <ReportSection title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search and export apply to this page. Click a value for the full record.'}/>
@@ -116,6 +121,6 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
    <section className="iboss-dash-report-links"><div><h3>Go straight to the source</h3><p>Masters, transactions and merged reports stay one click away.</p></div><div>{linkedReports.map(([key,label])=><button type="button" key={key} onClick={()=>onOpen(key)}>{label}<ArrowUpRight/></button>)}<button type="button" onClick={()=>onOpen('merge')}>Report Merge<ArrowUpRight/></button></div></section>
    <p className="iboss-dash-note">{data.note}</p>
   </>}
-  {selected&&<MetricDetails key={selected.key} metric={selected} range={range} token={token} ReportSection={ReportSection} preview={preview} close={()=>setSelected(null)}/>}
+  {selected&&<MetricDetails key={selected.key} metric={selected} reconciliation={data.reconciliation||[]} range={range} token={token} ReportSection={ReportSection} preview={preview} close={()=>setSelected(null)}/>}
  </div>;
 }
