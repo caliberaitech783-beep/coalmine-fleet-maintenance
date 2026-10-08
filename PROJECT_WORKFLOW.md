@@ -555,3 +555,7 @@ Admin and Super Admin sessions can select and delete filtered requests in Produc
 ### C-Directory visibility
 
 Every signed-in user can browse the complete C-Directory roster through the All tab, including General Users and users at Corporate Office, Nagpur or Head Office, Chandrapur. Office, WCL, NCL and site tabs filter the roster by location. The directory has no My access or My Sites tab. Account profiles and operational permissions remain role-specific.
+
+### HR User
+
+Team User includes HR User. Selecting it provides the complete C-Directory, Employee Tenure Report and all C-Dir Masters on desktop and mobile views. HR cannot access unrelated masters or maintenance actions. Category A contact numbers remain masked, and HR cannot edit protected A employee or Contact Master records.

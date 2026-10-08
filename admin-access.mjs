@@ -79,7 +79,8 @@ export function accessAllows(selection, name) {
 }
 
 export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
-  // C-Dir masters hold staff contact details: Admin and Super Admin only, never Managers.
+  if(permissions.hrDirectoryMasters===true)return isCdirMaster(name);
+    // C-Dir masters hold staff contact details: Admin and Super Admin only, never Managers.
   if (isCdirMaster(name)) return normalizeAdminLevel(permissions.adminLevel) !== "Manager";
   if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   if (name === "Shift Master" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;

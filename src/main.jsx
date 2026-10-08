@@ -3153,6 +3153,7 @@ const mobileRoleAuthority = {
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
   "General User": "Choose from all menus",
+  "HR User": "Complete C-Directory, tenure report and C-Dir Masters",
   "Account User": "Accounts workspace only",
   "Tender User": "Tender login with menus and actions customised for this user",
 };
@@ -4396,6 +4397,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
   const shownMenus=[...menus.filter(menu=>menu!=="Tender"&&menuOptions.includes(menu)),...(hasTender?["Tender"]:[])];
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
+  if(role==="HR User")return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.</p><input type="hidden" name={menuField} value="CD" /></section>;
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
@@ -4503,7 +4505,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
     </>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== GENERAL_USER_ROLE && accountRole !== "HR User" && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
@@ -4579,7 +4581,8 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(role === "Account User"||role === "Tender User"){
+      if(role === "HR User"){record[menuField]="CD";record[requestField]="";
+      }else if(role === "Account User"||role === "Tender User"){
         record[menuField]=assignedUserRoles(record).includes("Tender User")?"CD | Tender":"CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
         record[menuField]=generalUserMenuSelection(record,view).join(" | ");
@@ -4589,7 +4592,7 @@ function applyUserRoleDefaults(record) {
         if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
       }
     }
-    if(role === GENERAL_USER_ROLE || role === "Account User" || role === "Tender User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
+    if(role === "HR User" || role === GENERAL_USER_ROLE || role === "Account User" || role === "Tender User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
   }
   return record;
 }
@@ -11544,6 +11547,7 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
+    if(session?.assignedRole==='HR User')return ['CD','Employee Tenure Report'].includes(name)||isCdirMaster(name);
     if(name==="User Sessions")return canViewUserSessions(session);
     if(name==="OEM Email Delivery Status")return isAdministrator;
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
@@ -11569,6 +11573,7 @@ function App() {
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
+    if(session?.assignedRole==='HR User')return "CD";
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = [...masterNav, ...cdirMasterNavItems].find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
@@ -11624,7 +11629,7 @@ function App() {
   const selectMenu = (name) => {
     if (name === "Report Setting") name = "Reports";
     if (adminOnlyPages.has(name) && !isAdministrator && !(name==='User Sessions'&&canViewUserSessions(session))) return;
-    if (session?.role === "super" && !canOpenAdminPage(name)) return;
+    if ((session?.role === "super"||session?.assignedRole === "HR User") && !canOpenAdminPage(name)) return;
     if (name === "Dashboard") window.dispatchEvent(new CustomEvent("nerve-center:dashboard-home"));
     if (name === active) return;
     preloadNavigationFeature(name);
@@ -11634,7 +11639,7 @@ function App() {
     setActive(name);
   };
   useEffect(() => {
-    if (session?.role !== "super" || canOpenAdminPage(active)) return;
+    if ((session?.role !== "super"&&session?.assignedRole !== "HR User") || canOpenAdminPage(active)) return;
     const landingPage = firstAccessibleAdminPage();
     pageHistory.current = [landingPage];
     setCanGoBack(false);
@@ -11962,7 +11967,7 @@ function App() {
     <main>{accountWorkspace==="directory"?<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={accountDirectoryView==="directory"} className={accountDirectoryView==="directory"?"active":""} onClick={()=>setAccountDirectoryView("directory")}><BookUser/>Directory</button><button type="button" role="tab" aria-selected={accountDirectoryView==="tenure"} className={accountDirectoryView==="tenure"?"active":""} onClick={()=>setAccountDirectoryView("tenure")}><Users/>Employee Tenure Report</button></div>{accountDirectoryView==="tenure"?<EmployeeTenureReport token={session.token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={session.token}/>}</>:ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
-  if (session.role === "normal")
+  if (session.role === "normal" && session.assignedRole !== "HR User")
     return (
       <RequestShiftProvider token={session.token} requests={requests}>
         {isSessionViewOnlyUser(session)&&<div className="panel"><button type="button" onClick={()=>selectMenu('User Sessions')}>Admin · User Sessions</button></div>}

@@ -48,7 +48,7 @@ import {createFeedCache} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
-import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
+import {cdirDirectoryForViewer,cdirViewerContext,isProtectedDirectoryContact,maskHRContactMasters} from './cdir-access.mjs';
 import {canEditCdirEmployee,registerCdirEmployeeEdit} from './cdir-employee-edit.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
@@ -2247,7 +2247,7 @@ app.post('/api/login',async(req,res,next)=>{
     if(req.body.portal==='accounts'&&(profile.userType!=='Account User'||!ibossAccountsAllowed({role:profile.sessionRole,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions})))return res.status(403).json({error:'This ID is not an Account User. Select Fleet operations to sign in with your fleet ID.'});
     if(req.body.portal!=='accounts'&&profile.userType==='Account User')return res.status(403).json({error:'This is an Account User ID. Select Accounts before signing in.'});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
-    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, MIS User, or General User in Users & employees.'});
+    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, MIS User, General User, or HR User in Users & employees.'});
     if(!ADMIN_LOCK_POLICY_PAUSED&&profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
       const incidents=await activeAdminLockIncidents();
       if(incidents.length)return res.status(423).json({error:`This admin account is locked because CRM ticket ${incidents[0].ticketReference} has remained open for 72 hours. Contact a Super Admin.`});
@@ -2502,6 +2502,20 @@ async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
+    if(session.assignedRole==='HR User'&&isCdirMaster(req.params?.master?decodeURIComponent(req.params.master):'')){
+      if([CDIR_MASTERS.contact,CDIR_MASTERS.employee].includes(decodeURIComponent(req.params.master))){
+        const protectedMaster=decodeURIComponent(req.params.master);
+        const directory=await cdirDirectory();
+        const submitted=Array.isArray(req.body)?req.body:[req.body||{}];
+        const {rows}=await pool.query('SELECT record_data FROM master_records WHERE master_name=$1',[protectedMaster]);
+        const candidates=req.params.id&&!['all','selected'].includes(req.params.id)
+          ?(await pool.query('SELECT record_data FROM master_records WHERE master_name=$1 AND id=$2',[protectedMaster,req.params.id])).rows
+          :req.method==='DELETE'?rows:[];
+        if([...submitted,...candidates.map(row=>row.record_data)].some(record=>isProtectedDirectoryContact(record,directory)))
+          return res.status(403).json({error:'Protected category A records can only be changed by authorized leadership roles.'});
+      }
+      req.session=session;return next();
+    }
     if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
     const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
     if(requestedMaster&&!masterAccessAllows(session.permissions,requestedMaster)&&!masterAccessAllows(session.permissions,requestedMaster,'mobileMasterAccess'))
@@ -3844,6 +3858,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
 // Only Admin and Super Admin may change them; Managers cannot even read them.
 function cdirWriteError(req,master){
   if(!isCdirMaster(master))return '';
+  if(req.session?.assignedRole==='HR User')return '';
   return req.session?.role==='super'&&normalizeAdminLevel(req.session?.permissions?.adminLevel)!=='Manager'
     ?'':'Only an Admin or Super Admin can change the C-Dir masters.';
 }
@@ -7592,7 +7607,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const maintenanceManager=maintenanceManagerSession(req.session);
     const canViewRepairTypes=maintenanceManager||superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     const canViewDelayedReasons=maintenanceManager||superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true||req.session.permissions?.editRequests===true;
-    if(!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
+    if(req.session.assignedRole!=='HR User'&&!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?(req.session.role==='normal'?userSiteScope(managerRecord):managerReportScope(managerRecord)):null;
@@ -7613,7 +7628,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
+        if(req.session.assignedRole==='HR User'?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
@@ -7634,6 +7649,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }
       (grouped[row.master_name]??=[]).push({id:row.id,...record});
     }
+    if(req.session.assignedRole==='HR User')maskHRContactMasters(grouped,await cdirDirectory());
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped,{etag});
     res.json(grouped);
   }catch(error){next(error)}

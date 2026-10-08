@@ -70,3 +70,17 @@ export function cdirDirectoryForViewer(directory={},viewer={}){
       totalDepartments:new Set(rows.map((row)=>row.department).filter(Boolean)).size},
     sites,matrix,siteTotals,siteStats,categoryTotalsUnique};
 }
+
+export function isProtectedDirectoryContact(record={},directory={}){
+  const normalized=value=>String(value||'').trim().toLowerCase();
+  return Object.entries(directory.matrix||{}).some(([key,rows])=>rows.some(person=>
+    String(person.cat||key.slice(key.lastIndexOf('|')+1)).trim().toUpperCase()==='A' &&
+    ((record.empId&&normalized(record.empId)===normalized(person.empId))||(!record.empId&&record.name&&normalized(record.name)===normalized(person.name)))));
+}
+export function maskHRContactMasters(grouped={},directory={}){
+  for(const record of grouped['C-Dir Contact master']||[]){
+    if(!isProtectedDirectoryContact(record,directory))continue;
+    for(const field of ['contact','whatsapp','emergencyContact'])if(record[field])record[field]='**********';
+  }
+  return grouped;
+}
