@@ -1,4 +1,7 @@
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
+import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
+import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
+import {sendTelegramWelcomeAudio} from './telegram.mjs';
 import {oracleAccountLedger} from './oracle-db.mjs';
 import {companyCode} from './iboss-company-scope.mjs';
 import {installTenderIdentity} from './tender-identity.mjs';
@@ -3774,6 +3777,19 @@ app.get('/api/telegram/links',requireSuper,requireWhatsAppAdministrator,async(_r
   }catch(error){next(error)}
 });
 
+// Preview never sends a Telegram message.
+app.post('/api/telegram/bdms-chatbot/preview',requireSession,async(req,res,next)=>{
+  try{
+    if(typeof req.body?.text!=='string'||req.body.text.length>300)return res.status(400).json({error:'Enter a question of up to 300 characters.'});
+    res.set('Cache-Control','no-store');
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization||!bdmsChatCanRead(authorization.session))return res.status(403).json({error:'Your BDMS role does not permit breakdown queries.'});
+    const flow=bdmsChatFlow(req.body.text,req.body.language,authorization.session);
+    const result=flow.query?await telegramBdmsPilotAnswer(req.session,req.body.text,flow.language,req.body.context):{text:flow.text,keyboard:flow.keyboard,context:{}};
+    res.json({...flow,...result,preview:true});
+  }catch(error){next(error)}
+});
+
 // Telegram calls this for every message sent to the bot. It is public, so it is
 // authenticated by the secret header Telegram echoes back from setWebhook.
 app.post('/api/telegram/webhook',async(req,res)=>{
@@ -3843,10 +3859,61 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       await followTelegramGroupMigration(update.groupChatId,update.newChatId);
       await migrateTelegramSiteGroup(update.groupChatId,update.newChatId);
     }else if(update.kind==='start'||update.kind==='text'){
-      await reply(update.chatId,'To receive Caliber Pulse alerts here, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
+      if(process.env.TELEGRAM_BDMS_CHATBOT_ENABLED!=='false'){
+        const {rows:links}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.chatId]);
+        if(links.length!==1)return await reply(update.chatId,'Connect exactly one BDMS account to this private Telegram chat before using the pilot.');
+        const allowed=String(process.env.TELEGRAM_BDMS_CHATBOT_PILOT_LOGINS||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+        if(allowed.length&&!allowed.includes(String(links[0].login).toLowerCase()))return await reply(update.chatId,'The BDMS chatbot is not enabled for your login yet.');
+        const user=await bdmsUserRecord(links[0].login);
+        if(!user)return await reply(update.chatId,'Your BDMS account is no longer available.');
+        const profile=resolveMobileAccess({user});
+        const session={...dashboardSessionFromProfile(profile),login:links[0].login};
+        const key=`telegram_bdms_chat_language:${links[0].login}`;
+        const {rows:settings}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[key]);
+        const authorization=await currentDashboardAuthorization(session);
+        if(!authorization||!bdmsChatCanRead(authorization.session))return await reply(update.chatId,'Your current BDMS role does not permit breakdown queries.');
+        const flow=bdmsChatFlow(req.body.message?.text||'/menu',settings[0]?.setting_value?.language,authorization.session);
+        const result=flow.query?await telegramBdmsPilotAnswer(session,req.body.message?.text,flow.language,settings[0]?.setting_value?.context):{text:flow.text,keyboard:flow.keyboard,context:{}};
+        await pool.query(`INSERT INTO app_settings (setting_key,setting_value) VALUES ($1,$2::jsonb) ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`,[key,JSON.stringify({language:flow.language,context:result.context})]);
+        await sendTelegramText({chatId:update.chatId,message:result.text,replyMarkup:result.keyboard});
+        if(flow.welcome)await sendTelegramWelcomeAudio({chatId:update.chatId,buffer:await fs.readFile(path.join(root,'public','caliber-pulse-welcome.mp3'))});
+      }else await reply(update.chatId,'To receive Caliber Pulse alerts here, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
     }
   }catch(error){console.error('Telegram webhook update failed.',error.message)}
 });
+
+async function telegramBdmsPilotAnswer(session,text,language='en',context={}){
+  const authorization=await currentDashboardAuthorization(session);
+  if(!authorization||!bdmsChatCanRead(authorization.session))return {text:'Your current BDMS role does not permit breakdown queries.',keyboard:{remove_keyboard:true},context:{}};
+  if(!bdmsChatQueryAllowed(text,authorization.session))return bdmsChatConversation({text,language,session:authorization.session});
+  const scope=infoPulseRequestScope(authorization.session,authorization.user);
+  const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);
+  let requests=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
+  if(authorization.session.assignedRole==='Production User')requests=requests.filter(r=>String(r.requesterLogin||'').toLowerCase()===String(session.login||'').toLowerCase());
+  const currentSession={...authorization.session,login:session.login};
+  const query=bdmsChatIntent(/Back to results|सूची पर वापस/.test(text)?context?.listQuery||'':text);
+  let transfers=[],tickets=[],fleetRecords=null;
+  if(query.kind==='transfers'||/^Transfer /.test(text)){
+    const access=await vehicleTransferAccessContext(currentSession);
+    if(access.canView){
+      const {rows:transferRows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at DESC");
+      transfers=transferRows.map(r=>({...r.record_data,id:r.id,status:vehicleTransferStatus(r.record_data)})).filter(r=>transferVisibleToContext(r,access));
+    }
+  }
+  if(query.kind==='ticketClose'||/^Ticket /.test(text)){
+    const {rows:ticketRows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ORDER BY created_at DESC`);
+    for(const ticket of ticketRows)if(await ticketVisibleToSession(ticket,currentSession))tickets.push(ticket);
+  }
+  if(query.kind==='fleet'&&canReadDashboardEquipment(authorization.session)){
+    const fleetScope=dashboardEquipmentScope(authorization.session,authorization.user);
+    if(dashboardEquipmentScopeIsUsable(fleetScope)){
+      const {rows:equipmentRows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master'");
+      const snapshot=dashboardFleetSnapshot(equipmentRows.map(r=>({...r.record_data,id:r.id})),rows);
+      fleetRecords=scopeDashboardEquipmentRecords(snapshot,authorization.session,authorization.user,fleetScope);
+    }
+  }
+  return bdmsChatConversation({text,language,context:context&&typeof context==='object'?context:{},session:currentSession,requests:await attachDailyRemarks(requests),transfers,tickets,fleetRecords,scopeLabel:scope.label,baseUrl:process.env.PUBLIC_APP_URL||'https://pulse.cmll.in'});
+}
 
 // ---------- C-Dir (Caliber Directory) masters ----------
 // Only Admin and Super Admin may change them; Managers cannot even read them.

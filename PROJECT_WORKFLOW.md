@@ -1,5 +1,17 @@
 # Caliber Pulse project workflow
 
+## Telegram BDMS chatbot
+
+Result lists now provide request-selection buttons and guided follow-ups: maintenance work and daily remarks, recorded lifecycle timestamps, permitted linked requests, permitted vehicle history, and role-appropriate first-trip/MIS details. Back to results and Main menu support navigation. `telegram-bdms-conversation.mjs` stores only selected request/list-query identifiers in conversation context, alongside the language preference. Each detail turn reloads current authorization and scoped records; unknown, archived or newly inaccessible selections are denied. The same engine powers the fictional local trial and authenticated preview.
+
+Menus and typed-query authorization now follow the current BDMS role: Production sees its own requests and first-trip work, Maintenance sees repairs and ageing, MIS sees verification work, managers/administrators see scoped summaries and queues, and permitted General Users get read-only reporting. Queries outside a role's menu are rejected server-side, not merely hidden. Current site assignments still apply to every query across all eight configured BDMS sites. The trial has explicit fictional role/site simulation controls; production users cannot select or impersonate these identities.
+
+The pilot now asks for English or Hindi before accepting a query. Language preference is persisted in `app_settings` under the linked login's `telegram_bdms_chat_language:` key; `/start` and Change language return to the language chooser. The welcome MP3 says “Welcome to Caliber Pulse. Please select your language first, then choose your query” in English and Hindi. Telegram displays it as a tap-to-play audio message, not automatic playback. Expanded menus include site summary, closed requests, first-trip pending, MIS pending and oldest-first breakdown ageing. Record content stays as entered; interface labels use the chosen language.
+
+The read-only private-chat pilot in `telegram-bdms-chatbot.mjs` supports Open breakdowns, Running BD, door/request lookup, pending first-trip/MIS entries and bilingual help. It does not support Accounts, IBOSS, unrestricted AI questions, approvals or write actions. `POST /api/telegram/bdms-chatbot/preview` requires a BDMS session and returns an answer without sending a Telegram message.
+
+The approved release enables the chatbot for connected eligible BDMS users by default. `TELEGRAM_BDMS_CHATBOT_ENABLED=false` disables it. An optional comma-separated `TELEGRAM_BDMS_CHATBOT_PILOT_LOGINS` restricts rollout when set; an empty allowlist admits all eligible linked BDMS users. Each private message must resolve to exactly one linked BDMS account. Current employee/privilege records are rechecked; Info Pulse site scope and request visibility rules apply, and Production users are further restricted to their own requests. Existing webhook secret checks, account linking, stop handling and group notifications are preserved. Open the existing CALIBER BDMS private Telegram chat and send /start, choose English or Hindi, then use the role-specific menu. Groups continue their existing notification behavior.
+
 This is the maintainer guide for the Caliber Pulse breakdown and fleet-management application. It describes the current source in this repository, the production flow, and the rules that connect users, masters, requests, reports, and deployment.
 
 Production URL: [https://bdms.cmll.in/](https://bdms.cmll.in/)

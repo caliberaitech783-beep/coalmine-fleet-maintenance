@@ -51,13 +51,13 @@ function assertReady(config,purpose,settings,privateChatId=''){
   if(config.paused||!(allowedPrivate||telegramPurposeEnabled(settings,purpose))){const error=new Error('Telegram delivery is paused for this message type.');error.code='TELEGRAM_POLICY_PAUSED';throw error}
 }
 
-export async function sendTelegramText({message,purpose='',settings,chatId,privateChat=false},{env=process.env,fetchImpl=fetch}={}){
+export async function sendTelegramText({message,purpose='',settings,chatId,privateChat=false,replyMarkup},{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(privateChat||clean(chatId)?{...env,TELEGRAM_DEFAULT_CHAT_ID:clean(chatId)||clean(env.TELEGRAM_DEFAULT_CHAT_ID)}:env);
   assertReady(config,purpose,settings,privateChat?clean(chatId):'');
   const text=telegramPlainText(message);
   if(!text)throw new Error('A Telegram message is required.');
   const target=clean(chatId)||config.chatId;
-  const result=await telegramRequest('sendMessage',{env,fetchImpl,json:{chat_id:target,text,disable_web_page_preview:true}});
+  const result=await telegramRequest('sendMessage',{env,fetchImpl,json:{chat_id:target,text,disable_web_page_preview:true,...(replyMarkup?{reply_markup:replyMarkup}:{})}});
   return {sent:true,chatId:target,messageId:result?.message_id};
 }
 
@@ -76,6 +76,16 @@ export async function sendTelegramDocument({buffer,filename='caliber-pulse-repor
   form.append('document',new Blob([documentBuffer],{type:'application/pdf'}),safeFilename);
   const result=await telegramRequest('sendDocument',{env,fetchImpl,form});
   return {sent:true,chatId:target,messageId:result?.message_id};
+}
+
+export async function sendTelegramWelcomeAudio({buffer,chatId},{env=process.env,fetchImpl=fetch}={}){
+  if(!/^\d+$/.test(String(chatId)))throw new Error('Welcome audio requires a private chat.');
+  assertReady(telegramConfiguration({...env,TELEGRAM_DEFAULT_CHAT_ID:String(chatId)}),'',undefined);
+  const form=new FormData();
+  form.append('chat_id',String(chatId));
+  form.append('title','Welcome to Caliber Pulse · Select your language');
+  form.append('audio',new Blob([buffer],{type:'audio/mpeg'}),'caliber-pulse-welcome.mp3');
+  return telegramRequest('sendAudio',{env,fetchImpl,form});
 }
 
 // "Require Telegram at login": off until an administrator turns it on, with a
