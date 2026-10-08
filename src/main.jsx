@@ -5665,29 +5665,43 @@ function EnhancedSpeechComplaint({
     r.lang = lang;
     r.interimResults = true;
     r.continuous = true;
-    let final = "", recognitionFailed = false;
+    let final = "", latestTranscript = "", recognitionFailed = false;
+    const originalText = text.trim();
+    const writeTranscript = () => {
+      if (!latestTranscript || !mounted.current) return;
+      setText([originalText, latestTranscript].filter(Boolean).join(" "));
+    };
     const resetSilence = () => {
       clearTimeout(silenceTimer.current);
-      silenceTimer.current = setTimeout(stop, 5000);
+      silenceTimer.current = setTimeout(stop, 12000);
     };
     r.onstart = () => {
       audioOnlyMode.current = false;
       setListening(true);
-      setNote(`Listening in ${languageName}… pause up to 5 seconds while speaking.`);
+      setNote(`Listening in ${languageName}… pause up to 12 seconds while speaking.`);
       resetSilence();
       maxTimer.current = setTimeout(stop, 45000);
     };
     r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += " " + e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
+      if (!mounted.current) return;
+      // Results are cumulative; rebuilding avoids duplicating revised results.
+      const finalized = [], pending = [];
+      for (let i = 0; i < e.results.length; i++) {
+        const words = String(e.results[i][0]?.transcript || "").trim();
+        if (!words) continue;
+        (e.results[i].isFinal ? finalized : pending).push(words);
       }
-      setNote(interim || "Processing speech…");
+      final = finalized.join(" ");
+      const received = [...finalized, ...pending].join(" ").trim();
+      // Some engines retract interim results when stopped. Keep the last words.
+      if (received) latestTranscript = received;
+      writeTranscript();
+      setNote(pending.join(" ") || "Processing speech…");
       resetSilence();
     };
     r.onerror = (e) => {
       recognitionFailed = true;
+      writeTranscript();
       recognition.current = null;
       audioOnlyMode.current = true;
       finishAudioOnly(
@@ -5705,13 +5719,15 @@ function EnhancedSpeechComplaint({
       clearTimers();
       stopAudio();
       setListening(false);
-      if (!final.trim()) {
+      if (!latestTranscript.trim()) {
         setNote("No clear speech was detected. Review your audio, then type the text or record again.");
         return;
       }
       // Keep every recognized detail and the selected language, including negations.
-      setText(final.trim());
-      setNote(`Transcribed in ${languageName}. Review and edit the text before submitting.`);
+      writeTranscript();
+      setNote(final.trim() === latestTranscript.trim()
+        ? `Transcribed in ${languageName}. Review and edit the text before submitting.`
+        : `Speech captured in ${languageName}. Review and edit the text before submitting.`);
     };
     try {
       r.start();

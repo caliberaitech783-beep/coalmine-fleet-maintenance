@@ -220,6 +220,46 @@ for (const props of speechPurposes) for (const [lang, transcript] of [
   assert.ok(byType(tree, 'audio'));
 });
 
+for (const props of speechPurposes) test(`${props.name} writes interim speech immediately and retains it after Stop`, async () => {
+  const app = speechHarness();
+  await byType(app.render(props), 'button').props.onClick();
+  const interim = [{ transcript: 'ब्रेक काम नहीं कर रहा है' }];
+  interim.isFinal = false;
+  app.recognition.onresult({ resultIndex: 0, results: [interim] });
+  assert.equal(byType(app.render(props), 'textarea').props.value, interim[0].transcript);
+  app.recognition.onresult({ resultIndex: 0, results: [] });
+  byType(app.render(props), 'button').props.onClick();
+  const tree = app.render(props);
+  assert.equal(byType(tree, 'textarea').props.value, interim[0].transcript);
+  assert.ok(byType(tree, 'audio'));
+});
+
+test('revised cumulative results replace earlier words without duplicating finalized speech or existing text', async () => {
+  const app = speechHarness();
+  const props = { initialText: 'Existing note.' };
+  await byType(app.render(props), 'button').props.onClick();
+  const result = (transcript, isFinal) => Object.assign([{ transcript }], { isFinal });
+  const first = result('Brake failed.', true);
+  app.recognition.onresult({ resultIndex: 0, results: [first, result('Oil', false)] });
+  app.recognition.onresult({ resultIndex: 1, results: [first, result('Oil is not leaking.', true)] });
+  app.recognition.onresult({ resultIndex: 0, results: [first, result('Oil is not leaking.', true)] });
+  byType(app.render(props), 'button').props.onClick();
+  assert.equal(byType(app.render(props), 'textarea').props.value, 'Existing note. Brake failed. Oil is not leaking.');
+});
+
+test('recognition error retains recognized words and the recorded audio', async () => {
+  const app = speechHarness();
+  await byType(app.render(), 'button').props.onClick();
+  const partial = Object.assign([{ transcript: 'The engine will not start.' }], { isFinal: false });
+  const recognition = app.recognition;
+  recognition.onresult({ resultIndex: 0, results: [partial] });
+  recognition.onerror({ error: 'network' });
+  recognition.onend();
+  const tree = app.render();
+  assert.equal(byType(tree, 'textarea').props.value, partial[0].transcript);
+  assert.ok(byType(tree, 'audio'));
+});
+
 test('every speech-enabled form uses the same selected-language implementation', () => {
   assert.equal((source.match(/new Speech\(/g) || []).length, 1);
   assert.match(source, /const SpeechComplaint = EnhancedSpeechComplaint;/);
