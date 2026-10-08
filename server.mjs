@@ -1,6 +1,6 @@
 import {companyCode} from './iboss-company-scope.mjs';
 import {installTenderIdentity} from './tender-identity.mjs';
-import {accountPageNumber} from './iboss-account-pages.mjs';
+import {accountPageQuery,accountPageNumber} from './iboss-account-pages.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
 import {canReopenBreakdown,reopenBreakdownError} from './reopen-breakdown.mjs';
 import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from './iboss-access.mjs';
@@ -11,7 +11,7 @@ import {requestHistorySnapshotSql,requestHistoryTimelineSql} from './request-his
 import {retryDatabaseRead} from './database-read-retry.mjs';
 import {measureRequestHistoryPayload} from './request-history-diagnostics.mjs';
 import {applySchemaMigration} from './schema-migration.mjs';
-import {oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
+import {oracleAccountsCount,oracleDashboardCount,oracleStockStatement,oraclePurchaseOrderReport,oracleGrnRegister,oraclePoGrnReconciliation,oracleAccounts,oracleAccountsDashboard,oracleAccountsDashboardMetric,oracleReportMerge,oracleReportMergeTrail} from './oracle-db.mjs';
 import {resolveSelection,mergeChain} from './iboss-report-merge.mjs';
 import {accountView,ACCOUNT_SECTIONS} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
@@ -4049,6 +4049,24 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
     res.set('Cache-Control','no-store');
     res.json(await runDiagnostics(diagnosticChecks()));
   }catch(error){next(error)}
+});
+
+app.get('/api/reports/iboss-accounts/:view/count',requireSession,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+ try{companyCode(req.query.company??'');accountPageQuery(req.params.view,req.query.from,req.query.to,0,req.query.search??'');}catch(error){return res.status(400).json({error:error.message});}
+ if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+ try{res.json(await oracleAccountsCount(req.params.view,req.query.from,req.query.to,req.query.search??'',req.query.company??''));}
+ catch(error){console.error('Accounts count failed:',error.code||'Oracle error');res.status(502).json({error:'Total count is unavailable. Refresh to retry.'});}
+});
+app.get('/api/reports/iboss-accounts-dashboard/:metric/count',requireSession,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
+ const input={from:req.query.from,to:req.query.to,company:req.query.company??''};
+ try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
+ if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
+ try{res.json(await oracleDashboardCount(req.params.metric,input));}
+ catch(error){console.error('Dashboard count failed:',error.code||'Oracle error');res.status(502).json({error:'Total count is unavailable. Refresh to retry.'});}
 });
 
 app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{

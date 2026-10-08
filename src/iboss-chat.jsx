@@ -1,3 +1,4 @@
+import {recordCountLabel} from './iboss-record-count.mjs';
 import React,{useEffect,useRef,useState} from 'react';
 import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
 import {indiaDateTimeInputValue} from '../report-date-range.mjs';
@@ -17,7 +18,7 @@ export default function IbossChat({token,allowed,ReportSection}){
  useEffect(()=>{
   if(!request)return;
   const active=createAccountPageLoader({url:`/api/reports/iboss-accounts/${request.view}?${new URLSearchParams({...request.range,search:request.search||''})}`,token,onChange:setData});
-  loader.current=active;void active.loadMore();
+  loader.current=active;void active.loadMore();active.loadCount();
   return ()=>{active.dispose();loader.current=null;};
  },[request,token]);
  const filtered=filterChatOptions(question,options);
@@ -70,7 +71,7 @@ export default function IbossChat({token,allowed,ReportSection}){
     {definition.asOf&&<p><strong>Latest stored balances on or before {formatDisplayDate(request.range.to)}.</strong> Check each Stored Balance Date; an earlier snapshot is not confirmed closing for the selected day.</p>}
     {data.error&&<p role="alert">{data.error} <button type="button" onClick={()=>loader.current?.loadMore()}>Retry</button></p>}
     {!data.error||data.rows.length>0?<>
-     <p role="status">{data.rows.length} {definition.summary?'summary groups':'records'} loaded{data.hasMore?' · more available':''}. {definition.summary?'Each count and amount covers all matching source records in its group. ':''}Search and exports cover loaded rows only. Fetched {new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST.</p>
+     <p role="status">{recordCountLabel(data,definition.summary?'summary groups':'records')} {definition.summary?'Each count and amount covers all matching source records in its group. ':''}Search and exports cover loaded rows only. Fetched {new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST.</p>
      <ReportSection key={`${request.view}-${request.search||''}-${request.range.from}-${request.range.to}`} title={definition.title} description={definition.dated?`${formatDisplayDate(request.range.from)} to ${formatDisplayDate(request.range.to)}`:definition.asOf?`On or before ${formatDisplayDate(request.range.to)}`:'All ERP records; no date filter'} category="iboss-accounts" rows={data.rows} columns={definition.columns.map(column=>({...column,value:row=>row[column.key]??''}))} exportLabel={data.hasMore?'Generate (loaded rows)':'Generate'} emptyMessage="No ERP records match this report and date range."/>
      {data.hasMore&&<button type="button" disabled={data.loadingMore} onClick={()=>loader.current?.loadMore()}>{data.loadingMore?'Loading…':'Load 500 more records'}</button>}
     </>:null}

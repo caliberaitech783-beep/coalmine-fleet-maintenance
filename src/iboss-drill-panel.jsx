@@ -57,6 +57,7 @@ export default function DrillPanel({target,range:initialRange,token,close}){
     <button type="button" aria-pressed={direction==='forward'} onClick={()=>setDirection('forward')}>Forward to completion<ArrowRight/></button>
    </div>}
    {data.loading?<p role="status">Tracing documents in Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<>
+    <p role="status">Total: {data.steps.reduce((sum,step)=>sum+step.documents.length,0).toLocaleString('en-IN')} records across {data.steps.length} linked reports.</p>
     <ol className="merge-trail-steps">
      {shown.map(step=><li key={step.key} className={`${step.documents.length?'done':'pending'}${step.key===current.focus?.step?' focus':''}`}>
       <span className="merge-trail-dot" aria-hidden="true"/>

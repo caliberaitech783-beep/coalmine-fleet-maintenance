@@ -1,3 +1,4 @@
+import {recordCountLabel} from './iboss-record-count.mjs';
 import {createAccountPageLoader} from './iboss-account-loader.mjs';
 import React,{useEffect,useMemo,useState,useRef} from 'react';
 import {accountPrivileges} from '../account-role-access.mjs';
@@ -36,7 +37,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
   if(!view)return;
   setData({rows:[],loading:true,error:''});
   const loader=createAccountPageLoader({url:`/api/reports/iboss-accounts/${view}?${new URLSearchParams(range)}`,token,onChange:setData});
-  pageLoader.current=loader;void loader.loadMore();
+  pageLoader.current=loader;void loader.loadMore();loader.loadCount();
   return ()=>{loader.dispose();if(pageLoader.current===loader)pageLoader.current=null;};
  },[token,view,range,attempt]);
  const columns=useMemo(()=>definition?.columns.map(column=>({...column,value:row=>(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key]??'',sortValue:row=>row[column.key],...(ACCOUNT_DRILLS[view]?.[column.key]?{render:row=>{const target=accountDrill(view,column.key,row);const text=(column.date||column.key.endsWith('_DATE'))&&row[column.key]?formatDisplayDate(row[column.key]):row[column.key];if(!target)return text===''||text===null||text===undefined?'—':text;return <button type="button" className="merge-doc-link" title="Drill down" onClick={()=>setDrill(target)}>{text}</button>;}}:{})}))||[],[definition,view]);
@@ -67,7 +68,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
    {validation&&<p role="alert">{validation}</p>}
    {data.loading?<p role="status">Loading {definition.title} from Oracle…</p>:data.error&&!data.rows.length?<p role="alert">{data.error}<button type="button" onClick={()=>pageLoader.current?.loadMore()}>Retry</button></p>:<>
     <p>{definition.note||'Current records from the connected Oracle database.'}</p>
-    <p role="status">{data.hasMore?`${data.rows.length.toLocaleString('en-IN')} records loaded. More records are available.`:'All matching records loaded.'} Search, filters, sorting and Generate apply to the loaded records.</p>
+    <p role="status">{recordCountLabel(data)} Search, filters, sorting and Generate apply to the loaded records.</p>
     <ReportSection key={`${view}-${attempt}-${range.from}-${range.to}`} exportLabel={data.hasMore?"Generate (loaded rows)":"Generate"} title={definition.title} category="iboss-accounts" description={`${definition.asOf?`Stored on / before ${formatDisplayDate(range.to)} · `:definition.dated?`${formatDisplayDate(range.from)} to ${formatDisplayDate(range.to)} · `:''}${data.rows.length.toLocaleString('en-IN')} loaded records · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this report and date range."/>
     {data.error&&<p role="alert">{data.error}</p>}
     {data.hasMore&&<button type="button" className="secondary" disabled={data.loadingMore} onClick={()=>pageLoader.current?.loadMore()}>{data.loadingMore?'Loading more…':data.error?'Retry loading more':'Load 500 more records'}</button>}

@@ -1,3 +1,4 @@
+import {recordCountLabel} from './iboss-record-count.mjs';
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Landmark,Wallet,BookOpen,Clock,FileText,Shield,Users,ArrowUpRight,RefreshCw,ChevronRight,Calendar,AlertTriangle,Percent,Building2} from 'lucide-react';
 import {ACCOUNT_VIEWS} from '../iboss-accounts.mjs';
@@ -17,6 +18,15 @@ const linkedReports=[['payment-advice','Payment Advice'],['emi-schedule','EMI Sc
 const metricViews={bank:'bank-balance',payable:'payable-receivable',receivable:'payable-receivable','aged-receivable':'outstanding-180',loan:'emi-details','overdue-emi':'emi-schedule','upcoming-emi':'emi-schedule','pending-advice':'payment-advice','maturing-fd':'fixed-deposit','expiring-bg':'bank-guarantee','expired-bg':'bank-guarantee'};
 
 function MetricDetails({metric,range,token,ReportSection,preview,close}){
+ const [count,setCount]=useState({totalCount:null});
+ useEffect(()=>{
+  if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
+  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(range)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+   .then(async response=>{const body=await response.json();if(!response.ok||!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
+   .then(body=>{if(!controller.signal.aborted)setCount({totalCount:body.totalCount});})
+   .catch(()=>{if(!controller.signal.aborted)setCount({totalCount:null,countError:'Total count unavailable — reopen to retry.'});});
+  return ()=>controller.abort();
+ },[metric,range,token,preview]);
  const dialog=useRef(null),[page,setPage]=useState(0),[detail,setDetail]=useState(null),[data,setData]=useState({loading:true,rows:[]});
  useEffect(()=>{const opener=document.activeElement;dialog.current.showModal();return ()=>{if(opener?.isConnected)opener.focus();};},[]);
  useEffect(()=>{
@@ -35,6 +45,7 @@ function MetricDetails({metric,range,token,ReportSection,preview,close}){
  return <dialog ref={dialog} className="iboss-dash-dialog" aria-labelledby="dashboard-card-title" onCancel={event=>{event.preventDefault();if(detail)setDetail(null);else close();}}>
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
   {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
+   <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
    <ReportSection title={metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search and export apply to this page. Click a value for the full record.'}/>
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
   </>}

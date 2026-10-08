@@ -78,7 +78,7 @@ export default function IbossReportMerge({token,ReportSection,embedded=false,ini
   </div>}
   {ran&&(data.loading?<p role="status">Merging {request.steps.length} reports from Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<>
    <p>Click any document number to trace it back to its origin or forward to completion. Shared columns appear once; child reports are summarised per {ran.rowLabel}.</p>
-   <ReportSection key={`${request.chain}-${request.at}`} title={`${ran.title} · Merged`} category="iboss-accounts" description={`${formatDisplayDate(request.range.from)} to ${formatDisplayDate(request.range.to)} · ${request.steps.length} reports · ${(data.rows||[]).length.toLocaleString('en-IN')} rows${data.checkedAt?` · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`:''}`} rows={data.rows||[]} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this process and date range."/>
+   <ReportSection key={`${request.chain}-${request.at}`} title={`${ran.title} · Merged`} category="iboss-accounts" description={`${formatDisplayDate(request.range.from)} to ${formatDisplayDate(request.range.to)} · ${request.steps.length} reports · Total: ${(data.rows||[]).length.toLocaleString('en-IN')} records${data.checkedAt?` · Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}`:''}`} rows={data.rows||[]} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} emptyMessage="No Oracle records match this process and date range."/>
   </>)}
   {trail&&ran&&<DrillPanel target={trail} range={request.range} token={token} close={()=>setTrail(null)}/>}
  </Wrapper>;

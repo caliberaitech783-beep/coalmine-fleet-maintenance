@@ -39,6 +39,20 @@ async function loadAccountsDashboard(from,to,section,company){
   }finally{await connection.close();}
 }
 
+export async function oracleAccountsCount(view,from,to,search='',company='') {
+ const query=accountPageQuery(view,from,to,0,search),sql=companyScopedSql(query.countSql,company),binds={...query.countBinds};
+ if(sql.includes(':company_code'))binds.company_code=company;
+ return oracleReportCount(sql,binds);
+}
+export async function oracleDashboardCount(key,input) {
+ const query=dashboardMetric(key,input);return oracleReportCount(query.countSql,query.countBinds);
+}
+async function oracleReportCount(sql,binds) {
+ const pool=await oraclePool(),connection=await pool.getConnection();
+ try{connection.callTimeout=60000;const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:1});return {totalCount:Number(result.rows[0].TOTAL_COUNT)};}
+ finally{await connection.close();}
+}
+
 export async function oracleAccountsDashboardMetric(key,input){
   const request=dashboardMetric(key,input),pool=await oraclePool(),connection=await pool.getConnection();
   try{

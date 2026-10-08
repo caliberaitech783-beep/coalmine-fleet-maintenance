@@ -69,5 +69,7 @@ export function dashboardMetric(key,{from,to,company='',page=0}={}){
  const sql=`SELECT * FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
  if(definition.asOf)values.to_date=to;
  const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
- return {sql,binds,view:metric.view,columns:definition.columns,from:dates.from,to:definition.asOf?to:dates.to,page};
+ const countSql=`SELECT COUNT(*) AS TOTAL_COUNT FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''}`;
+ const countBinds=Object.fromEntries(Object.entries(binds).filter(([name])=>!['row_offset','row_limit'].includes(name)));
+ return {sql,binds,countSql,countBinds,view:metric.view,columns:definition.columns,from:dates.from,to:definition.asOf?to:dates.to,page};
 }
