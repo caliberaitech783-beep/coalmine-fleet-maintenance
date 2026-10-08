@@ -101,3 +101,5 @@
 .iboss-dash-controls .iboss-date-calendar{width:38px;min-width:38px;max-width:38px;padding:8px 5px;cursor:pointer}
 .iboss-date-calendar::-webkit-datetime-edit{display:none}
 .iboss-date-calendar::-webkit-calendar-picker-indicator{margin:0;cursor:pointer}
+
+.iboss-dash-controls select{max-width:380px;min-width:210px;padding:12px;border:1px solid #dbe3ef;border-radius:8px;background:white;color:inherit;font:inherit;}

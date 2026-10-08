@@ -57,6 +57,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
   </div>}
   {SECTIONS.filter(([key])=>key!==section).map(([key])=><div key={key} hidden role="tabpanel" id={`accounts-panel-${key}`} aria-labelledby={`accounts-tab-${key}`}/>)}
   {definition&&<>
+   {range.company&&<p>Company: {range.companyName||range.company} · Shared ERP master records remain available.</p>}
    <form className="stock-statement-filters" onSubmit={refresh}>
     <button type="button" onClick={()=>{setView('');setValidation('');}}><ArrowLeft/>All Accounts menus</button>
     {definition.dated&&<><label>From<DateInput value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To<DateInput value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label></>}

@@ -22,7 +22,7 @@ export default function DrillPanel({target,range:initialRange,token,close}){
  useEffect(()=>{setDirection(focusIndex>0?'backward':'forward');},[current,focusIndex]);
  useEffect(()=>{
   const controller=new AbortController();setData({steps:[],loading:true,error:''});
-  fetch(`/api/reports/iboss-accounts-merge/${current.chain}/trail?${new URLSearchParams({from:range.from,to:range.to,key:current.key})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+  fetch(`/api/reports/iboss-accounts-merge/${current.chain}/trail?${new URLSearchParams({...range,key:current.key})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
    .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load the document trail.');return body;})
    .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false,error:''});})
    .catch(error=>{if(!controller.signal.aborted)setData({steps:[],loading:false,error:error.message});});

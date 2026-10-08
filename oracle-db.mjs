@@ -1,3 +1,4 @@
+import {companyCode,companyScopedSql,COMPANY_LIST_SQL} from './iboss-company-scope.mjs';
 import {accountPageQuery,accountPageResult,ACCOUNT_PAGE_SIZE} from './iboss-account-pages.mjs';
 import {DASHBOARD_QUERIES,buildDashboard,dashboardMetric,DASHBOARD_PAGE_SIZE} from './iboss-dashboard.mjs';
 import {dashboardCache} from './iboss-dashboard-cache.mjs';
@@ -14,17 +15,18 @@ const password = String(process.env.ORACLE_DB_PASSWORD || "");
 const connectString = String(process.env.ORACLE_DB_CONNECT_STRING || "").trim();
 
 const cachedDashboard=dashboardCache();
-export async function oracleAccountsDashboard(from,to,section='all'){
-  purchaseOrderRange(from,to);
+export async function oracleAccountsDashboard(from,to,section='all',company=''){
+  purchaseOrderRange(from,to);companyCode(company);
   if(!['all','core','receivable','tax'].includes(section))throw new Error('Invalid dashboard section.');
-  return cachedDashboard(JSON.stringify([from,to,section]),()=>loadAccountsDashboard(from,to,section));
+  return cachedDashboard(JSON.stringify([from,to,section,company]),()=>loadAccountsDashboard(from,to,section,company));
 }
-async function loadAccountsDashboard(from,to,section){
-  const values=purchaseOrderRange(from,to),pool=await oraclePool(),connection=await pool.getConnection();
+async function loadAccountsDashboard(from,to,section,company){
+  const values={...purchaseOrderRange(from,to),company_code:company},pool=await oraclePool(),connection=await pool.getConnection();
   try{
     connection.callTimeout=60000;await connection.execute('SET TRANSACTION READ ONLY');
     const groups={};
-    for(const [key,{sql}] of Object.entries(DASHBOARD_QUERIES)){
+    for(const [key,definition] of Object.entries(DASHBOARD_QUERIES)){
+      const sql=companyScopedSql(definition.sql,company);
       if(section==='core'&&['receivable','tax'].includes(key))continue;
       if(['receivable','tax'].includes(section)&&key!==section)continue;
       const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
@@ -32,7 +34,8 @@ async function loadAccountsDashboard(from,to,section){
       if(result.rows.length>50000)throw new Error('Dashboard source exceeds the supported grouping limit.');
       groups[key]=result.rows;
     }
-    return buildDashboard(groups,{from,to});
+    const companies=section==='core'||section==='all'?(await connection.execute(COMPANY_LIST_SQL,{},{outFormat:oracledb.OUT_FORMAT_OBJECT})).rows:[];
+    return {...buildDashboard(groups,{from,to}),company,companies};
   }finally{await connection.close();}
 }
 
@@ -51,8 +54,8 @@ let poolPromise;
 let stockStatementCache;
 let stockStatementPending;
 
-export async function oracleAccounts(view,from,to,page=0,search='') {
-  const query=accountPageQuery(view,from,to,page,search);
+export async function oracleAccounts(view,from,to,page=0,search='',company='') {
+  const query=accountPageQuery(view,from,to,page,search);query.sql=companyScopedSql(query.sql,company);if(query.sql.includes(':company_code'))query.binds.company_code=company;
   const pool=await oraclePool();const connection=await pool.getConnection();
   try {
     connection.callTimeout=60000;
@@ -61,13 +64,14 @@ export async function oracleAccounts(view,from,to,page=0,search='') {
   } finally {await connection.close();}
 }
 
-async function runMergeStatements(statements) {
+async function runMergeStatements(statements,company='') {
   const pool=await oraclePool();const connection=await pool.getConnection();
   try {
     connection.callTimeout=90000;
     await connection.execute('SET TRANSACTION READ ONLY');
     const rowsByStep={};
     for(const statement of statements){
+      statement.sql=companyScopedSql(statement.sql,company);if(statement.sql.includes(':company_code'))statement.binds.company_code=company;
       const result=await connection.execute(statement.sql,statement.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,fetchArraySize:5000,maxRows:50001});
       if(result.rows.length>50000){const error=new Error('More than 50,000 records match one of the selected reports. Choose a shorter date range.');error.code='REPORT_TOO_LARGE';throw error;}
       rowsByStep[statement.step]=result.rows;
@@ -76,14 +80,14 @@ async function runMergeStatements(statements) {
   } finally {await connection.close();}
 }
 
-export async function oracleReportMerge(chain,steps,from,to) {
-  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to}));
+export async function oracleReportMerge(chain,steps,from,to,company='') {
+  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to}),company);
   return {...buildMergedReport(chain,steps,rowsByStep),checkedAt:new Date().toISOString()};
 }
 
-export async function oracleReportMergeTrail(chain,anchorKey,from,to) {
+export async function oracleReportMergeTrail(chain,anchorKey,from,to,company='') {
   const steps=mergeChain(chain).steps.map(step=>step.key);
-  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to,anchorKey}));
+  const rowsByStep=await runMergeStatements(mergeStatements(chain,steps,{from,to,anchorKey}),company);
   return {steps:buildTrail(chain,rowsByStep),checkedAt:new Date().toISOString()};
 }
 

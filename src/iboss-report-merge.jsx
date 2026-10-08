@@ -51,6 +51,7 @@ export default function IbossReportMerge({token,ReportSection,embedded=false,ini
  const ran=request&&MERGE_CHAINS[request.chain];
  const Wrapper=embedded?'div':'section';
  return <Wrapper className={embedded?'iboss-report-merge':'reports-workspace stock-statement iboss-accounts iboss-report-merge'}>
+  {range.company&&<p>Company: {range.companyName||range.company} · Shared master records remain available.</p>}
   {!embedded&&<h1><Combine aria-hidden="true"/> Accounts · Report Merge</h1>}
   <div className="iboss-accounts-panel" role="region" aria-labelledby="merge-process-heading">
    <h2 id="merge-process-heading">1. Choose a process</h2>

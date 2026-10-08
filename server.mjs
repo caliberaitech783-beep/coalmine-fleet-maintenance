@@ -1,3 +1,4 @@
+import {companyCode} from './iboss-company-scope.mjs';
 import {installTenderIdentity} from './tender-identity.mjs';
 import {accountPageNumber} from './iboss-account-pages.mjs';
 import {canEditBreakdownResponsibility} from './breakdown-responsibility.mjs';
@@ -4052,11 +4053,11 @@ app.get('/api/diagnostics',requireSuper,requireAdministrator,async(req,res,next)
 
 app.get('/api/reports/iboss-accounts/:view',requireSession,async(req,res)=>{
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
-  try {accountPageNumber(req.query.page??0);if(req.query.search!==undefined&&(typeof req.query.search!=='string'||req.query.search.length>120))throw new Error('Invalid search text.');const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
+  try {companyCode(req.query.company??'');accountPageNumber(req.query.page??0);if(req.query.search!==undefined&&(typeof req.query.search!=='string'||req.query.search.length>120))throw new Error('Invalid search text.');const definition=accountView(req.params.view);if(definition.dated)purchaseOrderRange(req.query.from,req.query.to);if(definition.asOf)purchaseOrderRange(req.query.to,req.query.to);}
   catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try {res.json(await oracleAccounts(req.params.view,req.query.from,req.query.to,req.query.page??0,req.query.search??''));}
+  try {res.json(await oracleAccounts(req.params.view,req.query.from,req.query.to,req.query.page??0,req.query.search??'',req.query.company??''));}
   catch(error){
     if(error.code==='REPORT_TOO_LARGE')return res.status(400).json({error:error.message});
     console.error('IBOSS Accounts failed:',error.code || 'Oracle error');
@@ -4079,17 +4080,17 @@ const accountsMergeFailed=(res,error)=>{
 app.get('/api/reports/iboss-accounts-dashboard',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
-  try{purchaseOrderRange(req.query.from,req.query.to);}catch(error){return res.status(400).json({error:error.message});}
+  try{purchaseOrderRange(req.query.from,req.query.to);companyCode(req.query.company??'');}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
   const section=req.query.section||'all';
   if(!['all','core','receivable','tax'].includes(section))return res.status(400).json({error:'Invalid dashboard section.'});
-  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to,section));}
+  try{res.json(await oracleAccountsDashboard(req.query.from,req.query.to,section,req.query.company??''));}
   catch(error){console.error('IBOSS dashboard failed:',error.code||'Oracle error');res.status(502).json({error:'Could not load the dashboard from Oracle. Please retry.'});}
 });
 app.get('/api/reports/iboss-accounts-dashboard/:metric',requireSession,async(req,res)=>{
   res.set('Cache-Control','no-store');
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
-  const input={from:req.query.from,to:req.query.to,page:Number(req.query.page||0)};
+  const input={from:req.query.from,to:req.query.to,company:req.query.company??'',page:Number(req.query.page||0)};
   try{dashboardMetric(req.params.metric,input);}catch(error){return res.status(400).json({error:error.message});}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
   try{res.json(await oracleAccountsDashboardMetric(req.params.metric,input));}
@@ -4106,7 +4107,7 @@ app.get('/api/reports/iboss-accounts-merge/:chain',requireSession,async(req,res)
   } catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try {res.json({...await oracleReportMerge(req.params.chain,selection.steps,req.query.from,req.query.to),...selection});}
+  try {res.json({...await oracleReportMerge(req.params.chain,selection.steps,req.query.from,req.query.to,req.query.company??''),...selection});}
   catch(error){accountsMergeFailed(res,error);}
 });
 
@@ -4114,12 +4115,12 @@ app.get('/api/reports/iboss-accounts-merge/:chain/trail',requireSession,async(re
   if(!await accountsMergeAllowed(req))return res.status(403).json({error:'You do not have access to Accounts.'});
   const key=String(req.query.key||'');
   try {
-    mergeChain(req.params.chain);purchaseOrderRange(req.query.from,req.query.to);
+    mergeChain(req.params.chain);purchaseOrderRange(req.query.from,req.query.to);companyCode(req.query.company??'');
     if(!key||key.length>100)throw new Error('Choose a document to trace.');
   } catch(error){return res.status(400).json({error:error.message});}
   res.set('Cache-Control','no-store');
   if(!oracleConfigured)return res.status(503).json({error:'Oracle database settings are not configured.'});
-  try {res.json(await oracleReportMergeTrail(req.params.chain,key,req.query.from,req.query.to));}
+  try {res.json(await oracleReportMergeTrail(req.params.chain,key,req.query.from,req.query.to,req.query.company??''));}
   catch(error){accountsMergeFailed(res,error);}
 });
 

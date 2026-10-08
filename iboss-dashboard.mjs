@@ -1,3 +1,4 @@
+import {companyCode,companyScopedSql} from './iboss-company-scope.mjs';
 import {bankLedgerSql} from './iboss-bank-ledger.mjs';
 import {accountView} from './iboss-accounts.mjs';
 import {purchaseOrderRange} from './purchase-order-report.mjs';
@@ -59,13 +60,13 @@ export const DASHBOARD_METRICS={
  'expired-bg':{view:'bank-guarantee',where:"r.expirydate<:planning_date AND NOT EXISTS (SELECT 1 FROM cmpl.bankgaurantycloser c WHERE c.bankgaurantytno=TO_NUMBER(r.id) AND c.bankgaurantycloserdate<TO_DATE(:planning_date,'YYYY-MM-DD')+1)"}
 };
 const shift=(day,days)=>new Date(Date.parse(day+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
-export function dashboardMetric(key,{from,to,page=0}={}){
- purchaseOrderRange(from,to);
+export function dashboardMetric(key,{from,to,company='',page=0}={}){
+ purchaseOrderRange(from,to);companyCode(company);
  if(!Object.hasOwn(DASHBOARD_METRICS,key)||!Number.isInteger(page)||page<0||page>5000)throw new Error('Choose a valid dashboard card and page.');
  const metric=DASHBOARD_METRICS[key],definition=accountView(metric.view);
  const dates=metric.dates==='period'?{from,to}:metric.dates==='overdue'?{from:'1900-01-01',to:shift(to,-1)}:metric.dates==='upcoming'?{from:to,to:shift(to,30)}:{from:'1900-01-01',to:'2999-12-31'};
- const values={from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
- const sql=`SELECT * FROM (${definition.sql}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
+ const values={company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
+ const sql=`SELECT * FROM (${companyScopedSql(definition.sql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${definition.columns.map(column=>`r.${column.key}`).slice(0,4).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
  if(definition.asOf)values.to_date=to;
  const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
  return {sql,binds,view:metric.view,columns:definition.columns,from:dates.from,to:definition.asOf?to:dates.to,page};
