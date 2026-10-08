@@ -96,3 +96,8 @@
 .iboss-dash-example dd{margin:0}
 @media(max-width:1100px){.iboss-dash-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.iboss-dash-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.iboss-dash-bottom-grid>section:last-child{grid-column:1/-1}.iboss-dash-title h2{font-size:26px}}
 @media(max-width:700px){.iboss-dash-title{align-items:flex-start;flex-direction:column}.iboss-dash-controls{flex-wrap:wrap}.iboss-dash-controls>span{margin-left:0}.iboss-dash-scope{flex-direction:column}.iboss-dash-main,.iboss-dash-party-grid,.iboss-dash-bottom-grid{grid-template-columns:1fr}.iboss-dash-kpi{padding:14px}.iboss-dash-kpi strong{font-size:24px}.iboss-dash-panel{padding:16px}.iboss-dash-panel-heading{flex-wrap:wrap}.iboss-dash-legend{font-size:11px}.iboss-dash-aging-grid>div{grid-template-columns:60px 1fr;gap:8px}}
+.iboss-editable-date{display:flex;gap:4px;align-items:center}
+.iboss-dash-controls .iboss-editable-date input[type="text"]{width:145px}
+.iboss-dash-controls .iboss-date-calendar{width:38px;min-width:38px;max-width:38px;padding:8px 5px;cursor:pointer}
+.iboss-date-calendar::-webkit-datetime-edit{display:none}
+.iboss-date-calendar::-webkit-calendar-picker-indicator{margin:0;cursor:pointer}

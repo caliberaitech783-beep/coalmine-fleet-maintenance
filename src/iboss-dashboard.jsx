@@ -5,7 +5,7 @@ import {purchaseOrderRange} from '../purchase-order-report.mjs';
 import {dashboardFinancialYearRange,DASHBOARD_REFRESH_MS} from './iboss-dashboard-refresh.mjs';
 import {mergeDashboardSection} from './iboss-dashboard-sections.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
-import DateInput from './date-input.mjs';
+import EditableDateInput,{typedDateRange} from './iboss-editable-date.mjs';
 import DrillPanel from './iboss-drill-panel.jsx';
 import {accountDrill} from '../iboss-drill.mjs';
 import './iboss-dashboard.css';
@@ -74,7 +74,7 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
   })();
   return ()=>controller.abort();
  },[token,range,attempt,preview]);
- const refresh=event=>{event.preventDefault();try{purchaseOrderRange(draft.from,draft.to);setValidation('');setRange({...draft});setAttempt(value=>value+1);}catch(error){setValidation(error.message);}};
+ const refresh=event=>{event.preventDefault();try{const selected=typedDateRange(draft);purchaseOrderRange(selected.from,selected.to);setValidation('');setDraft(selected);setRange(selected);setAttempt(value=>value+1);}catch(error){setValidation(error.message);}};
  const select=(key,title)=>setSelected({key,title:title||data.cards.find(card=>card.key===key)?.title||data.tasks.find(task=>task.key===key)?.title});
  const maxAge=Math.max(1,...(data.aging||[]).flatMap(item=>[Math.abs(item.payable),Math.abs(item.receivable)]));
  const taskCount=(data.tasks||[]).filter(task=>task.count>0).length;
@@ -82,7 +82,7 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
  return <div className="iboss-dashboard">
   {preview&&<div className="iboss-dash-preview"><Shield/> DESIGN PREVIEW · Illustrative figures for review · Not deployed</div>}
   <div className="iboss-dash-title"><div><small>IBOSS / ACCOUNTS</small><h2>Finance at a glance</h2><p>Balances, commitments and follow-up — one place to start your day.</p></div><div className="iboss-dash-mode" role="group" aria-label="Dashboard focus"><button type="button" aria-pressed={mode==='management'} onClick={()=>setMode('management')}>Management</button><button type="button" aria-pressed={mode==='accounts'} onClick={()=>setMode('accounts')}>Accounts team</button></div></div>
-  <form className="iboss-dash-controls" onSubmit={refresh}><label>Activity from<DateInput value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To / planning date<DateInput value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label><button type="submit" disabled={data.loading||data.refreshing}><RefreshCw/>{data.refreshing?'Refreshing…':data.loading?'Loading…':preview?'Apply preview dates':'Refresh'}</button><span><i className="iboss-dash-status"/>{preview?'Example data':data.checkedAt?`Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})}`:'Connecting to Oracle'}</span></form>
+  <form className="iboss-dash-controls" onSubmit={refresh}><label>Activity from<EditableDateInput label="Activity from" value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>To / planning date<EditableDateInput label="To / planning date" value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label><button type="submit" ><RefreshCw/>{preview?'Apply preview dates':'Apply dates / Refresh'}</button><span><i className="iboss-dash-status"/>{preview?'Example data':data.checkedAt?`Checked ${new Date(data.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'})}`:'Connecting to Oracle'}</span></form>
   {validation&&<p role="alert">{validation}</p>}
   {!preview&&<p className="iboss-dash-note">Automatically refreshes from Oracle every 10 minutes while this dashboard is open. Your selected date range is retained.</p>}
   {data.cards&&data.error&&<p role="alert">Refresh failed: {data.error}. Showing the last successful figures.</p>}
