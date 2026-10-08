@@ -50,6 +50,7 @@ import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccess
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
 import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
 import {canEditCdirEmployee,registerCdirEmployeeEdit} from './cdir-employee-edit.mjs';
+import {EMPLOYEE_TRANSFER_SCHEMA,registerEmployeeTransfers,employeeTransferAccess,employeeTransferVisible} from './employee-transfer.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -674,6 +675,7 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS master_records_master_name_idx
       ON master_records (master_name, created_at DESC);
+    ${EMPLOYEE_TRANSFER_SCHEMA}
     CREATE INDEX IF NOT EXISTS master_records_user_login_idx
       ON master_records ((lower(trim(record_data->>'login'))))
       WHERE master_name='Users & employees';
@@ -3922,6 +3924,11 @@ async function cdirDirectory(){
 }
 
 registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters:cdirMasterRecords,auditChangedFields,loadViewer:currentUserRecord});
+registerEmployeeTransfers(app,{pool,requireSession,loadViewer:currentUserRecord,loadMasters:cdirMasterRecords,
+  pmLogins:async(client,site)=>{
+    const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'");
+    return [...new Set(rows.filter(({record_data:user})=>{const profile=resolveMobileAccess({user});return profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Project Manager')&&userManagesSite(user,site);}).map(({record_data:user})=>String(user.login||'').trim().toLowerCase()).filter(Boolean))];
+  },notify:(client,recipients,reference,message)=>addTicketNotifications(client,recipients,reference,message,null,{whatsapp:false})});
 app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
@@ -5805,16 +5812,17 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
     const read=async()=>{
       const {rows}=await retryDatabaseRead(()=>pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
-        COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination','') AS site,
+        COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination',employee_transfer.record_data->>'destination','') AS site,
         COALESCE(r.door_number,transfer.record_data->>'door',transfer.record_data->>'equipment','') AS door,
         COALESCE(r.requester_role,'') AS "requesterRole",
-        COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' END,'') AS "ticketCategory",
+        COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' WHEN employee_transfer.id IS NOT NULL THEN 'Employee transfer' END,'') AS "ticketCategory",
         to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
         FROM crm_notifications n
         LEFT JOIN maintenance_requests r ON r.reference=n.ticket_reference
         LEFT JOIN crm_tickets t ON t.reference=n.ticket_reference
         LEFT JOIN master_records transfer ON transfer.master_name='Vehicle transfers'
           AND transfer.record_data->>'transferNo'=n.ticket_reference
+        LEFT JOIN employee_transfers employee_transfer ON employee_transfer.record_data->>'transferNo'=n.ticket_reference
         WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]));
       return rows;
     };
@@ -5845,6 +5853,15 @@ app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
       FROM crm_notifications WHERE id=$1 AND recipient_login=$2 LIMIT 1`,[notificationId.toString(),login]);
     const reference=String(notifications[0]?.reference||'').trim();
     if(!reference)return unavailable();
+
+    if(reference.startsWith('ET-')){
+      const {rows}=await pool.query("SELECT id,record_data FROM employee_transfers WHERE record_data->>'transferNo'=$1",[reference]);
+      if(rows.length!==1)return unavailable();
+      const record={id:rows[0].id,...rows[0].record_data};
+      const context=employeeTransferAccess(req.session,await currentUserRecord(req.session));
+      if(!context.canSubmit||!employeeTransferVisible(record,context))return unavailable();
+      return res.json({kind:'employee-transfer',reference,record});
+    }
 
     const [ticketResult,requestResult,transferResult]=await Promise.all([
       pool.query(`SELECT ${ticketProjection()} FROM crm_tickets WHERE reference=$1`,[reference]),

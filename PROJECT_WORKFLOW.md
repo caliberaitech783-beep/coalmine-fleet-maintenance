@@ -559,3 +559,9 @@ Every signed-in user can browse the complete C-Directory roster through the All 
 ### HR User
 
 Team User includes HR User. Selecting it provides the complete C-Directory, Employee Tenure Report and all C-Dir Masters on desktop and mobile views. HR cannot access unrelated masters or maintenance actions. HR users are exempt from category A contact masking. Only HR users, directors and administrators may edit employee details using the profile edit icon.
+
+### Employee Transfer
+
+C-Directory includes Employee Transfer for HR users, directors, administrators and Project Managers. Employee ID lookup resolves one active C-Dir Employee master record and its contact record; ambiguous IDs or contacts require reconciliation. HR, directors and admins may request from any location; Project Managers may request only from their assigned sites. Each request preserves original and proposed details, source/destination, transfer date, requester, remarks and approval history in the dedicated employee_transfers table, included in the existing full database backup.
+
+Both locations must have an assigned Project Manager. Request creation and outgoing/incoming bell notifications commit together. Only the source site's Project Manager can approve, followed by the destination site's Project Manager accepting or rejecting. Acceptance atomically updates the employee/contact masters; employee details remain unchanged until then. Changed employee records block acceptance so newer edits cannot be overwritten. Rejections require a reason; duplicate pending requests and repeated acceptance are rejected. Each All, Outgoing, Incoming and History table, employee-detail comparison and approval history uses the shared ReportSection export/PDF/Excel/print controls. Notification clicks resolve a scoped employee transfer target and open the transfer workspace.

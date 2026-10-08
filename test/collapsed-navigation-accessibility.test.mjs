@@ -13,7 +13,7 @@ const sideSource = source.slice(source.indexOf("function Side("), source.indexOf
 const {code} = await transformWithOxc(sideSource, "side-navigation.jsx", {jsx: {runtime: "classic"}});
 const Null = () => null;
 
-function harness(initialWidth) {
+function harness(initialWidth, transferAllowed=false) {
   let width = initialWidth, cursor = 0;
   const slots = [], queries = new Map(), effects = [], listeners = new Map();
   const useState = initial => {
@@ -32,7 +32,7 @@ function harness(initialWidth) {
   const scope = {document: {getElementById:()=>null,addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type)}, React, useState, useEffect: effect => effects.push(effect), window: {matchMedia},
     masterNav: [["Equipment master", Null]], nav: [["Dashboard", Null]], whatsappNav: [], operationalWorkspaceNav: [], reportCategoryTabs: [],
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
-    reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser, canViewBdAgeingReport,
+    reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser, canViewBdAgeingReport, useEmployeeTransferAccess:()=>transferAllowed,
     profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(), databaseToolPages: new Set(),
     ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon", "FileBarChart", "Landmark"].map(name => [name, Null])),
   };
@@ -50,6 +50,13 @@ test('BD Ageing navigation is restricted to exact allowed accounts, including on
     for (const login of ['MOHITCHADDA','MANISHCHADDA','RAHULCHADDA','THAKUR@1990']) assert.match(renderToStaticMarkup(harness(width).render(true,{login})),/BD Ageing Report/);
     assert.doesNotMatch(renderToStaticMarkup(harness(width).render(true,{login:'admin',role:'super',name:'MOHITCHADDA'})),/BD Ageing Report/);
   }
+});
+
+test('Employee Transfer navigation follows the server capability on desktop and mobile',()=>{
+ for(const width of [390,1920]){
+  assert.match(renderToStaticMarkup(harness(width,true).render(true)),/data-workspace="employee-transfer"/);
+  assert.doesNotMatch(renderToStaticMarkup(harness(width,false).render(true)),/data-workspace="employee-transfer"/);
+ }
 });
 
 test("closed offscreen navigation is inert and hidden from assistive technology at tablet/mobile widths", () => {

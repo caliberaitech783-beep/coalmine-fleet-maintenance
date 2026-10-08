@@ -324,6 +324,7 @@ import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
 import CaliberDirectoryPage from "./caliber-directory-page.jsx";
+import EmployeeTransfer,{CdirModule,useEmployeeTransferAccess} from "./employee-transfer.jsx";
 import StockStatement from './stock-statement.jsx';
 import PurchaseOrderReport from './purchase-order-report.jsx';
 import GrnRegister from './grn-register.jsx';
@@ -997,6 +998,7 @@ function ClockMenu({ label, centerLabel = label, icon: EntryIcon, items = [], ac
 }
 
 function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", activeReportCategory = "general" }) {
+  const employeeTransferAllowed=useEmployeeTransferAccess(session?.token || authToken);
   useEffect(() => {
     const header=document.getElementById('admin-primary-navigation');
     if(!header)return undefined;
@@ -1277,12 +1279,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu cdir-menu${cdirOpen ? " open" : ""}${cdirSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setCdirSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);closeMenus(); setCdirOpen(!cdirOpen);}}>
+          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Transfer" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);closeMenus(); setCdirOpen(!cdirOpen);}}>
             <span className="header-nav-icon" aria-hidden="true"><BookUser /></span><span className="nav-label">C-Dir</span><ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown cdir-dropdown" role="menu">
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "CD" ? " active" : ""}`} data-workspace="directory" onClick={event => selectDropdownPage("CD", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span><span className="nav-label">Directory</span></button></div>}
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Tenure Report" ? " active" : ""}`} data-workspace="report-employee-tenure" onClick={event => selectDropdownPage("Employee Tenure Report", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Tenure Report</span></button></div>}
+            {employeeTransferAllowed && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Transfer" ? " active" : ""}`} data-workspace="employee-transfer" onClick={event => selectDropdownPage("Employee Transfer", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Transfer</span></button></div>}
             <ClockMenu down label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} hours={cdirMasterNav.map((_, index, all) => 3.4 + index * 5.2 / Math.max(1, all.length - 1))} active={active} onSelect={selectMaster} />
           </div>
         </div>}
@@ -10896,6 +10899,10 @@ function NotificationVehicleTransferEntry({reference, transfer = {}}) {
   </div>;
 }
 
+function NotificationEmployeeTransferEntry({reference,transfer={}}){
+  return <div className="notification-entry-record"><div className="notification-entry-hero"><div><span>Employee transfer</span><h2>{reference}</h2><p>{transfer.empId} · {transfer.name}</p></div><Status>{transfer.status}</Status></div><dl className="notification-entry-fields"><NotificationEntryField label="From location" value={transfer.source}/><NotificationEntryField label="To location" value={transfer.destination}/><NotificationEntryField label="Transfer date" value={formatDisplayDate(transfer.effectiveDate)}/><NotificationEntryField label="Requested by" value={transfer.submittedBy}/><NotificationEntryField label="Source approval" value={transfer.approvedBy?transfer.approvedBy+' · '+formatDisplayDateTime(transfer.approvedAt):'Pending'}/><NotificationEntryField label="Destination acceptance" value={transfer.acceptedBy?transfer.acceptedBy+' · '+formatDisplayDateTime(transfer.acceptedAt):'Pending'}/><NotificationEntryField label="Remarks" value={transfer.remarks} wide/><NotificationEntryField label="Rejection reason" value={transfer.rejectionReason} wide/></dl></div>;
+}
+
 function NotificationEntryDialog({ state, onClose, token }) {
   if (!state) return null;
   const target = state.target;
@@ -10903,12 +10910,13 @@ function NotificationEntryDialog({ state, onClose, token }) {
     ? "Opening notification entry"
     : state.phase === "error"
       ? "Notification entry unavailable"
-      : `${target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
+      : `${target.kind === "employee-transfer" ? "Employee transfer" : target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
   return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal" overlayClassName="notification-entry-overlay">
     {state.phase === "loading" && <div className="notification-entry-state loading" role="status" aria-live="polite" aria-busy="true"><Clock /><div><b>Loading the exact entry…</b><p>Checking your current access and retrieving the latest record.</p></div></div>}
     {state.phase === "error" && <div className="notification-entry-state error" role="alert"><AlertTriangle /><div><b>Entry unavailable</b><p>This entry is no longer available or is outside your assigned access.</p><button type="button" onClick={onClose}>Close</button></div></div>}
     {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} token={token} />}
     {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} token={token} />}
+    {state.phase === "ready" && target?.kind === "employee-transfer" && <NotificationEmployeeTransferEntry reference={target.reference} transfer={target.record} />}
     {state.phase === "ready" && target?.kind === "transfer" && <NotificationVehicleTransferEntry reference={target.reference} transfer={target.record} />}
   </Modal>, document.body);
 }
@@ -11108,7 +11116,7 @@ function NotificationBell({ session, onOpenEntry }) {
       const kind = body?.kind;
       const reference = String(body?.reference ?? "").trim();
       const record = body?.record;
-      if (!(["request", "ticket", "transfer"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
+      if (!(["request", "ticket", "transfer", "employee-transfer"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
       if (sequence !== entrySequenceRef.current) return;
       const target = {kind, reference, record};
       entryControllerRef.current = null;
@@ -11351,10 +11359,10 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
-      {!embedded&&section==="directory"&&showDirectoryMenu&&<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={directoryView === "directory"} className={directoryView === "directory" ? "active" : ""} onClick={() => setDirectoryView("directory")}><BookUser />Directory</button><button type="button" role="tab" aria-selected={directoryView === "tenure"} className={directoryView === "tenure" ? "active" : ""} onClick={() => setDirectoryView("tenure")}><Users />Employee Tenure Report</button></div>{directoryView === "tenure" ? <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} /> : <CaliberDirectoryPage token={session?.token || authToken} />}</>}
+      {!embedded&&section==="directory"&&showDirectoryMenu&&<CdirModule token={session?.token || authToken} ReportSection={ReportSection} initialView={directoryView} onViewChange={setDirectoryView}/>}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
@@ -11547,7 +11555,7 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
-    if(session?.assignedRole==='HR User')return ['CD','Employee Tenure Report'].includes(name)||isCdirMaster(name);
+    if(session?.assignedRole==='HR User')return ['CD','Employee Tenure Report','Employee Transfer'].includes(name)||isCdirMaster(name);
     if(name==="User Sessions")return canViewUserSessions(session);
     if(name==="OEM Email Delivery Status")return isAdministrator;
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
@@ -11565,6 +11573,7 @@ function App() {
     if ([...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
+    if (name === "Employee Transfer") return true;
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
     if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
     if (["Accounts","Accounts Masters","Accounts Transactions"].includes(name)) return ibossAccountsAllowed(session,activeNavigationPermissions);
@@ -11901,6 +11910,8 @@ function App() {
     <PoGrnReconciliation token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "GRN Register" ? (
     <GrnRegister token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : renderedActive === "Employee Transfer" ? (
+    <EmployeeTransfer token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Employee Tenure Report" ? (
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "CD" ? (
@@ -11964,7 +11975,7 @@ function App() {
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
-    <main>{accountWorkspace==="directory"?<><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages"><button type="button" role="tab" aria-selected={accountDirectoryView==="directory"} className={accountDirectoryView==="directory"?"active":""} onClick={()=>setAccountDirectoryView("directory")}><BookUser/>Directory</button><button type="button" role="tab" aria-selected={accountDirectoryView==="tenure"} className={accountDirectoryView==="tenure"?"active":""} onClick={()=>setAccountDirectoryView("tenure")}><Users/>Employee Tenure Report</button></div>{accountDirectoryView==="tenure"?<EmployeeTenureReport token={session.token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={session.token}/>}</>:ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
+    <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
   if (session.role === "normal" && session.assignedRole !== "HR User")
@@ -12041,7 +12052,7 @@ function App() {
             <button type="button" aria-label="Focus page smart search" title="Smart search" className="smart-search-button" onClick={() => active === "Dashboard" ? window.dispatchEvent(new Event("dashboard-smart-search")) : document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <SearchScanIcon />
             </button>
-            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
+            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "employee-transfer" ? "Employee Transfer" : target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">

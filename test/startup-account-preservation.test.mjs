@@ -9,6 +9,7 @@ import {initializeLoginHistory} from '../user-login-history.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord} from '../shift-master.mjs';
 import {archiveSchemaSql} from '../request-archive.mjs';
 import {applySchemaMigration} from '../schema-migration.mjs';
+import {EMPLOYEE_TRANSFER_SCHEMA} from '../employee-transfer.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const migration=source.slice(source.indexOf('async function migrate(){'),source.indexOf('// Large JSON payloads arrive'));
@@ -42,7 +43,7 @@ async function runStartup({users=[],initialized=true}={}){
   const context={
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],BREAKDOWN_SUB_CATEGORY_DEFAULTS:['Tyre puncture'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
-    SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,
+    SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,
     hashPassword:()=>assert.fail('startup must not construct default account credentials'),
   };
   await runInNewContext(`${migration}\nmigrate();`,context);

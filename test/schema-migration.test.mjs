@@ -8,6 +8,7 @@ import pg from 'pg';
 import {archiveSchemaSql} from '../request-archive.mjs';
 import {repairLegacySessionDefaults} from '../auth-session-schema.mjs';
 import {initializeLoginHistory} from '../user-login-history.mjs';
+import {EMPLOYEE_TRANSFER_SCHEMA} from '../employee-transfer.mjs';
 
 test('unchanged slot restarts skip DDL; schema changes apply once and failed migrations roll back',async()=>{
   const db=new PGlite();
@@ -47,7 +48,7 @@ test('unchanged slot restarts skip DDL; schema changes apply once and failed mig
 test('production schema and session repairs install atomically on a fresh database',async()=>{
   const db=new PGlite();
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  const sql=source.match(/await applySchemaMigration\(pool,`([\s\S]*?)`,\[repairLegacySessionDefaults,initializeLoginHistory\]\)/)[1].replace('${archiveSchemaSql}',()=>archiveSchemaSql);
+  const sql=source.match(/await applySchemaMigration\(pool,`([\s\S]*?)`,\[repairLegacySessionDefaults,initializeLoginHistory\]\)/)[1].replace('${archiveSchemaSql}',()=>archiveSchemaSql).replace('${EMPLOYEE_TRANSFER_SCHEMA}',()=>EMPLOYEE_TRANSFER_SCHEMA);
   const client={query:(sql,args)=>{
     if(sql==='SELECT pg_advisory_xact_lock(783,1)')return Promise.resolve({rows:[]});
     if(!args&&sql.includes(';'))return db.exec(sql);
@@ -57,7 +58,7 @@ test('production schema and session repairs install atomically on a fresh databa
   try {
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,false);
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,true);
-    assert.equal((await db.query("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_name IN ('maintenance_requests','auth_sessions','user_login_history','crm_notifications')")).rows[0].count,4);
+    assert.equal((await db.query("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_name IN ('maintenance_requests','auth_sessions','user_login_history','crm_notifications','employee_transfers')")).rows[0].count,5);
   } finally {await db.close();}
 });
 

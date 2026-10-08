@@ -70,7 +70,11 @@ test('C-Dir is a native application page and does not render the legacy iframe',
   assert.doesNotMatch(component,/<iframe\b/);
   assert.match(client,/import CaliberDirectoryPage from "\.\/caliber-directory-page\.jsx"/);
   assert.match(client,/<CaliberDirectoryPage token=\{session\?\.token \|\| authToken\}/);
-  assert.match(client,/className="cdir-module-tabs"[\s\S]*?<BookUser \/>Directory[\s\S]*?<Users \/>Employee Tenure Report/);
+  assert.match(client,/<CdirModule token=\{session\?\.token \|\| authToken\}/);
+  const module=fs.readFileSync(new URL('../src/employee-transfer.jsx',import.meta.url),'utf8');
+  assert.match(module,/className="cdir-module-tabs"/);
+  assert.match(module,/'directory','Directory'[\s\S]*?'tenure','Employee Tenure Report'/);
+  assert.match(module,/<CaliberDirectoryPage token=\{token\}/);
   assert.doesNotMatch(client,/<UsersRound \/>/);
   assert.match(component,/viewer\.allAccess\|\|viewer\.profile==='project-manager'/);
   assert.match(component,/Project Manager Site Coverage/);
