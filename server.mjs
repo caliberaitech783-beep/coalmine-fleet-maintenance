@@ -2,6 +2,7 @@ import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
 import {telegramBdmsAccountChoice} from './telegram-bdms-account.mjs';
+import {telegramChatbotLink} from './telegram-chatbot-link.mjs';
 import {sendTelegramWelcomeAudio} from './telegram.mjs';
 import {oracleAccountLedger} from './oracle-db.mjs';
 import {companyCode} from './iboss-company-scope.mjs';
@@ -3689,6 +3690,16 @@ async function storedTelegramRequirement(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_REQUIREMENT_SETTING_KEY]);
   return normalizeTelegramRequirement(rows[0]?.setting_value);
 }
+
+// Public, reusable entry point. Account linking remains authenticated and
+// uses its existing one-time personal token; this link grants no data access.
+app.get('/join/bdms',async(_req,res)=>{
+  res.set('Cache-Control','no-store');
+  try{
+    if(!telegramConfiguration().botToken)return res.status(503).send('Telegram is unavailable. Please open pulse.cmll.in and contact your administrator.');
+    res.redirect(302,telegramChatbotLink(await telegramBotUsername()));
+  }catch{res.status(503).send('Telegram is temporarily unavailable. Please try again or open pulse.cmll.in.');}
+});
 
 app.get('/api/telegram/me',requireSession,async(req,res,next)=>{
   try{

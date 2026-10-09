@@ -582,3 +582,5 @@ Both locations must have an assigned Project Manager. Request creation and outgo
 ### BDMS Assistant screen
 
 BDMS-enabled desktop and mobile headers include BDMS Assistant. Its opening click starts the bilingual welcome audio synchronously; browser playback rejection presents Enable sound. The authenticated dialog uses the existing role/site-scoped chatbot preview endpoint for language selection, menus, detail follow-ups and custom dates. Closing aborts pending requests and pauses audio. Telegram welcome includes a public application link with `?bdmsAssistant=1`; it opens the assistant after normal BDMS sign-in. No Telegram identity is treated as application authentication. Browser restrictions may require one initial sound-enabling tap when opening from Telegram. Accounts and HR profiles are excluded.
+
+Public chatbot entry: https://pulse.cmll.in/join/bdms redirects to the configured Telegram bot with the public bdms start marker. It contains no login or account-link token and grants no request access. New users still connect their own account through Profile -> Connect Telegram. This is a bot chat entry, not a site-group invitation.
