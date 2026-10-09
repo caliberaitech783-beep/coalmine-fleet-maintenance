@@ -28,8 +28,8 @@ test('date and fleet totals include site status breakdowns',()=>{
  assert.match(fleet,/Sasti OC: Total: 1 · On road: 1/);assert.match(fleet,/Majri OC: Total: 1 · On road: 0 · Off road: 0 · Idle: 1/);
 });
 test('transfers and support tickets count all permitted records',()=>{
- const transfers=Array.from({length:10},(_,id)=>({id,source:'Sasti OC',destination:'Majri OC'}));
- assert.match(bdmsChatConversation({session,text:'Vehicle transfer details',transfers}).text,/Sasti OC: Transfers: 10/);
- const tickets=Array.from({length:10},(_,i)=>({reference:`TKT-${i}`,site:'Majri OC',status:'Open'}));
- assert.match(bdmsChatConversation({session,text:'Ticket close status',tickets}).text,/Majri OC: Tickets: 10/);
+ const transfers=Array.from({length:10},(_,id)=>({id,source:'Sasti OC',destination:'Majri OC',transferDate:'2026-10-09'}));
+ assert.match(bdmsChatConversation({session,text:'Vehicle transfer details',transfers,today:'2026-10-09'}).text,/Sasti OC: Transfers: 10/);
+ const tickets=Array.from({length:10},(_,i)=>({reference:`TKT-${i}`,site:'Majri OC',status:'Open',createdAt:'2026-10-09'}));
+ assert.match(bdmsChatConversation({session,text:'Ticket close status',tickets,today:'2026-10-09'}).text,/Majri OC: Tickets: 10/);
 });
