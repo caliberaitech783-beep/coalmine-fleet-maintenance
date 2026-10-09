@@ -199,5 +199,14 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
     rows:requests.filter(row=>row.verifiedAt || openRows.has(row)),
   });
   // Every breakdown report carries the HMR / KMR readings of each request.
+  const withoutChassis=new Set([REPORT_TITLES[0],REPORT_TITLES[2],REPORT_TITLES[3],REPORT_TITLES[4],REPORT_TITLES[5],REPORT_TITLES[12]]);
+  for(const item of reports){
+    if(withoutChassis.has(item.title))item.columns=item.columns.filter(column=>column.key!=='chassis');
+    if(item.title===TICKET_ACCEPTANCE_REPORT_TITLE)item.columns=item.columns.map(column=>column.key==='difference'?{...column,label:'Delayed time'}:column);
+    if(item.title===REPORT_TITLES[0])item.columns.push(
+      col('acceptedBy','Accepted by',row=>row.acceptedBy||'Not recorded'),
+      col('closedBy','Closed by',row=>row.closedBy||'Not recorded'),
+    );
+  }
   return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:requestShiftColumns(withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)}),item.rows,shiftRecords)});
 }

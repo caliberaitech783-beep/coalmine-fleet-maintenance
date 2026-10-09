@@ -1,4 +1,5 @@
 import {requestStatusLabel} from './src/request-status.mjs';
+import {transferReportTimingColumns} from './transfer-report-timing.mjs';
 import {requestShiftColumns,requestShiftLabel} from './request-shift.mjs';
 import {REPORT_XLSX_STYLES, styleReportSheets} from './report-xlsx-style.mjs';
 import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
@@ -202,6 +203,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'roadStatus',label:'Road status',value:(record)=>record.reportRoadStatus},
   ];
   const transferColumns=[
+    ...transferReportTimingColumns,
     {key:'door',label:'Door no.',value:(record)=>record.reportDoor},
     {key:'transferNo',label:'Transfer no.',value:(record)=>record.transferNo},
     {key:'transferDate',label:'Transfer date',value:(record)=>record.transferDate},

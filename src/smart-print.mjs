@@ -257,7 +257,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
     notifyExport(`Preparing ${formatName}… Your download will start shortly.`,'pending');
-    new Promise(resolve=>setTimeout(resolve,50)).then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
+    new Promise(resolve=>setTimeout(resolve,50)).then(()=>onExport({format,title:reportTitle,sourceTitle:title,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
       .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;notifyExport(`${formatName} download started. Check your browser downloads.`,'success');})
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;notifyExport(notice.textContent,'error');})
       .finally(()=>{exporting=false;render();});

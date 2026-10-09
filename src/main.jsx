@@ -12,6 +12,8 @@ import { isIdleVehicleRequest } from "../request-idle.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter, setSmartPrintPrinterSource } from "./smart-print.mjs";
 import {beginDownload,runDownloadNotice} from './download-notice.mjs';
+import {pendingPdfRows,REMOVED_REPORT_TITLES} from '../report-pending-export.mjs';
+import {transferReportTimingColumns} from '../transfer-report-timing.mjs';
 import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect, rememberedPrinter } from "./direct-print.mjs";
 import { showPrintPreview } from "./print-preview.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
@@ -3857,7 +3859,9 @@ function printTableReportInBrowser({ title, columns = [], rows = [], highlightRo
   }, 150);
 }
 // Smart Print exports: exactly the chosen columns, their order and the table's filtered rows, as PDF or Excel.
-async function exportSmartPrintSelection({ format, title, columns = [], rows = [], highlightRow, appendices = [] }) {
+async function exportSmartPrintSelection({ format, title, sourceTitle=title, columns = [], rows = [], highlightRow, appendices = [] }) {
+  const pending=format==='pdf'?pendingPdfRows(sourceTitle,rows):{rows,summary:null};
+  rows=pending.rows;
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
   if (format === "xlsx") {
@@ -3871,6 +3875,7 @@ async function exportSmartPrintSelection({ format, title, columns = [], rows = [
     columns: appendix.columns.map((column) => ({ label: column.label })),
     rows: appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row)))),
   }));
+  if(pending.summary)appendixTables.unshift(pending.summary);
   const response = await fetchPdfExport("/api/exports/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
@@ -7564,6 +7569,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     {key: "roadStatus", label: "Road status", value: (record) => record.reportRoadStatus, render: (record) => <Status>{record.reportRoadStatus}</Status>},
   ];
   const transferColumns = [
+    ...transferReportTimingColumns,
     {key: "door", label: "Door no.", value: (record) => record.reportDoor, render: (record) => <b>{record.reportDoor || "—"}</b>},
     {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo},
     {key: "transferDate", label: "Transfer date", value: (record) => formatDisplayDate(record.transferDate), sortValue: (record) => record.transferDate, render: (record) => formatDisplayDate(record.transferDate)},
@@ -7663,11 +7669,11 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
   })), [shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, reportFrom, availabilityFrom, reportTo, availabilityTo, reportNow, showAllAcceptances]);
   const reportGroups = [
-    ...legacyReportGroups.filter((report) => report.category === "general"),
+    ...legacyReportGroups.filter((report) => report.category === "general"&&!REMOVED_REPORT_TITLES.has(report.title)),
     {category: "vehicle-history", title: VEHICLE_HISTORY_REPORT, description: "Every vehicle with its door number, latest available driver, make, model, location, identity details, and lifetime breakdown count. Select a door number for the complete chronology.", rows: vehicleHistoryReportRows, columns: vehicleHistoryOverviewColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available in the equipment master or request history", rowKey: (row) => `vehicle-${row.vehicleKey}`},
     {category: "vehicle-history", title: MAXIMUM_VEHICLE_BREAKDOWN_REPORT, description: "Month-wise repeat-breakdown ranking. Narrow the result by region and site, then select a count to see every time and reason.", rows: maximumVehicleBreakdownRows, columns: maximumBreakdownColumns, dateValue: (row) => row.breakdowns.at(-1)?.start, emptyMessage: "No vehicle breakdowns match the selected month and location", rowKey: (row) => `maximum-${row.vehicleKey}`, breakdownScopeFilter: true},
     {category: "vehicle-history", title: VEHICLE_COMMON_REMARK_REPORT, description: "One operational summary per vehicle using the latest driver and maintenance note, current notice, site, and the most frequently recorded breakdown reason.", rows: vehicleCommonRemarksRows, columns: vehicleCommonRemarkColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available for the common-remarks summary", rowKey: (row) => `remark-${row.vehicleKey}`},
-    ...departmentReports,
+    ...departmentReports.filter(report=>!REMOVED_REPORT_TITLES.has(report.title)),
   ].map((report) => ({
     ...report,
     columns: report.columns.map((column) => column.key === "door" ? {
