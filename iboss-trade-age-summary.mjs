@@ -9,14 +9,15 @@ export const TRADE_AGE_SUMMARIES=Object.fromEntries(Object.entries(TRADE_AGE_REP
  const sign=key.startsWith('trade-receivable')?'-':'';
  const sql=`SELECT e.companycode,e.account_code,e.account_name,MAX(p.msme) AS msme,
  ${AGEING_COLUMNS.map(b=>`SUM(CASE WHEN ${b.where} THEN ${sign}e.balanceamount ELSE 0 END) AS ${b.key}`).join(',\n')},
- COUNT(*) AS bill_count,SUM(${sign}e.balanceamount) AS total_outstanding,
+ COUNT(DISTINCT CASE WHEN ${sign}e.balanceamount>0 THEN e.bill_identity END) AS bill_count,
+ SUM(CASE WHEN ${sign}e.balanceamount>0 AND e.bill_identity IS NULL THEN 1 ELSE 0 END) AS unreferenced_entries,SUM(${sign}e.balanceamount) AS total_outstanding,
  SUM(e.outstanding_dr) AS outstanding_dr,SUM(e.outstanding_cr) AS outstanding_cr,SUM(e.balanceamount) AS balanceamount
  FROM (${report.sql}) e LEFT JOIN cmpl.party p ON p.partycode=e.account_code
  GROUP BY e.companycode,e.account_code,e.account_name`;
  return [key+'-summary',{...report,title:report.title+' — Party Summary',sql,columns:[
- {key:'MSME',label:'Is MSME'},{key:'ACCOUNT_NAME',label:'Party Name'},
+ {key:'MSME',label:'Is MSME'},{key:'ACCOUNT_NAME',label:'Party Name'},{key:'BILL_COUNT',label:'No. of Bills',numeric:true,integer:true},
  ...AGEING_COLUMNS.map(({key,label})=>({key,label,numeric:true})),
- {key:'TOTAL_OUTSTANDING',label:'Total Outstanding',numeric:true},{key:'BILL_COUNT',label:'Open Entries'},
+ {key:'TOTAL_OUTSTANDING',label:'Total Outstanding',numeric:true},{key:'UNREFERENCED_ENTRIES',label:'Entries without Bill Reference',numeric:true,integer:true},
  {key:'ACCOUNT_CODE',label:'Account Code'},{key:'COMPANYCODE',label:'Company Code'}]}];
 }));
 export function summaryAgeFilter(value){

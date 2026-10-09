@@ -21,3 +21,11 @@ test('receivable debit is positive while payable credit is positive, retaining o
  assert.match(TRADE_AGE_SUMMARIES['trade-payable-ageing-summary'].sql,/SUM\(e.balanceamount\) AS total_outstanding/);
  assert.match(TRADE_AGE_SUMMARIES['trade-receivable-ageing-summary'].sql,/SUM\(-e.balanceamount\) AS total_outstanding/);
 });
+test('pending bill count is distinct, excludes advances and is placed beside the party',()=>{
+ for(const [key,report] of Object.entries(TRADE_AGE_SUMMARIES)){
+  assert.match(report.sql,/COUNT\(DISTINCT CASE WHEN -?e.balanceamount>0 THEN e.bill_identity END\) AS bill_count/);
+  assert.match(report.sql,/bill_identity IS NULL/);
+  assert.equal(report.columns[2].key,'BILL_COUNT');assert.equal(report.columns[2].label,'No. of Bills');assert.equal(report.columns[2].integer,true);
+  assert.match(report.sql,/PURCHASEBILL:/);assert.match(report.sql,/JOBBILL:/);
+ }
+});
