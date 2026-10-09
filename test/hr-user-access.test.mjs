@@ -4,6 +4,24 @@ import {assignedUserRoles} from '../account-role-access.mjs';
 import {resolveMobileAccess,normalizeMobileUserRole,MOBILE_USER_ROLES} from '../mobile-access.mjs';
 import {masterAccessAllows} from '../admin-access.mjs';
 import {cdirViewerContext} from '../cdir-access.mjs';
+import {canReadDashboardEquipment} from '../dashboard-equipment-access.mjs';
+
+test('HR User has the requested header menus and read-only fleet data',()=>{
+ const access=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
+ assert.deepEqual(access.permissions.tabAccess,['Dashboard','Reports','CD','Tickets']);
+ assert.deepEqual(access.permissions.mobileTabAccess,access.permissions.tabAccess);
+ assert.equal(canReadDashboardEquipment({role:access.sessionRole,assignedRole:access.assignedRole,permissions:access.permissions}),true);
+ assert.equal(access.permissions.readRequests,true);
+ for(const key of ['createRequests','editRequests','deleteRequests','closeRequests','verifyRequests'])assert.equal(access.permissions[key],false);
+});
+
+test('HR header hides operational workspaces and allows the requested pages',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(source.includes('permissions.adminLevel !== "Manager" && ![\'HR User\',\'HR Manager\'].includes(session?.assignedRole)'));
+ assert.ok(source.includes("if(session?.assignedRole==='HR User')return ['Dashboard','Reports','Tickets','CD'"));
+ assert.ok(source.includes('<AnnouncementHistoryButton token={authToken} />'));
+});
 test('HR checkbox round-trips and produces only directory master permissions',()=>{
  assert.ok(MOBILE_USER_ROLES.includes('HR User'));
  assert.equal(normalizeMobileUserRole('HR User'),'HR User');
