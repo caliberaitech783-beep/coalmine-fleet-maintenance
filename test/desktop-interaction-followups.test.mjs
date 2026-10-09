@@ -40,7 +40,7 @@ test("Breakdown status tabs use roving focus and identify their panel", () => {
 });
 
 test("a UI deployment reload preserves the signed-in browser session", () => {
-  const versionCheck = source.slice(source.indexOf("const checkVersion = async"), source.indexOf("const selectMenu"));
+  const versionCheck = source.slice(source.indexOf("function SiteUpdateCountdown"), source.indexOf('createRoot(document.getElementById("root"))'));
   assert.match(versionCheck, /window\.location\.replace\(`\/\?updated=/);
   assert.doesNotMatch(versionCheck, /removeItem\("nerveCenterSession"\)/);
   assert.doesNotMatch(versionCheck, /authToken = ""/);
