@@ -7,6 +7,26 @@ import {CDIR_MASTERS} from '../cdir-masters.mjs';
 import {cdirViewerContext} from '../cdir-access.mjs';
 import {canReadDashboardEquipment} from '../dashboard-equipment-access.mjs';
 
+test('existing HR sessions read the shared breakdown feed using current account permissions',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {runInNewContext}=await import('node:vm');
+ const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+ const route=source.slice(source.indexOf("app.get('/api/requests',requireSession"));
+ const guard=route.slice(route.indexOf("if(req.session.assignedRole==='HR User')"),route.indexOf('    const requesterLogin='));
+ const profile=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
+ for(const current of [profile,null,{sessionRole:'normal',assignedRole:'Unknown',permissions:{}}]){
+  const authorize=runInNewContext('(async(req,res)=>{'+guard+'return true;})',{
+   currentDashboardAuthorization:async()=>current?{session:{role:current.sessionRole,assignedRole:current.assignedRole,permissions:current.permissions}}:null,
+  });
+  const req={session:{role:'normal',assignedRole:'HR User',login:'hr',permissions:{readRequests:false}}};
+  let status=200;const res={status(code){status=code;return this;},json(){return false;}};
+  const allowed=await authorize(req,res);
+  assert.equal(allowed,current===profile);
+  assert.equal(status,current===profile?200:current===null?401:403);
+  if(allowed){assert.equal(req.session.login,'hr');assert.equal(req.session.permissions.createRequests,false);}
+ }
+});
+
 test('HR User has the requested header menus and read-only fleet data',()=>{
  const access=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
  assert.deepEqual(access.permissions.tabAccess,['Dashboard','Reports','CD','Tickets','Masters']);
