@@ -11616,35 +11616,6 @@ function App() {
       viewRepairTypes: true,
     },
   } : null;
-  useEffect(() => {
-    let stopped = false;
-    const checkVersion = async () => {
-      try {
-        const response = await fetch(`/api/app-version?t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!stopped && data.version && data.version !== APP_VERSION) {
-          // Deploying a new interface is not a logout event. Keep the valid
-          // stored session and reload only the application assets.
-          window.location.replace(`/?updated=${encodeURIComponent(data.version)}`);
-        }
-      } catch (error) {
-        console.warn("Could not check for a UI update.", error);
-      }
-    };
-    checkVersion();
-    // Version checks are tiny and uncached. A one-minute ceiling keeps every
-    // signed-in role on the same deployed interface without ending its session.
-    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
-    window.addEventListener("focus",checkVersion);
-    window.addEventListener("pageshow",checkVersion);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      window.removeEventListener("focus",checkVersion);
-      window.removeEventListener("pageshow",checkVersion);
-    };
-  }, []);
   const selectMenu = (name) => {
     if (name === "Report Setting") name = "Reports";
     if (adminOnlyPages.has(name) && !isAdministrator && !(name==='User Sessions'&&canViewUserSessions(session))) return;
@@ -12077,8 +12048,71 @@ function App() {
     </div></RequestShiftProvider>
   );
 }
+function SiteUpdateCountdown() {
+  const [update, setUpdate] = useState(null);
+  const [seconds, setSeconds] = useState(60);
+  useEffect(() => {
+    let stopped = false;
+    let checking = false;
+    let scheduled = false;
+    const checkVersion = async () => {
+      if (stopped || checking || scheduled) return;
+      checking = true;
+      try {
+        const response = await fetch(`/api/app-version?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!stopped && data.version && data.version !== APP_VERSION) {
+          scheduled = true;
+          setUpdate({ version: data.version, deadline: Date.now() + 60_000 });
+        }
+      } catch (error) {
+        console.warn("Could not check for a UI update.", error);
+      } finally {
+        checking = false;
+      }
+    };
+    checkVersion();
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
+    window.addEventListener("focus", checkVersion);
+    window.addEventListener("pageshow", checkVersion);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkVersion);
+      window.removeEventListener("pageshow", checkVersion);
+    };
+  }, []);
+  useEffect(() => {
+    if (!update) return;
+    let reloaded = false;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((update.deadline - Date.now()) / 1000));
+      setSeconds(remaining);
+      if (remaining === 0 && !reloaded) {
+        reloaded = true;
+        // Keep the valid stored session when loading the newly deployed assets.
+        window.location.replace(`/?updated=${encodeURIComponent(update.version)}`);
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", tick);
+    };
+  }, [update]);
+  if (!update) return null;
+  return <div role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:2147483647,width:"min(640px, calc(100% - 32px))",display:"flex",alignItems:"center",gap:20,padding:"16px 20px",background:"#10213f",color:"#fff",border:"1px solid #49617f",borderRadius:12,boxShadow:"0 8px 30px #0003"}}>
+    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>A new site update is available</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>This page will refresh automatically after the countdown. Please finish and save your current work.</span></div>
+    <b role="timer" aria-live="off" aria-label={`${seconds} seconds until refresh`} style={{fontSize:26,fontVariantNumeric:"tabular-nums"}}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b>
+  </div>;
+}
+
 createRoot(document.getElementById("root")).render(
   <ApplicationErrorBoundary>
+    <SiteUpdateCountdown />
     <App />
   </ApplicationErrorBoundary>,
 );
