@@ -1,11 +1,13 @@
+import {officeApprovalKey} from './cdir-approval-routing.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
 import {managerRoleSelection,normalizeAdminLevel} from './admin-access.mjs';
 import {displaySiteSelection,managerReportScope,userSiteSelection} from './region-scope.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 
 function directorySiteIds(sites,assignedSites){
-  const assigned=new Set(assignedSites.map(canonicalSiteName).filter(Boolean));
-  return sites.filter((site)=>[site.label,site.dataKey].some((value)=>assigned.has(canonicalSiteName(value)))).map((site)=>site.id);
+  const siteKey=value=>officeApprovalKey(value)||canonicalSiteName(value);
+  const assigned=new Set(assignedSites.map(siteKey).filter(Boolean));
+  return sites.filter((site)=>[site.label,site.dataKey].some((value)=>assigned.has(siteKey(value)))).map((site)=>site.id);
 }
 
 const unique=values=>[...new Set(values.filter(Boolean))];
@@ -36,7 +38,7 @@ export function cdirViewerContext({session={},user={},sites=[]}={}){
     profile:isAdmin?'admin-user':isProjectManager?'project-manager':isManager?'manager-user':assignedRole==='General User'?'general-user':'site-user',
     label:isAdmin?(adminLevel==='Super Admin'?'Super Admin':'Admin'):isProjectManager?'Project Manager':managerRoles.join(' · ')||assignedRole||'Site User',
     allAccess,mySitesEnabled:false,siteIds,
-    canViewAContacts:isAdmin||isProjectManager||assignedRole==='HR User'||assignedUserRoles(user).includes('HR User')||/\bdirector\b/i.test(String(user.designation||user.employeeDesignation||'')),
+    canViewAContacts:isAdmin||isProjectManager||['HR User','HR Manager'].includes(assignedRole)||assignedUserRoles(user).some(role=>['HR User','HR Manager'].includes(role))||/\bdirector\b/i.test(String(user.designation||user.employeeDesignation||'')),
     sites:allowedSites.map((site)=>site.label),
     regions:unique(allowedSites.map((site)=>site.group)),
   };

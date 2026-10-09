@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {CDIR_MASTERS,CDIR_MASTER_FIELDS,cdirNormalizeRecord,cdirEmployeeError} from './cdir-masters.mjs';
 
 export function canEditCdirEmployee(session={},user={}) {
-  return session?.assignedRole==='HR User'||assignedUserRoles(user).includes('HR User')
+  return ['HR User','HR Manager'].includes(session?.assignedRole)||assignedUserRoles(user).some(role=>['HR User','HR Manager'].includes(role))
     || /\bdirector\b/i.test(String(user.designation||user.employeeDesignation||''))
     || (session?.role==='super'&&['admin','super admin'].includes(String(session.permissions?.adminLevel||'').trim().toLowerCase()));
 }

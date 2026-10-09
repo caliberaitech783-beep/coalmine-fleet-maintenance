@@ -5,6 +5,7 @@ export const MOBILE_USER_ROLES = [
   "MIS User",
   "General User",
   "HR User",
+  "HR Manager",
 ];
 
 export const GENERAL_USER_ROLE = "General User";
@@ -55,6 +56,7 @@ export function normalizeMobileUserRole(value) {
   if (text.includes("head")) return "";
   if (text.includes("maintenance")) return "Maintenance User";
   if (text === "mis" || text.includes("mis user") || text.includes("management information")) return "MIS User";
+  if (text === "hr manager") return "HR Manager";
   if (text === "hr" || text === "hr user") return "HR User";
   if (text === "general" || text === "general user") return GENERAL_USER_ROLE;
   return "";
@@ -150,7 +152,7 @@ export function resolveMobileAccess({ user = {}, privilege = {}, portal, selecte
     };
   }
 
-  if(assignedRole==='HR User')return {
+  if(['HR User','HR Manager'].includes(assignedRole))return {
     sessionRole:'normal',userType:'Mobile User',assignedRole,
     permissions:{hrDirectoryMasters:true,adminLevel:'HR',tabAccess:'CD | Masters',mobileTabAccess:'CD | Masters',
       desktopUserMenuAccess:['CD'],mobileUserMenuAccess:['CD'],masterAccess:'',mobileMasterAccess:'',

@@ -1,3 +1,4 @@
+import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -17,7 +18,7 @@ test('employee transfer authorization excludes general users and non-Project Man
 
 test('HTTP employee transfer flow enforces site scope, preserves history, sends both inbox notifications and saves only after both PM approvals',async t=>{
  const db=new PGlite();t.after(()=>db.close());
- await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE notices(recipient TEXT,reference TEXT,message TEXT);${EMPLOYEE_TRANSFER_SCHEMA}`);
+ await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE notices(recipient TEXT,reference TEXT,message TEXT);${EMPLOYEE_TRANSFER_SCHEMA}${CDIR_DELETION_SCHEMA}`);
  const client={query:(...args)=>db.query(...args),release(){}};const pool={...client,connect:async()=>client};
  const insert=async(master,record)=>(await db.query('INSERT INTO master_records(master_name,record_data) VALUES($1,$2) RETURNING id',[master,JSON.stringify(record)])).rows[0].id;
  for(const name of ['Majri OC','Jayant OC','Sasti OC'])await insert(CDIR_MASTERS.site,{name});await insert(CDIR_MASTERS.category,{code:'A'});

@@ -1,5 +1,5 @@
 export const ACCOUNT_PRIVILEGES = ['Dashboard','Masters','Transactions','Report Merge'];
-export const TEAM_ROLES = ['Production User','Maintenance User','MIS User','General User','HR User','Account User','Tender User'];
+export const TEAM_ROLES = ['Production User','Maintenance User','MIS User','General User','HR User','HR Manager','Account User','Tender User'];
 export function assignedUserRoles(user={}) {
   const raw=Object.hasOwn(user,'userRoles')?user.userRoles:(user.userType==='Account User'?'Account User':user.userGroup||user.mobileRole||user.assignedRole||'');
   return [...new Set((Array.isArray(raw)?raw:String(raw||'').split(/\s*\|\s*/)).filter(role=>TEAM_ROLES.includes(role)))];

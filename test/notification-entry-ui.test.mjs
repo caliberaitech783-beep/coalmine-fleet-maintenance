@@ -46,7 +46,7 @@ test("the exact entry dialog has accessible loading, generic error, request, tic
 });
 
 test("only a validated server kind drives broad navigation after the dialog opens", () => {
-  assert.match(openEntry, /\["request", "ticket", "transfer", "employee-transfer"\]\.includes\(kind\)/);
+  assert.match(openEntry, /\["request", "ticket", "transfer", "employee-transfer", "cdir-deletion"\]\.includes\(kind\)/);
   assert.match(openEntry, /setEntryState\(\{phase: "ready", target\}\);[\s\S]*onOpenEntryRef\.current\?\.\(target\)/);
   assert.equal(source.match(/<NotificationBell\b/g)?.length, 2);
   const uses = source.split(/\r?\n/).filter((line) => line.includes("<NotificationBell"));
