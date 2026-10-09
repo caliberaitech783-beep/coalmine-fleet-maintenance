@@ -73,19 +73,19 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
   const withComplaint=buildDirectorReportTables({requests:[{ref:'REQ-REASON',status:'Open',start:opened,complaint}],now}).find(table=>table.title==='Recent Breakdown Cases');
   assert.equal(withComplaint.rows[0][withComplaint.columns.findIndex(column=>column.key==='complaint')],complaint,'export preserves the full complaint');
   const transfer=tables.find(table=>table.title==='Vehicle Transfer Report');
-  assert.deepEqual(transfer.columns.map(column=>column.key),['door','transferNo','transferDate','from','to','model','driver']);
-  assert.equal(transfer.rows[0][0],'D9','door number resolved from the chassis in the equipment master');
+  assert.deepEqual(transfer.columns.map(column=>column.key),['transferTime','transferAcceptedAt','transferTat','door','transferNo','transferDate','from','to','model','driver']);
+  assert.equal(transfer.rows[0][transfer.columns.findIndex(column=>column.key==='door')],'D9','door number resolved from the chassis in the equipment master');
 });
 
-test('maintenance reports lead with Location and Door no., close with chassis, and wrap the red flag reason',()=>{
+test('maintenance reports preserve identifiers, revised chassis visibility and wrapped red flag reason',()=>{
   const reports=buildDepartmentReports({requests:[],equipmentRecords:[{door:'D1',chassisNo:'CH-1',currentLocation:'Sasti OC',model:'M1'}],now,from:'2026-09-01',to:'2026-09-07'});
   const keys=title=>reports.find(r=>r.title===title).columns.map(c=>c.key);
-  assert.deepEqual(keys('Turn Around Time for Repair'),['requestShift','site','door','equipmentGroup','model','category','acceptedAt','closedAt','closingHmr','closingKmr','tat','complaint','openingHmr','openingKmr','ref','chassis']);
+  assert.deepEqual(keys('Turn Around Time for Repair'),['requestShift','site','door','equipmentGroup','model','category','acceptedAt','closedAt','closingHmr','closingKmr','tat','complaint','openingHmr','openingKmr','ref','acceptedBy','closedBy']);
   assert.deepEqual(keys('Open Off road Cases'),['requestShift','site','door','equipmentGroup','model','category','start','days','complaint','openingHmr','openingKmr','ref','chassis']);
-  assert.deepEqual(keys('Availability Report'),['site','door','equipmentGroup','model','productive','breakdown','available','percentage','chassis']);
+  assert.deepEqual(keys('Availability Report'),['site','door','equipmentGroup','model','productive','breakdown','available','percentage']);
   const availability=reports.find(r=>r.title==='Availability Report');
   assert.equal(availability.columns[0].value(availability.rows[0]),'Sasti OC','availability location comes from the equipment master');
   const redFlag=reports.find(r=>r.title==='Vehicle Arrival Red Flag Report');
-  assert.deepEqual(redFlag.columns.map(c=>c.key),['requestShift','status','site','door','equipmentGroup','model','openingHmr','openingKmr','closingHmr','closingKmr','category','start','arrivalFlaggedAt','arrivalFlagRemark','flagWaitingTime','chassis','arrivalFlaggedBy','ref']);
+  assert.deepEqual(redFlag.columns.map(c=>c.key),['requestShift','status','site','door','equipmentGroup','model','openingHmr','openingKmr','closingHmr','closingKmr','category','start','arrivalFlaggedAt','arrivalFlagRemark','flagWaitingTime','arrivalFlaggedBy','ref']);
   assert.equal(redFlag.columns.find(c=>c.key==='arrivalFlagRemark').wrap,true);
 });
