@@ -1,6 +1,7 @@
 import {createTenderSession,currentTenderSession,touchTenderSession,endTenderSession} from './tender-sessions.mjs';
 import {TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from './tender-permissions.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
+import {normalizeAdminLevel} from './admin-access.mjs';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
 import {loginRecordCandidates,userLoginCandidates} from './mobile-access.mjs';
@@ -10,9 +11,11 @@ const enabled=v=>v===true||['true','yes','1'].includes(String(v).toLowerCase());
 export function tenderProfile(row,key){
  const u=row?.record_data||{};
  const tenderUser=assignedUserRoles(u).includes('Tender User');
- const permissions=tenderUser?{desktop:Object.hasOwn(u,'tenderDesktopAccess')?normalizedTenderSelection(u.tenderDesktopAccess):[...TENDER_ALL_PERMISSIONS],mobile:Object.hasOwn(u,'tenderMobileAccess')?normalizedTenderSelection(u.tenderMobileAccess):[...TENDER_ALL_PERMISSIONS]}:null;
- const roles=tenderUser?['System Administrator']:[...new Set((Array.isArray(u.tenderRoles)?u.tenderRoles:String(u.tenderRoles||'').split(/\s*[|,]\s*/)).filter(r=>TENDER_ROLES.includes(r)))];
- if(!row||!(tenderUser||enabled(u.tenderAccess))||!roles.length||u.active===false||String(u.active).toLowerCase()==='false'||['inactive','disabled','terminated'].includes(String(u.status||'').toLowerCase())||u.mustChangePassword===true||!u.passwordHash)return null;
+ const centralAdmin=String(u.userType||'').toLowerCase().includes('super')&&normalizeAdminLevel(u.adminLevel)!=='Manager';
+ const regularPermissions=TENDER_ALL_PERMISSIONS.filter(key=>!key.startsWith('admin.'));
+ const permissions=centralAdmin?null:tenderUser?{desktop:Object.hasOwn(u,'tenderDesktopAccess')?normalizedTenderSelection(u.tenderDesktopAccess):[...regularPermissions],mobile:Object.hasOwn(u,'tenderMobileAccess')?normalizedTenderSelection(u.tenderMobileAccess):[...regularPermissions]}:null;
+ const roles=centralAdmin?['System Administrator']:tenderUser?['Bid Manager']:[...new Set((Array.isArray(u.tenderRoles)?u.tenderRoles:String(u.tenderRoles||'').split(/\s*[|,]\s*/)).filter(r=>TENDER_ROLES.includes(r)&&r!=='System Administrator'))];
+ if(!row||!(centralAdmin||tenderUser||enabled(u.tenderAccess))||!roles.length||u.active===false||String(u.active).toLowerCase()==='false'||['inactive','disabled','terminated'].includes(String(u.status||'').toLowerCase())||u.mustChangePassword===true||!u.passwordHash)return null;
  return {tenderPermissions:permissions,id:String(row.id),login:String(u.login||userLoginCandidates(u)[0]||''),name:u.employee||u.name||u.login,email:u.mail||u.email||'',phone:u.phone||'',roles,businessUnit:String(u.tenderBusinessUnit||''),credentialVersion:createHmac('sha256',key).update(`${row.id}:${u.passwordHash}`).digest('hex')};
 }
 export function installTenderIdentity(app,pool,env=process.env){
