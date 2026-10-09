@@ -3,7 +3,7 @@ import {accessAllows} from './admin-access.mjs';
 import {assignedUserSiteName,equipmentSiteName} from './site-location.mjs';
 import {REGION_DATA,managerReportScope,reportScopeIncludesSite,userSiteScope} from './region-scope.mjs';
 
-const OPERATIONAL_DASHBOARD_ROLES=new Set(['Production User','Maintenance User','MIS User']);
+const OPERATIONAL_DASHBOARD_ROLES=new Set(['Production User','Maintenance User','MIS User','HR User']);
 
 const normalizedIdentity=(value)=>String(value||'').trim().toLowerCase();
 

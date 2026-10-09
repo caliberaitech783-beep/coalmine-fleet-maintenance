@@ -116,3 +116,18 @@ test('inline edits keep reversed dates ordered like the dashboard',()=>{
   all(tree,n=>(n.type==='input'||n.type===DateInput)&&n.props['aria-label']==='Report from date')[0].props.onChange({target:{value:'2026-09-12'}});
   assert.deepEqual(app.applied.at(-1),['2026-09-12T00:00:00','2026-09-12T23:59:59.999']);
 });
+
+test('inline AM/PM time selectors apply the range and retain times when dates change',()=>{
+  const app=harness('ReportPeriodFilter');
+  const from='2026-10-09T00:00:00',to='2026-10-09T23:59:59.999';
+  let tree=app.render({from,to});
+  const timeField=all(tree,n=>n.props.label==='From time')[0];
+  timeField.props.onChange('13:30');
+  assert.deepEqual(app.applied.at(-1),['2026-10-09T13:30:00',to]);
+  tree=app.render({from:app.applied.at(-1)[0],to});
+  all(tree,n=>n.type===DateInput&&n.props['aria-label']==='Report to date')[0].props.onChange({target:{value:'2026-10-10'}});
+  assert.deepEqual(app.applied.at(-1),['2026-10-09T13:30:00','2026-10-10T23:59:59.999']);
+  const range=model.periodBounds('2026-10-09','2026-10-09','13:30','14:00');
+  const rows=[{at:'2026-10-09 01:30:00'},{at:'2026-10-09 13:30:00'},{at:'2026-10-09 14:00:59'},{at:'2026-10-09 14:01:00'}];
+  assert.deepEqual(reportRowsWithinRange(rows,r=>r.at,range.from,range.to),rows.slice(1,3));
+});

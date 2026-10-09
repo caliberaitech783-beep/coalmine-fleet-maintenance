@@ -41,3 +41,8 @@
 .report-period-dialog .period-apply:disabled{opacity:.45;cursor:not-allowed}
 .report-period-dialog .period-error{color:#b42318;font-size:12px;margin:10px 0 0}
 @media(max-width:430px){.report-period-filter{padding:12px}.report-period-filter>span{font-size:12px;overflow-wrap:anywhere}.report-period-dialog input[type=date]{font-size:16px}.report-period-dialog select{font-size:16px}.report-period-body{padding:12px}.report-period-times{gap:8px}}
+
+.report-period-filter .report-period-time{display:flex;align-items:center;gap:4px;border:0;padding:0;margin:0;min-width:0}
+.report-period-filter .report-period-time legend{font-size:12px;font-weight:600;color:var(--muted,#61728c);margin-bottom:5px}
+.report-period-filter .report-period-time select{min-height:42px;padding:6px;border:1px solid var(--line,#e2e4ee);border-radius:7px;background:var(--panel,#fff);color:var(--text,#26344b);font:inherit}
+.report-period-filter [role=alert]{color:#b42318;flex-basis:100%}

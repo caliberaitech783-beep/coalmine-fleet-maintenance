@@ -2,8 +2,57 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {assignedUserRoles} from '../account-role-access.mjs';
 import {resolveMobileAccess,normalizeMobileUserRole,MOBILE_USER_ROLES} from '../mobile-access.mjs';
-import {masterAccessAllows} from '../admin-access.mjs';
+import {masterAccessAllows,accessAllows,navigationPermissionsForView} from '../admin-access.mjs';
+import {CDIR_MASTERS} from '../cdir-masters.mjs';
 import {cdirViewerContext} from '../cdir-access.mjs';
+import {canReadDashboardEquipment} from '../dashboard-equipment-access.mjs';
+
+test('existing HR sessions read the shared breakdown feed using current account permissions',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const {runInNewContext}=await import('node:vm');
+ const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+ const route=source.slice(source.indexOf("app.get('/api/requests',requireSession"));
+ const guard=route.slice(route.indexOf("if(req.session.assignedRole==='HR User')"),route.indexOf('    const requesterLogin='));
+ const profile=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
+ for(const current of [profile,null,{sessionRole:'normal',assignedRole:'Unknown',permissions:{}}]){
+  const authorize=runInNewContext('(async(req,res)=>{'+guard+'return true;})',{
+   currentDashboardAuthorization:async()=>current?{session:{role:current.sessionRole,assignedRole:current.assignedRole,permissions:current.permissions}}:null,
+  });
+  const req={session:{role:'normal',assignedRole:'HR User',login:'hr',permissions:{readRequests:false}}};
+  let status=200;const res={status(code){status=code;return this;},json(){return false;}};
+  const allowed=await authorize(req,res);
+  assert.equal(allowed,current===profile);
+  assert.equal(status,current===profile?200:current===null?401:403);
+  if(allowed){assert.equal(req.session.login,'hr');assert.equal(req.session.permissions.createRequests,false);}
+ }
+});
+
+test('HR User has the requested header menus and read-only fleet data',()=>{
+ const access=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
+ assert.deepEqual(access.permissions.tabAccess,['Dashboard','Reports','CD','Tickets','Masters']);
+ assert.deepEqual(access.permissions.mobileTabAccess,access.permissions.tabAccess);
+ assert.equal(canReadDashboardEquipment({role:access.sessionRole,assignedRole:access.assignedRole,permissions:access.permissions}),true);
+ assert.equal(access.permissions.readRequests,true);
+ for(const key of ['createRequests','editRequests','deleteRequests','closeRequests','verifyRequests'])assert.equal(access.permissions[key],false);
+});
+
+test('HR User can open every directory master on desktop and mobile without other masters',()=>{
+ const {permissions}=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
+ for(const mobile of [false,true]){
+  const view=navigationPermissionsForView(permissions,mobile);
+  assert.equal(accessAllows(view.tabAccess,'Masters'),true);
+  for(const name of Object.values(CDIR_MASTERS))assert.equal(masterAccessAllows(view,name),true,name);
+  for(const name of ['Users & employees','Equipment master','Breakdown master'])assert.equal(masterAccessAllows(view,name),false,name);
+ }
+});
+
+test('HR header hides operational workspaces and allows the requested pages',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(source.includes('permissions.adminLevel !== "Manager" && ![\'HR User\',\'HR Manager\'].includes(session?.assignedRole)'));
+ assert.ok(source.includes("if(session?.assignedRole==='HR User')return ['Dashboard','Reports','Tickets','CD'"));
+ assert.ok(source.includes('<AnnouncementHistoryButton token={authToken} />'));
+});
 test('HR checkbox round-trips and produces only directory master permissions',()=>{
  assert.ok(MOBILE_USER_ROLES.includes('HR User'));
  assert.equal(normalizeMobileUserRole('HR User'),'HR User');

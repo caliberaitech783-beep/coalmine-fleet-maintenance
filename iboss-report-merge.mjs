@@ -18,7 +18,7 @@ const partyScoped=(dateColumn,keyExpression)=>scope=>scope.key?`${keyExpression}
 const bgScope=anchored('a.bankgaurantydate','TO_CHAR(a.tno)');
 const fdScope=anchored('a.fixeddepositdate','TO_CHAR(a.tno)');
 const loanScope=anchored('a.loandate','TO_CHAR(a.tno)');
-const voucherScope=anchored('v.voucherdate','TO_CHAR(v.tno)');
+const voucherScope=s=>s.key?"v.tno = TO_NUMBER(:anchor_key DEFAULT NULL ON CONVERSION ERROR)":range('v.voucherdate');
 
 const paid=value=>['Y','YES','1','T','TRUE','PAID'].includes(String(value??'').trim().toUpperCase());
 const today=()=>new Date().toISOString().slice(0,10);
@@ -240,7 +240,7 @@ export const MERGE_CHAINS={
    {key:'lines',title:'Voucher Lines',role:'many',docLabel:'Ledger Lines',fields:[f('ACCOUNT_CODE','Account Code','text',{link:'party-position'}),f('ACCOUNT_NAME','Account'),amount('LINE_AMOUNT','Signed Amount'),f('LINE_NARRATION','Line Narration')],
     sql:s=>`SELECT TO_CHAR(d.tno) AS anchor,'Line '||TO_CHAR(d.sno)||' · '||NVL(p.partyname,d.accountcode) AS doc_no,d.accountcode AS account_code,p.partyname AS account_name,d.amount AS line_amount,d.narration AS line_narration FROM cmpl.voucherdetail d JOIN cmpl.voucher v ON v.tno=d.tno LEFT JOIN cmpl.party p ON p.partycode=d.accountcode WHERE ${voucherScope(s)} ORDER BY d.sno`},
    {key:'tds',title:'TDS on this Voucher',role:'many',docLabel:'TDS Sections',fields:[f('PARTYCODE','Party Code','text',{link:'party-position'}),f('PARTYNAME','Party'),amount('TDS_BASE','Deduction Base'),amount('TDSAMOUNT','TDS Amount')],
-    sql:s=>`SELECT TO_CHAR(c.vouchertno) AS anchor,c.taxsectionname AS doc_no,${day('c.transactiondate')} AS doc_date,c.partycode,c.partyname,c.amount AS tds_base,c.tdsamount FROM cmpl.tdsdetail c JOIN cmpl.voucher v ON v.tno=c.vouchertno WHERE ${voucherScope(s)} ORDER BY c.tno`}
+    sql:s=>`SELECT TO_CHAR(c.vouchertno) AS anchor,c.taxsectionname AS doc_no,${day('c.transactiondate')} AS doc_date,c.partycode,c.partyname,c.amount AS tds_base,c.tdsamount FROM cmpl.tdsdetail c JOIN cmpl.voucher v ON v.tno=c.vouchertno WHERE ${voucherScope(s)}${s.key?" AND c.vouchertno = TO_NUMBER(:anchor_key DEFAULT NULL ON CONVERSION ERROR)":""} ORDER BY c.tno`}
   ]
  }
 };

@@ -6276,6 +6276,13 @@ app.get('/api/reports/bd-ageing',requireSession,bdAgeingReportHandler({
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
+    // HR sessions issued before dashboard access was added have readRequests=false.
+    // Resolve current account permissions rather than retaining that stale denial.
+    if(req.session.assignedRole==='HR User'){
+      const authorization=await currentDashboardAuthorization(req.session);
+      if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+      req.session={...req.session,...authorization.session};
+    }
     const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
     const generalDashboard=req.session.assignedRole==='General User'&&req.query.scope==='dashboard'&&req.session.permissions?.viewDashboardRequests===true;
     if(req.session.role!=='super'&&!operationalRole&&!generalDashboard&&req.session.permissions?.readRequests!==true)

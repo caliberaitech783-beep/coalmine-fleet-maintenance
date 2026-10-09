@@ -1100,6 +1100,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   useEffect(() => {
     closeMenus();
   }, [active]);
+  if(session?.assignedRole==='HR User')permissions={...permissions,tabAccess:['Dashboard','Reports','CD','Tickets','Masters'],mobileTabAccess:['Dashboard','Reports','CD','Tickets','Masters']};
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const activeManagerRoles=Array.isArray(permissions.managerRoles)&&permissions.managerRoles.length
     ?permissions.managerRoles:[permissions.managerRole].filter(Boolean);
@@ -1200,7 +1201,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ClockMenu alwaysOpen down label="WhatsApp Integration" centerLabel="WhatsApp" items={visibleWhatsAppNav} hours={[3.6, 5.2, 6.8, 8.4, 6, 3].slice(0, visibleWhatsAppNav.length)} labelFor={navigationLabel} keyFor={whatsappMenuKey} active={active} onSelect={(page, event) => selectDropdownPage(page, event, setWhatsappSelectionClosed)} />
           </div>
         </div>}
-        {permissions.adminLevel !== "Manager" && <div
+        {permissions.adminLevel !== "Manager" && !['HR User','HR Manager'].includes(session?.assignedRole) && <div
           className={`masters-menu${workspacesOpen ? " open" : ""}${workspacesSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setWorkspacesSelectionClosed(false)}
         >
@@ -1306,7 +1307,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {visibleIbossNav.map(([name,Icon,workspace]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name || name === "Accounts" && ["Accounts Masters","Accounts Transactions"].includes(active) ? " active" : ""}`} data-workspace={workspace} onClick={event => selectDropdownPage(name,event,setIbossSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
           </div>
         </div>}
-        <BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} />
+        {session?.assignedRole!=='HR User'&&<BdmsAssistant session={session} token={authToken} />}<AnnouncementHistoryButton token={authToken} />
       </nav>
       <div className="user">
         <span className="header-user-copy">
@@ -4411,7 +4412,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
   const shownMenus=[...menus.filter(menu=>menu!=="Tender"&&menuOptions.includes(menu)),...(hasTender?["Tender"]:[])];
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
-  if(["HR User","HR Manager"].includes(role))return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.</p><input type="hidden" name={menuField} value="CD" /></section>;
+  if(["HR User","HR Manager"].includes(role))return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>{role==='HR User'?'Dashboard, Reports, C-Directory, C-Dir Masters, Announcements and Tickets are included.':'Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.'}</p><input type="hidden" name={menuField} value={role==='HR User'?'Dashboard | Reports | CD | Tickets | Masters':'CD'} /></section>;
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
@@ -4595,7 +4596,7 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(["HR User","HR Manager"].includes(role)){record[menuField]="CD";record[requestField]="";
+      if(["HR User","HR Manager"].includes(role)){record[menuField]=role==='HR User'?"Dashboard | Reports | CD | Tickets | Masters":"CD";record[requestField]="";
       }else if(role === "Account User"||role === "Tender User"){
         record[menuField]=assignedUserRoles(record).includes("Tender User")?"CD | Tender":"CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
@@ -11571,7 +11572,8 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
-    if(['HR User','HR Manager'].includes(session?.assignedRole))return ['CD','Employee Tenure Report','Employee Transfer','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
+    if(session?.assignedRole==='HR User')return ['Dashboard','Reports','Tickets','CD','Employee Tenure Report','Employee Transfer','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
+    if(session?.assignedRole==='HR Manager')return ['CD','Employee Tenure Report','Employee Transfer','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
     if(name==="User Sessions")return canViewUserSessions(session);
     if(name==="OEM Email Delivery Status")return isAdministrator;
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
@@ -11598,7 +11600,8 @@ function App() {
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
-    if(['HR User','HR Manager'].includes(session?.assignedRole))return "CD";
+    if(session?.assignedRole==='HR User')return "Dashboard";
+    if(session?.assignedRole==='HR Manager')return "CD";
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = [...masterNav, ...cdirMasterNavItems].find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
@@ -11622,35 +11625,6 @@ function App() {
       viewRepairTypes: true,
     },
   } : null;
-  useEffect(() => {
-    let stopped = false;
-    const checkVersion = async () => {
-      try {
-        const response = await fetch(`/api/app-version?t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!stopped && data.version && data.version !== APP_VERSION) {
-          // Deploying a new interface is not a logout event. Keep the valid
-          // stored session and reload only the application assets.
-          window.location.replace(`/?updated=${encodeURIComponent(data.version)}`);
-        }
-      } catch (error) {
-        console.warn("Could not check for a UI update.", error);
-      }
-    };
-    checkVersion();
-    // Version checks are tiny and uncached. A one-minute ceiling keeps every
-    // signed-in role on the same deployed interface without ending its session.
-    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
-    window.addEventListener("focus",checkVersion);
-    window.addEventListener("pageshow",checkVersion);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      window.removeEventListener("focus",checkVersion);
-      window.removeEventListener("pageshow",checkVersion);
-    };
-  }, []);
   const selectMenu = (name) => {
     if (name === "Report Setting") name = "Reports";
     if (adminOnlyPages.has(name) && !isAdministrator && !(name==='User Sessions'&&canViewUserSessions(session))) return;
@@ -12083,8 +12057,71 @@ function App() {
     </div></RequestShiftProvider>
   );
 }
+function SiteUpdateCountdown() {
+  const [update, setUpdate] = useState(null);
+  const [seconds, setSeconds] = useState(60);
+  useEffect(() => {
+    let stopped = false;
+    let checking = false;
+    let scheduled = false;
+    const checkVersion = async () => {
+      if (stopped || checking || scheduled) return;
+      checking = true;
+      try {
+        const response = await fetch(`/api/app-version?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!stopped && data.version && data.version !== APP_VERSION) {
+          scheduled = true;
+          setUpdate({ version: data.version, deadline: Date.now() + 60_000 });
+        }
+      } catch (error) {
+        console.warn("Could not check for a UI update.", error);
+      } finally {
+        checking = false;
+      }
+    };
+    checkVersion();
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 60_000));
+    window.addEventListener("focus", checkVersion);
+    window.addEventListener("pageshow", checkVersion);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkVersion);
+      window.removeEventListener("pageshow", checkVersion);
+    };
+  }, []);
+  useEffect(() => {
+    if (!update) return;
+    let reloaded = false;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((update.deadline - Date.now()) / 1000));
+      setSeconds(remaining);
+      if (remaining === 0 && !reloaded) {
+        reloaded = true;
+        // Keep the valid stored session when loading the newly deployed assets.
+        window.location.replace(`/?updated=${encodeURIComponent(update.version)}`);
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", tick);
+    };
+  }, [update]);
+  if (!update) return null;
+  return <div role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:2147483647,width:"min(640px, calc(100% - 32px))",display:"flex",alignItems:"center",gap:20,padding:"16px 20px",background:"#10213f",color:"#fff",border:"1px solid #49617f",borderRadius:12,boxShadow:"0 8px 30px #0003"}}>
+    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>New update — refreshing in one minute</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>This page will refresh automatically after the countdown. Please finish and save your current work.</span></div>
+    <b role="timer" aria-live="off" aria-label={`${seconds} seconds until refresh`} style={{fontSize:26,fontVariantNumeric:"tabular-nums"}}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b>
+  </div>;
+}
+
 createRoot(document.getElementById("root")).render(
   <ApplicationErrorBoundary>
+    <SiteUpdateCountdown />
     <App />
   </ApplicationErrorBoundary>,
 );

@@ -1,3 +1,4 @@
+import {documentResponse} from './iboss-document-response.mjs';
 import React,{useEffect,useRef,useState} from 'react';
 import {ArrowLeft,ArrowRight,X,ExternalLink,RefreshCw,CornerUpLeft} from 'lucide-react';
 import {MERGE_CHAINS} from '../iboss-report-merge.mjs';
@@ -17,17 +18,18 @@ export default function DrillPanel({target,range:initialRange,token,close}){
  const current=stack[stack.length-1],chain=MERGE_CHAINS[current.chain];
  const focusIndex=Math.max(0,chain.steps.findIndex(step=>step.key===current.focus?.step));
  const [direction,setDirection]=useState('');
+ const [attempt,setAttempt]=useState(0);
  const [data,setData]=useState({steps:[],loading:true,error:''});
  const panel=useRef(null);
  useEffect(()=>{setDirection(focusIndex>0?'backward':'forward');},[current,focusIndex]);
  useEffect(()=>{
   const controller=new AbortController();setData({steps:[],loading:true,error:''});
   fetch(`/api/reports/iboss-accounts-merge/${current.chain}/trail?${new URLSearchParams({...range,key:current.key})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load the document trail.');return body;})
+   .then(documentResponse)
    .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false,error:''});})
    .catch(error=>{if(!controller.signal.aborted)setData({steps:[],loading:false,error:error.message});});
   return ()=>controller.abort();
- },[current,range,token]);
+ },[current,range,token,attempt]);
  useEffect(()=>{const onKey=event=>{if(event.key==='Escape')close();};window.addEventListener('keydown',onKey);return ()=>window.removeEventListener('keydown',onKey);},[close]);
  useEffect(()=>{if(!data.loading)panel.current?.querySelector('.merge-trail-steps li.focus')?.scrollIntoView?.({block:'nearest'});},[data.loading]);
  const open=next=>{setStack(list=>[...list,next]);panel.current?.scrollTo?.(0,0);};
@@ -56,7 +58,7 @@ export default function DrillPanel({target,range:initialRange,token,close}){
     <button type="button" aria-pressed={direction==='backward'} onClick={()=>setDirection('backward')}><ArrowLeft/>Back to origin</button>
     <button type="button" aria-pressed={direction==='forward'} onClick={()=>setDirection('forward')}>Forward to completion<ArrowRight/></button>
    </div>}
-   {data.loading?<p role="status">Tracing documents in Oracle…</p>:data.error?<p role="alert">{data.error}</p>:<>
+   {data.loading?<p role="status">Tracing documents in Oracle…</p>:data.error?<div role="alert"><p>{data.error}</p><button type="button" onClick={()=>setAttempt(value=>value+1)}>Retry document</button></div>:<>
     <p role="status">Total: {data.steps.reduce((sum,step)=>sum+step.documents.length,0).toLocaleString('en-IN')} records across {data.steps.length} linked reports.</p>
     <ol className="merge-trail-steps">
      {shown.map(step=><li key={step.key} className={`${step.documents.length?'done':'pending'}${step.key===current.focus?.step?' focus':''}`}>

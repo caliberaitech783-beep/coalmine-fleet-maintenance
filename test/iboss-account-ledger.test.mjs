@@ -13,3 +13,11 @@ test('trade account name and code open mounted ledger retaining row company and 
  const s=readFileSync(new URL('../src/iboss-dashboard.jsx',import.meta.url),'utf8');assert.match(s,/\['ACCOUNT_NAME','ACCOUNT_CODE'\].includes\(column.key\)/);assert.match(s,/row.COMPANYCODE\|\|range.company/);assert.match(s,/<AccountLedger \{\.\.\.ledger\} range=\{range\}/);
  const ui=readFileSync(new URL('../src/iboss-account-ledger.jsx',import.meta.url),'utf8');assert.match(ui,/key:String\(r.TNO\)/);assert.match(ui,/CREATOR_NAME/);assert.match(ui,/CREATED_AT/);assert.match(ui,/RUNNING_BALANCE/);
 });
+test('shared ledger uses ERP grouped headers, B/F, narration rows and full-period footers',()=>{
+ const ui=readFileSync(new URL('../src/iboss-account-ledger.jsx',import.meta.url),'utf8');
+ assert.match(ui,/colSpan="2" scope="colgroup">Amount/);
+ assert.match(ui,/colSpan="2" scope="colgroup">Balance/);
+ assert.match(ui,/ledger-opening/);assert.match(ui,/ledger-narration/);
+ assert.match(ui,/Total \(Excluding Opening\)/);assert.match(ui,/Total \(Including Opening\)/);
+ assert.match(ui,/showAudit&&/);
+});
