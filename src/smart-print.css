@@ -1,5 +1,10 @@
 .smart-print-dialog { width: min(1100px, calc(100vw - 24px)); max-height: 90dvh; padding: 0; border: 1px solid #d7dfeb; border-radius: 14px; color: var(--ink,#17233c); background: var(--surface,#fff); box-shadow: 0 20px 80px #0004; }
 .smart-print-dialog::backdrop { background: #17233c88; }
+.smart-print-export-toast { position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; width: max-content; max-width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 16px; border-radius: 12px; background: #522e90; color: #fff; box-shadow: 0 6px 24px #0004; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.smart-print-export-toast[hidden] { display: none; }
+.smart-print-export-toast.success { background: #166534; }
+.smart-print-export-toast.error { background: #991b1b; }
+.smart-print-dialog .smart-print-export-toast button { flex-shrink: 0; background: transparent; color: #fff; border-color: #ffffff66; }
 .smart-print-dialog > header,.smart-print-dialog > footer { display: flex; align-items: center; gap: 12px; padding: 18px 22px; background: var(--surface,#fff); }
 .smart-print-dialog > header { border-bottom: 1px solid #d7dfeb; }
 .smart-print-dialog header div,.smart-print-dialog footer span { flex: 1; min-width: 0; }

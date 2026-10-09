@@ -131,7 +131,19 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   const dialog=document.createElement('dialog');dialog.className='smart-print-dialog';dialog.setAttribute('aria-label',exportOnly?'Print/Export':'Smart Print');
   const make=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
   const button=(text,action,parent,className)=>{const node=make('button',text,className);node.type='button';node.onclick=action;parent.append(node);return node;};
-  const close=()=>{dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus();};
+  let toastTimer,closed=false;
+  const toast=make('div',undefined,'smart-print-export-toast');toast.hidden=true;
+  toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');toast.setAttribute('aria-atomic','true');
+  const toastText=make('span');toast.append(toastText);
+  button('×',()=>{toast.hidden=true;clearTimeout(toastTimer);},toast).setAttribute('aria-label','Dismiss download notification');
+  dialog.append(toast);
+  const notifyExport=(message,state)=>{
+    if(closed)return;
+    clearTimeout(toastTimer);toastText.textContent=message;toast.hidden=false;
+    toast.className=`smart-print-export-toast ${state}`;
+    if(state==='success')toastTimer=setTimeout(()=>{toast.hidden=true;},6000);
+  };
+  const close=()=>{closed=true;clearTimeout(toastTimer);dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus();};
   const header=make('header');
   const back=button('←',close,header);back.setAttribute('aria-label','Back');
   const heading=make('div');heading.append(make('h2',exportOnly?'Print/Export':'Smart Print'),make('p',title));header.append(heading);
@@ -244,9 +256,10 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const {reportTitle,chosen,appendices}=report;if(!chosen.length||exporting)return;
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
+    notifyExport(`Preparing ${formatName}… Your download will start shortly.`,'pending');
     Promise.resolve().then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
-      .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;})
-      .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;})
+      .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;notifyExport(`${formatName} download started. Check your browser downloads.`,'success');})
+      .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;notifyExport(notice.textContent,'error');})
       .finally(()=>{exporting=false;render();});
   };
   // One Print/Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
