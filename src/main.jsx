@@ -1098,7 +1098,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   useEffect(() => {
     closeMenus();
   }, [active]);
-  if(session?.assignedRole==='HR User')permissions={...permissions,tabAccess:['Dashboard','Reports','CD','Tickets'],mobileTabAccess:['Dashboard','Reports','CD','Tickets']};
+  if(session?.assignedRole==='HR User')permissions={...permissions,tabAccess:['Dashboard','Reports','CD','Tickets','Masters'],mobileTabAccess:['Dashboard','Reports','CD','Tickets','Masters']};
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const activeManagerRoles=Array.isArray(permissions.managerRoles)&&permissions.managerRoles.length
     ?permissions.managerRoles:[permissions.managerRole].filter(Boolean);
@@ -4407,7 +4407,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
   const shownMenus=[...menus.filter(menu=>menu!=="Tender"&&menuOptions.includes(menu)),...(hasTender?["Tender"]:[])];
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
-  if(["HR User","HR Manager"].includes(role))return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>{role==='HR User'?'Dashboard, Reports, C-Directory, Announcements and Tickets are included.':'Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.'}</p><input type="hidden" name={menuField} value={role==='HR User'?'Dashboard | Reports | CD | Tickets':'CD'} /></section>;
+  if(["HR User","HR Manager"].includes(role))return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>{role==='HR User'?'Dashboard, Reports, C-Directory, C-Dir Masters, Announcements and Tickets are included.':'Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.'}</p><input type="hidden" name={menuField} value={role==='HR User'?'Dashboard | Reports | CD | Tickets | Masters':'CD'} /></section>;
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
@@ -4591,7 +4591,7 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(["HR User","HR Manager"].includes(role)){record[menuField]=role==='HR User'?"Dashboard | Reports | CD | Tickets":"CD";record[requestField]="";
+      if(["HR User","HR Manager"].includes(role)){record[menuField]=role==='HR User'?"Dashboard | Reports | CD | Tickets | Masters":"CD";record[requestField]="";
       }else if(role === "Account User"||role === "Tender User"){
         record[menuField]=assignedUserRoles(record).includes("Tender User")?"CD | Tender":"CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){

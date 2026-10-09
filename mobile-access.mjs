@@ -154,7 +154,7 @@ export function resolveMobileAccess({ user = {}, privilege = {}, portal, selecte
 
   if(['HR User','HR Manager'].includes(assignedRole))return {
     sessionRole:'normal',userType:'Mobile User',assignedRole,
-    permissions:{hrDirectoryMasters:true,adminLevel:'HR',tabAccess:assignedRole==='HR User'?['Dashboard','Reports','CD','Tickets']:'CD | Masters',mobileTabAccess:assignedRole==='HR User'?['Dashboard','Reports','CD','Tickets']:'CD | Masters',
+    permissions:{hrDirectoryMasters:true,adminLevel:'HR',tabAccess:assignedRole==='HR User'?['Dashboard','Reports','CD','Tickets','Masters']:'CD | Masters',mobileTabAccess:assignedRole==='HR User'?['Dashboard','Reports','CD','Tickets','Masters']:'CD | Masters',
       desktopUserMenuAccess:['CD'],mobileUserMenuAccess:['CD'],masterAccess:'',mobileMasterAccess:'',
       reportAccess:'',whatsappAccess:'',adminAccess:'',readRequests:assignedRole==='HR User',viewEquipment:assignedRole==='HR User',viewRepairTypes:assignedRole==='HR User',
       createRequests:false,editRequests:false,deleteRequests:false,closeRequests:false,verifyRequests:false},
