@@ -1,3 +1,4 @@
+import {fetchAccountsReport} from './iboss-accounts-response.mjs';
 import FinanceCharts from './iboss-finance-charts.jsx';
 import AccountLedger from './iboss-account-ledger.jsx';
 import {TRADE_AGE_BANDS} from '../trade-age-bands.mjs';
@@ -28,26 +29,26 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
  const ageSummary=ageing.startsWith('summary:');
  const [ledger,setLedger]=useState(null);
  const requestRange=useMemo(()=>({...range,search,...(metric.key.startsWith('trade-')?{ageing}:{}),...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,ageing,bank,status,metric.key]);
- const [count,setCount]=useState({totalCount:null});
+ const [count,setCount]=useState({totalCount:null}),[retry,setRetry]=useState(0);
  useEffect(()=>{
   if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok||!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
+  fetchAccountsReport(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+   .then(body=>{if(!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
    .then(body=>{if(!controller.signal.aborted)setCount(body);})
    .catch(()=>{if(!controller.signal.aborted)setCount({totalCount:null,countError:'Total count unavailable — reopen to retry.'});});
   return ()=>controller.abort();
- },[metric,requestRange,token,preview]);
+ },[metric,requestRange,token,preview,retry]);
  const dialog=useRef(null),[page,setPage]=useState(0),[detail,setDetail]=useState(null),[data,setData]=useState({loading:true,rows:[]});
  useEffect(()=>{const opener=document.activeElement;dialog.current.showModal();return ()=>{if(opener?.isConnected)opener.focus();};},[]);
  useEffect(()=>{
   if(preview){const view=metricViews[metric.key];setData({view,columns:ACCOUNT_VIEWS[view].columns,rows:preview.metricRows?.[metric.key]||[],loading:false,...range});return;}
   const controller=new AbortController();setData({loading:true,rows:[]});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...requestRange,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load card details.');return body;})
+  fetchAccountsReport(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...requestRange,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+   .then(body=>{if(!Array.isArray(body.rows))throw new Error('The report response was incomplete. Please retry.');return body;})
    .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false});})
    .catch(error=>{if(!controller.signal.aborted)setData({loading:false,rows:[],error:error.message});});
   return ()=>controller.abort();
- },[metric,requestRange,token,page,preview]);
+ },[metric,requestRange,token,page,preview,retry]);
  useEffect(()=>{const timer=setTimeout(()=>{setPage(0);setSearch(searchDraft.trim());},400);return ()=>clearTimeout(timer);},[searchDraft]);
  const columns=useMemo(()=>(data.columns||[]).map(column=>{
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
@@ -63,7 +64,7 @@ function MetricDetails({metric,range,token,ReportSection,preview,close,reconcili
   {metric.key.startsWith('trade-')&&<div className="iboss-dash-controls"><label>Ageing / report view<select value={ageing} onChange={event=>{setPage(0);setAgeing(event.target.value);}}><option value="ledger">Ledger balances</option><optgroup label="Party-wise ageing summary">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={'summary:'+band.value}>{band.value==='all'?'Ageing summary — all columns':band.label}</option>)}</optgroup><optgroup label="Bill-wise ageing details">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={band.value}>{band.label}</option>)}</optgroup></select></label></div>}
   {metric.key.startsWith('trade-')&&ageing!=='ledger'&&<>{ageSummary&&<p><strong>Party-wise ageing as on {formatDisplayDate(range.to)}</strong> · {metric.key==='trade-payable'?'Payable credit':'Receivable debit'} amounts are positive; advances / opposite balances are negative. Selecting an age band shows parties with a non-zero balance in that column.</p>}<p>Ageing is measured from the bill/document date to {formatDisplayDate(range.to)}; items without a source bill/document date appear in Date unavailable. Includes older opening items regardless of Activity from. Advances and opposite balances remain visible. This is document age, not days overdue.</p><p className="iboss-dash-note">Settlement uses current ERP allocation links with both vouchers dated through the selected closing date. Later edits to allocation links cannot be reconstructed.</p>{count.totalDr!=null&&<p>All matching entries: Dr {Number(count.totalDr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Cr {Number(count.totalCr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Net {Math.abs(count.signedTotal).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} {count.signedTotal<0?'Dr':'Cr'}</p>}</>}
   <div className="iboss-dash-controls"><label>Search all matching Oracle records<input type="search" maxLength={120} value={searchDraft} onChange={event=>setSearchDraft(event.target.value)} placeholder="Account code, account / party name, bill or voucher…"/></label><button type="button" onClick={()=>{setSearchDraft('');setSearch('');setPage(0);}}>Clear search</button></div>
-  {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
+  {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error} <button type="button" onClick={()=>setRetry(n=>n+1)}>Retry report</button></p>:<>
    <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
    <ReportSection key={data.view} showSearch={false} title={ageSummary?metric.title+' — Party-wise Ageing':metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search covers all matching Oracle records. Export includes loaded records only. Click an account or party for its ledger details.'}/>
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
