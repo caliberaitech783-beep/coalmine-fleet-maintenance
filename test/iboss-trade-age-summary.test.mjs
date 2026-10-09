@@ -29,3 +29,15 @@ test('pending bill count is distinct, excludes advances and is placed beside the
   assert.match(report.sql,/PURCHASEBILL:/);assert.match(report.sql,/JOBBILL:/);
  }
 });
+test('every ageing amount has its own distinct pending bill count for both sides',()=>{
+ for(const [key,report] of Object.entries(TRADE_AGE_SUMMARIES)){
+  const sign=key.startsWith('trade-receivable')?'-':'';
+  for(const band of AGEING_COLUMNS){
+   assert.ok(report.sql.includes(`COUNT(DISTINCT CASE WHEN (${band.where}) AND ${sign}e.balanceamount>0 THEN e.bill_identity END) AS ${band.key}_BILLS`));
+   const index=report.columns.findIndex(c=>c.key===band.key);
+   const count=report.columns[index+1];
+   assert.equal(count.key,band.key+'_BILLS');assert.equal(count.integer,true);
+   assert.ok(count.label.endsWith('No. of Bills'));
+  }
+ }
+});
