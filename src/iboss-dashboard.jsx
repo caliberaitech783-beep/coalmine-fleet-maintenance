@@ -52,7 +52,8 @@ function MetricDetails({metric,range:initialRange,token,ReportSection,preview,cl
   return ()=>controller.abort();
  },[metric,requestRange,token,page,preview,retry]);
  useEffect(()=>{const timer=setTimeout(()=>{setPage(0);setSearch(searchDraft.trim());},400);return ()=>clearTimeout(timer);},[searchDraft]);
- const columns=useMemo(()=>(data.columns||[]).map(column=>{
+ const columns=useMemo(()=>(data.columns||[]).map(sourceColumn=>{
+  const column={...sourceColumn,label:ageSummary&&/^AGE_\d+$/.test(sourceColumn.key)?sourceColumn.label+' DAYS':ageSummary&&sourceColumn.key==='AGE_OVER_360'?'ABOVE 360 DAYS':sourceColumn.label};
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
   if(ageSummary&&!column.numeric&&!['ACCOUNT_NAME','ACCOUNT_CODE'].includes(column.key))return {...column,value,render:row=>value(row)||'Not recorded'};
   if(ageSummary&&column.numeric)return {...column,value:row=>Number(row[column.key]||0),render:row=>Number(row[column.key]||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})};
