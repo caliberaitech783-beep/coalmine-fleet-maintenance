@@ -143,3 +143,4 @@
 @media(max-width:700px){.iboss-kpi-comparison{grid-template-columns:1fr;gap:22px;padding:22px}.iboss-kpi-section-heading{align-items:flex-start;flex-direction:column}.iboss-dash-kpi{padding:16px;min-height:220px}.iboss-dash-kpi-top{font-size:12px;align-items:flex-start;flex-direction:column-reverse;gap:10px}.iboss-dash-kpi strong{font-size:25px}.iboss-kpi-icon{flex-basis:auto;width:34px;height:34px;border-radius:10px}}
 @media(max-width:400px){.iboss-dash-kpis{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.iboss-dash-kpi{transition:none}.iboss-dash-kpi:hover{transform:none}}
+.iboss-ageing-as-on{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.iboss-ageing-as-on .iboss-editable-date{max-width:260px}
