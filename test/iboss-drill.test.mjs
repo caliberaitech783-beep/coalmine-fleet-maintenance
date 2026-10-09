@@ -43,7 +43,7 @@ test('trails carry cross-links to related parties, banks, vouchers, deposits, gu
  assert.deepEqual(bank.find(step=>step.key==='loan').documents[0].link,{chain:'loan-emi',key:'9'});
  const bg=buildTrail('bank-guarantee',{bg:[{ANCHOR:'77',DOC_NO:'BG/1',BANK_CODE:'SBI'}]});
  assert.deepEqual(bg[0].documents[0].details.find(item=>item.label==='Issuing Bank Code').link,{chain:'bank-position',key:'SBI'});
- for(const statement of mergeStatements('voucher',MERGE_CHAINS.voucher.steps.map(step=>step.key),{from:'2026-04-01',to:'2026-09-30',anchorKey:'5'}))assert.match(statement.sql,/TO_CHAR\(v\.tno\) = :anchor_key/);
+ for(const statement of mergeStatements('voucher',MERGE_CHAINS.voucher.steps.map(step=>step.key),{from:'2026-04-01',to:'2026-09-30',anchorKey:'5'}))assert.match(statement.sql,/v\.tno = TO_NUMBER\(:anchor_key DEFAULT NULL ON CONVERSION ERROR\)/);
 });
 
 test('Masters, Transactions and Report Merge all open the shared drill panel',()=>{
