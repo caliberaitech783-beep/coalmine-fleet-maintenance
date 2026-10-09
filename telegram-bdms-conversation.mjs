@@ -1,3 +1,4 @@
+import {bdmsSiteCounts} from './telegram-bdms-site-counts.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatRole,bdmsChatKeyboard,bdmsChatIntent,bdmsChatTransfersAllowed} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatMetricsReply} from './telegram-bdms-metrics.mjs';
 
@@ -28,9 +29,9 @@ export function bdmsChatConversation({text,language='en',session={},requests=[],
     const transfer=transferId?transfers.find(r=>String(r.id)===transferId):null;
     if(transferId&&!transfer)return {text:hi?'ट्रांसफर आपकी अनुमति में उपलब्ध नहीं है।':'Transfer not available in your permitted scope.',keyboard:mainKeyboard,context:{}};
     const detail=transfer?[['Vehicle / वाहन',transfer.door||transfer.equipment],['Source / स्रोत',transfer.source],['Destination / गंतव्य',transfer.destination],['Date / तारीख',transfer.transferDate],['Status / स्थिति',transfer.status],['Source approval / स्रोत अनुमोदन',transfer.sourceApprovedBy],['MIS verification / MIS सत्यापन',transfer.destinationMisVerifiedBy],['Destination acceptance / गंतव्य स्वीकृति',transfer.destinationAcceptedBy]].map(([key,v])=>`${key}: ${clean(v)||'—'}`).join('\n'):transfers.slice(0,8).map(r=>`Transfer ${r.id} · ${clean(r.door||r.equipment)}\n${clean(r.source)} → ${clean(r.destination)} · ${clean(r.status)}`).join('\n\n');
-    return {text:`${hi?'वाहन ट्रांसफर विवरण':'Vehicle transfer details'}\n${detail||(hi?'कोई अनुमति वाला ट्रांसफर नहीं मिला।':'No permitted transfers found.')}\n\n${hi?'आगे क्या देखना चाहेंगे?':'What would you like to see next?'}`,keyboard:keyboard([...(!transfer?transfers.slice(0,8).map(r=>`Transfer ${r.id}`):[label('back',language)]),label('main',language)]),context:{listQuery:language==='hi'?'वाहन ट्रांसफर विवरण':'Vehicle transfer details'}};
+    return {text:`${hi?'वाहन ट्रांसफर विवरण':'Vehicle transfer details'}\n${!transfer?`${hi?'कुल ट्रांसफर':'Total transfers'}: ${transfers.length}\n${bdmsSiteCounts(transfers,[[hi?'ट्रांसफर':'Transfers',()=>true]],{language,siteFor:r=>r.source,title:hi?'स्रोत साइट के अनुसार':'By source site'})}\n\n`:''}${detail||(hi?'कोई अनुमति वाला ट्रांसफर नहीं मिला।':'No permitted transfers found.')}\n\n${hi?'आगे क्या देखना चाहेंगे?':'What would you like to see next?'}`,keyboard:keyboard([...(!transfer?transfers.slice(0,8).map(r=>`Transfer ${r.id}`):[label('back',language)]),label('main',language)]),context:{listQuery:language==='hi'?'वाहन ट्रांसफर विवरण':'Vehicle transfer details'}};
   }
-  const ticketId=input.match(/^Ticket (.+)$/)?.[1];
+  const ticketId=bdmsChatIntent(input).kind==='ticketClose'?null:input.match(/^Ticket (.+)$/)?.[1];
   if(ticketId){
     const ticket=tickets.find(r=>r.reference===ticketId);
     if(!ticket)return {text:hi?'टिकट आपकी अनुमति में उपलब्ध नहीं है।':'Ticket not available in your permitted scope.',keyboard:mainKeyboard,context:{}};
@@ -62,7 +63,7 @@ export function bdmsChatConversation({text,language='en',session={},requests=[],
     }else if(action==='linked'||action==='history'){
       const related=visible.filter(r=>r.ref!==record.ref&&(action==='linked'?(record.linkedRequestReferences||[]).includes(r.ref):record.door&&r.door===record.door&&r.site===record.site));
       detail=related.slice(0,8).map(r=>`${r.ref} · ${clean(r.status)}`).join('\n')||(hi?'आपकी अनुमति में संबंधित अनुरोध नहीं हैं।':'No related requests in your permitted scope.');
-      return {text:`${header}\n\n${label(action,language)}\n${detail}\n\n${followup(language)}`,keyboard:keyboard([...related.slice(0,8).map(r=>r.ref),...options.map(key=>label(key,language))]),context:state};
+      return {text:`${header}\n\n${label(action,language)}\n${bdmsSiteCounts(related,[[hi?'अनुरोध':'Requests',()=>true]],{language})}\n${detail}\n\n${followup(language)}`,keyboard:keyboard([...related.slice(0,8).map(r=>r.ref),...options.map(key=>label(key,language))]),context:state};
     }else detail=value('Complaint','समस्या',record.complaint);
     return {text:`${header}\n\n${detail}\n\n${followup(language)}`.slice(0,4000),keyboard:detailKeyboard,context:state};
   }
@@ -70,9 +71,9 @@ export function bdmsChatConversation({text,language='en',session={},requests=[],
   const answer=bdmsChatAnswer({text:input,language,session,requests:visible,scopeLabel,baseUrl});
   const ticketQuery=bdmsChatIntent(input).kind==='ticketClose';
   const support=ticketQuery?tickets.slice(0,8):[];
-  const supportText=support.length?'\n\n'+(hi?'BDMS सहायता टिकट':'BDMS support tickets')+'\n'+support.map(t=>`Ticket ${t.reference} · ${clean(t.status)}`).join('\n'):'';
+  const supportText=ticketQuery?'\n\n'+(hi?'BDMS सहायता टिकट':'BDMS support tickets')+`\n${hi?'कुल':'Total'}: ${tickets.length}\n${bdmsSiteCounts(tickets,[[hi?'टिकट':'Tickets',()=>true]],{language})}\n`+support.map(t=>`Ticket ${t.reference} · ${clean(t.status)}`).join('\n'):'';
   const lines=answer.split('\n');
   const shown=visible.filter(r=>lines.some(line=>line.startsWith(`${r.ref} ·`))).slice(0,8);
-  if(!shown.length&&!support.length)return {text:answer,keyboard:mainKeyboard,context:{}};
+  if(!shown.length&&!support.length)return {text:answer+supportText,keyboard:mainKeyboard,context:{}};
   return {text:`${answer}${supportText}\n\n${hi?'आगे क्या देखना चाहेंगे? नीचे एक अनुरोध चुनें।':'What would you like to see next? Select a request or ticket below for details.'}`.slice(0,4096),keyboard:keyboard([...shown.map(r=>r.ref),...support.map(t=>`Ticket ${t.reference}`),label('main',language)]),context:{listQuery:input}};
 }

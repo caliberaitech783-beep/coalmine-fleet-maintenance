@@ -1,3 +1,4 @@
+import {bdmsSiteCounts} from './telegram-bdms-site-counts.mjs';
 // Read-only, private-chat pilot. Data must be supplied by the application's
 // current authorization and request visibility rules, never by an LLM.
 export const BDMS_CHAT_KEYBOARD={keyboard:[['Open breakdowns','Running BD'],['Find vehicle/request','Pending work'],['Help / सहायता']],resize_keyboard:true};
@@ -62,7 +63,7 @@ export function bdmsChatIntent(text=''){
   if(/ticket close|टिकट बंद/i.test(value))return {kind:'ticketClose'};
   if(/first trip verification|पहली ट्रिप सत्यापन/i.test(value))return {kind:'firstTripVerification'};
   if(/idle|idel|ideal details|आइडल/i.test(value))return {kind:'idle'};
-  if(/summary|सारांश/i.test(value))return {kind:'summary'};
+  if(/summary|site\s*(?:wise|वाइज).*count|साइट.*संख्या|सारांश/i.test(value))return {kind:'summary'};
   if(/my requests|मेरे अनुरोध/i.test(value))return {kind:'own'};
   if(/repair updates|मरम्मत अपडेट/i.test(value))return {kind:'updates'};
   if(/verified requests|सत्यापित अनुरोध/i.test(value))return {kind:'verified'};
@@ -91,7 +92,7 @@ export function bdmsChatAnswer(options){
   const answer=bdmsChatEnglishAnswer(options);
   if(options.language!=='hi')return answer;
   const translations=[['Your BDMS role does not permit breakdown queries. / आपकी भूमिका को ब्रेकडाउन देखने की अनुमति नहीं है।','आपकी भूमिका को ब्रेकडाउन देखने की अनुमति नहीं है।'],['This bot supports BDMS breakdown operations only. Accounts and other applications are excluded. / यह बॉट केवल BDMS ब्रेकडाउन के लिए है।','यह बॉट केवल BDMS ब्रेकडाउन के लिए है। खाते और अन्य ऐप शामिल नहीं हैं।'],['BDMS pilot · Read only / केवल जानकारी','BDMS पायलट · केवल जानकारी'],['Scope:','अनुमति वाले साइट:'],['Choose Open breakdowns, Running BD, Find vehicle/request, Pending work or Help.','नीचे दिए गए मेनू से अपना प्रश्न चुनें।'],['No requests or statuses will be changed.','अनुरोध या स्थिति नहीं बदली जाएगी।'],['Matching requests:','मिले अनुरोध:'],['Vehicle / request details','वाहन / अनुरोध विवरण'],['Complaint:','समस्या:'],['Maintenance:','मेंटेनेंस:'],['No update recorded','कोई अपडेट दर्ज नहीं'],['Pending first-trip / MIS entries · Approvals not included','पहली ट्रिप / MIS लंबित · अनुमोदन शामिल नहीं'],['Closed requests','बंद अनुरोध'],['First trip pending','पहली ट्रिप लंबित'],['MIS pending','MIS सत्यापन लंबित'],['Breakdown ageing · oldest first','ब्रेकडाउन अवधि · सबसे पुराने पहले'],['Site summary','साइट सारांश'],['Open:','खुले:'],['Closed:','बंद:'],['Running BD:','रनिंग बी डी:'],['Started:','शुरू:'],['Showing the first 8. Use /find to narrow the result.','पहले 8 दिखाए गए हैं। अधिक सटीक खोज के लिए /find भेजें।'],['Enter at least three characters of the door or request number.','डोर या अनुरोध नंबर के कम से कम तीन अक्षर लिखें।']];
-  translations.push(['My requests','मेरे अनुरोध'],['Repair updates','मरम्मत अपडेट'],['Verified requests','सत्यापित अनुरोध'],['Pending repairs','लंबित मरम्मत'],['Running BD is included in Open.','रनिंग बी डी की संख्या खुले अनुरोधों में शामिल है।'],['Choose a query from your role menu.','अपनी भूमिका के मेनू से प्रश्न चुनें।']);
+  translations.push(['Site-wise counts','साइट के अनुसार संख्या'],['Count:','संख्या:'],['My requests','मेरे अनुरोध'],['Repair updates','मरम्मत अपडेट'],['Verified requests','सत्यापित अनुरोध'],['Pending repairs','लंबित मरम्मत'],['Running BD is included in Open.','रनिंग बी डी की संख्या खुले अनुरोधों में शामिल है।'],['Choose a query from your role menu.','अपनी भूमिका के मेनू से प्रश्न चुनें।']);
   if(bdmsChatIntent(options.text).kind==='help')return `BDMS सहायता\nआपको अपनी भूमिका और अनुमति वाले साइट के अनुसार जानकारी दिखाई जाती है।\nखोज: /find के बाद डोर या अनुरोध नंबर भेजें।\nलंबित कार्य: ${bdmsChatRole(options.session)==='production'?'पहली ट्रिप':bdmsChatRole(options.session)==='maintenance'?'मरम्मत':bdmsChatRole(options.session)==='mis'?'MIS सत्यापन':'पहली ट्रिप और MIS सत्यापन'}। अनुमोदन अभी शामिल नहीं हैं।\nसभी दर्ज समस्याएँ ठीक होने पर ही अनुरोध बंद करें।`;
   if(bdmsChatIntent(options.text).kind==='findPrompt')return 'डोर या अनुरोध नंबर भेजें। उदाहरण: /find V160';
   return translations.reduce((result,[en,hi])=>result.replaceAll(en,hi),answer);
@@ -110,7 +111,7 @@ function bdmsChatEnglishAnswer({text,session={},requests=[],scopeLabel='Assigned
   if(intent.kind==='own'){rows=rows.filter(r=>String(r.requesterLogin||'').toLowerCase()===String(session.login||'').toLowerCase());title='My requests';}
   if(intent.kind==='updates'){rows=rows.filter(r=>r.status!=='Closed');title='Repair updates';}
   if(intent.kind==='verified'){rows=rows.filter(r=>r.verifiedAt);title='Verified requests';}
-  if(intent.kind==='summary')return `Site summary\nScope: ${scopeLabel}\nOpen: ${rows.filter(r=>r.status!=='Closed').length}\nRunning BD: ${rows.filter(r=>r.status==='Running BD').length}\nClosed: ${rows.filter(r=>r.status==='Closed').length}\nRunning BD is included in Open.`;
+  if(intent.kind==='summary')return `Site summary\nScope: ${scopeLabel}\nOpen: ${rows.filter(r=>r.status!=='Closed').length}\nRunning BD: ${rows.filter(r=>r.status==='Running BD').length}\nClosed: ${rows.filter(r=>r.status==='Closed').length}\nRunning BD is included in Open.\n\n${bdmsSiteCounts(rows,[['Open',r=>r.status!=='Closed'],['Running BD',r=>r.status==='Running BD'],['Closed',r=>r.status==='Closed']])}`;
   if(intent.kind==='closed'){rows=rows.filter(r=>r.status==='Closed');title='Closed requests';}
   if(intent.kind==='firstTrip'){rows=rows.filter(r=>['Closed','Running BD'].includes(r.status)&&!r.verifiedAt&&!r.firstTripDone);title='First trip pending';}
   if(intent.kind==='mis'){rows=rows.filter(r=>['Closed','Running BD'].includes(r.status)&&!r.verifiedAt&&r.firstTripDone);title='MIS pending';}
@@ -130,5 +131,5 @@ function bdmsChatEnglishAnswer({text,session={},requests=[],scopeLabel='Assigned
   }
   const clean=v=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,180);
   const detail=rows.slice(0,8).map(r=>`${clean(r.ref)} · ${clean(r.door||r.equipment)}\n${clean(r.site)} · ${clean(r.status)}\n${intent.kind==='ageing'?`Started: ${clean(r.start||'Not recorded')}\n`:''}${['find','updates'].includes(intent.kind)?`Complaint: ${clean(r.complaint)}\nMaintenance: ${clean(r.work||r.maintenanceWork||'No update recorded')}\n`:''}${baseUrl.replace(/\/$/,'')}/?request=${encodeURIComponent(r.ref)}`);
-  return `${title}\nScope: ${scopeLabel}\nMatching requests: ${rows.length}\n\n${detail.join('\n\n')||'No matching requests in your permitted scope. / आपकी अनुमति वाले साइट में कोई अनुरोध नहीं मिला।'}${rows.length>8?'\n\nShowing the first 8. Use /find to narrow the result.':''}`.slice(0,4000);
+  return `${title}\nScope: ${scopeLabel}\nMatching requests: ${rows.length}\n\n${bdmsSiteCounts(rows)}\n\n${detail.join('\n\n')||'No matching requests in your permitted scope. / आपकी अनुमति वाले साइट में कोई अनुरोध नहीं मिला।'}${rows.length>8?'\n\nShowing the first 8. Use /find to narrow the result.':''}`.slice(0,4000);
 }
