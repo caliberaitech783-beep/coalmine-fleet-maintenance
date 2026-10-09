@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {runDownloadNotice} from './download-notice.mjs';
 import {
   BookUser,Building2,Download,FilterX,LayoutDashboard,
   Network,Pencil,RefreshCw,Search,TableProperties,TriangleAlert,UsersRound,X,
@@ -30,13 +31,13 @@ function flattenDirectory(directory){
 }
 
 function csvCell(value){return `"${String(value??'').replaceAll('"','""')}"`;}
-function exportRows(rows){
+function exportRows(rows){return runDownloadNotice('Directory CSV',()=>{
   const columns=[['Employee ID','empId'],['Name','name'],['Category','cat'],['Designation','designation'],['Department','department'],['Site / Office','siteLabel'],['Reports to','reportingTo'],['Contact','contact'],['Email','email'],['Status','status']];
   const lines=[columns.map(([label])=>csvCell(label)).join(',')];
   rows.forEach(row=>lines.push(columns.map(([,key])=>csvCell(row[key])).join(',')));
   const blob=new Blob([`\ufeff${lines.join('\r\n')}`],{type:'text/csv;charset=utf-8'});
   const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`caliber-directory-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(link.href);
-}
+});}
 
 function DirectoryTable({rows,onSelect,onOrganisation,organisationManagers,empty='No employees match these filters.'}){
   if(!rows.length)return <div className="cdir-empty">{empty}</div>;

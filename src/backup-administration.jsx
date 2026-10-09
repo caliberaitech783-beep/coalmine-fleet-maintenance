@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {beginDownload} from './download-notice.mjs';
 import {responseTotalBytes,trackedBody,transferLabel,transferPercent} from './transfer-progress.mjs';
 import {AlertTriangle,CalendarClock,CheckCircle2,CloudCog,Copy,Database,Download,FileArchive,FolderOpen,HardDrive,History,KeyRound,Laptop,RefreshCw,RotateCcw,Save,ShieldCheck,Trash2,Upload} from 'lucide-react';
 
@@ -111,6 +112,7 @@ function PcBackupCopy({session}){
   };
   const copyKey=async()=>{try{await navigator.clipboard.writeText(created.key);setCopied(true);}catch{setCopied(false);}};
   const downloadSetup=async()=>{
+    const downloadNotice=beginDownload('Backup setup script');
     setWorking('script');setProblem('');
     try{
       const response=await fetch('/pc-backup/Caliber-Pulse-Backup-Setup.ps1',{cache:'no-store'});
@@ -120,7 +122,8 @@ function PcBackupCopy({session}){
       const url=URL.createObjectURL(new Blob([script],{type:'text/plain'}));
       const link=document.createElement('a');link.href=url;link.download='Caliber-Pulse-Backup-Setup.ps1';document.body.appendChild(link);link.click();link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(scriptError){setProblem(scriptError.message||'Could not load the PC setup script.');}
+      downloadNotice.success();
+    }catch(scriptError){downloadNotice.error(scriptError);setProblem(scriptError.message||'Could not load the PC setup script.');}
     finally{setWorking('');}
   };
   const when=(value)=>value?new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short',hour12:true}).replace(/\b(am|pm)\b/gi,period=>period.toUpperCase()):'Never';
@@ -197,6 +200,7 @@ export default function BackupAdministration({section='Backup',session,onNavigat
     finally{setBusy('');}
   };
   const exportBackup=async()=>{
+    const downloadNotice=beginDownload('Backup export');
     setBusy('export');setError('');setNotice('');setTransfer(null);
     try{
       let handle=null;
@@ -212,10 +216,12 @@ export default function BackupAdministration({section='Backup',session,onNavigat
       else await saveResponseToComputer(response,fileName,onProgress);
       setTransfer((current)=>({...current,phase:'done',fileName}));
       setNotice(`${fileName} was exported to the selected location.`);await load();
-    }catch(exportError){setTransfer(null);if(exportError.name!=='AbortError')setError(exportError.message||'Could not export the backup.');}
+      downloadNotice.success();
+    }catch(exportError){downloadNotice.error(exportError);setTransfer(null);if(exportError.name!=='AbortError')setError(exportError.message||'Could not export the backup.');}
     finally{setBusy('');}
   };
   const downloadStored=async(row)=>{
+    const downloadNotice=beginDownload('Backup');
     setBusy(`download-${row.id}`);setError('');setTransfer(null);
     try{
       const startedAt=Date.now();
@@ -224,7 +230,8 @@ export default function BackupAdministration({section='Backup',session,onNavigat
       await saveResponseToComputer(response,row.fileName,(loaded,total)=>setTransfer({label:`Download ${row.fileName}`,phase:'sending',loaded,total,startedAt,fileName:row.fileName}));
       setTransfer((current)=>current&&({...current,phase:'done',fileName:row.fileName}));
       setNotice(`${row.fileName} was saved to the selected location.`);
-    }catch(downloadError){setTransfer(null);if(downloadError.name!=='AbortError')setError(downloadError.message||'Could not download the backup.');}
+      downloadNotice.success();
+    }catch(downloadError){downloadNotice.error(downloadError);setTransfer(null);if(downloadError.name!=='AbortError')setError(downloadError.message||'Could not download the backup.');}
     finally{setBusy('');}
   };
   const deleteStored=async(row)=>{

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import {beginDownload} from './download-notice.mjs';
 import { CheckCircle2, Download, Printer, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
 import { printHelperAvailable } from "./direct-print.mjs";
 
@@ -40,6 +41,7 @@ export default function PrintHelperSetupPage({ session }) {
     finally { setWorking(false); }
   };
   const downloadCertificate = async () => {
+    const downloadNotice=beginDownload('Print certificate');
     setWorking(true);
     try {
       const response = await fetch("/api/print-helper/setup/override.crt", { cache: "no-store", headers });
@@ -49,7 +51,8 @@ export default function PrintHelperSetupPage({ session }) {
       link.href = url; link.download = "override.crt";
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (error) { alert(error.message); }
+      downloadNotice.success();
+    } catch (error) { downloadNotice.error(error); alert(error.message); }
     finally { setWorking(false); }
   };
   const setup = state.setup;

@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {beginDownload} from './download-notice.mjs';
 
 export default function TelegramSiteGroups({token}){
   const [data,setData]=useState(null),[busy,setBusy]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState(''),[campaign,setCampaign]=useState(null);
@@ -14,13 +15,17 @@ export default function TelegramSiteGroups({token}){
     try{setData(await request(''))}catch(error){setError(error.message)}
   }
   useEffect(()=>{refresh()},[token]);
-  function download(value,name){
+  function download(value,name,downloadNotice=beginDownload('Telegram JSON export')){
+    try{
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
     const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    downloadNotice.success();
+    }catch(error){downloadNotice.error(error);throw error;}
   }
   async function exportUsers(){
+    const downloadNotice=beginDownload('Telegram users');
     setBusy('export');setError('');
-    try{download(await request('/export'),'Caliber Pulse-site-group-users.json')}catch(error){setError(error.message)}finally{setBusy('')}
+    try{download(await request('/export'),'Caliber Pulse-site-group-users.json',downloadNotice)}catch(error){downloadNotice.error(error);setError(error.message)}finally{setBusy('')}
   }
   async function sendCampaign(campaignId){
     setBusy('campaign');setError('');setNotice('');

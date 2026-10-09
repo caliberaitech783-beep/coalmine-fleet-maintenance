@@ -1,4 +1,5 @@
 import React, {useEffect, useRef, useState} from "react";
+import {beginDownload} from './download-notice.mjs';
 
 function ProtectedMedia({url, token, label, kind = "attachment", contentType = "", fileName = ""}) {
   const [state, setState] = useState({phase: "idle", objectUrl: "", type: ""});
@@ -49,7 +50,7 @@ function ProtectedMedia({url, token, label, kind = "attachment", contentType = "
   const type = state.type || contentType;
   if (String(type).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={state.objectUrl}>{label} video</video>;
   if (String(type).startsWith("image/")) return <a href={state.objectUrl} target="_blank" rel="noreferrer" title={fileName || `Open ${label.toLowerCase()}`}><img className="ticket-media" src={state.objectUrl} alt={fileName || label} /></a>;
-  return <a className="protected-media-file" href={state.objectUrl} target="_blank" rel="noreferrer" download={fileName || undefined}>Open {fileName || label}</a>;
+  return <a className="protected-media-file" href={state.objectUrl} target="_blank" rel="noreferrer" download={fileName || undefined} onClick={()=>beginDownload('Attachment').success()}>Open {fileName || label}</a>;
 }
 
 export function ProtectedAudio(props) {

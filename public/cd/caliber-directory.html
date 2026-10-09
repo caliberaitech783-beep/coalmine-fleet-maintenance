@@ -2631,20 +2631,29 @@ window.cdirDirectoryReady = (async function(){
 
   // ---------- file offering (works both as a plain local file and inside a published Claude artifact) ----------
   async function offerDownload(filename, blob){
+    const notice=document.createElement('div');
+    notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
+    Object.assign(notice.style,{position:'fixed',bottom:'20px',right:'16px',maxWidth:'calc(100vw - 32px)',padding:'16px',borderRadius:'12px',background:'#522e90',color:'#fff',zIndex:'2147483647'});
+    notice.textContent='Preparing download…';document.body.appendChild(notice);
+    const done=(error)=>{notice.textContent=error?'Download failed. Please try again.':'Download started. Check your browser downloads.';notice.style.background=error?'#991b1b':'#166534';setTimeout(()=>notice.remove(),10000);};
+    await new Promise(resolve=>setTimeout(resolve,50));
+    try{
     let claudeApi = null;
     try{ claudeApi = (window.claude && typeof window.claude.use === 'function') ? window.claude : null; }catch(e){}
     if(claudeApi){
       let dl = null;
       try{ dl = await claudeApi.use('downloads'); }catch(e){ dl = null; }
       if(dl){
-        try{ await dl.save({filename, data: blob}); return; }
-        catch(err){ alert('Could not save the file (' + (err && err.code || 'error') + ').'); return; }
+        try{ await dl.save({filename, data: blob}); done();return; }
+        catch(err){ done(err);alert('Could not save the file (' + (err && err.code || 'error') + ').'); return; }
       }
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);done();
+    }catch(error){done(error);}
   }
   // ---------- CSV export ----------
   function csvEscape(v){ v = (v===undefined||v===null)?'':String(v); return '"' + v.replace(/"/g,'""') + '"'; }

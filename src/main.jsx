@@ -11,6 +11,7 @@ import { siteReportHtml } from "./site-report.mjs";
 import { isIdleVehicleRequest } from "../request-idle.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter, setSmartPrintPrinterSource } from "./smart-print.mjs";
+import {beginDownload,runDownloadNotice} from './download-notice.mjs';
 import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect, rememberedPrinter } from "./direct-print.mjs";
 import { showPrintPreview } from "./print-preview.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
@@ -3930,10 +3931,11 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     if (downloadActivity) return;
     setOpen(false);
     setDownloadActivity(message);
+    const downloadNotice=beginDownload(message.replace(/Preparing | report\.\.\./g,''));
     window.setTimeout(async () => {
       const startedAt = Date.now();
-      try { await task(); }
-      catch (error) { alert(error.message); }
+      try { await task(); downloadNotice.success(); }
+      catch (error) { downloadNotice.error(error); alert(error.message); }
       finally {
         window.setTimeout(() => setDownloadActivity(""), Math.max(0, 450 - (Date.now() - startedAt)));
       }
@@ -4756,7 +4758,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
     setDragActive(false);
     setMode(null);
   };
-  const template = () => {
+  const template = () => runDownloadNotice('CSV template',() => {
     const csv =
       fields
         .map(([, label]) => '"' + label.replaceAll('"', '""') + '"')
@@ -4766,7 +4768,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
     link.download = name.toLowerCase().replaceAll(" ", "-") + "-template.csv";
     link.click();
     URL.revokeObjectURL(link.href);
-  };
+  });
   const syncOracle = async () => {
     if (syncingOracle) return;
     setSyncingOracle(true);
@@ -7795,6 +7797,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   };
   const downloadSelectedReportZip = async () => {
     if (reportZipDownloading || !selectedZipReports.length) return;
+    const downloadNotice=beginDownload('Selected reports ZIP');
     setReportZipDownloading(true);
     try {
       if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
@@ -7825,7 +7828,8 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       }));
       downloadExportFile(zipStoredFiles(generatedFiles.flat(), "application/zip"), exportFileName("selected-reports", "zip"));
       setReportZipOpen(false);
-    } catch (error) { alert(error.message); }
+      downloadNotice.success();
+    } catch (error) { downloadNotice.error(error); alert(error.message); }
     finally { setReportZipDownloading(false); }
   };
   const scheduleDesignationOptions = reportAccess.canManageAll ? reportDesignationOptions : reportDesignationOptions.filter((designation) => reportAccess.allowedDesignationKeys.includes(designation.key));
@@ -9811,7 +9815,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     } catch (error) { alert(error.message); } finally { setLoading(false); }
   };
   return file
-    ? <a className="compact" href={file} target="_blank" rel="noreferrer" download={name}>Open file</a>
+    ? <a className="compact" href={file} target="_blank" rel="noreferrer" download={name} onClick={()=>beginDownload('Attachment').success()}>Open file</a>
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
