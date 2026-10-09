@@ -2888,7 +2888,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return <>
       {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
       {canEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
-      {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> {deletionApprovalRequired ? "Request deletion" : "Delete"}</button>}
+      {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
       {canRemark && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
       {!canEdit && !canRemark && !canDelete && <span>Read only</span>}
     </>;
@@ -4417,7 +4417,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
 }
 
 function TenderSubmenuFields({record={},view}){const field=view==='mobile'?'tenderMobileAccess':'tenderDesktopAccess';const previouslyEnabled=assignedUserRoles(record).includes('Tender User')||isCheckedValue(record.tenderAccess);const [selected,setSelected]=useState(()=>previouslyEnabled&&Object.hasOwn(record,field)?normalizedTenderSelection(record[field]):[...TENDER_ALL_PERMISSIONS]);return <fieldset className="user-access-field access-section-card access-submenu-card"><legend>Tender · Menus and submenus</legend><input type="hidden" name={field} value=""/><div><AccessSelectAll label="Select all Tender permissions" options={TENDER_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{TENDER_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={field} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div>{view==='desktop'&&<label>Business unit scope (blank allows all)<input name="tenderBusinessUnit" defaultValue={record.tenderBusinessUnit||''}/></label>}</fieldset>;}
-function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false, deletionApprovalRequired = false }) {
+function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
     : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
@@ -5213,7 +5213,7 @@ function Equipment({
   const deleteEquipment = async (record) => {
     if (!record.id) return;
     const recordName = record.equipmentName || record.door || record.manufacturerSerialNo || "this equipment record";
-    if (!confirm(deletionApprovalRequired ? `Request deletion of ${recordName}? The record will remain until the assigned manager approves.` : `Delete ${recordName}? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
     try {
       await onDelete(record.id);
       if (detail?.id === record.id) setDetail(null);
@@ -8035,7 +8035,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   );
 }
 
-function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
+function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [], canCreateSuperAdmin = false, deletionApprovalRequired = false }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     [changingPassword, setChangingPassword] = useState(null),
@@ -8139,7 +8139,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   };
   const deleteRow = async (record) => {
     const recordName = record.oem || record.employee || record.login || record.username || (isCdirMaster(name) && (record.name || record.designation || record.department || record.code)) || [record.site,record.shiftName].filter(Boolean).join(" · ") || "this record";
-    if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
+    if (!confirm(deletionApprovalRequired ? `Request deletion of ${recordName}? The record will remain until the assigned manager approves.` : `Delete ${recordName}? This cannot be undone.`)) return;
     const reason = window.prompt(`Enter the reason for deleting ${recordName}:`, "");
     if (reason === null) return;
     if (!reason.trim()) return alert("A deletion reason is required for the Audit Trail.");
@@ -8323,7 +8323,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                       {name !== "Privilege" && (
                         <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
-                      <button className="delete" aria-label={`${deletionApprovalRequired ? "Request deletion of" : "Delete"} ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
+                      <button className="delete" aria-label={`${deletionApprovalRequired ? "Request deletion of" : "Delete"} ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> {deletionApprovalRequired ? "Request deletion" : "Delete"}</button>
                     </td>
                   )}
                 </tr>
