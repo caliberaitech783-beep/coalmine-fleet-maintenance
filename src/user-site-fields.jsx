@@ -4,7 +4,7 @@ import "./user-site-fields.css";
 
 export default function UserSiteFields({record = {}, siteOptions = []}) {
   const [selected, setSelected] = useState(() => userSiteSelection(record));
-  const options = displaySiteSelection([...siteOptions, ...userSiteSelection(record)]);
+  const options = displaySiteSelection([...siteOptions, "Nagpur", "Chandrapur", ...userSiteSelection(record)]);
   const allSelected = options.length > 0 && options.every((site) => selected.includes(site));
   return <fieldset className="account-role-field user-site-field full">
     <legend>Location *</legend>

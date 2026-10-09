@@ -57,8 +57,10 @@ import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
 import {cdirDirectoryForViewer,cdirViewerContext} from './cdir-access.mjs';
+import {CDIR_DELETION_SCHEMA,registerCdirDeletions,deletionProtectedMaster,cdirDirectAdministrator} from './cdir-deletion.mjs';
+import {cdirApprovalRecipients} from './cdir-approval-routing.mjs';
 import {canEditCdirEmployee,registerCdirEmployeeEdit} from './cdir-employee-edit.mjs';
-import {EMPLOYEE_TRANSFER_SCHEMA,registerEmployeeTransfers,employeeTransferAccess,employeeTransferVisible} from './employee-transfer.mjs';
+import {EMPLOYEE_TRANSFER_SCHEMA,registerEmployeeTransfers,employeeTransferAccess,employeeTransferVisible,employeeTransferSiteAllowed} from './employee-transfer.mjs';
 import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {replaceCdirRoster} from './cdir-roster-import.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -684,6 +686,7 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS master_records_master_name_idx
       ON master_records (master_name, created_at DESC);
     ${EMPLOYEE_TRANSFER_SCHEMA}
+    ${CDIR_DELETION_SCHEMA}
     CREATE INDEX IF NOT EXISTS master_records_user_login_idx
       ON master_records ((lower(trim(record_data->>'login'))))
       WHERE master_name='Users & employees';
@@ -2512,7 +2515,7 @@ async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
-    if(session.assignedRole==='HR User'&&isCdirMaster(req.params?.master?decodeURIComponent(req.params.master):'')){
+    if(['HR User','HR Manager'].includes(session.assignedRole)&&isCdirMaster(req.params?.master?decodeURIComponent(req.params.master):'')){
       req.session=session;return next();
     }
     if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
@@ -3938,7 +3941,7 @@ async function telegramBdmsPilotAnswer(session,text,language='en',context={}){
 // Only Admin and Super Admin may change them; Managers cannot even read them.
 function cdirWriteError(req,master){
   if(!isCdirMaster(master))return '';
-  if(req.session?.assignedRole==='HR User')return '';
+  if(['HR User','HR Manager'].includes(req.session?.assignedRole))return '';
   return req.session?.role==='super'&&normalizeAdminLevel(req.session?.permissions?.adminLevel)!=='Manager'
     ?'':'Only an Admin or Super Admin can change the C-Dir masters.';
 }
@@ -4013,11 +4016,10 @@ async function cdirDirectory(){
 }
 
 registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters:cdirMasterRecords,auditChangedFields,loadViewer:currentUserRecord});
-registerEmployeeTransfers(app,{pool,requireSession,loadViewer:currentUserRecord,loadMasters:cdirMasterRecords,
-  pmLogins:async(client,site)=>{
-    const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'");
-    return [...new Set(rows.filter(({record_data:user})=>{const profile=resolveMobileAccess({user});return profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Project Manager')&&userManagesSite(user,site);}).map(({record_data:user})=>String(user.login||'').trim().toLowerCase()).filter(Boolean))];
-  },notify:(client,recipients,reference,message)=>addTicketNotifications(client,recipients,reference,message,null,{whatsapp:false})});
+async function cdirApproverLogins(client,site){const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'");return cdirApprovalRecipients(rows.map(row=>row.record_data),site,resolveMobileAccess);}
+const cdirNotify=(client,recipients,reference,message)=>addTicketNotifications(client,recipients,reference,message,null,{whatsapp:false});
+registerEmployeeTransfers(app,{pool,requireSession,loadViewer:currentUserRecord,loadMasters:cdirMasterRecords,pmLogins:cdirApproverLogins,notify:cdirNotify});
+const requestCdirDeletion=registerCdirDeletions(app,{pool,requireSession,loadViewer:currentUserRecord,approverLogins:cdirApproverLogins,notify:cdirNotify});
 app.get('/api/cdir/directory',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
@@ -5927,10 +5929,10 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
     const read=async()=>{
       const {rows}=await retryDatabaseRead(()=>pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
-        COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination',employee_transfer.record_data->>'destination','') AS site,
+        COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination',employee_transfer.record_data->>'destination',deletion_request.record_data->>'site','') AS site,
         COALESCE(r.door_number,transfer.record_data->>'door',transfer.record_data->>'equipment','') AS door,
         COALESCE(r.requester_role,'') AS "requesterRole",
-        COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' WHEN employee_transfer.id IS NOT NULL THEN 'Employee transfer' END,'') AS "ticketCategory",
+        COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' WHEN employee_transfer.id IS NOT NULL THEN 'Employee transfer' WHEN deletion_request.id IS NOT NULL THEN 'C-Directory deletion' END,'') AS "ticketCategory",
         to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
         FROM crm_notifications n
         LEFT JOIN maintenance_requests r ON r.reference=n.ticket_reference
@@ -5938,6 +5940,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
         LEFT JOIN master_records transfer ON transfer.master_name='Vehicle transfers'
           AND transfer.record_data->>'transferNo'=n.ticket_reference
         LEFT JOIN employee_transfers employee_transfer ON employee_transfer.record_data->>'transferNo'=n.ticket_reference
+        LEFT JOIN cdir_deletion_requests deletion_request ON deletion_request.record_data->>'requestNo'=n.ticket_reference
         WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]));
       return rows;
     };
@@ -5969,6 +5972,12 @@ app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
     const reference=String(notifications[0]?.reference||'').trim();
     if(!reference)return unavailable();
 
+    if(reference.startsWith('CD-DEL-')){
+      const {rows}=await pool.query("SELECT id,record_data FROM cdir_deletion_requests WHERE record_data->>'requestNo'=$1",[reference]);if(rows.length!==1)return unavailable();
+      const record={id:rows[0].id,...rows[0].record_data},context=employeeTransferAccess(req.session,await currentUserRecord(req.session));
+      if(!context.canSubmit||!(context.privileged||employeeTransferSiteAllowed(context,record.site)))return unavailable();
+      return res.json({kind:'cdir-deletion',reference,record});
+    }
     if(reference.startsWith('ET-')){
       const {rows}=await pool.query("SELECT id,record_data FROM employee_transfers WHERE record_data->>'transferNo'=$1",[reference]);
       if(rows.length!==1)return unavailable();
@@ -7728,7 +7737,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const maintenanceManager=maintenanceManagerSession(req.session);
     const canViewRepairTypes=maintenanceManager||superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     const canViewDelayedReasons=maintenanceManager||superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true||req.session.permissions?.editRequests===true;
-    if(req.session.assignedRole!=='HR User'&&!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
+    if(!['HR User','HR Manager'].includes(req.session.assignedRole)&&!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?(req.session.role==='normal'?userSiteScope(managerRecord):managerReportScope(managerRecord)):null;
@@ -7749,7 +7758,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(req.session.assignedRole==='HR User'?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
+        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
@@ -8070,6 +8079,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
 app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
+    if(deletionProtectedMaster(master)&&!cdirDirectAdministrator(req.session))return res.status(403).json({error:'Submit individual employee/contact deletion requests for approval.'});
     const cdirError=cdirWriteError(req,master);
     if(cdirError)return res.status(403).json({error:cdirError});
     if(!master)return res.status(400).json({error:'A master name is required.'});
@@ -8133,6 +8143,7 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const master=decodeURIComponent(req.params.master);
     const id=Number(req.params.id);
     if(!master||!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid master record is required.'});
+    if(deletionProtectedMaster(master)&&!cdirDirectAdministrator(req.session))return requestCdirDeletion(req,res,next);
     const existingRecordResult=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     const deletedRecord=existingRecordResult.rows[0]?.record_data;
     if(!deletedRecord)return res.status(404).json({error:'Master record not found.'});

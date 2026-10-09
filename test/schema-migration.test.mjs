@@ -1,3 +1,4 @@
+import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {PGlite} from '@electric-sql/pglite';
@@ -48,7 +49,7 @@ test('unchanged slot restarts skip DDL; schema changes apply once and failed mig
 test('production schema and session repairs install atomically on a fresh database',async()=>{
   const db=new PGlite();
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  const sql=source.match(/await applySchemaMigration\(pool,`([\s\S]*?)`,\[repairLegacySessionDefaults,initializeLoginHistory\]\)/)[1].replace('${archiveSchemaSql}',()=>archiveSchemaSql).replace('${EMPLOYEE_TRANSFER_SCHEMA}',()=>EMPLOYEE_TRANSFER_SCHEMA);
+  const sql=source.match(/await applySchemaMigration\(pool,`([\s\S]*?)`,\[repairLegacySessionDefaults,initializeLoginHistory\]\)/)[1].replace('${archiveSchemaSql}',()=>archiveSchemaSql).replace('${EMPLOYEE_TRANSFER_SCHEMA}',()=>EMPLOYEE_TRANSFER_SCHEMA).replace('${CDIR_DELETION_SCHEMA}',()=>CDIR_DELETION_SCHEMA);
   const client={query:(sql,args)=>{
     if(sql==='SELECT pg_advisory_xact_lock(783,1)')return Promise.resolve({rows:[]});
     if(!args&&sql.includes(';'))return db.exec(sql);
@@ -58,7 +59,7 @@ test('production schema and session repairs install atomically on a fresh databa
   try {
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,false);
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,true);
-    assert.equal((await db.query("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_name IN ('maintenance_requests','auth_sessions','user_login_history','crm_notifications','employee_transfers')")).rows[0].count,5);
+    assert.equal((await db.query("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_name IN ('maintenance_requests','auth_sessions','user_login_history','crm_notifications','employee_transfers','cdir_deletion_requests')")).rows[0].count,6);
   } finally {await db.close();}
 });
 

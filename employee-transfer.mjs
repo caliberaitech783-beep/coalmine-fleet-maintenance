@@ -4,6 +4,8 @@ import {CDIR_MASTERS,cdirNormalizeRecord,cdirEmployeeError} from './cdir-masters
 import {managerRoleSelection} from './admin-access.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {canonicalSiteName} from './site-location.mjs';
+import {assignedUserRoles} from './account-role-access.mjs';
+import {approvalRoleForSite,officeApprovalKey,hrManagerAssignedToOffice} from './cdir-approval-routing.mjs';
 
 export const EMPLOYEE_TRANSFER_SCHEMA=`CREATE TABLE IF NOT EXISTS employee_transfers(id BIGSERIAL PRIMARY KEY,record_data JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE INDEX IF NOT EXISTS employee_transfers_employee_idx ON employee_transfers ((record_data->>'employeeRecordId')); CREATE UNIQUE INDEX IF NOT EXISTS employee_transfers_reference_idx ON employee_transfers ((record_data->>'transferNo')); CREATE UNIQUE INDEX IF NOT EXISTS employee_transfers_pending_idx ON employee_transfers ((record_data->>'employeeRecordId')) WHERE record_data->>'status' IN ('Awaiting source approval','Awaiting destination acceptance');`;
 export const ET_STATUS={OUT:'Awaiting source approval',IN:'Awaiting destination acceptance',DONE:'Completed',REJECTED:'Rejected'};
@@ -17,9 +19,10 @@ export function employeeTransferAccess(session={},user={}){
   const roles=managerRoleSelection(user.managerRoles||user.managerRole||session.permissions?.managerRoles||session.permissions?.managerRole);
   const pm=session.role==='super'&&roles.includes('Project Manager')&&clean(user.adminLevel||session.permissions?.adminLevel).toLowerCase()==='manager';
   const privileged=canEditCdirEmployee(session,user);
-  return {privileged,pm,canSubmit:privileged||pm,scope:managerReportScope(user)};
+  const hrManager=assignedUserRoles(user).includes('HR Manager')||session.assignedRole==='HR Manager';
+  return {privileged,pm,hrManager,user,canSubmit:privileged||pm||hrManager,scope:managerReportScope(user)};
 }
-export const employeeTransferSiteAllowed=(context,site)=>context.pm&&reportScopeIncludesSite(context.scope,site);
+export const employeeTransferSiteAllowed=(context,site)=>officeApprovalKey(site)?context.hrManager&&hrManagerAssignedToOffice(context.user,site):context.pm&&reportScopeIncludesSite(context.scope,site);
 export const employeeTransferVisible=(record,context)=>context.privileged||[record.source,record.destination].some(site=>employeeTransferSiteAllowed(context,site));
 async function employeeRecord(db,id){
   const {rows}=await db.query('SELECT id,record_data FROM master_records WHERE master_name=$1 AND id=$2 FOR UPDATE',[CDIR_MASTERS.employee,id]);
@@ -73,10 +76,11 @@ export function registerEmployeeTransfers(app,{pool,requireSession,loadViewer,lo
     const proposed=cdirNormalizeRecord(CDIR_MASTERS.employee,{...employee,...Object.fromEntries(Object.entries(input.record).filter(([key])=>!contacts.includes(key))),site:destination});
     const error=cdirEmployeeError(proposed,values);if(error)fail(400,error);
     const pending=await client.query(`SELECT id FROM employee_transfers WHERE record_data->>'employeeRecordId'=$1 AND record_data->>'status'=ANY($2::text[])`,[String(input.employeeRecordId),[ET_STATUS.OUT,ET_STATUS.IN]]);if(pending.rows.length)fail(409,'This employee already has a pending transfer.');
+    const deletion=await client.query("SELECT id FROM cdir_deletion_requests WHERE record_data->>'employeeRecordId'=$1 AND record_data->>'status'='Pending'",[String(input.employeeRecordId)]);if(deletion.rows.length)fail(409,'Complete or reject the pending deletion request first.');
     const sourceManagers=await pmLogins(client,employee.site),destinationManagers=await pmLogins(client,destination);
-    if(!sourceManagers.length||!destinationManagers.length)fail(400,'Assign a Project Manager to both source and destination before creating this request.');
+    if(!sourceManagers.length||!destinationManagers.length)fail(400,`Assign a ${approvalRoleForSite(employee.site)} at ${employee.site} and a ${approvalRoleForSite(destination)} at ${destination} before creating this request.`);
     const at=new Date().toISOString(),by=req.session.name||req.session.login;
-    const record={transferNo:`ET-${Date.now()}-${randomUUID().slice(0,4).toUpperCase()}`,employeeRecordId:String(input.employeeRecordId),empId:employee.empId,name:proposed.name,source:employee.site,destination,effectiveDate,remarks:clean(input.remarks).slice(0,2000),status:ET_STATUS.OUT,submittedBy:by,submittedLogin:req.session.login,submittedAt:at,sourceManagers,destinationManagers,before:employee,beforeContact:contact,revision:hash(employee,contact),proposed,proposedContact:{...(contact?.record_data||{}),name:proposed.name,empId:employee.empId,...Object.fromEntries(contacts.map(key=>[key,clean(input.record[key]??contact?.record_data[key])]))},history:[{action:'Requested',by,login:req.session.login,at,note:clean(input.remarks).slice(0,2000)}]};
+    const record={transferNo:`ET-${Date.now()}-${randomUUID().slice(0,4).toUpperCase()}`,employeeRecordId:String(input.employeeRecordId),empId:employee.empId,name:proposed.name,source:employee.site,destination,effectiveDate,remarks:clean(input.remarks).slice(0,2000),status:ET_STATUS.OUT,submittedBy:by,submittedLogin:req.session.login,submittedAt:at,sourceManagers,destinationManagers,sourceApproverRole:approvalRoleForSite(employee.site),destinationApproverRole:approvalRoleForSite(destination),before:employee,beforeContact:contact,revision:hash(employee,contact),proposed,proposedContact:{...(contact?.record_data||{}),name:proposed.name,empId:employee.empId,...Object.fromEntries(contacts.map(key=>[key,clean(input.record[key]??contact?.record_data[key])]))},history:[{action:'Requested',by,login:req.session.login,at,note:clean(input.remarks).slice(0,2000)}]};
     const saved=await client.query('INSERT INTO employee_transfers(record_data) VALUES($1::jsonb) RETURNING id',[JSON.stringify(record)]);
     await notify(client,sourceManagers,record.transferNo,`Employee transfer OUT: ${record.empId} ${record.name}, ${record.source} → ${destination}. Source approval required.`);
     await notify(client,destinationManagers,record.transferNo,`Employee transfer IN: ${record.empId} ${record.name}, ${record.source} → ${destination}. Awaiting source approval.`);
@@ -88,7 +92,7 @@ export function registerEmployeeTransfers(app,{pool,requireSession,loadViewer,lo
     const {rows}=await client.query('SELECT record_data FROM employee_transfers WHERE id=$1 FOR UPDATE',[req.params.id]);const record=rows[0]?.record_data;if(!record)fail(404,'Transfer not found.');
     const action=req.params.action,sourceStage=record.status===ET_STATUS.OUT,destinationStage=record.status===ET_STATUS.IN;
     if(!sourceStage&&!destinationStage)fail(409,'This request is already finalized.');
-    if(!employeeTransferSiteAllowed(ctx,sourceStage?record.source:record.destination))fail(403,'Only the assigned Project Manager can act on this stage.');
+    if(!employeeTransferSiteAllowed(ctx,sourceStage?record.source:record.destination))fail(403,'Only the assigned location approver can act on this stage.');
     if(!['approve','accept','reject'].includes(action)||action==='approve'&&!sourceStage||action==='accept'&&!destinationStage)fail(409,'This action does not match the current transfer stage.');
     const note=clean(req.body?.note).slice(0,2000);if(action==='reject'&&!note)fail(400,'Enter a reason for rejection.');
     const at=new Date().toISOString(),by=req.session.name||req.session.login;

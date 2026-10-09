@@ -325,6 +325,7 @@ import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
 import CaliberDirectoryPage from "./caliber-directory-page.jsx";
+import CdirDeletion from "./cdir-deletion.jsx";
 import EmployeeTransfer,{CdirModule,useEmployeeTransferAccess} from "./employee-transfer.jsx";
 import StockStatement from './stock-statement.jsx';
 import PurchaseOrderReport from './purchase-order-report.jsx';
@@ -1280,13 +1281,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu cdir-menu${cdirOpen ? " open" : ""}${cdirSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setCdirSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Employee Transfer" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);closeMenus(); setCdirOpen(!cdirOpen);}}>
+          <div className="nav-config-row"><button className={`header-nav-item${active === "CD" || active === "Record Deletion Approvals" || active === "Employee Transfer" || active === "Employee Tenure Report" || cdirMasterNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="cd" aria-haspopup="menu" aria-expanded={cdirOpen} onClick={() => {setCdirSelectionClosed(false);closeMenus(); setCdirOpen(!cdirOpen);}}>
             <span className="header-nav-icon" aria-hidden="true"><BookUser /></span><span className="nav-label">C-Dir</span><ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown cdir-dropdown" role="menu">
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "CD" ? " active" : ""}`} data-workspace="directory" onClick={event => selectDropdownPage("CD", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><BookUser /><i className="workspace-icon-glow" /></span><span className="nav-label">Directory</span></button></div>}
             {canViewDirectory && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Tenure Report" ? " active" : ""}`} data-workspace="report-employee-tenure" onClick={event => selectDropdownPage("Employee Tenure Report", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Tenure Report</span></button></div>}
             {employeeTransferAllowed && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Employee Transfer" ? " active" : ""}`} data-workspace="employee-transfer" onClick={event => selectDropdownPage("Employee Transfer", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users /><i className="workspace-icon-glow" /></span><span className="nav-label">Employee Transfer</span></button></div>}
+            {employeeTransferAllowed && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Record Deletion Approvals" ? " active" : ""}`} data-workspace="cdir-deletion" onClick={event => selectDropdownPage("Record Deletion Approvals", event, setCdirSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Trash2 /></span><span className="nav-label">Record Deletion Approvals</span></button></div>}
             <ClockMenu down label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} hours={cdirMasterNav.map((_, index, all) => 3.4 + index * 5.2 / Math.max(1, all.length - 1))} active={active} onSelect={selectMaster} />
           </div>
         </div>}
@@ -2885,7 +2887,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return <>
       {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
       {canEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
-      {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
+      {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> {deletionApprovalRequired ? "Request deletion" : "Delete"}</button>}
       {canRemark && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
       {!canEdit && !canRemark && !canDelete && <span>Read only</span>}
     </>;
@@ -3157,6 +3159,7 @@ const mobileRoleAuthority = {
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
   "General User": "Choose from all menus",
+  "HR Manager": "Office HR approvals, C-Directory and C-Dir Masters",
   "HR User": "Complete C-Directory, tenure report and C-Dir Masters",
   "Account User": "Accounts workspace only",
   "Tender User": "Tender login with menus and actions customised for this user",
@@ -4401,7 +4404,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
   const shownMenus=[...menus.filter(menu=>menu!=="Tender"&&menuOptions.includes(menu)),...(hasTender?["Tender"]:[])];
   const requestOptions=operationalRequestOptions[role]||[];
   const [selectedRequests,setSelectedRequests]=useState(()=>selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option)));
-  if(role==="HR User")return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.</p><input type="hidden" name={menuField} value="CD" /></section>;
+  if(["HR User","HR Manager"].includes(role))return <section className="view-menu-access full"><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><p>Full C-Directory, Employee Tenure Report and all C-Dir Masters are included.</p><input type="hidden" name={menuField} value="CD" /></section>;
   const toggleRequest=(option,checked)=>setSelectedRequests((current)=>checked?[...new Set([...current,option])]:current.filter((item)=>item!==option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
@@ -4412,7 +4415,7 @@ function OperationalViewMenuFields({record={},view="desktop",role="",hasTender=f
 }
 
 function TenderSubmenuFields({record={},view}){const field=view==='mobile'?'tenderMobileAccess':'tenderDesktopAccess';const previouslyEnabled=assignedUserRoles(record).includes('Tender User')||isCheckedValue(record.tenderAccess);const [selected,setSelected]=useState(()=>previouslyEnabled&&Object.hasOwn(record,field)?normalizedTenderSelection(record[field]):[...TENDER_ALL_PERMISSIONS]);return <fieldset className="user-access-field access-section-card access-submenu-card"><legend>Tender · Menus and submenus</legend><input type="hidden" name={field} value=""/><div><AccessSelectAll label="Select all Tender permissions" options={TENDER_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{TENDER_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={field} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div>{view==='desktop'&&<label>Business unit scope (blank allows all)<input name="tenderBusinessUnit" defaultValue={record.tenderBusinessUnit||''}/></label>}</fieldset>;}
-function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false }) {
+function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false, deletionApprovalRequired = false }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
     : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
@@ -4509,7 +4512,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
     </>}
-    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== GENERAL_USER_ROLE && accountRole !== "HR User" && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== GENERAL_USER_ROLE && !["HR User","HR Manager"].includes(accountRole) && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
@@ -4585,7 +4588,7 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(role === "HR User"){record[menuField]="CD";record[requestField]="";
+      if(["HR User","HR Manager"].includes(role)){record[menuField]="CD";record[requestField]="";
       }else if(role === "Account User"||role === "Tender User"){
         record[menuField]=assignedUserRoles(record).includes("Tender User")?"CD | Tender":"CD";record[requestField]="";
       }else if(role === GENERAL_USER_ROLE){
@@ -4596,7 +4599,7 @@ function applyUserRoleDefaults(record) {
         if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
       }
     }
-    if(role === "HR User" || role === GENERAL_USER_ROLE || role === "Account User" || role === "Tender User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
+    if(["HR User","HR Manager"].includes(role) || role === GENERAL_USER_ROLE || role === "Account User" || role === "Tender User")for(const key of ["read","edit","delete","verify","print"])record[key]=false;
   }
   return record;
 }
@@ -5208,7 +5211,7 @@ function Equipment({
   const deleteEquipment = async (record) => {
     if (!record.id) return;
     const recordName = record.equipmentName || record.door || record.manufacturerSerialNo || "this equipment record";
-    if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
+    if (!confirm(deletionApprovalRequired ? `Request deletion of ${recordName}? The record will remain until the assigned manager approves.` : `Delete ${recordName}? This cannot be undone.`)) return;
     try {
       await onDelete(record.id);
       if (detail?.id === record.id) setDetail(null);
@@ -8316,7 +8319,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                       {name !== "Privilege" && (
                         <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
-                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
+                      <button className="delete" aria-label={`${deletionApprovalRequired ? "Request deletion of" : "Delete"} ${row.oem || row.employee || row.login || row.username || (isCdirMaster(name) && (row.name || row.designation || row.department || row.code)) || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
                     </td>
                   )}
                 </tr>
@@ -8621,6 +8624,7 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
       const details = await response.json().catch(() => ({}));
       throw new Error(details.error || "Could not delete this record.");
     }
+    if(response.status===202){const details=await response.json();alert(`${details.requestNo} submitted for deletion approval. Record retained until approval.`);return;}
     setRecords((current) => current.filter((item) => item.id !== id));
   };
   const removeAll = async () => {
@@ -9610,7 +9614,7 @@ Generic = function GenericWithMasters(props) {
     ) : name === "Hierarchy master" ? (
       <HierarchyMasterPage records={records} onAdd={onAdd} onEdit={onEdit} onDeleteAll={onDeleteAll} onOpenReportSettings={props.onOpenReportSettings} />
     ) : (
-      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} canCreateSuperAdmin={props.session?.permissions?.adminLevel==="Super Admin"} />
+      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} canCreateSuperAdmin={props.session?.permissions?.adminLevel==="Super Admin"} deletionApprovalRequired={[CDIR_MASTERS.employee,CDIR_MASTERS.contact].includes(name)&&!(props.session?.role==="super"&&["Admin","Super Admin"].includes(props.session?.permissions?.adminLevel))} />
     )
   ) : (
     <OriginalGeneric {...props} />
@@ -10911,12 +10915,13 @@ function NotificationEntryDialog({ state, onClose, token }) {
     ? "Opening notification entry"
     : state.phase === "error"
       ? "Notification entry unavailable"
-      : `${target.kind === "employee-transfer" ? "Employee transfer" : target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
+      : `${target.kind === "cdir-deletion" ? "Deletion request" : target.kind === "employee-transfer" ? "Employee transfer" : target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
   return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal" overlayClassName="notification-entry-overlay">
     {state.phase === "loading" && <div className="notification-entry-state loading" role="status" aria-live="polite" aria-busy="true"><Clock /><div><b>Loading the exact entry…</b><p>Checking your current access and retrieving the latest record.</p></div></div>}
     {state.phase === "error" && <div className="notification-entry-state error" role="alert"><AlertTriangle /><div><b>Entry unavailable</b><p>This entry is no longer available or is outside your assigned access.</p><button type="button" onClick={onClose}>Close</button></div></div>}
     {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} token={token} />}
     {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} token={token} />}
+    {state.phase === "ready" && target?.kind === "cdir-deletion" && <div className="notification-entry-record"><h2>{target.record.name}</h2><p>{target.record.site} · {target.record.status}</p><p>Reason: {target.record.reason}</p><p>Approver: {target.record.approverRole}</p></div>}
     {state.phase === "ready" && target?.kind === "employee-transfer" && <NotificationEmployeeTransferEntry reference={target.reference} transfer={target.record} />}
     {state.phase === "ready" && target?.kind === "transfer" && <NotificationVehicleTransferEntry reference={target.reference} transfer={target.record} />}
   </Modal>, document.body);
@@ -11117,7 +11122,7 @@ function NotificationBell({ session, onOpenEntry }) {
       const kind = body?.kind;
       const reference = String(body?.reference ?? "").trim();
       const record = body?.record;
-      if (!(["request", "ticket", "transfer", "employee-transfer"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
+      if (!(["request", "ticket", "transfer", "employee-transfer", "cdir-deletion"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
       if (sequence !== entrySequenceRef.current) return;
       const target = {kind, reference, record};
       entryControllerRef.current = null;
@@ -11360,7 +11365,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="cdir-deletion"){setDirectoryView("deletions");setSection("directory");return;}if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
       {!embedded&&section==="directory"&&showDirectoryMenu&&<CdirModule token={session?.token || authToken} ReportSection={ReportSection} initialView={directoryView} onViewChange={setDirectoryView}/>}
@@ -11556,7 +11561,7 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
-    if(session?.assignedRole==='HR User')return ['CD','Employee Tenure Report','Employee Transfer'].includes(name)||isCdirMaster(name);
+    if(['HR User','HR Manager'].includes(session?.assignedRole))return ['CD','Employee Tenure Report','Employee Transfer','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
     if(name==="User Sessions")return canViewUserSessions(session);
     if(name==="OEM Email Delivery Status")return isAdministrator;
     if(backupAdminPages.has(name)||databaseToolPages.has(name))return isAdministrator;
@@ -11574,7 +11579,7 @@ function App() {
     if ([...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
       || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
-    if (name === "Employee Transfer") return true;
+    if (["Employee Transfer","Record Deletion Approvals"].includes(name)) return true;
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");
     if (["Stock Statement","Purchase Order","GRN Register","PO-GRN Reconciliation"].includes(name)) return accessAllows(activeNavigationPermissions.tabAccess,"Reports") && reportAccessAllows(activeNavigationPermissions.reportAccess,name);
     if (["Accounts","Accounts Masters","Accounts Transactions"].includes(name)) return ibossAccountsAllowed(session,activeNavigationPermissions);
@@ -11583,7 +11588,7 @@ function App() {
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
-    if(session?.assignedRole==='HR User')return "CD";
+    if(['HR User','HR Manager'].includes(session?.assignedRole))return "CD";
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = [...masterNav, ...cdirMasterNavItems].find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
@@ -11639,7 +11644,7 @@ function App() {
   const selectMenu = (name) => {
     if (name === "Report Setting") name = "Reports";
     if (adminOnlyPages.has(name) && !isAdministrator && !(name==='User Sessions'&&canViewUserSessions(session))) return;
-    if ((session?.role === "super"||session?.assignedRole === "HR User") && !canOpenAdminPage(name)) return;
+    if ((session?.role === "super"||["HR User","HR Manager"].includes(session?.assignedRole)) && !canOpenAdminPage(name)) return;
     if (name === "Dashboard") window.dispatchEvent(new CustomEvent("nerve-center:dashboard-home"));
     if (name === active) return;
     preloadNavigationFeature(name);
@@ -11649,7 +11654,7 @@ function App() {
     setActive(name);
   };
   useEffect(() => {
-    if ((session?.role !== "super"&&session?.assignedRole !== "HR User") || canOpenAdminPage(active)) return;
+    if ((session?.role !== "super"&&!["HR User","HR Manager"].includes(session?.assignedRole)) || canOpenAdminPage(active)) return;
     const landingPage = firstAccessibleAdminPage();
     pageHistory.current = [landingPage];
     setCanGoBack(false);
@@ -11911,6 +11916,8 @@ function App() {
     <PoGrnReconciliation token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "GRN Register" ? (
     <GrnRegister token={session?.token || authToken} ReportSection={ReportSection} />
+  ) : renderedActive === "Record Deletion Approvals" ? (
+    <CdirDeletion token={session?.token || authToken} ReportSection={ReportSection}/>
   ) : renderedActive === "Employee Transfer" ? (
     <EmployeeTransfer token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Employee Tenure Report" ? (
@@ -11979,7 +11986,7 @@ function App() {
     <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
-  if (session.role === "normal" && session.assignedRole !== "HR User")
+  if (session.role === "normal" && !["HR User","HR Manager"].includes(session.assignedRole))
     return (
       <RequestShiftProvider token={session.token} requests={requests}>
         {isSessionViewOnlyUser(session)&&<div className="panel"><button type="button" onClick={()=>selectMenu('User Sessions')}>Admin · User Sessions</button></div>}
@@ -12053,7 +12060,7 @@ function App() {
             <button type="button" aria-label="Focus page smart search" title="Smart search" className="smart-search-button" onClick={() => active === "Dashboard" ? window.dispatchEvent(new Event("dashboard-smart-search")) : document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <SearchScanIcon />
             </button>
-            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "employee-transfer" ? "Employee Transfer" : target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
+            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "cdir-deletion" ? "Record Deletion Approvals" : target?.kind === "employee-transfer" ? "Employee Transfer" : target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">

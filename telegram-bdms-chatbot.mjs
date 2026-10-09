@@ -79,7 +79,7 @@ export function bdmsChatIntent(text=''){
   return {kind:'menu'};
 }
 export function bdmsChatCanRead(session={}){
-  if(['Account User','Tender User','HR User'].includes(session.assignedRole)||session.userType==='Account User')return false;
+  if(['Account User','Tender User','HR User','HR Manager'].includes(session.assignedRole)||session.userType==='Account User')return false;
   return session.role==='super'||['Production User','Maintenance User','MIS User'].includes(session.assignedRole)||session.permissions?.readRequests===true;
 }
 export function bdmsChatAnswer(options){

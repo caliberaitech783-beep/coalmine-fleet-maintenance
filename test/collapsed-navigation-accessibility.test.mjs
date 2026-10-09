@@ -34,7 +34,7 @@ function harness(initialWidth, transferAllowed=false) {
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true, ibossAccountsAllowed, isSessionViewOnlyUser, canViewBdAgeingReport, useEmployeeTransferAccess:()=>transferAllowed,
     profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null, authToken: "", isCdirMaster: () => false, BookUser: Null, cdirMasterNavItems: [], ClockMenu: Null, Database: Null, adminDatabaseNav: [], backupAdminPages: new Set(), databaseToolPages: new Set(),
-    ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon", "FileBarChart", "Landmark"].map(name => [name, Null])),
+    ...Object.fromEntries(["Trash2", "CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon", "FileBarChart", "Landmark"].map(name => [name, Null])),
   };
   const Side = new Function(...Object.keys(scope), `${code}; return Side;`)(...Object.values(scope));
   return {
