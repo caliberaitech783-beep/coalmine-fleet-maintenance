@@ -123,7 +123,7 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(all(body.children.at(-1)).filter(n=>n.tag==='button'&&['PDF','Excel (.xlsx)'].includes(n.textContent)).map(n=>n.textContent),['PDF','Excel (.xlsx)']);
   assert.equal(all(body.children.at(-1)).some(n=>/^A[34] · /.test(n.textContent)),false);
   all(body.children.at(-1)).find(n=>n.textContent==='Excel (.xlsx)').onclick();
-  await new Promise(resolve=>setTimeout(resolve));
+  await new Promise(resolve=>setTimeout(resolve,70));
   assert.equal(exported[0].format,'xlsx');
   assert.deepEqual(exported[0].columns,[columns[2],columns[0],columns[3]]);
   assert.equal(exported[0].rows,rows);
@@ -131,7 +131,7 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   nodes.find(n=>n.textContent==='Print\/Export').onclick();
   assert.equal(exported.length,1);
   all(body.children.at(-1)).find(n=>n.textContent==='PDF').onclick();
-  await new Promise(resolve=>setTimeout(resolve));
+  await new Promise(resolve=>setTimeout(resolve,70));
   assert.equal(exported[1].format,'pdf');assert.equal(exported[1].pageSize,undefined);
   assert.deepEqual(exported[1].columns,[columns[2],columns[0],columns[3]]);
   assert.match(all(body.children.at(-1)).find(n=>n.className==='smart-print-notice').textContent,/PDF export downloaded with 3 columns and 2 records/);
@@ -164,7 +164,7 @@ test('direct smart export opens with header ticks and one download action',async
   checks[1].checked=false;checks[1].onchange();
   nodes=all(body.children.at(-1));
   nodes.find(n=>n.textContent==='Download Excel').onclick();
-  await new Promise(resolve=>setTimeout(resolve));
+  await new Promise(resolve=>setTimeout(resolve,70));
   assert.equal(exported[0].format,'xlsx');
   assert.deepEqual(exported[0].columns,[columns[0]]);
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}

@@ -136,12 +136,11 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');toast.setAttribute('aria-atomic','true');
   const toastText=make('span');toast.append(toastText);
   button('×',()=>{toast.hidden=true;clearTimeout(toastTimer);},toast).setAttribute('aria-label','Dismiss download notification');
-  dialog.append(toast);
   const notifyExport=(message,state)=>{
     if(closed)return;
     clearTimeout(toastTimer);toastText.textContent=message;toast.hidden=false;
     toast.className=`smart-print-export-toast ${state}`;
-    if(state==='success')toastTimer=setTimeout(()=>{toast.hidden=true;},6000);
+    if(state==='success')toastTimer=setTimeout(()=>{toast.hidden=true;},10000);
   };
   const close=()=>{closed=true;clearTimeout(toastTimer);dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus();};
   const header=make('header');
@@ -158,6 +157,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   updateLayouts();
   const preview=make('div',undefined,'smart-print-preview');
   const footer=make('footer');dialog.append(footer);
+  footer.append(toast);
   const count=make('span');footer.append(count);
   button('Cancel',close,footer);
   // Print first asks for the page size, and Export asks for the format, in one shared prompt.
@@ -257,7 +257,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
     notifyExport(`Preparing ${formatName}… Your download will start shortly.`,'pending');
-    Promise.resolve().then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
+    new Promise(resolve=>setTimeout(resolve,50)).then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
       .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;notifyExport(`${formatName} download started. Check your browser downloads.`,'success');})
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;notifyExport(notice.textContent,'error');})
       .finally(()=>{exporting=false;render();});
