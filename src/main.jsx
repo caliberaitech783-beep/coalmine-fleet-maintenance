@@ -12105,7 +12105,7 @@ function SiteUpdateCountdown() {
   }, [update]);
   if (!update) return null;
   return <div role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:2147483647,width:"min(640px, calc(100% - 32px))",display:"flex",alignItems:"center",gap:20,padding:"16px 20px",background:"#10213f",color:"#fff",border:"1px solid #49617f",borderRadius:12,boxShadow:"0 8px 30px #0003"}}>
-    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>A new site update is available</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>This page will refresh automatically after the countdown. Please finish and save your current work.</span></div>
+    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>New update — refreshing in one minute</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>This page will refresh automatically after the countdown. Please finish and save your current work.</span></div>
     <b role="timer" aria-live="off" aria-label={`${seconds} seconds until refresh`} style={{fontSize:26,fontVariantNumeric:"tabular-nums"}}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b>
   </div>;
 }
