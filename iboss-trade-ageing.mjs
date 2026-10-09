@@ -20,7 +20,7 @@ export const TRADE_AGE_REPORTS=Object.fromEntries(Object.entries(TRADE_GROUPS).m
  WHEN 'INVOICE' THEN (SELECT /*+ NO_UNNEST */ MAX(i.invoicedate) FROM cmpl.invoice i WHERE i.tno=v.moduletno)
  WHEN 'SERVICEBILL' THEN (SELECT /*+ NO_UNNEST */ MAX(s.servicebilldate) FROM cmpl.servicebill s WHERE s.tno=v.moduletno)
  END END`;
- const docDate='COALESCE('+sourceDate+',v.voucherdate)';
+ const docDate=sourceDate;
  const sql=`SELECT e.*,TO_DATE(:to_date,'YYYY-MM-DD')-TRUNC(e.document_date_raw) AS age_days,
  GREATEST(-e.balanceamount,0) AS outstanding_dr,GREATEST(e.balanceamount,0) AS outstanding_cr,
  CASE WHEN e.balanceamount${key==='trade-payable'?'>':'<'}0 THEN '${key==='trade-payable'?'Payable':'Receivable'}' ELSE 'Advance / opposite balance' END AS balance_type
@@ -28,7 +28,7 @@ export const TRADE_AGE_REPORTS=Object.fromEntries(Object.entries(TRADE_GROUPS).m
  v.voucherno AS voucher_no,TO_CHAR(v.voucherdate,'YYYY-MM-DD') AS voucher_date,
  d.billno AS bill_no,
  ${docDate} AS document_date_raw,TO_CHAR(${docDate},'YYYY-MM-DD') AS document_date,
- CASE WHEN ${sourceDate} IS NULL THEN 'Voucher date (fallback)' ELSE 'Bill / document date' END AS age_basis,
+ CASE WHEN ${sourceDate} IS NULL THEN 'Bill date unavailable' ELSE 'Bill / document date' END AS age_basis,
  d.amount AS original_amount,NVL(a.allocated,0) AS allocated_amount,d.amount-NVL(a.allocated,0) AS balanceamount
  FROM cmpl.voucher v JOIN cmpl.voucherdetail d ON d.tno=v.tno JOIN cmpl.party p ON p.partycode=d.accountcode
  LEFT JOIN (${allocated}) a ON a.tno=d.tno AND a.sno=d.sno

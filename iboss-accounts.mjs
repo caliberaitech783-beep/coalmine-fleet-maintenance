@@ -1,3 +1,4 @@
+import {TRADE_AGE_SUMMARIES} from './iboss-trade-age-summary.mjs';
 import {TRADE_AGE_REPORTS} from './iboss-trade-ageing.mjs';
 import {TRADE_REPORTS} from './iboss-trade-ledger.mjs';
 import {CHAT_REPORTS} from './iboss-chat-reports.mjs';
@@ -20,6 +21,6 @@ export const ACCOUNT_VIEWS={
  'bank-interest':{title:'Bank Interest',dated:true,note:'Stored ERP bank-interest report rows filtered by For Date. Rates and interest amounts are shown as recorded; this page does not generate or recalculate interest.',columns:[col('COMPANYCODE','Company Code'),col('ACCOUNT_CODE','Account Code'),col('ACCOUNT_NAME','Account Name'),col('FROM_DATE','Calculation From'),col('TO_DATE','Calculation To'),col('FOR_DATE','For Date'),col('BALANCE','Balance'),col('LIMITAMOUNT','Limit Amount'),col('INTERESTRATE','Interest Rate'),col('ODINTERESTRATE','OD Interest Rate'),col('DRCR','DR / CR'),col('INTERESTAMOUNT','Interest Amount'),col('ODINTERESTAMOUNT','OD Interest Amount'),col('TOTAL','Total')],sql:`SELECT TO_CHAR(b.tno)||':'||TO_CHAR(b.sno) AS id,b.companycode,b.accountcode AS account_code,p.partyname AS account_name,TO_CHAR(b.fromdate,'YYYY-MM-DD') AS from_date,TO_CHAR(b.todate,'YYYY-MM-DD') AS to_date,TO_CHAR(b.fordate,'YYYY-MM-DD') AS for_date,b.balance,b.limitamount,b.interestrate,b.odinterestrate,b.drcr,b.interestamount,b.odinterestamount,b.total FROM cmpl.bankinterestreport b LEFT JOIN cmpl.party p ON p.partycode=b.accountcode WHERE b.fordate >= TO_DATE(:from_date,'YYYY-MM-DD') AND b.fordate < TO_DATE(:to_date,'YYYY-MM-DD')+1 ORDER BY b.fordate,b.tno,b.sno`}
 };
 export const ACCOUNT_SECTIONS={masters:Object.keys(ACCOUNT_VIEWS),transactions:Object.keys(TRANSACTION_VIEWS)};
-Object.assign(ACCOUNT_VIEWS,TRANSACTION_VIEWS,CHAT_REPORTS,TRADE_REPORTS,TRADE_AGE_REPORTS);
+Object.assign(ACCOUNT_VIEWS,TRANSACTION_VIEWS,CHAT_REPORTS,TRADE_REPORTS,TRADE_AGE_REPORTS,TRADE_AGE_SUMMARIES);
 export function accountView(key){if(!Object.hasOwn(ACCOUNT_VIEWS,key)){const error=new Error('Unknown Accounts report.');error.code='INVALID_ACCOUNT_VIEW';throw error;}return ACCOUNT_VIEWS[key];}
 export function accountRecord(row,index){return {...row,ID:String(row.ID??index)};}

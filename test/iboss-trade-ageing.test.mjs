@@ -24,6 +24,6 @@ test('historical settlement requires both voucher dates and preserves opposing r
  for(const report of Object.values(TRADE_AGE_REPORTS)){
   assert.match(report.sql,/dv.voucherdate<TO_DATE\(:to_date/);assert.match(report.sql,/cv.voucherdate<TO_DATE\(:to_date/);
   assert.match(report.sql,/d.amount-NVL\(a.allocated,0\)<>0/);assert.doesNotMatch(report.sql,/SYSDATE|ROUND\(.*balance|INSERT|UPDATE/);
-  assert.match(report.sql,/Voucher date \(fallback\)/);assert.match(report.sql,/Advance \/ opposite balance/);
+  assert.match(report.sql,/Bill date unavailable/);assert.match(report.sql,/Advance \/ opposite balance/);
  }
 });

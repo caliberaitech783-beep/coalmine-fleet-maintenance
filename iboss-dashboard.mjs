@@ -1,3 +1,4 @@
+import {summaryAgeFilter} from './iboss-trade-age-summary.mjs';
 import {tradeAgeFilter} from './trade-age-bands.mjs';
 import {TRADE_REPORTS,tradeCard} from './iboss-trade-ledger.mjs';
 import {BANK_RECONCILIATION_SUMMARY_SQL,reconciliationFilter} from './iboss-bank-reconciliation.mjs';
@@ -76,8 +77,9 @@ export function dashboardMetric(key,{from,to,company='',bank='',status='unreconc
  purchaseOrderRange(from,to);companyCode(company);
  if(!Object.hasOwn(DASHBOARD_METRICS,key)||!Number.isInteger(page)||page<0||page>5000)throw new Error('Choose a valid dashboard card and page.');
  const metric={...DASHBOARD_METRICS[key]},reconcile=key==='bank-reconciliation'?reconciliationFilter(bank,status):null;if(reconcile)metric.where=reconcile.where;
- const ageFilter=key.startsWith('trade-')?tradeAgeFilter(ageing):null;
- if(ageFilter){metric.view=key+'-ageing';metric.where=ageFilter.where;}
+ const ageSummary=key.startsWith('trade-')&&ageing.startsWith('summary:');
+ const ageFilter=key.startsWith('trade-')?(ageSummary?{where:summaryAgeFilter(ageing)}:tradeAgeFilter(ageing)):null;
+ if(ageFilter){metric.view=key+'-ageing'+(ageSummary?'-summary':'');metric.where=ageFilter.where;}
  const definition=accountView(metric.view);
  if(typeof search!=='string'||search.length>120)throw new Error('Search must contain at most 120 characters.');
  const terms=[metric.where];
@@ -87,7 +89,7 @@ export function dashboardMetric(key,{from,to,company='',bank='',status='unreconc
  const sourceSql=metric.view==='payable-receivable'&&!metric.dates?definition.sql.replace(/a\.(documentdate|voucherdate) >= TO_DATE\(:from_date,'YYYY-MM-DD'\) AND a\.\1 < TO_DATE\(:to_date,'YYYY-MM-DD'\)\+1/g,'1=1'):definition.sql;
  const dates=metric.dates==='period'?{from,to}:metric.dates==='overdue'?{from:'1900-01-01',to:shift(to,-1)}:metric.dates==='upcoming'?{from:to,to:shift(to,30)}:{from:'1900-01-01',to:'2999-12-31'};
  const values={search_text:search.trim(),...reconcile?.binds,company_code:company,from_date:dates.from,to_date:dates.to,planning_date:to,planning_end:shift(to,30),row_offset:page*DASHBOARD_PAGE_SIZE,row_limit:DASHBOARD_PAGE_SIZE+1};
- const sql=`SELECT * FROM (${companyScopedSql(sourceSql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${ageFilter?'r.account_code,r.id':key==='bank-reconciliation'?'r.voucher_date,r.id':definition.columns.map(column=>`r.${column.key}`).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
+ const sql=`SELECT * FROM (${companyScopedSql(sourceSql,company)}) r ${metric.where?'WHERE '+metric.where:''} ORDER BY ${ageSummary?'r.account_name,r.companycode,r.account_code':ageFilter?'r.account_code,r.id':key==='bank-reconciliation'?'r.voucher_date,r.id':definition.columns.map(column=>`r.${column.key}`).join(',')} OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY`;
  if(definition.asOf)values.to_date=to;
  const binds=Object.fromEntries([...new Set([...sql.matchAll(/:(\w+)/g)].map(match=>match[1]))].map(name=>[name,values[name]]));
  const countSql=`SELECT COUNT(*) AS TOTAL_COUNT${ageFilter?',SUM(r.outstanding_dr) AS TOTAL_DR,SUM(r.outstanding_cr) AS TOTAL_CR,SUM(r.balanceamount) AS SIGNED_TOTAL':''} FROM (${companyScopedSql(sourceSql,company)}) r ${metric.where?'WHERE '+metric.where:''}`;
