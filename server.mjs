@@ -1,3 +1,4 @@
+import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -3913,7 +3914,7 @@ async function telegramBdmsPilotAnswer(session,text,language='en',context={}){
   let requests=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
   if(authorization.session.assignedRole==='Production User')requests=requests.filter(r=>String(r.requesterLogin||'').toLowerCase()===String(session.login||'').toLowerCase());
   const currentSession={...authorization.session,login:session.login};
-  const query=bdmsChatIntent(/Back to results|सूची पर वापस/.test(text)?context?.listQuery||'':text);
+  const query=bdmsChatIntent(bdmsEffectiveReport(text,context));
   let transfers=[],tickets=[],fleetRecords=null;
   if(query.kind==='transfers'||/^Transfer /.test(text)){
     const access=await vehicleTransferAccessContext(currentSession);

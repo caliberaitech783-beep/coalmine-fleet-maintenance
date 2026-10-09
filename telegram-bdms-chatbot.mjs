@@ -1,4 +1,5 @@
 import {bdmsSiteCounts} from './telegram-bdms-site-counts.mjs';
+import {bdmsPeriodControls} from './telegram-bdms-period.mjs';
 // Read-only, private-chat pilot. Data must be supplied by the application's
 // current authorization and request visibility rules, never by an LLM.
 export const BDMS_CHAT_KEYBOARD={keyboard:[['Open breakdowns','Running BD'],['Find vehicle/request','Pending work'],['Help / सहायता']],resize_keyboard:true};
@@ -36,7 +37,7 @@ export function bdmsChatKeyboard(language,session={role:'super'}){
   const keys=roleQueries[bdmsChatRole(session)]||[];
   const items=keys.filter(key=>key!=='transfers'||bdmsChatTransfersAllowed(session)).map(key=>labels[key][language==='hi'?1:0]);
   if(bdmsChatRole(session)==='production'&&items.length)items[0]=language==='hi'?'मेरे अनुरोध सारांश':'My requests summary';
-  items.push(language==='hi'?'सहायता':'Help',language==='hi'?'भाषा बदलें':'Change language');
+  items.push(language==='hi'?'सहायता':'Help',language==='hi'?'भाषा बदलें':'Change language',...bdmsPeriodControls(language));
   return {keyboard:Array.from({length:Math.ceil(items.length/2)},(_,i)=>items.slice(i*2,i*2+2)),resize_keyboard:true};
 }
 export function bdmsChatQueryAllowed(text,session){

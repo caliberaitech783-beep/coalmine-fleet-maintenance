@@ -1,3 +1,4 @@
+import {periodReportKinds,bdmsPeriodControls,bdmsPeriodControl,bdmsEffectiveReport,bdmsResolvePeriod,bdmsPeriodSelection,bdmsPeriodHeading,bdmsPeriodRows,bdmsRequestDateBasis,bdmsWeekdayButtons} from './telegram-bdms-period.mjs';
 import {bdmsSiteCounts} from './telegram-bdms-site-counts.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatRole,bdmsChatKeyboard,bdmsChatIntent,bdmsChatTransfersAllowed} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatMetricsReply} from './telegram-bdms-metrics.mjs';
@@ -12,7 +13,7 @@ const keyboard=items=>({keyboard:items.map(item=>[item]),resize_keyboard:true});
 
 // Context stores identifiers only. Every turn rechecks them against fresh,
 // already site-scoped records; context is never authority to read a request.
-export function bdmsChatConversation({text,language='en',session={},requests=[],transfers=[],tickets=[],fleetRecords=null,today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Kolkata'}).format(new Date()),scopeLabel,baseUrl='https://pulse.cmll.in',context={}}){
+function bdmsChatConversationCore({text,language='en',session={},requests=[],transfers=[],tickets=[],fleetRecords=null,today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Kolkata'}).format(new Date()),scopeLabel,baseUrl='https://pulse.cmll.in',context={}}){
   const mainKeyboard=bdmsChatKeyboard(language,session),hi=language==='hi';
   if(!bdmsChatCanRead(session))return {text:hi?'आपकी भूमिका को अनुमति नहीं है।':'Your BDMS role does not permit breakdown queries.',keyboard:mainKeyboard,context:{}};
   let visible=requests.filter(r=>!r.archivedAt);
@@ -21,7 +22,7 @@ export function bdmsChatConversation({text,language='en',session={},requests=[],
   const action=Object.keys(actions).find(key=>actions[key].includes(input));
   if(action==='main'||/^\/menu$/i.test(input))return {text:bdmsChatAnswer({text:'/menu',language,session,requests:visible,scopeLabel}),keyboard:mainKeyboard,context:{}};
   const safeQuery=typeof context.listQuery==='string'?context.listQuery.slice(0,300):'/menu';
-  if(action==='back')return bdmsChatConversation({text:safeQuery,language,session,requests:visible,transfers,tickets,fleetRecords,today,scopeLabel,baseUrl});
+  if(action==='back')return bdmsChatConversation({text:safeQuery,language,session,requests:visible,transfers,tickets,fleetRecords,today,scopeLabel,baseUrl,context:{period:context.period,reportQuery:context.reportQuery}});
   if(['todayBd','dateBd','fleet'].includes(bdmsChatIntent(input).kind))return {text:bdmsChatMetricsReply({text:input,language,requests:visible,fleetRecords,today}),keyboard:keyboard(hi?['आज के कुल ब्रेकडाउन','पिछले 7 दिन','पिछले 30 दिन','तारीख / दिनों के अनुसार ब्रेकडाउन','वाहन उपलब्धता',label('main',language)]:['Total BD today','Last 7 days','Last 30 days','BD by date / days','Vehicle availability',label('main',language)]),context:{}};
   const transferId=input.match(/^Transfer (.+)$/)?.[1];
   if(bdmsChatIntent(input).kind==='transfers'||transferId){
@@ -76,4 +77,40 @@ export function bdmsChatConversation({text,language='en',session={},requests=[],
   const shown=visible.filter(r=>lines.some(line=>line.startsWith(`${r.ref} ·`))).slice(0,8);
   if(!shown.length&&!support.length)return {text:answer+supportText,keyboard:mainKeyboard,context:{}};
   return {text:`${answer}${supportText}\n\n${hi?'आगे क्या देखना चाहेंगे? नीचे एक अनुरोध चुनें।':'What would you like to see next? Select a request or ticket below for details.'}`.slice(0,4096),keyboard:keyboard([...shown.map(r=>r.ref),...support.map(t=>`Ticket ${t.reference}`),label('main',language)]),context:{listQuery:input}};
+}
+
+export function bdmsChatConversation(options={}){
+ const {language='en',session={},today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Kolkata'}).format(new Date())}=options;
+ if(!bdmsChatCanRead(session))return bdmsChatConversationCore(options);
+ const hi=language==='hi',original=options.context||{};
+ let period=bdmsResolvePeriod(original.period,today),input=String(options.text||'').trim(),reportQuery=bdmsEffectiveReport(input,original);
+ if(bdmsPeriodControl(input)){
+  const selected=bdmsPeriodSelection(input,today);
+  if(selected.prompt||selected.error){
+   const prompt=selected.prompt==='day'?(hi?'सबसे हाल का दिन चुनें।':'Choose the most recent weekday.'):(hi?'एक दिन के लिए /date YYYY-MM-DD या अवधि के लिए /period YYYY-MM-DD YYYY-MM-DD भेजें। अंतिम तारीख आज से आगे नहीं हो सकती।':'For one date, send /date YYYY-MM-DD. For a range, send /period YYYY-MM-DD YYYY-MM-DD. Use valid dates; the end cannot be later than today.');
+   return {text:bdmsPeriodHeading(period,language)+'\n'+prompt,keyboard:keyboard(selected.prompt==='day'?bdmsWeekdayButtons(language):bdmsPeriodControls(language)),context:{...original,period,reportQuery}};
+  }
+  period=selected.period;input=reportQuery;
+ }
+ const kind=bdmsChatIntent(input).kind;
+ if(kind==='todayBd'&&!bdmsPeriodControl(String(options.text||'')))period=bdmsResolvePeriod({},today);
+ const explicitBd=input.match(/^\/bd\s+(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})$/);
+ if(explicitBd){const chosen=bdmsPeriodSelection('/period '+explicitBd[1]+' '+explicitBd[2],today);if(chosen.period)period=chosen.period;}
+ const selection=/^(?:\/request\s+)?REQ-[A-Za-z0-9-]+$/i.test(input)||/^(Transfer |Ticket )/.test(input)&&!['transfers','ticketClose'].includes(kind);
+ const isReport=periodReportKinds.has(kind)&&!selection;
+ const basis=bdmsRequestDateBasis(kind==='pending'&&bdmsChatRole(session)==='maintenance'?'open':kind);
+ let data={...options,text:input,today,context:{...original,period}};
+ if(isReport){
+  reportQuery=input;
+  if(kind!=='fleet'){
+   data.requests=bdmsPeriodRows(options.requests||[],period,basis.date);
+   data.transfers=bdmsPeriodRows(options.transfers||[],period,r=>r.transferDate);
+   data.tickets=bdmsPeriodRows(options.tickets||[],period,r=>r.resolvedAt||r.createdAt);
+  }
+  if(kind==='todayBd'||kind==='dateBd'&&(bdmsPeriodControl(String(options.text||''))||/^\/bd\s/.test(input)))data.text='/bd '+period.from+' '+period.to;
+ }
+ const result=bdmsChatConversationCore(data);
+ const note=kind==='fleet'?(hi?'फ्लीट उपलब्धता वर्तमान लाइव स्थिति है; ऐतिहासिक स्नैपशॉट उपलब्ध नहीं है।':'Fleet availability is a current live snapshot; historical snapshots are unavailable.'):['transfers','ticketClose'].includes(kind)?(kind==='transfers'?(hi?'ट्रांसफर तारीख':'Transfer date'):(hi?'सहायता टिकट: समाधान / निर्माण तारीख; ब्रेकडाउन: खोलने की तारीख':'Support tickets: resolution / creation date; breakdown requests: opening date')):(hi?basis.hi:basis.label);
+ const controls=bdmsPeriodControls(language),existing=result.keyboard?.keyboard||[];
+ return {...result,text:isReport?(bdmsPeriodHeading(period,language)+'\n'+note+'\n\n'+result.text).slice(0,4096):result.text,keyboard:{...result.keyboard,keyboard:[...existing.filter(row=>!row.some(v=>controls.includes(v))),...controls.map(v=>[v])],resize_keyboard:true},context:{...result.context,period,reportQuery:isReport?reportQuery:original.reportQuery||original.listQuery||'Site summary'}};
 }
