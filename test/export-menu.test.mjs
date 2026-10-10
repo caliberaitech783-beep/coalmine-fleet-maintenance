@@ -24,7 +24,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/if \(!excelSheets\) \{\s*smartExport\("xlsx"\);/);
   assert.match(source,/if \(!dashboardPdf\) \{\s*smartExport\("pdf"\);/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
-  assert.match(source,/<ExportMenu title=\{title\} columns=\{visibleColumns\} rows=\{rows\}/);
+  assert.match(source,/<ExportMenu title=\{title\} columns=\{exportView\?\.sourceRows === rows \? exportView\.columns : visibleColumns\} rows=\{exportView\?\.sourceRows === rows \? exportView\.rows : rows\}/);
   assert.match(source,/<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\}/);
   assert.match(source,/function MobileWorkflowTable\([^\n]*exportTitle = "Workflow report"/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);

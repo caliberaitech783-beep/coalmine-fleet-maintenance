@@ -1,3 +1,4 @@
+import {reportPortalTarget} from './report-portal-target.mjs';
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Printer, Save, Trash2, X } from "lucide-react";
@@ -42,7 +43,7 @@ export function useSavedReports(reportKey) {
 
 function Dialog({ title, onClose, children, className = "", labelledBy }) {
   useEffect(() => {
-    const onKey = (event) => { if (event.key === "Escape") onClose(); };
+    const onKey = (event) => { if (event.key === "Escape") { event.preventDefault(); onClose(); } };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -51,7 +52,7 @@ function Dialog({ title, onClose, children, className = "", labelledBy }) {
       <header><h2 id={labelledBy}>{title}</h2><button type="button" className="saved-report-close" onClick={onClose} aria-label="Close"><X /></button></header>
       {children}
     </section>
-  </div>, document.body);
+  </div>, reportPortalTarget());
 }
 
 /** Ask for a name and save the current view. */

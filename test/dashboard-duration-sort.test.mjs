@@ -16,7 +16,7 @@ const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const h = React.createElement;
 const source = main.slice(main.indexOf("function FilterableHeader("), main.indexOf("const EMPTY_TABLE_FILTER_VALUE ="));
 const { code } = await transformWithOxc(source, "duration-menu.jsx", { jsx: { runtime: "classic" } });
-const bindings = { React, isDurationColumn, ...dateRanges, ...multiFilters, EMPTY_TABLE_FILTER_VALUE: "__empty_table_filter_value__", CalendarDays: () => null, createPortal: (child) => child, document: { body: {} },
+const bindings = { reportPortalTarget: () => ({}), React, isDurationColumn, ...dateRanges, ...multiFilters, EMPTY_TABLE_FILTER_VALUE: "__empty_table_filter_value__", CalendarDays: () => null, createPortal: (child) => child, document: { body: {} },
   useState: (initial) => [initial, () => {}], useRef: () => ({ current: null }), useEffect() {},
   matchesSmartSearch: () => true, ...Object.fromEntries(["ArrowUp", "ArrowDown", "ArrowUpDown", "X", "Search"].map((name) => [name, () => null])) };
 const Header = new Function(...Object.keys(bindings), `${code}; return FilterableHeader;`)(...Object.values(bindings));
@@ -54,7 +54,7 @@ test("Reports keep their exact time filters; dates, status and meter readings ar
     assert.ok(menu({ label, sortKey: label }).html.includes("All values"));
   }
   for (const label of ["Days of breakdown", "Downtime", "Turn around time (TAT)", "Arrival delay", "Waiting when flagged", "Time taken"]) assert.equal(isDurationColumn(label), true, label);
-  const report = main.slice(main.indexOf("function ReportTable("), main.indexOf("function ReportTable(") + 7000);
+  const report = main.slice(main.indexOf("function ReportTable("), main.indexOf("function MasterField(", main.indexOf("function ReportTable(")));
   assert.match(report, /durationSortOnly=\{false\}/);
   assert.match(report, /defaultDurationSort\(columns\)/);
 });
