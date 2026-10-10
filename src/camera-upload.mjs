@@ -1,22 +1,29 @@
 // Keep the original file input as the single source of truth, including native
 // required validation and the form's existing React change/upload handlers.
-export function capturePhotoForInput(target,{document:doc=globalThis.document,DataTransfer:Transfer=globalThis.DataTransfer,Event:InputEvent=globalThis.Event,notify=globalThis.alert,accept='image/jpeg,image/png,image/webp'}={}) {
+const pending=new WeakMap();
+export function capturePhotoForInput(target,{notify=globalThis.alert}={}) {
   if(!target||target.disabled)return;
-  const picker=doc.createElement('input');
-  picker.type='file';
-  picker.accept=accept;
-  picker.setAttribute('capture','environment');
-  picker.onchange=()=>{
-    const file=picker.files?.[0];
-    if(!file)return;
-    try{
-      const transfer=new Transfer();
-      transfer.items.add(file);
-      target.files=transfer.files;
-      target.dispatchEvent(new InputEvent('change',{bubbles:true}));
-    }catch{
-      notify?.('This browser could not attach the photo. Please use Choose file to select your saved photo.');
+  pending.get(target)?.();
+  const accept=target.getAttribute('accept'),capture=target.getAttribute('capture');
+  const restore=()=>{
+    for(const [name,value] of [['accept',accept],['capture',capture]]){
+      if(value===null)target.removeAttribute(name);else target.setAttribute(name,value);
     }
+    for(const event of ['change','cancel','click'])target.removeEventListener(event,restore);
+    pending.delete(target);
   };
-  picker.click();
+  target.setAttribute('accept','image/*');
+  target.setAttribute('capture','environment');
+  target.addEventListener('change',restore);
+  target.addEventListener('cancel',restore);
+  pending.set(target,restore);
+  try{
+    // Keep the connected input and native change event; no FileList copying.
+    target.click();
+    // Restore on the next Choose file click if the browser emits no cancel.
+    if(pending.has(target))target.addEventListener('click',restore);
+  }catch{
+    restore();
+    notify?.('The camera could not be opened. Please use Choose file to attach a photo.');
+  }
 }
