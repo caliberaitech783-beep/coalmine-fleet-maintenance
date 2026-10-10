@@ -48,7 +48,11 @@ test("browser XLSX worksheets use Excel's required element order and safe Spread
     const xml = files.get(name);
     assert.ok(xml.indexOf("<autoFilter") < xml.indexOf("<mergeCells"), `${name} must put autoFilter before mergeCells`);
     assert.doesNotMatch(xml, /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/);
+    assert.match(xml, /pageSetUpPr fitToPage="1"/);
+    assert.match(xml, /orientation="landscape" fitToWidth="1" fitToHeight="0"/);
   }
+  assert.match(files.get('xl/workbook.xml'), /name="_xlnm.Print_Area" localSheetId="0">&#39;Report&#39;!\$A\$1:\$B\$4/);
+  assert.match(files.get('xl/workbook.xml'), /name="_xlnm.Print_Titles" localSheetId="1">&#39;Daily Updates&#39;!\$1:\$3/);
   assert.match(files.get("xl/worksheets/sheet2.xml"), /Control_x0001_text/);
   assert.match(files.get("xl/worksheets/sheet2.xml"), /literal _x005F_x0001_/);
   assert.match(files.get("docProps/core.xml"), /BD &amp; Balance/);

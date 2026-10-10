@@ -106,9 +106,10 @@ export function savePrintOptions(options,storage=globalThis.window?.localStorage
   try{storage?.setItem(PRINT_OPTIONS_STORAGE_KEY,JSON.stringify({duplex:options.duplex,copies:options.copies}));}catch{/* private mode */}
 }
 /** Shrinks a report that is wider than the page so every column fits; never enlarges it. */
-export function printFitScale(contentWidth,availableWidth,minimum=.3) {
+export function printFitScale(contentWidth,availableWidth) {
   if(!(contentWidth>0)||!(availableWidth>0)||contentWidth<=availableWidth)return 1;
-  return Math.max(minimum,Math.floor((availableWidth/contentWidth)*1000)/1000);
+  // No minimum zoom: a floor can leave wide ageing reports outside the paper.
+  return availableWidth/contentWidth;
 }
 // The app registers one exporter so every Smart Print dialog offers the same PDF / Excel downloads.
 let smartPrintExporter;
@@ -148,6 +149,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   const heading=make('div');heading.append(make('h2',exportOnly?'Print/Export':'Smart Print'),make('p',title));header.append(heading);
   const closeButton=button('×',close,header);closeButton.setAttribute('aria-label','Close Smart Print');dialog.append(header);
   const body=make('div',undefined,'smart-print-body');dialog.append(body);
+  body.append(make('p','Print properties: Fit all columns to page width · Landscape · Long reports continue on additional pages. Applied automatically to printing, PDF and Excel.','smart-print-fit-policy'));
   // A snapshot (a dashboard) prints as it is on screen, so there are no columns to choose.
   body.append(make('p',snapshot||'Tick columns in the preview header. All columns are selected by default and the same selection is used for Smart Print, PDF and Excel.'));
   const controls=make('div',undefined,'smart-print-controls');body.append(controls);

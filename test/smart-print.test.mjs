@@ -172,9 +172,10 @@ test('direct smart export opens with header ticks and one download action',async
 test('wide reports are scaled down to the page and never enlarged',()=>{
  assert.equal(printFitScale(800,1032),1);
  assert.equal(printFitScale(2064,1032),.5);
- assert.equal(printFitScale(3096,1032),.333);
- assert.equal(printFitScale(100000,1032),.3);
+ assert.equal(printFitScale(3096,1032),1/3);
+ assert.equal(printFitScale(100000,1032),.01032);
  assert.equal(printFitScale(0,1032),1);
+ for(const width of [5000,10000,100000])assert.ok(width*printFitScale(width,1032)<=1032+.000001);
  assert.equal(printPageSize('a3').widthMm,420);
  assert.equal(printPageSize('unknown').name,'A4');
  assert.deepEqual(PRINT_PAGE_SIZES.map(page=>page.name),['A4','A3']);
