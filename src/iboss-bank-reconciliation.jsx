@@ -2,7 +2,7 @@ import React from 'react';
 import {reconciliationBanks} from './iboss-reconciliation-banks.mjs';
 const amount=value=>Number(value||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const balance=value=>`${amount(Math.abs(value))} ${value<0?'Dr':'Cr'}`;
-export default function ReconciliationControls({rows,bank,status,onBank,onStatus}){
+export default function ReconciliationControls({rows,bank,status,onBank,onStatus,ReportSection}){
  const matchingBanks=reconciliationBanks(rows,status,bank);
  const banks=[...new Map(rows.map(row=>[row.ACCOUNT_CODE,row.ACCOUNT_NAME])).entries()];
  const selected=rows.filter(row=>!bank||String(row.ACCOUNT_CODE)===String(bank));
@@ -18,10 +18,11 @@ export default function ReconciliationControls({rows,bank,status,onBank,onStatus
   <h3>Banks with {status==='unreconciled'?'not reconciled':status==='reconciled'?'reconciled':'reconciled or not reconciled'} entries — {matchingBanks.length} banks</h3>
   <p className="iboss-dash-note">Status and counts cover the selected voucher period and company. A partly reconciled bank has both reconciled and pending entries. Select a bank below to view its matching vouchers.</p>
   {bank&&<button type="button" onClick={()=>onBank('')}>Show all banks</button>}
-  {matchingBanks.length?<div style={{overflowX:'auto',maxHeight:360,overflowY:'auto'}}><table className="iboss-dash-party-table" aria-label="Bank-wise reconciliation status">
-   <thead><tr><th>Bank account</th><th>Bank status</th><th>Not reconciled entries</th><th>Reconciled entries</th><th>Pending Dr</th><th>Pending Cr</th></tr></thead>
-   <tbody>{matchingBanks.map(row=><tr key={row.code}><td><button type="button" onClick={()=>onBank(row.code)}>{row.name} ({row.code})</button></td><td>{row.state}</td><td>{row.UNRECONCILED_COUNT.toLocaleString('en-IN')}</td><td>{row.RECONCILED_COUNT.toLocaleString('en-IN')}</td><td>{amount(row.UNCLEAR_DR)}</td><td>{amount(row.UNCLEAR_CR)}</td></tr>)}</tbody>
-  </table></div>:<p>No banks have matching entries for this selection.</p>}
+  <ReportSection title="Bank-wise reconciliation status" category="iboss-accounts" rows={matchingBanks} description="All banks matching the selected company, period and reconciliation status." columns={[
+   {key:'name',label:'Bank account',value:row=>row.name,render:row=><button type="button" className="iboss-detail-link" onClick={()=>onBank(row.code)}>{row.name} ({row.code})</button>},
+   {key:'code',label:'Account code',value:row=>row.code},{key:'state',label:'Bank status',value:row=>row.state},
+   ...[['UNRECONCILED_COUNT','Not reconciled entries'],['RECONCILED_COUNT','Reconciled entries'],['UNCLEAR_DR','Pending Dr'],['UNCLEAR_CR','Pending Cr']].map(([key,label])=>({key,label,value:row=>Number(row[key]||0),render:row=>key.endsWith('COUNT')?Number(row[key]||0).toLocaleString('en-IN'):amount(row[key])}))
+  ]} rowKey={row=>row.code} emptyMessage="No banks have matching entries for this selection."/>
   {selected.length?<table className="iboss-dash-party-table"><thead><tr><th>Balance / totals</th><th>Dr</th><th>Cr</th></tr></thead><tbody>
    <tr><th>Selected entries — full filtered total</th><td>{amount(dr)}</td><td>{amount(cr)}</td></tr>
    <tr><th>Unclear / not reconciled in period</th><td>{amount(sum('UNCLEAR_DR'))}</td><td>{amount(sum('UNCLEAR_CR'))}</td></tr>

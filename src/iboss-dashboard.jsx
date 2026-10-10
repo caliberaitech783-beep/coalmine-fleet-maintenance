@@ -1,3 +1,5 @@
+import {ageingAsOnRange} from './iboss-ageing-as-on.mjs';
+import {fetchAccountsReport} from './iboss-accounts-response.mjs';
 import FinanceCharts from './iboss-finance-charts.jsx';
 import AccountLedger from './iboss-account-ledger.jsx';
 import {TRADE_AGE_BANDS} from '../trade-age-bands.mjs';
@@ -21,55 +23,58 @@ const units={'trade-payable':'ledger accounts','trade-receivable':'ledger accoun
 const linkedReports=[['payment-advice','Payment Advice'],['emi-schedule','EMI Schedule'],['payable-receivable','Party Balances'],['bank-balance','Bank Balances'],['fixed-deposit','Fixed Deposits'],['bank-guarantee','Bank Guarantees']];
 const metricViews={'trade-payable':'trade-payable','trade-receivable':'trade-receivable','bank-reconciliation':'bank-reconciliation',bank:'bank-balance',payable:'payable-receivable',receivable:'payable-receivable','aged-receivable':'outstanding-180',loan:'emi-details','overdue-emi':'emi-schedule','upcoming-emi':'emi-schedule','pending-advice':'payment-advice','maturing-fd':'fixed-deposit','expiring-bg':'bank-guarantee','expired-bg':'bank-guarantee'};
 
-function MetricDetails({metric,range,token,ReportSection,preview,close,reconciliation=[]}){
+function MetricDetails({metric,range:initialRange,token,ReportSection,preview,close,reconciliation=[]}){
+ const [range,setDetailRange]=useState(initialRange),[asOnDraft,setAsOnDraft]=useState(initialRange.to),[asOnError,setAsOnError]=useState('');
  const [bank,setBank]=useState(''),[status,setStatus]=useState('unreconciled');
  const [searchDraft,setSearchDraft]=useState(''),[search,setSearch]=useState('');
  const [ageing,setAgeing]=useState(metric.key.startsWith('trade-')?'summary:all':'ledger');
  const ageSummary=ageing.startsWith('summary:');
  const [ledger,setLedger]=useState(null);
  const requestRange=useMemo(()=>({...range,search,...(metric.key.startsWith('trade-')?{ageing}:{}),...(metric.key==='bank-reconciliation'?{bank,status}:{})}),[range,search,ageing,bank,status,metric.key]);
- const [count,setCount]=useState({totalCount:null});
+ const [count,setCount]=useState({totalCount:null}),[retry,setRetry]=useState(0);
  useEffect(()=>{
   if(preview)return;const controller=new AbortController();setCount({totalCount:null,countLoading:true});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok||!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
+  fetchAccountsReport(`/api/reports/iboss-accounts-dashboard/${metric.key}/count?${new URLSearchParams(requestRange)}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+   .then(body=>{if(!Number.isSafeInteger(body.totalCount)||body.totalCount<0)throw new Error();return body;})
    .then(body=>{if(!controller.signal.aborted)setCount(body);})
    .catch(()=>{if(!controller.signal.aborted)setCount({totalCount:null,countError:'Total count unavailable — reopen to retry.'});});
   return ()=>controller.abort();
- },[metric,requestRange,token,preview]);
+ },[metric,requestRange,token,preview,retry]);
  const dialog=useRef(null),[page,setPage]=useState(0),[detail,setDetail]=useState(null),[data,setData]=useState({loading:true,rows:[]});
  useEffect(()=>{const opener=document.activeElement;dialog.current.showModal();return ()=>{if(opener?.isConnected)opener.focus();};},[]);
  useEffect(()=>{
   if(preview){const view=metricViews[metric.key];setData({view,columns:ACCOUNT_VIEWS[view].columns,rows:preview.metricRows?.[metric.key]||[],loading:false,...range});return;}
   const controller=new AbortController();setData({loading:true,rows:[]});
-  fetch(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...requestRange,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
-   .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load card details.');return body;})
+  fetchAccountsReport(`/api/reports/iboss-accounts-dashboard/${metric.key}?${new URLSearchParams({...requestRange,page})}`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+   .then(body=>{if(!Array.isArray(body.rows))throw new Error('The report response was incomplete. Please retry.');return body;})
    .then(body=>{if(!controller.signal.aborted)setData({...body,loading:false});})
    .catch(error=>{if(!controller.signal.aborted)setData({loading:false,rows:[],error:error.message});});
   return ()=>controller.abort();
- },[metric,requestRange,token,page,preview]);
+ },[metric,requestRange,token,page,preview,retry]);
  useEffect(()=>{const timer=setTimeout(()=>{setPage(0);setSearch(searchDraft.trim());},400);return ()=>clearTimeout(timer);},[searchDraft]);
- const columns=useMemo(()=>(data.columns||[]).map(column=>{
+ const columns=useMemo(()=>(data.columns||[]).map(sourceColumn=>{
+  const column={...sourceColumn,label:ageSummary&&/^AGE_\d+$/.test(sourceColumn.key)?sourceColumn.label+' DAYS':ageSummary&&sourceColumn.key==='AGE_OVER_360'?'ABOVE 360 DAYS':sourceColumn.label};
   const value=row=>column.date||column.key.endsWith('_DATE')?row[column.key]?formatDisplayDate(row[column.key]):'':row[column.key]??'';
   if(ageSummary&&!column.numeric&&!['ACCOUNT_NAME','ACCOUNT_CODE'].includes(column.key))return {...column,value,render:row=>value(row)||'Not recorded'};
-  if(ageSummary&&column.numeric)return {...column,value:row=>Number(row[column.key]||0),render:row=>Number(row[column.key]||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})};
+  if(ageSummary&&column.numeric)return {...column,value:row=>Number(row[column.key]||0),render:row=>Number(row[column.key]||0).toLocaleString('en-IN',{minimumFractionDigits:column.integer?0:2,maximumFractionDigits:column.integer?0:2})};
   return {...column,value,sortValue:row=>row[column.key],drilldown:true,render:row=>value(row)===''?'—':<button type="button" className="iboss-detail-link" onClick={()=>{if(!preview&&metric.key.startsWith('trade-')&&['ACCOUNT_NAME','ACCOUNT_CODE'].includes(column.key)){setLedger({account:String(row.ACCOUNT_CODE),company:String(row.COMPANYCODE||range.company||'')});return;}const target=accountDrill(data.view,column.key,row)||ACCOUNT_VIEWS[data.view].columns.map(item=>accountDrill(data.view,item.key,row)).find(Boolean);if(preview||target)setDetail({target,row,from:data.from,to:data.to,label:String(value(row))});}}>{value(row)}</button>};
  }),[data,metric.key,range.company,preview,ageSummary]);
  return <dialog ref={dialog} className="iboss-dash-dialog" aria-labelledby="dashboard-card-title" onCancel={event=>{event.preventDefault();if(detail)setDetail(null);else close();}}>
   <header><div><small>{preview?'Illustrative preview records':'Oracle records behind this card'}</small><h2 id="dashboard-card-title">{metric.title}</h2></div><button type="button" onClick={close} aria-label="Close dashboard details">×</button></header>
   {['bank-reconciliation','trade-payable','trade-receivable'].includes(metric.key)&&<p>{metric.key.startsWith('trade-')&&ageing!=='ledger'?<>As on: {formatDisplayDate(range.to)} · Ageing from bill date</>:<>Voucher period: {formatDisplayDate(range.from)} to {formatDisplayDate(range.to)}</>} · {range.companyName||range.company||'All companies'}</p>}
-  {metric.key==='bank-reconciliation'&&<ReconciliationControls rows={reconciliation} bank={bank} status={status} onBank={value=>{setPage(0);setBank(value);}} onStatus={value=>{setPage(0);setStatus(value);}}/>}
+  {metric.key==='bank-reconciliation'&&<ReconciliationControls ReportSection={ReportSection} rows={reconciliation} bank={bank} status={status} onBank={value=>{setPage(0);setBank(value);}} onStatus={value=>{setPage(0);setStatus(value);}}/>}
   {metric.key.startsWith('trade-')&&ageing==='ledger'&&<p>ERP trade-group ledgers and their child accounts. Opening + period credits − period debits = closing. Closing credit is positive; closing debit is negative. Click an account to view its vouchers.</p>}
-  {metric.key.startsWith('trade-')&&<div className="iboss-dash-controls"><label>Ageing / report view<select value={ageing} onChange={event=>{setPage(0);setAgeing(event.target.value);}}><option value="ledger">Ledger balances</option><optgroup label="Party-wise ageing summary">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={'summary:'+band.value}>{band.value==='all'?'Ageing summary — all columns':band.label}</option>)}</optgroup><optgroup label="Bill-wise ageing details">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={band.value}>{band.label}</option>)}</optgroup></select></label></div>}
-  {metric.key.startsWith('trade-')&&ageing!=='ledger'&&<>{ageSummary&&<p><strong>Party-wise ageing as on {formatDisplayDate(range.to)}</strong> · {metric.key==='trade-payable'?'Payable credit':'Receivable debit'} amounts are positive; advances / opposite balances are negative. Selecting an age band shows parties with a non-zero balance in that column.</p>}<p>Ageing is measured from the bill/document date to {formatDisplayDate(range.to)}; items without a source bill/document date appear in Date unavailable. Includes older opening items regardless of Activity from. Advances and opposite balances remain visible. This is document age, not days overdue.</p><p className="iboss-dash-note">Settlement uses current ERP allocation links with both vouchers dated through the selected closing date. Later edits to allocation links cannot be reconstructed.</p>{count.totalDr!=null&&<p>All matching entries: Dr {Number(count.totalDr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Cr {Number(count.totalCr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Net {Math.abs(count.signedTotal).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} {count.signedTotal<0?'Dr':'Cr'}</p>}</>}
+  {metric.key.startsWith('trade-')&&<div className="iboss-dash-controls"><form className="iboss-ageing-as-on" onSubmit={event=>{event.preventDefault();try{const next=ageingAsOnRange(range,asOnDraft);setAsOnError('');setAsOnDraft(next.to);setPage(0);setLedger(null);setDetail(null);setDetailRange(next);setRetry(n=>n+1);}catch(error){setAsOnError(error.message);}}}><label>As on date<EditableDateInput label="Ageing as on date" value={asOnDraft} onChange={event=>setAsOnDraft(event.target.value)}/></label><button type="submit">Apply date</button></form><label>Ageing / report view<select value={ageing} onChange={event=>{setPage(0);setAgeing(event.target.value);}}><option value="ledger">Ledger balances</option><optgroup label="Party-wise ageing summary">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={'summary:'+band.value}>{band.value==='all'?'Ageing summary — all columns':band.label}</option>)}</optgroup><optgroup label="Bill-wise ageing details">{TRADE_AGE_BANDS.map(band=><option key={band.value} value={band.value}>{band.label}</option>)}</optgroup></select></label></div>}
+  {asOnError&&<p role="alert">{asOnError}</p>}
+  {metric.key.startsWith('trade-')&&ageing!=='ledger'&&<>{ageSummary&&<p><strong>Party-wise ageing as on {formatDisplayDate(range.to)}</strong> · {metric.key==='trade-payable'?'Payable credit':'Receivable debit'} amounts are positive; advances / opposite balances are negative. Selecting an age band shows parties with a non-zero balance in that column.</p>}<p>Ageing is measured from the bill/document date to {formatDisplayDate(range.to)}; items without a source bill/document date appear in Date unavailable. Each bill is aged separately. No. of Bills counts distinct pending bill references; entries without a bill reference are listed separately. Fully allocated bills are excluded; partially paid bills show only the remaining balance. Includes older opening items regardless of Activity from. Advances and opposite balances remain visible. This is document age, not days overdue.</p><p className="iboss-dash-note">Settlement uses current ERP allocation links with both vouchers dated through the selected closing date. Later edits to allocation links cannot be reconstructed.</p>{count.totalDr!=null&&<p>All matching entries: Dr {Number(count.totalDr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Cr {Number(count.totalCr).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} · Net {Math.abs(count.signedTotal).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})} {count.signedTotal<0?'Dr':'Cr'}</p>}</>}
   <div className="iboss-dash-controls"><label>Search all matching Oracle records<input type="search" maxLength={120} value={searchDraft} onChange={event=>setSearchDraft(event.target.value)} placeholder="Account code, account / party name, bill or voucher…"/></label><button type="button" onClick={()=>{setSearchDraft('');setSearch('');setPage(0);}}>Clear search</button></div>
-  {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error}</p>:<>
+  {data.loading?<p role="status">Loading matching records…</p>:data.error?<p role="alert">{data.error} <button type="button" onClick={()=>setRetry(n=>n+1)}>Retry report</button></p>:<>
    <p role="status">{recordCountLabel({...count,rows:data.rows,...(preview?{totalCount:data.rows.length}:{})})}</p>
    <ReportSection key={data.view} showSearch={false} title={ageSummary?metric.title+' — Party-wise Ageing':metric.title} rows={data.rows} columns={columns} rowKey={(row,index)=>`${row.ID}-${index}`} category="iboss-accounts" emptyMessage="No records match this card." description={preview?'Example records for layout review.':'Search covers all matching Oracle records. Export includes loaded records only. Click an account or party for its ledger details.'}/>
    {!preview&&<nav aria-label="Dashboard detail pages"><button type="button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Previous</button><span>Page {page+1} · up to 200 records</span><button type="button" disabled={!data.hasMore} onClick={()=>setPage(value=>value+1)}>Next</button></nav>}
   </>}
   {detail&&(preview?<section className="iboss-dash-example"><h3>Example record · {detail.label}</h3><p>Live records open their linked Oracle document trail, including recorded audit details where available.</p><dl>{Object.entries(detail.row).map(([key,value])=><React.Fragment key={key}><dt>{key.replace(/_/g,' ')}</dt><dd>{String(value??'—')}</dd></React.Fragment>)}</dl><button type="button" onClick={()=>setDetail(null)}>Back to records</button></section>:<DrillPanel target={detail.target} range={{...range,from:detail.from,to:detail.to}} token={token} close={()=>setDetail(null)}/>)}
- {ledger&&<AccountLedger {...ledger} range={range} token={token} close={()=>setLedger(null)}/>}
+ {ledger&&<AccountLedger {...ledger} range={range} ReportSection={ReportSection} token={token} close={()=>setLedger(null)}/>}
  </dialog>;
 }
 
@@ -110,7 +115,10 @@ export default function IbossDashboard({token,ReportSection,onOpen:openReport,pr
  const select=(key,title)=>setSelected({key,title:title||data.cards.find(card=>card.key===key)?.title||data.tasks.find(task=>task.key===key)?.title});
  const maxAge=Math.max(1,...(data.aging||[]).flatMap(item=>[Math.abs(item.payable),Math.abs(item.receivable)]));
  const taskCount=(data.tasks||[]).filter(task=>task.count>0).length;
- const renderParties=side=><section className="iboss-dash-panel"><div className="iboss-dash-panel-heading"><div><small>Current signed balances</small><h3>{side==='receivable'?'Largest customer balances':'Largest vendor balances'}</h3></div><button type="button" onClick={()=>select(side)}>View all <ChevronRight/></button></div><table className="iboss-dash-party-table"><thead><tr><th>Party</th><th>Bills</th><th>Balance</th></tr></thead><tbody>{data.parties[side].length?data.parties[side].map(party=><tr key={party.code}><td><button type="button" onClick={()=>onOpen('merge',{range,chain:'party-position',anchor:party.code,label:party.name})}>{party.name}<small>{party.code}</small></button></td><td>{party.bills.toLocaleString('en-IN')}</td><td>{dashboardAmount(party.balance)}</td></tr>):<tr><td colSpan="3">{side==='receivable'&&(data.sectionPending?.receivable||data.sectionErrors?.receivable)?'Customer balances loading or unavailable—see status above.':'No open balances.'}</td></tr>}</tbody></table></section>;
+ const renderParties=side=><section className="iboss-dash-panel"><ReportSection title={side==='receivable'?'Largest customer balances':'Largest vendor balances'} category="iboss-accounts" description="Displayed leading balances only. Use View all for the full report." rows={data.parties[side]} columns={[
+ {key:'name',label:'Party',value:row=>row.name,render:row=><button type="button" className="iboss-detail-link" onClick={()=>onOpen('merge',{range,chain:'party-position',anchor:row.code,label:row.name})}>{row.name}</button>},
+ {key:'code',label:'Account code',value:row=>row.code},{key:'bills',label:'Bills',value:row=>row.bills},{key:'balance',label:'Balance',value:row=>Number(row.balance),render:row=>dashboardAmount(row.balance)}
+ ]} headingControl={<button type="button" onClick={()=>select(side)}>View all <ChevronRight/></button>}/></section>;
  return <div className="iboss-dashboard">
   {preview&&<div className="iboss-dash-preview"><Shield/> DESIGN PREVIEW · Illustrative figures for review · Not deployed</div>}
   <div className="iboss-dash-title"><div><small>IBOSS / ACCOUNTS</small><h2>Finance at a glance</h2><p>Balances, commitments and follow-up — one place to start your day.</p></div><div className="iboss-dash-mode" role="group" aria-label="Dashboard focus"><button type="button" aria-pressed={mode==='management'} onClick={()=>setMode('management')}>Management</button><button type="button" aria-pressed={mode==='accounts'} onClick={()=>setMode('accounts')}>Accounts team</button></div></div>

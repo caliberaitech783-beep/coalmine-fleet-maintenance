@@ -1,3 +1,4 @@
+import {ageingSnapshots,ageingSummaryResult} from './iboss-ageing-snapshots.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {companyCode,companyScopedSql,COMPANY_LIST_SQL} from './iboss-company-scope.mjs';
 import {accountPageQuery,accountPageResult,ACCOUNT_PAGE_SIZE} from './iboss-account-pages.mjs';
@@ -45,8 +46,24 @@ export async function oracleAccountsCount(view,from,to,search='',company='') {
  if(sql.includes(':company_code'))binds.company_code=company;
  return oracleReportCount(sql,binds);
 }
+const ageSnapshots=ageingSnapshots();
+async function ageingSummarySnapshot(key,input,request,count=false){
+ const cacheKey=JSON.stringify([key,input.to,input.company||'']);
+ const rows=ageSnapshots(cacheKey,async()=>{
+  const source=dashboardMetric(key,{...input,search:'',ageing:'summary:all',page:0});
+  const sql=source.sql.replace(/ OFFSET :row_offset ROWS FETCH NEXT :row_limit ROWS ONLY$/,'');
+  const {row_offset,row_limit,...binds}=source.binds;
+  const pool=await oraclePool(),connection=await pool.getConnection();
+  try{connection.callTimeout=60000;await connection.execute('SET TRANSACTION READ ONLY');
+   const result=await connection.execute(sql,binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:50001,fetchArraySize:1000});
+   if(result.rows.length>50000)throw new Error('Ageing summary exceeds the supported party limit.');
+   return result.rows;
+  }finally{await connection.close();}
+ });
+ return rows===null?{pending:true}:ageingSummaryResult(rows,request,input,{count,pageSize:DASHBOARD_PAGE_SIZE});
+}
 export async function oracleDashboardCount(key,input) {
- const query=dashboardMetric(key,input);return oracleReportCount(query.countSql,query.countBinds);
+ const query=dashboardMetric(key,input);if(query.view.endsWith('-ageing-summary'))return ageingSummarySnapshot(key,input,query,true);return oracleReportCount(query.countSql,query.countBinds);
 }
 async function oracleReportCount(sql,binds) {
  const pool=await oraclePool(),connection=await pool.getConnection();
@@ -55,7 +72,9 @@ async function oracleReportCount(sql,binds) {
 }
 
 export async function oracleAccountsDashboardMetric(key,input){
-  const request=dashboardMetric(key,input),pool=await oraclePool(),connection=await pool.getConnection();
+  const request=dashboardMetric(key,input);
+  if(request.view.endsWith('-ageing-summary'))return ageingSummarySnapshot(key,input,request);
+  const pool=await oraclePool(),connection=await pool.getConnection();
   try{
     connection.callTimeout=60000;
     const result=await connection.execute(request.sql,request.binds,{outFormat:oracledb.OUT_FORMAT_OBJECT,maxRows:DASHBOARD_PAGE_SIZE+1});

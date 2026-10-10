@@ -27,6 +27,13 @@ export const TRADE_AGE_REPORTS=Object.fromEntries(Object.entries(TRADE_GROUPS).m
  FROM (SELECT TO_CHAR(v.tno)||':'||TO_CHAR(d.sno) id,v.companycode,d.accountcode AS account_code,p.partyname AS account_name,
  v.voucherno AS voucher_no,TO_CHAR(v.voucherdate,'YYYY-MM-DD') AS voucher_date,
  d.billno AS bill_no,
+ CASE
+ WHEN v.voucherno='OPENING' AND d.moduletno IS NOT NULL THEN 'OPENING:'||TO_CHAR(d.moduletno)
+ WHEN v.modulecode='PBPASS' THEN (SELECT MAX(CASE WHEN pp.purchasebilltno IS NOT NULL THEN 'PURCHASEBILL:'||TO_CHAR(pp.purchasebilltno) END) FROM cmpl.pbpass pp WHERE pp.tno=v.moduletno)
+ WHEN v.modulecode='JBPASS' THEN (SELECT MAX(CASE WHEN jp.jobbilltno IS NOT NULL THEN 'JOBBILL:'||TO_CHAR(jp.jobbilltno) END) FROM cmpl.jbpass jp WHERE jp.tno=v.moduletno)
+ WHEN v.modulecode IN ('INVOICE','SERVICEBILL','FREIGHTADVICE','EXTERNALSERVICESENTRY','NECESSITYCOMPLETION') AND v.moduletno IS NOT NULL THEN v.modulecode||':'||TO_CHAR(v.moduletno)
+ WHEN TRIM(d.billno) IS NOT NULL THEN 'REFERENCE:'||UPPER(TRIM(d.billno))||':'||TO_CHAR(v.voucherdate,'YYYY')
+ END AS bill_identity,
  ${docDate} AS document_date_raw,TO_CHAR(${docDate},'YYYY-MM-DD') AS document_date,
  CASE WHEN ${sourceDate} IS NULL THEN 'Bill date unavailable' ELSE 'Bill / document date' END AS age_basis,
  d.amount AS original_amount,NVL(a.allocated,0) AS allocated_amount,d.amount-NVL(a.allocated,0) AS balanceamount

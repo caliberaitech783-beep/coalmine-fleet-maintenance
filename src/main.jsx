@@ -1,3 +1,4 @@
+import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
 import {TENDER_PERMISSION_OPTIONS,TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from '../tender-permissions.mjs';
 import { RequestDeleteReview } from "./workshop-selected-delete.jsx";
@@ -3465,7 +3466,7 @@ function FilterableHeader({
             )) : <span className="column-filter-empty">No matching values</span>}
           </div></>}
         </div>,
-        document.body,
+        reportPortalTarget(),
       )}
     </th>
   );
@@ -3556,7 +3557,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
       </button>}
       {open && createPortal(
         dialogMode ? <div className="report-action-dialog-backdrop" onPointerDown={() => setOpen(false)}>{filterDialog}</div> : filterDialog,
-        document.body,
+        reportPortalTarget(),
       )}
     </div>
   );
@@ -3587,7 +3588,7 @@ function CaliberActivityOverlay({ message = "", className = "" }) {
         <span>Please wait while Caliber Pulse prepares your file.</span>
       </div>
     </div>,
-    document.body,
+    reportPortalTarget(),
   );
 }
 function downloadExportFile(blob, filename) {
@@ -4010,7 +4011,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
   };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
-  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className={`export-menu-popover${portalClassName ? ` ${portalClassName}` : ""}`} style={popoverPosition} role="menu" aria-label={`${title} export options`}>{smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}<button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> {smartLabels ? "Smart PDF" : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> {smartLabels ? "Smart Excel" : "Download as Excel"}</button>{!smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}</div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} className={portalClassName} /></>;
+  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className={`export-menu-popover${portalClassName ? ` ${portalClassName}` : ""}`} style={popoverPosition} role="menu" aria-label={`${title} export options`}>{smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}<button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> {smartLabels ? "Smart PDF" : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> {smartLabels ? "Smart Excel" : "Download as Excel"}</button>{!smartLabels && smartPrintItem && <button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button>}</div>, reportPortalTarget())}</div><CaliberActivityOverlay message={downloadActivity} className={portalClassName} /></>;
 }
 function ReportColumnSelector({ columns = [], visibleColumnKeys = [], layoutStore, onApply, onClose }) {
   const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
@@ -4074,7 +4075,7 @@ function ReportColumnSelector({ columns = [], visibleColumnKeys = [], layoutStor
         <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!draftKeys.length} onClick={() => onApply(draftKeys)}>Apply</button></footer>
       </section>
     </div>,
-    document.body,
+    reportPortalTarget(),
   );
 }
 function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
@@ -4088,7 +4089,7 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
         <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!columnKey} onClick={() => onApply(columnKey, direction)}>Apply</button></footer>
       </section>
     </div>,
-    document.body,
+    reportPortalTarget(),
   );
 }
 function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset, resetLabel = "Reset report", onSaveReport, onSavedReports }) {
@@ -4186,7 +4187,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
       </>}
       <div className="report-actions-divider" />
       <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>{resetLabel}</span></button>
-    </div>, document.body)}
+    </div>, reportPortalTarget())}
   </div>;
 }
 const printSavedReport = ({ title, columns, rows, reportGrouping }) => openSmartPrint({ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
@@ -4195,7 +4196,7 @@ function ActionsTable(props) {
   const children=/\b(dashboard-location-dates|workflow-table|breakdown-table-auto-fit)\b/.test(props.className || "")?withDashboardResponsibilityCells(props.children,shiftData.requests):props.children;
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
-function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "", onExportViewChange = null, onResetSearch = null }) {
   const {shifts}=useRequestShiftData();
   columns=requestShiftColumns(columns,rows,shifts);
   const [appliedColumns, applyColumns] = useColumnPreferences(layoutKey || "report-table", columns, visibleColumnKeys);
@@ -4240,6 +4241,12 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     });
   };
   const activeFilterCount = columns.filter((column) => columnFilters[column.key]).length;
+  const exportViewRef = useRef(null);
+  useEffect(() => {
+    if (!onExportViewChange) return;
+    const next = {sourceRows: rows, rows: sortedRows, columns: displayedColumns};
+    if (!sameReportView(exportViewRef.current, next)) { exportViewRef.current = next; onExportViewChange(next); }
+  });
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const pagedRows = sortedRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -4270,7 +4277,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
         <TableLayoutSelect store={layoutStore} visibleKeys={displayedColumns.map(column => column.key)} onSelect={keys => onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(keys, columns))} />
-        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(allColumnKeys, columns)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} resetLabel="Reset table" onReset={() => { onResetSearch?.(); setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(allColumnKeys, columns)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
         <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
@@ -7312,6 +7319,8 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
   </section>;
 }
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", children }) {
+  if (category === "iboss-accounts") exportLabel = "Print/Export";
+  const [exportView, setExportView] = useState(null);
   const TableViewport = category === "vehicle-history" ? VehicleHistoryScroll : "div";
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [searchQuery, setSearchQuery] = useState(query);
@@ -7330,7 +7339,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         <div className="generated-report-heading-actions">
           {headingControl}
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
-          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} smartLabels={category === "employee-tenure"} className="secondary" label={exportLabel} />
+          <ExportMenu title={title} columns={exportView?.sourceRows === rows ? exportView.columns : visibleColumns} rows={exportView?.sourceRows === rows ? exportView.rows : rows} smartLabels={category === "employee-tenure"} className="secondary" label={exportLabel} />
         </div>
       </div>
       {controls}
@@ -7339,6 +7348,9 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         <TableViewport className="reports-detail-table emptytable">
           <ReportTable
             layoutKey={title}
+            title={title}
+            onExportViewChange={setExportView}
+            onResetSearch={() => setSearchQuery("")}
             query={showSearch ? searchQuery : query}
             rows={rows}
             rowKey={rowKey}
