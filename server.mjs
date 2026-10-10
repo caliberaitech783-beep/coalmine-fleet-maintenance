@@ -6926,6 +6926,7 @@ async function activeRequestConflict({door='',chassis=''}={},client=pool){
   const normalizedChassis=String(chassis||'').trim();
   if(!normalizedDoor&&!normalizedChassis)return null;
   const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,site,complaint,issues,status,
+      vehicle_idle AS "vehicleIdle",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",
       owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
       to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
@@ -6937,7 +6938,7 @@ async function activeRequestConflict({door='',chassis=''}={},client=pool){
     ) ORDER BY created_at DESC`,[normalizedDoor,normalizedChassis]);
   // A request hidden from every operational view must not silently block a
   // replacement. Closure/verification timestamps also outrank stale status text.
-  return requestsVisibleGlobally(rows).find(isActiveMaintenanceRequest)||null;
+  return rows.find(isIdleVehicleRequest)||requestsVisibleGlobally(rows).find(isActiveMaintenanceRequest)||null;
 }
 
 async function createRequestWithVehicleLock({door='',chassis='',existingReference='',existingReason=''},write){
@@ -6951,6 +6952,7 @@ async function createRequestWithVehicleLock({door='',chassis='',existingReferenc
       .filter(([,value])=>value).map(([field,value])=>`bdms-request:${field}:${value}`).sort();
     for(const key of keys)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
     const duplicate=await activeRequestConflict({door,chassis},client);
+    if(duplicate && isIdleVehicleRequest(duplicate))throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,idleApprovalPending:true,existingReference:duplicate.ref});
     if(duplicate && !(existingReference===duplicate.ref && ['same','different'].includes(existingReason)))throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
     const result=await write(client,duplicate);
     await client.query('COMMIT');
@@ -6965,7 +6967,7 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
     if(!door&&!chassis)return res.status(400).json({error:'Select a door number before checking active requests.'});
     const conflict=await activeRequestConflict({door,chassis});
     if(!conflict)return res.json({duplicate:false});
-    res.json({duplicate:true,existingReference:conflict.ref,status:conflict.status,door:conflict.door,complaint:conflict.complaint,issues:conflict.issues,message:activeRequestConflictMessage(conflict,door)});
+    res.json({duplicate:true,idleApprovalPending:isIdleVehicleRequest(conflict),existingReference:conflict.ref,status:conflict.status,door:conflict.door,complaint:conflict.complaint,issues:conflict.issues,message:activeRequestConflictMessage(conflict,door)});
   }catch(error){next(error)}
 });
 
@@ -7044,7 +7046,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notifications could not be completed.`,error.message)}
     });
   }catch(error){
-    if(error.duplicate)return res.status(409).json({duplicate:true,existingReference:error.existingReference,error:error.message});
+    if(error.duplicate)return res.status(409).json({duplicate:true,idleApprovalPending:Boolean(error.idleApprovalPending),existingReference:error.existingReference,error:error.message});
     if(error.code==='23505'&&error.constraint==='maintenance_requests_reference_key')return res.status(409).json({code:'REQUEST_REFERENCE_CONFLICT',error:'This request reference already exists. Refresh the request form and try again.'});
     maintenanceWriteFailure(error,res,next);
   }

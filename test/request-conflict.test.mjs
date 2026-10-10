@@ -1,10 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from 'node:fs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {
   activeRequestConflictMessage,
   findActiveRequestConflict,
   isActiveMaintenanceRequest,
 } from "../request-conflict.mjs";
+
+test('closed pending idle blocks by door or chassis and takes priority over active linked cases', () => {
+  const idle={ref:'REQ-IDLE',door:'E94',chassis:'CH94',status:'Closed',closedAt:'2026-10-09',vehicleIdle:true};
+  const active={...idle,ref:'REQ-ACTIVE',status:'Accepted',closedAt:null,vehicleIdle:false};
+  assert.equal(findActiveRequestConflict([active,idle],{door:' e94 '}),idle);
+  assert.equal(findActiveRequestConflict([idle],{chassis:'ch94'}),idle);
+  assert.match(activeRequestConflictMessage(idle),/Resolve the idle approval/);
+  assert.equal(findActiveRequestConflict([{...idle,vehicleIdle:false,idealApprovedAt:'2026-10-10'}],{door:'E94'}),null);
+  assert.equal(findActiveRequestConflict([idle],{door:'E95'}),null);
+});
+
+test('transaction guard rejects pending idle even with linked-ticket override, before writing', async () => {
+  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const code=source.slice(source.indexOf('async function createRequestWithVehicleLock('),source.indexOf("app.get('/api/requests/conflict'"));
+  for(const existingReason of ['','same','different']){
+    const queries=[];
+    const client={query:async sql=>queries.push(sql),release:()=>{}};
+    const create=new Function('pool','activeRequestConflict','isIdleVehicleRequest','activeRequestConflictMessage',`${code};return createRequestWithVehicleLock;`)(
+      {connect:async()=>client},async()=>({ref:'REQ-IDLE',door:'E94',status:'Closed',vehicleIdle:true}),isIdleVehicleRequest,activeRequestConflictMessage);
+    let wrote=false;
+    await assert.rejects(create({door:'E94',existingReference:'REQ-IDLE',existingReason},async()=>{wrote=true;}),error=>error.status===409&&error.idleApprovalPending);
+    assert.equal(wrote,false);
+    assert.ok(queries.includes('ROLLBACK'));
+  }
+});
 
 test("active requests conflict on a normalized door number", () => {
   const request = {ref: "REQ-100", door: "  MH-40 ", chassis: "CH-1", status: "Open"};
