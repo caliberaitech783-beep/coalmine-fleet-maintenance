@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import {activeRequestConflictMessage,isActiveMaintenanceRequest} from '../request-conflict.mjs';
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {requestsVisibleGlobally} from '../mis-request-visibility.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {parseIndiaRequestDateTime} from '../request-time.mjs';
@@ -66,7 +67,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
     setImmediate:callback=>followups.push(callback),
     requestShiftLabel,...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>({site:'Sasti OB'}),
-    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,isActiveMaintenanceRequest,requestsVisibleGlobally,requestProjection:'*',
+    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,isActiveMaintenanceRequest,isIdleVehicleRequest,requestsVisibleGlobally,requestProjection:'*',
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',
     workflowRequestLink:()=>'',publicBaseUrl:()=>'',console,

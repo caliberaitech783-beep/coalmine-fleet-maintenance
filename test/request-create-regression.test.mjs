@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
+import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { parseRequestTimelineTimestamp, validateRequestTimelineChange } from "../request-timeline.mjs";
 
@@ -155,7 +156,7 @@ function conflictHarness({ submitting = false, rows = [], fetch = async () => ({
     door: request.door, equipmentDetails: request, activeRequestRecords: rows,
     submitting, submittingRef, conflictAlerted: { current: "" },
     setExistingReason: () => {}, setCheckingConflict: () => {}, setDuplicateConflict: value => { conflict = value; },
-    activeRequestConflictMessage, findActiveRequestConflict, fetch, URLSearchParams, authToken: "test",
+    activeRequestConflictMessage, findActiveRequestConflict, isIdleVehicleRequest, fetch, URLSearchParams, authToken: "test",
     window: { alert: message => alerts.push(message), setTimeout: callback => { timers.push(callback); return timers.length; }, clearTimeout: () => {} },
   });
   return { submittingRef, alerts, timers, conflict: () => conflict, cleanup: () => cleanup?.() };
