@@ -52,7 +52,7 @@ assert.match(source, /showMeterData[\s\S]*Opening KMR[\s\S]*Opening HMR[\s\S]*Cl
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
   assert.match(server, /opening_meter_reading=\$5/);
-  assert.match(server, /closing_meter_reading=\$6,closing_meter_readings=closing_meter_readings \|\| \$9::jsonb WHERE reference=\$7/);
+  assert.match(server, /closing_meter_reading=COALESCE\(\$6,closing_meter_reading\),closing_meter_readings=closing_meter_readings \|\| \$9::jsonb WHERE reference=\$7/);
 });
 
 test("MIS verification requires the closing reading without a closing meter file", () => {
@@ -62,7 +62,7 @@ test("MIS verification requires the closing reading without a closing meter file
   assert.match(verifyForm, /MeterReadingFields[^>]*stage="closing"[^>]*required/);
   assert.doesNotMatch(verifyForm, /closingMeterFile|Closing \{request\.meterType \|\| "KMR\/HMR"\} file/);
   assert.doesNotMatch(verifyRoute, /closingMeterFile|validMeterEvidenceDataUrl|closing_meter_file=/);
-  assert.match(verifyRoute, /closing_meter_reading=\$6,closing_meter_readings=closing_meter_readings \|\| \$9::jsonb WHERE reference=\$7/);
+  assert.match(verifyRoute, /closing_meter_reading=COALESCE\(\$6,closing_meter_reading\),closing_meter_readings=closing_meter_readings \|\| \$9::jsonb WHERE reference=\$7/);
 });
 
 test("request edit validates opening evidence and does not modify closing evidence", () => {
