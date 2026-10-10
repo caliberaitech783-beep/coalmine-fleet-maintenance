@@ -14,6 +14,21 @@ import * as timeline from '../request-timeline.mjs';
 import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from '../info-pulse-data.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+test('HMR-only verification preserves historic KMR and saves decimal HMR under its own key',async()=>{
+  const row={...pending,status:'Closed',vehicleIdle:false,closedAt:'2026-09-08T10:30:00.000Z',meterType:'KMR',closingMeterReading:'22000',closingMeterReadings:{KMR:'22000'},openingMeterReadings:{HMR:'10000',KMR:'21000'}};
+  const app=harness('verify',{row});
+  const res=await app.call({body:{closingMeterReading:'',closingMeterReadings:{HMR:'10555.6'}}});
+  assert.equal(res.status,200);
+  assert.equal(app.saved.closingMeterReadings.HMR,'10555.6');
+  assert.equal(app.saved.closingMeterReadings.KMR,'22000');
+  assert.equal(app.saved.closingMeterReading,'22000');
+  assert.equal(app.saved.meterType,'KMR');
+  for(const readings of [{},{HMR:''},{HMR:'bad'},{HMR:'9999'}]){
+    const failed=harness('verify',{row});
+    const response=await failed.call({body:{closingMeterReading:'',closingMeterReadings:readings}});
+    assert.equal(response.status,400);assert.equal(failed.mutations,0);
+  }
+});
 const slice=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end));
 const auth=slice('async function requireSession(','async function requireSuper(');
 const bestEffort=slice('async function addTicketNotificationsBestEffort(','let consolidatedReportRunning=');
@@ -67,7 +82,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
         status:'In progress',idleReason:'',closedAt:null,closedBy:'',idealRequestedAt:null,idealRequestedBy:'',idealApprovedAt:null,idealApprovedBy:'',
         inProgressAt:saved.inProgressAt||now,inProgressBy:saved.inProgressAt?saved.inProgressBy:values[1],
       });
-      else Object.assign(saved,{verificationStatus:'Verified',verifiedAt:now,verifiedBy:values[0],firstTripDone:values[1],firstTripAt:values[2],firstTripBy:values[3],firstTripCardImage:values[4],closingMeterReading:values[5]});
+      else Object.assign(saved,{verificationStatus:'Verified',verifiedAt:now,verifiedBy:values[0],firstTripDone:values[1],firstTripAt:values[2],firstTripBy:values[3],firstTripCardImage:values[4],closingMeterReading:values[5]??saved.closingMeterReading,closingMeterReadings:{...saved.closingMeterReadings,...JSON.parse(values[8])}});
       return {rows:[structuredClone(saved)],rowCount:1};
     }},
     requestStakeholderLogins:async()=>{if(notificationFailure==='recipients')throw Error('Recipient lookup unavailable');return ['stupal','sanskar','damini'];},

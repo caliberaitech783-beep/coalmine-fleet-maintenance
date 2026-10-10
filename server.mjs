@@ -7530,7 +7530,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and 12-hour time with AM/PM.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
-    if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
+    if((closingMeterReading&&!validMeterReading(closingMeterReading))||(!closingMeterReading&&!Object.keys(closingMeterReadings).length))return res.status(400).json({error:'Enter a valid closing HMR or KMR reading.'});
     const misUser=await currentUserRecord(req.session);
     const misScope=userSiteScope(misUser);
     if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
@@ -7553,9 +7553,13 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
     const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
     validateClosingMeterReadings(before,{meterType:primaryMeterType,closingMeterReadings,closingMeterReading});
+    // A category-specific form may only submit HMR while the historic primary
+    // meter is KMR. Save typed readings without inventing or clearing KMR.
+    const primaryClosingReading=closingMeterReading||closingMeterReadings[primaryMeterType]||null;
+    const typedClosingReadings={...closingMeterReadings,...(primaryClosingReading?{[primaryMeterType]:primaryClosingReading}:{})};
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status IN ('Closed','Running BD') AND verified_at IS NULL AND site=$8
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading}),firstTripRemark]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,first_trip_remark=$10,closing_meter_reading=COALESCE($6,closing_meter_reading),closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status IN ('Closed','Running BD') AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,primaryClosingReading,reference,existing.site,JSON.stringify(typedClosingReadings),firstTripRemark]);
     if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
     });
