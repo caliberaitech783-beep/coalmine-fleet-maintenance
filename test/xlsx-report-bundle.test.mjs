@@ -137,3 +137,14 @@ test('wide bundle worksheets use valid references beyond Z and legacy workbooks 
   const empty=storedFiles(buildXlsxWorkbookBuffer('Empty legacy',[{label:'Reference'}],[]));
   assert.deepEqual(cells(empty.get('xl/worksheets/sheet1.xml')).slice(2),[{reference:'A3',value:'Sr. No.'},{reference:'B3',value:'Reference'}]);
 });
+
+test('server exports define full print areas and repeat headings with page-width fitting',async()=>{
+  const {buildXlsxSheetsWorkbook}=await import('../report-xlsx.mjs');
+  const blob=buildXlsxSheetsWorkbook('Report',[{name:"Vendor's ledger",columns:[{label:'Bill'}],rows:[['One'],['Two']]}]);
+  const files=storedFiles(Buffer.from(await blob.arrayBuffer()));
+  const sheet=files.get('xl/worksheets/sheet1.xml');
+  assert.match(sheet,/<pageSetUpPr fitToPage="1"\/>/);
+  assert.match(sheet,/orientation="landscape" fitToWidth="1" fitToHeight="0"/);
+  assert.match(files.get('xl/workbook.xml'), /name="_xlnm.Print_Area" localSheetId="0">&#39;Vendor&#39;&#39;s ledger&#39;!\$A\$1:\$B\$5/);
+  assert.match(files.get('xl/workbook.xml'), /name="_xlnm.Print_Titles" localSheetId="0">&#39;Vendor&#39;&#39;s ledger&#39;!\$1:\$3/);
+});
