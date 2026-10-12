@@ -3501,9 +3501,13 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const activeFilterCount = columns.filter((column) => filters[column.key]).length;
-  const columnValues = useMemo(() => open ? Object.fromEntries(
-    columns.map((column) => [column.key, tableColumnValues(rows, column)]),
-  ) : {}, [open, columns, rows]);
+  const [activeValueKey, setActiveValueKey] = useState(null);
+  const activeValueColumn = open ? columns.find(column => column.key === activeValueKey) : null;
+  // Opening a wide report must not scan every column or mount all distinct values.
+  const columnValues = useMemo(() => activeValueColumn
+    ? {[activeValueColumn.key]: tableColumnValues(rows, activeValueColumn)} : {},
+  [activeValueColumn, rows]);
+  useEffect(() => { if (!open) setActiveValueKey(null); }, [open]);
   useEffect(() => {
     if (!open || dialogMode) return undefined;
     const closeFilter = (event) => {
@@ -3539,8 +3543,9 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
       <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
       <div className="table-parameter-filter-fields">
         {columns.map((column) => (
-          <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
+          <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onFocus={() => setActiveValueKey(column.key)} onPointerDown={() => setActiveValueKey(column.key)} onChange={(event) => onFilterChange(column.key, event.target.value)}>
             <option value="">All {column.label}</option>
+            {filters[column.key] && !columnValues[column.key] && !parseDateRange(filters[column.key]) && parseFilterValues(filters[column.key]).length <= 1 && <option value={filters[column.key]}>{filters[column.key] === EMPTY_TABLE_FILTER_VALUE ? "(Blank)" : filters[column.key]}</option>}
             {parseDateRange(filters[column.key]) && <option value={filters[column.key]}>{describeDateRange(parseDateRange(filters[column.key]))}</option>}
             {parseFilterValues(filters[column.key]).length > 1 && <option value={filters[column.key]}>{describeFilterValues(filters[column.key])}</option>}
             {(columnValues[column.key] || []).map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
