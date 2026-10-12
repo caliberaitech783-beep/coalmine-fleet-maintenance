@@ -1,3 +1,4 @@
+import {reportEquipmentGroupOptions,matchesReportEquipmentGroup} from './report-equipment-group.mjs';
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
 import {TENDER_PERMISSION_OPTIONS,TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from '../tender-permissions.mjs';
@@ -116,7 +117,7 @@ import { requestDeletable } from "../request-deletion.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
-import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../department-reports.mjs";
+import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE, TOTAL_SUMMARY_REPORT_TITLE } from "../department-reports.mjs";
 import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
@@ -7438,6 +7439,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   const [reportTo, setReportTo] = useState("");
   const [selectedReportShift, setSelectedReportShift] = useState(ALL_SHIFTS_KEY);
   const [offRoadAge, setOffRoadAge] = useState("all");
+  const [summaryEquipmentGroup,setSummaryEquipmentGroup] = useState("");
   const [showAllAcceptances, setShowAllAcceptances] = useState(false);
   const [reportNow, setReportNow] = useState(() => new Date());
   useEffect(() => { const timer = window.setInterval(() => setReportNow(new Date()), 60000); return () => window.clearInterval(timer); }, []);
@@ -7702,8 +7704,10 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
+  const summaryEquipmentGroupOptions = useMemo(()=>reportEquipmentGroupOptions(selectedReport?.title === TOTAL_SUMMARY_REPORT_TITLE ? selectedReport.rows : []),[selectedReport]);
   const invalidReportRange = Boolean(reportFrom && reportTo && !validReportDateRange(reportFrom, reportTo));
   const selectedReportRows = invalidReportRange ? [] : reportRowsForShift(selectedReport,(selectedReport?.rows || []).filter(row => {
+    if (selectedReport.title === TOTAL_SUMMARY_REPORT_TITLE && !matchesReportEquipmentGroup(row,summaryEquipmentGroup)) return false;
     if (selectedReport.title === "Open Off road Cases" && offRoadAge === "ten" && !olderThanTenDays(row, reportNow)) return false;
     if (selectedReport.title === "Availability Report" || (!reportFrom && !reportTo)) return true;
     const timestamp = indiaDateTimeEpoch(selectedReport.dateValue?.(row));
@@ -8015,6 +8019,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
       {reportMasterData.driverLookupWarning && <p role="status">{reportMasterData.driverLookupWarning}</p>}
       {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
+      {selectedReport?.title === TOTAL_SUMMARY_REPORT_TITLE && <div className="report-equipment-group-filter"><label>Equipment Group<select aria-label="Total Summary Report equipment group" value={summaryEquipmentGroup} onChange={event=>setSummaryEquipmentGroup(event.target.value)}><option value="">All equipment groups</option>{summaryEquipmentGroupOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{summaryEquipmentGroup&&<button type="button" className="secondary" onClick={()=>setSummaryEquipmentGroup("")}>Clear equipment group</button>}</div>}
       {selectedReport && reportShiftOptions.length > 0 && <div className="mobile-tabs report-shift-tabs" aria-label="Shift Master filter">
         <button type="button" className={selectedReportShift === ALL_SHIFTS_KEY ? "active" : ""} onClick={() => setSelectedReportShift(ALL_SHIFTS_KEY)}>All shifts</button>
         {reportShiftOptions.map((option) => <button type="button" key={option.key} className={selectedReportShift === option.key ? "active" : ""} onClick={() => setSelectedReportShift(option.key)}>{option.label}</button>)}

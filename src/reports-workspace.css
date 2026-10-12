@@ -1015,3 +1015,5 @@
   font-weight: 700;
 }
 :root[data-theme="dark"] .stage-gap.slowest { background: #46221e; box-shadow: inset 0 0 0 1px #8c3a32; color: #ffd9d4; }
+
+.report-equipment-group-filter{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:16px 24px;background:var(--surface,#f7f9fc)}.report-equipment-group-filter label{display:grid;gap:6px;font-weight:600}.report-equipment-group-filter select{min-width:230px;max-width:100%;padding:12px;border:1px solid var(--border,#d4ddec);border-radius:8px;background:var(--surface,#fff);color:inherit}.report-equipment-group-filter button{min-height:44px}
