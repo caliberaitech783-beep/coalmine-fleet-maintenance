@@ -17,7 +17,9 @@ test('master screens request only their required dataset and revalidate unchange
 
 test('large filter value lists are generated only for an open filter', () => {
   const filter = main.slice(main.indexOf('function TableParameterFilter('), main.indexOf('function exportCellText('));
-  assert.match(filter, /useMemo\(\(\) => open \? Object\.fromEntries/);
+  assert.match(filter, /const activeValueColumn = open \? columns.find/);
+  assert.match(filter, /tableColumnValues\(rows, activeValueColumn\)/);
+  assert.doesNotMatch(filter, /columns.map\(\(column\) => \[column.key, tableColumnValues/);
   assert.match(main, /const activeFilterColumn = openFilter \?/);
   assert.doesNotMatch(main, /Object\.fromEntries\(filterColumns\.map/);
 });
