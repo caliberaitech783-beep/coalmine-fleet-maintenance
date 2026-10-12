@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
+test('OEM touch layout uses one vertical scroller without clipping table rows',()=>{
+  const css=readFileSync(new URL('../src/oem-breakdown-details.css',import.meta.url),'utf8');
+  assert.match(css,/@media \(max-width: 700px\), \(hover: none\) and \(pointer: coarse\)/);
+  assert.match(css,/:is\(\.mine-oem-modal, \.mine-oem-inline-details\) \.mine-oem-details\s*\{\s*display: block; overflow-x: hidden; overflow-y: auto/);
+  assert.match(css,/\.mine-oem-details \.mine-oem-site-tables \.dashboard-record-results\s*\{\s*display: block; flex: none; height: auto; min-height: 0; max-height: none; overflow: visible/);
+  assert.match(css,/touch-action: pan-x pan-y/);
+});
+
 test('OEM hide/show filter control remains visible in both report groupings',()=>{
   const css=readFileSync(new URL('../src/oem-breakdown-details.css',import.meta.url),'utf8');
   const component=readFileSync(new URL('../src/oem-breakdown-details.jsx',import.meta.url),'utf8');

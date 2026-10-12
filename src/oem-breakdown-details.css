@@ -1,3 +1,21 @@
+/* One vertical scroll owner on touch devices, including desktop-site mode.
+   Specificity intentionally overrides the nested desktop flex scrollers. */
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  :is(.mine-oem-modal, .mine-oem-inline-details) .mine-oem-details {
+    display: block; overflow-x: hidden; overflow-y: auto;
+    min-height: 0; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
+  }
+  .mine-oem-details .mine-oem-site-tables,
+  .mine-oem-details .mine-oem-site-tables > .dashboard-record-browser,
+  .mine-oem-details .mine-oem-site-tables .dashboard-record-results {
+    display: block; flex: none; height: auto; min-height: 0; max-height: none; overflow: visible;
+  }
+  .mine-oem-details .mine-oem-site-tables .dashboard-asset-list {
+    flex: none; height: auto; min-height: 0; max-height: none;
+    overflow-x: auto; overflow-y: hidden; overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;
+  }
+}
 .mine-oem-view-tabs { display: flex; flex-wrap: wrap; align-items: center; flex-shrink: 0; gap: 8px; padding: 0; }
 .mine-oem-view-tabs > span { font-size: 13px; color: var(--muted); }
 /* Keep the shared fleet drilldown site strip compact and horizontally scrollable. */
