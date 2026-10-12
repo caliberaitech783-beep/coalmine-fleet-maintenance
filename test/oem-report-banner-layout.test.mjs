@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
+test('OEM hide/show filter control remains visible in both report groupings',()=>{
+  const css=readFileSync(new URL('../src/oem-breakdown-details.css',import.meta.url),'utf8');
+  const component=readFileSync(new URL('../src/oem-breakdown-details.jsx',import.meta.url),'utf8');
+  assert.doesNotMatch(css,/\.mine-oem-report-navigation \+ \.mine-oem-detail-context\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(css,/:is\(\.mine-oem-selection, \.mine-oem-context-end\)[^{]*\{\s*display:\s*none/);
+  assert.match(css,/\.mine-oem-details \.mine-oem-context-end\s*\{\s*display: flex/);
+  assert.match(component,/onClick=\{\(\) => setFiltersHidden\(hidden => !hidden\)\}/);
+  assert.match(component,/filtersHidden \? "Show filters" : "Hide filters"/);
+  assert.match(css,/\.mine-oem-details\.filters-hidden :is\(\.mine-oem-detail-search, \.dashboard-fleet-search, \.site-report-summary\)/);
+});
+
 test('OEM report banner places desktop filters beside branding and hides only its toolbar count', () => {
   const css = readFileSync(new URL('../src/oem-breakdown-details.css', import.meta.url), 'utf8');
   assert.match(css, /\.mine-oem-modal > header \.shared-table-record-count,\s*\.mine-oem-inline-details \.shared-table-record-count \{ display: none; \}/);

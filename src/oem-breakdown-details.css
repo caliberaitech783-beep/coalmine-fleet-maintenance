@@ -132,11 +132,13 @@
 .mine-oem-summary-slot .site-summary-region { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 8px; }
 .mine-oem-summary-slot .site-summary-region > div { flex-wrap: nowrap; }
 .mine-oem-summary-slot .site-summary-button { flex: 0 0 auto; padding: 6px 10px; white-space: nowrap; }
-.mine-oem-details .mine-oem-detail-context > :is(.mine-oem-selection, .mine-oem-context-end),
+.mine-oem-details .mine-oem-detail-context > .mine-oem-selection,
 .mine-oem-details .site-report-summary > b,
 .mine-oem-details .site-summary-region > b { display: none; }
 .mine-oem-report-navigation { gap: 12px; align-items: center; }
-.mine-oem-report-navigation + .mine-oem-detail-context { display: none; }
+.mine-oem-details .mine-oem-detail-context { display: flex; justify-content: flex-end; }
+.mine-oem-details .mine-oem-context-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.mine-oem-filter-toggle { min-height: 44px; white-space: nowrap; }
 .mine-oem-report-navigation > button { flex: 0 0 auto; }
 .mine-oem-report-navigation .mine-oem-grouping-description { max-width: 230px; line-height: 1.5; color: var(--text); }
 .mine-oem-report-navigation > .mine-oem-summary-slot { flex: 1 1 480px; padding-left: 16px; border-left: 1px solid var(--line); }
