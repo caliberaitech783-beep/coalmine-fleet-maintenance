@@ -6953,7 +6953,7 @@ async function createRequestWithVehicleLock({door='',chassis='',existingReferenc
     for(const key of keys)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
     const duplicate=await activeRequestConflict({door,chassis},client);
     if(duplicate && isIdleVehicleRequest(duplicate))throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,idleApprovalPending:true,existingReference:duplicate.ref});
-    if(duplicate && !(existingReference===duplicate.ref && ['same','different'].includes(existingReason)))throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
+    if(duplicate)throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
     const result=await write(client,duplicate);
     await client.query('COMMIT');
     return result;

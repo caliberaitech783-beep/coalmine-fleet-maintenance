@@ -124,6 +124,21 @@ test('active and Idle requests remain conflicts while Closed history permits a n
   assert.deepEqual(app.saved[0],closed);
 });
 
+test('same and different reason overrides cannot create a second active breakdown',async()=>{
+  for(const status of ['Open','Accepted','In progress','Awaiting parts','Running BD']){
+    for(const existingReason of ['same','different']){
+      const existing={ref:'REQ-EXISTING',door:'DOOR-1',chassis:'CHASSIS-1',status};
+      const app=harness({initial:[existing]});
+      const result=await app.create({existingReference:existing.ref,existingReason});
+      assert.equal(result.status,409,`${status}: ${existingReason}`);
+      assert.equal(result.body.duplicate,true);
+      assert.equal(result.body.existingReference,existing.ref);
+      assert.deepEqual(app.saved,[existing]);
+      assert.ok(app.queries.some(({sql})=>sql==='ROLLBACK'));
+    }
+  }
+});
+
 test('closure evidence cannot block a new request even when status text is stale',async()=>{
   for(const existing of [
     {ref:'REQ-CLOSED-CASE',door:'DOOR-1',chassis:'CHASSIS-1',status:' closed '},

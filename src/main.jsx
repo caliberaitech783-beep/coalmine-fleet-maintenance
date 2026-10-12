@@ -5951,7 +5951,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       alert("Select an equipment or vehicle from the selected equipment group.");
       return;
     }
-    if (duplicateConflict && (duplicateConflict.idleApprovalPending || duplicateConflict.checkFailed || !existingReason)) {
+    if (duplicateConflict) {
       alert(duplicateConflict.message || "This door number already has an active maintenance request.");
       return;
     }
@@ -6136,7 +6136,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <AlertTriangle />
             <span>
               <b>{duplicateConflict.idleApprovalPending ? "Pending idle approval" : duplicateConflict.checkFailed ? "Door-number check unavailable" : "Already off road / under maintenance"}</b>
-              {duplicateConflict.idleApprovalPending || duplicateConflict.checkFailed ? duplicateConflict.message : <>Request {duplicateConflict.existingReference} remains open.<p>{duplicateConflict.complaint}</p><label>Is this breakdown for the same reason?<select required value={existingReason} onChange={event=>setExistingReason(event.target.value)}><option value="">Select reason</option><option value="same">Same reason — create linked ticket</option><option value="different">Different reason — create linked ticket</option></select></label></>}
+              <p>{duplicateConflict.message}</p>
+              {duplicateConflict.complaint && <p>{duplicateConflict.complaint}</p>}
             </span>
           </div>
         )}
@@ -6144,8 +6145,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
           <button type="button" onClick={close}>
             Cancel
           </button>
-          <button className="primary" disabled={submitting || checkingConflict || Boolean(duplicateConflict && (duplicateConflict.idleApprovalPending || duplicateConflict.checkFailed || !existingReason))}>
-            {submitting ? "Submitting…" : checkingConflict ? "Checking door…" : duplicateConflict?.idleApprovalPending ? "Resolve idle approval first" : duplicateConflict ? (existingReason ? "Create linked request" : "Select breakdown reason") : "Submit request"} <ChevronRight />
+          <button className="primary" disabled={submitting || checkingConflict || Boolean(duplicateConflict)}>
+            {submitting ? "Submitting…" : checkingConflict ? "Checking door…" : duplicateConflict?.idleApprovalPending ? "Resolve idle approval first" : duplicateConflict?.checkFailed ? "Vehicle check unavailable" : duplicateConflict ? "Close existing request first" : "Submit request"} <ChevronRight />
           </button>
         </footer>
       </form>
