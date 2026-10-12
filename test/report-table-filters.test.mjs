@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+test('total summary equipment group filters the common table/export rows',()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const section=source.slice(source.indexOf('function ReportSection('),source.indexOf('function withStageGapHighlights('));
+  const filter=section.slice(section.indexOf('  const [equipmentGroupFilter'),section.indexOf('  const [exportView'));
+  const run=(title,selected,rows)=>new Function('title','rows','columns','useState','useMemo',`${filter}; return rows;`)(title,rows,[{key:'equipmentGroup',value:row=>row.group}],()=>[selected,()=>{}],fn=>fn());
+  const scoped=[{id:1,group:'VOLVO TIPPERS',site:'Sasti'},{id:2,group:'DOZERS',site:'Sasti'}];
+  assert.deepEqual(run('Total Summary Report','VOLVO TIPPERS',scoped),[scoped[0]]);
+  assert.deepEqual(run('Total Summary Report','',scoped),scoped);
+  assert.deepEqual(run('Total Summary Report','EXCAVATORS',scoped),[]);
+  assert.deepEqual(run('Summary Report','VOLVO TIPPERS',scoped),scoped);
+  assert.match(section,/<ExportMenu[^\n]*rows=\{exportView\?\.sourceRows === rows \? exportView.rows : rows\}/);
+  assert.match(section,/<ReportTable[\s\S]*rows=\{rows\}/);
+});
+
 test("every report table supports header filters, sorting, and equipment comparison fields", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const reportsSource = source.slice(source.indexOf("function ReportsPage"), source.indexOf("function MasterPage"));

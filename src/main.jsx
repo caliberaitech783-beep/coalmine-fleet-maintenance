@@ -7320,6 +7320,14 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
 }
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", children }) {
   if (category === "iboss-accounts") exportLabel = "Print/Export";
+  const [equipmentGroupFilter, setEquipmentGroupFilter] = useState("");
+  const showEquipmentGroupFilter = title === "Total Summary Report";
+  const groupColumn = columns.find(column => column.key === "equipmentGroup");
+  const groupValue = row => String(groupColumn?.value ? groupColumn.value(row) : row.equipmentGroup || "").trim();
+  const equipmentGroupOptions = [...new Set(rows.map(groupValue).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  rows = useMemo(() => showEquipmentGroupFilter && equipmentGroupFilter
+    ? rows.filter(row => groupValue(row) === equipmentGroupFilter) : rows,
+  [rows, showEquipmentGroupFilter, equipmentGroupFilter, groupColumn]);
   const [exportView, setExportView] = useState(null);
   const TableViewport = category === "vehicle-history" ? VehicleHistoryScroll : "div";
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
@@ -7343,6 +7351,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         </div>
       </div>
       {controls}
+      {showEquipmentGroupFilter && <div className="generated-report-search"><label>Equipment group<select aria-label="Total Summary Report equipment group" value={equipmentGroupFilter} onChange={event=>setEquipmentGroupFilter(event.target.value)}><option value="">All equipment groups</option>{[...new Set([...equipmentGroupOptions,...(equipmentGroupFilter?[equipmentGroupFilter]:[])])].map(group=><option key={group} value={group}>{group}</option>)}</select></label></div>}
       {!children && showSearch && <div className="generated-report-search"><label><Search /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search this report" aria-label={`Search ${title}`} /></label><span>{rows.length.toLocaleString("en-IN")} record{rows.length === 1 ? "" : "s"}</span></div>}
       {children || (
         <TableViewport className="reports-detail-table emptytable">
