@@ -69,7 +69,7 @@ test('tenure header puts the controlled search before Refresh and removes explan
   const {code: sectionCode}=await transformWithOxc(section,'report-section.jsx',{jsx:{runtime:'classic'}});
   let tableProps;
   const Null=()=>null;
-  const scope={React,useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],FileBarChart:Null,ExportMenu:Null,Search:Null,ReportTable:props=>{tableProps=props;return null;}};
+  const scope={React,useMemo:factory=>factory(),useState:initial=>[typeof initial==='function'?initial():initial,()=>{}],FileBarChart:Null,ExportMenu:Null,Search:Null,ReportTable:props=>{tableProps=props;return null;}};
   const Section=new Function(...Object.keys(scope),sectionCode+'; return ReportSection;')(...Object.values(scope));
   const html=renderToStaticMarkup(React.createElement(Section,{title:'Employee tenure',query:'Example',showSearch:false}));
   assert.equal(tableProps.query,'Example');
