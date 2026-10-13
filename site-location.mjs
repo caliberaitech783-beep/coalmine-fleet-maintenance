@@ -20,7 +20,11 @@ const SITE_ALIASES = new Map([
   ["jayant ii", "jayant ob"],
   ["jayant ob ii", "jayant ob"],
   ["dudhichua west", "dudhichua ob"],
+  ["dudhichua west ob", "dudhichua ob"],
+  // Legacy C-Dir spelling: keep West and East as separate site identities.
+  ["dudhicua west ob", "dudhichua ob"],
   ["dudhichua east", "dudhichua east ob"],
+  ["dudhicua east ob", "dudhichua east ob"],
 ]);
 
 export function canonicalSiteName(value = "") {
