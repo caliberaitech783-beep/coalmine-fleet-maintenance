@@ -1,19 +1,17 @@
 import React, {useMemo,useState} from 'react';
-import {downtimeMatrix,downtimeToday,downtimeMatrixDetails} from './downtime-matrix.mjs';
+import {downtimeMatrix,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes} from './downtime-matrix.mjs';
 import './downtime-matrix-report.css';
 
-const hours = value => `${Number(value.toFixed(2))} h`;
+const hours = downtimeHoursMinutes;
 const hour = value => value == null ? '—' : new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
 const columns = [
   {key:'door',label:'Door number',value:r=>r.door},
   {key:'equipmentGroup',label:'Equipment group',value:r=>r.equipmentGroup || '—'},
-  {key:'count',label:'Breakdowns',value:r=>r.count},
-  {key:'occurrence',label:'Breakdown number',value:r=>r.occurrence},
+  {key:'status',label:'Status',value:r=>r.status},
   {key:'start',label:'From hour (IST)',value:r=>hour(r.start)},
   {key:'end',label:'To hour (IST)',value:r=>hour(r.end)},
   {key:'reason',label:'Reason',wrap:true,value:r=>r.reason},
   {key:'eventHours',label:'Breakdown hours',value:r=>hours(r.eventHours)},
-  {key:'downtime',label:'Daily downtime',value:r=>hours(r.downtime)},
   {key:'available',label:'Available hours',value:r=>hours(r.available)},
 ];
 

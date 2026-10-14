@@ -40,6 +40,12 @@ export function downtimeMatrixDetails(rows) {
   return rows.flatMap(row => (row.events.length ? row.events : [null]).map((event,index)=>({
     ...row, ref:event?.ref || '—', occurrence:event ? index+1 : '—',
     start:event?.start ?? null, end:event?.end ?? null, reason:event?.reason || '—',
+    status:event ? (event.open ? 'Ongoing' : 'Closed') : '—',
     eventHours:event?.hours ?? 0, count:row.events.length, key:`${row.key}:${index}`,
   })));
+}
+
+export function downtimeHoursMinutes(value) {
+  const minutes = Math.max(0, Math.round(value * 60));
+  return `${String(Math.floor(minutes / 60)).padStart(2,'0')}h ${String(minutes % 60).padStart(2,'0')}m`;
 }

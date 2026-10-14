@@ -40,3 +40,13 @@ test('excludes vehicles whose breakdown ended before the selected day',()=>{
   const rows = downtimeMatrix([request('2026-10-13T10:00','2026-10-14T00:00')],[{door:'EX01',site:'Mine'}],'2026-10-14',now);
   assert.deepEqual(rows,[]);
 });
+
+test('detail status distinguishes ongoing and closed breakdowns', async()=>{
+  const {downtimeMatrixDetails,downtimeHoursMinutes} = await import('../src/downtime-matrix.mjs');
+  const rows = downtimeMatrix([request('2026-10-14T10:00','2026-10-14T12:00'), request('2026-10-14T15:00',null,'BD2')],[],'2026-10-14',now);
+  assert.deepEqual(downtimeMatrixDetails(rows).map(r=>r.status),['Closed','Ongoing']);
+  assert.equal(downtimeHoursMinutes(2.5),'02h 30m');
+  assert.equal(downtimeHoursMinutes(0),'00h 00m');
+  assert.equal(downtimeHoursMinutes(24),'24h 00m');
+  assert.equal(downtimeHoursMinutes(119.6/60),'02h 00m');
+});
