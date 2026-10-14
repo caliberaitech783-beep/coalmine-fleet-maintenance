@@ -1,6 +1,5 @@
 .downtime-site-tabs { display:flex; overflow-x:auto; gap:0; margin:20px 0; border-bottom:1px solid var(--line,#dce3ef); }
 .downtime-site-tabs button { display:flex; flex:1 0 150px; flex-direction:column; align-items:center; gap:10px; padding:12px 18px; border:0; border-bottom:3px solid transparent; border-radius:0; background:transparent; color:inherit; }
-.downtime-site-tabs button b { background:#970b0b; color:#fff; border-radius:3px; padding:3px 18px; }
 .downtime-site-tabs button span { white-space:nowrap; font-weight:700; }
 .downtime-site-tabs button[aria-pressed=true] { border-bottom-color:#7739bf; background:#7739bf12; }
 .downtime-site-tabs button:focus-visible { outline:2px solid #7739bf; outline-offset:-3px; }

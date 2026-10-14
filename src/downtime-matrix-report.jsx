@@ -29,7 +29,7 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
     <header><div><h1>Downtime Matrix Report</h1><p>Daily availability = 24 hours − breakdown downtime. Each breakdown is shown separately.</p></div><button type="button" onClick={onBack}>Back to reports</button></header>
     <label>Day (IST)<input type="date" value={date} max={downtimeToday()} onChange={event=>setDate(event.target.value)} /></label>
     <div className="downtime-site-tabs" role="group" aria-label="Downtime matrix site">
-      {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><b>{rows.filter(row=>row.site===value).length}</b><span>{value}</span></button>)}
+      {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><span>{value}</span></button>)}
     </div>
     <p>Breakdowns spanning midnight are split at the day boundary. Overlaps count once in daily downtime. Daily totals repeat for each breakdown of the same machine; today's available hours are provisional. To hour at midnight is 12:00 AM on the following day.</p>
     <ReportSection title="Downtime Matrix Report" description={`${date} · ${selectedSite || 'No sites'} · ${visible.length} machines · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No equipment or breakdowns for the selected day and site." />
