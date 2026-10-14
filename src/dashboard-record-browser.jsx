@@ -182,9 +182,9 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
     </details>}
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-label={hideHierarchyFilters ? `${title} records` : undefined} aria-labelledby={!hideHierarchyFilters && view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       {summaryLabel && <div className="dashboard-record-summary"><h4>{summaryLabel}</h4></div>}
+      {hideHierarchyFilters && onHourlyReport && <div className="dashboard-hourly-report-row"><button type="button" className="dashboard-hourly-report-button" onClick={onHourlyReport}>Hourly In/Out report</button></div>}
       <div className="dashboard-record-toolbar-row">
         <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
-        {hideHierarchyFilters && onHourlyReport && <button type="button" className="dashboard-hourly-report-button" onClick={onHourlyReport}>Hourly In/Out report</button>}
         {!searchBesideDates && fleetSearch}
       </div>
       {horizontalScroll.maximum > 0 && <label className="dashboard-mobile-scrollbar">
