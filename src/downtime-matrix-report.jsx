@@ -15,7 +15,7 @@ const eventColumns = [
   {key:'start',label:'From (IST)',value:r=>formatDisplayDateTime(new Date(r.start).toISOString())},
   {key:'end',label:'To (IST)',value:r=>formatDisplayDateTime(new Date(r.end).toISOString())},
   {key:'hours',label:'Downtime in selected day',value:r=>hours(r.hours)},
-  {key:'reason',label:'Reason',value:r=>r.reason}, {key:'status',label:'Status',value:r=>r.open?'Ongoing':'Closed'},
+  {key:'reason',label:'Reason',wrap:true,value:r=>r.reason}, {key:'status',label:'Status',value:r=>r.open?'Ongoing':'Closed'},
 ];
 
 export default function DowntimeMatrixReport({requests,equipment,ReportSection,onBack}) {
