@@ -39,7 +39,8 @@ export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
 export function downtimeMatrixDetails(rows) {
   return rows.flatMap(row => (row.events.length ? row.events : [null]).map((event,index)=>({
     ...row, ref:event?.ref || '—', occurrence:event ? index+1 : '—',
-    start:event?.start ?? null, end:event?.end ?? null, reason:event?.reason || '—',
+    start:event ? new Date(event.start).toISOString() : null,
+    end:event ? new Date(event.end).toISOString() : null, reason:event?.reason || '—',
     status:event ? (event.open ? 'Ongoing' : 'Closed') : '—',
     eventHours:event?.hours ?? 0, count:row.events.length, key:`${row.key}:${index}`,
   })));

@@ -50,3 +50,19 @@ test('detail status distinguishes ongoing and closed breakdowns', async()=>{
   assert.equal(downtimeHoursMinutes(24),'24h 00m');
   assert.equal(downtimeHoursMinutes(119.6/60),'02h 00m');
 });
+
+test('downtime report dates resolve site shifts for daytime and midnight carryover', async()=>{
+  const {downtimeMatrixDetails} = await import('../src/downtime-matrix.mjs');
+  const {requestShiftColumns} = await import('../request-shift.mjs');
+  const {SHIFT_MASTER_DEFAULTS} = await import('../shift-master.mjs');
+  const records = [
+    {...request('2026-10-14T12:00','2026-10-14T13:00'),site:'Jayant OC'},
+    {...request('2026-10-13T23:00','2026-10-14T02:00','BD2'),site:'Sasti OC'},
+  ];
+  const details = downtimeMatrixDetails(downtimeMatrix(records,[],'2026-10-14',now));
+  const shift = requestShiftColumns([],details,SHIFT_MASTER_DEFAULTS)[0];
+  assert.equal(shift.value(details.find(row=>row.site==='Jayant OC')),'Shift B');
+  assert.equal(shift.value(details.find(row=>row.site==='Sasti OC')),'Shift C');
+  assert.equal(typeof details[0].start,'string');
+  assert.equal(typeof details[0].end,'string');
+});

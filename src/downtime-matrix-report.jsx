@@ -3,7 +3,7 @@ import {downtimeMatrix,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes}
 import './downtime-matrix-report.css';
 
 const hours = downtimeHoursMinutes;
-const hour = value => value == null ? '—' : new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const hour = value => value == null ? '—' : new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true}).format(new Date(value));
 const columns = [
   {key:'door',label:'Door number',value:r=>r.door},
   {key:'equipmentGroup',label:'Equipment group',value:r=>r.equipmentGroup || '—'},
