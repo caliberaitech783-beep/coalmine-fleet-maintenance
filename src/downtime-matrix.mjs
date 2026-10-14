@@ -1,4 +1,5 @@
 import {parseRequestTimelineTimestamp} from '../request-timeline.mjs';
+import {equipmentGroupValue} from '../equipment-group.mjs';
 
 export const downtimeToday = (now = Date.now()) => new Date(now + 19800000).toISOString().slice(0,10);
 const epoch = value => parseRequestTimelineTimestamp(value)?.getTime();
@@ -13,7 +14,8 @@ export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
     const id = identity(row);
     if (!id) return null;
     const key = `${site}:${id}`;
-    if (!groups.has(key)) groups.set(key, {key, site, door:row.reportDoor || row.door || row.reg || row.equipmentName || row.equipment || id, events:[]});
+    if (!groups.has(key)) groups.set(key, {key, site, door:row.reportDoor || row.door || row.reg || row.equipmentName || row.equipment || id, equipmentGroup:equipmentGroupValue(row), events:[]});
+    if (!groups.get(key).equipmentGroup) groups.get(key).equipmentGroup = equipmentGroupValue(row);
     return groups.get(key);
   };
   equipment.forEach(add);
@@ -32,4 +34,12 @@ export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
     const downtime = total/3600000;
     return {...row, downtime, available:24-downtime};
   }).sort((a,b)=>a.site.localeCompare(b.site)||a.door.localeCompare(b.door,undefined,{numeric:true}));
+}
+
+export function downtimeMatrixDetails(rows) {
+  return rows.flatMap(row => (row.events.length ? row.events : [null]).map((event,index)=>({
+    ...row, ref:event?.ref || '—', occurrence:event ? index+1 : '—',
+    start:event?.start ?? null, end:event?.end ?? null, reason:event?.reason || '—',
+    eventHours:event?.hours ?? 0, count:row.events.length, key:`${row.key}:${index}`,
+  })));
 }
