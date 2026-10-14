@@ -61,31 +61,42 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
 export default function ReportPeriodFilter({from,to,onApply}) {
   const [open,setOpen]=useState(false);
   const [error,setError]=useState('');
+  const [draftFrom,setDraftFrom]=useState(from||'');
+  const [draftTo,setDraftTo]=useState(to||'');
+  useEffect(()=>{setDraftFrom(from||'');setDraftTo(to||'');setError('');},[from,to]);
+  const commit=(start,end)=>{setDraftFrom(start);setDraftTo(end);setError('');onApply(start,end);};
+  const apply=()=>{
+    if(!draftFrom&&!draftTo){commit('','');return;}
+    const bounds=periodBounds(draftFrom.slice(0,10),draftTo.slice(0,10),draftFrom.slice(11,16)||'00:00',draftTo.slice(11,16)||'23:59');
+    if(!bounds){setError('Select both dates; the end date/time must not be before the start.');return;}
+    commit(bounds.from,bounds.to);
+  };
   const updateTime=(bound,value)=>{
-    const start=from?.slice(0,10)||to?.slice(0,10)||indiaToday();
-    const end=to?.slice(0,10)||start;
-    const bounds=periodBounds(start,end,bound==='from'?value:from?.slice(11,16)||'00:00',bound==='to'?value:to?.slice(11,16)||'23:59');
-    if (!bounds) {setError('End date/time must not be before start date/time.');return;}
-    setError('');onApply(bounds.from,bounds.to);
+    const start=draftFrom?.slice(0,10)||draftTo?.slice(0,10)||indiaToday();
+    const end=draftTo?.slice(0,10)||start;
+    setDraftFrom(start+'T'+(bound==='from'?value:draftFrom?.slice(11,16)||'00:00')+':00');
+    setDraftTo(end+'T'+(bound==='to'?value:draftTo?.slice(11,16)||'23:59')+':59.999');
+    setError('');
   };
   const updateDate=(bound,value)=>{
-    if (!value) {onApply('','');return;}
-    const start=from?.slice(0,10),end=to?.slice(0,10);
+    const start=draftFrom?.slice(0,10),end=draftTo?.slice(0,10);
     const nextStart=bound==='from'||!start||value<start?value:start;
     const nextEnd=bound==='to'||!end||value>end?value:end;
-    const bounds=periodBounds(nextStart,nextEnd,from?.slice(11,16)||'00:00',to?.slice(11,16)||'23:59');
-    setError(bounds?'':'End date/time must not be before start date/time.');
-    if (bounds) onApply(bounds.from,bounds.to);
+    if(!value){bound==='from'?setDraftFrom(''):setDraftTo('');setError('');return;}
+    setDraftFrom(nextStart+'T'+(draftFrom?.slice(11,16)||'00:00')+':00');
+    setDraftTo(nextEnd+'T'+(draftTo?.slice(11,16)||'23:59')+':59.999');
+    setError('');
   };
   const format=value=>value?`${displayDate(value.slice(0,10))} ${timeParts(value.slice(11,16)).hour}:${timeParts(value.slice(11,16)).minute} ${timeParts(value.slice(11,16)).period}`:'Any time';
   return <div className="report-period-filter"><button type="button" className="secondary" aria-haspopup="dialog" aria-expanded={open} onClick={()=>setOpen(true)}><Filter size={17}/>Filter</button>
-    <label className="report-period-date"><span>From</span><DateInput aria-label="Report from date" value={from?.slice(0,10)||''} max={to?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
-    <label className="report-period-date"><span>To</span><DateInput aria-label="Report to date" value={to?.slice(0,10)||''} min={from?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
-    <TimeField label="From time" value={from?.slice(11,16)||'00:00'} onChange={value=>updateTime('from',value)}/>
-    <TimeField label="To time" value={to?.slice(11,16)||'23:59'} onChange={value=>updateTime('to',value)}/>
+    <label className="report-period-date"><span>From</span><DateInput aria-label="Report from date" value={draftFrom?.slice(0,10)||''} max={draftTo?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
+    <label className="report-period-date"><span>To</span><DateInput aria-label="Report to date" value={draftTo?.slice(0,10)||''} min={draftFrom?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
+    <TimeField label="From time" value={draftFrom?.slice(11,16)||'00:00'} onChange={value=>updateTime('from',value)}/>
+    <TimeField label="To time" value={draftTo?.slice(11,16)||'23:59'} onChange={value=>updateTime('to',value)}/>
+    <button type="button" className="primary period-apply" onClick={apply}>Apply</button>
     {error&&<span role="alert">{error}</span>}
-    {(from||to)&&<button type="button" className="secondary" onClick={()=>{setError('');onApply('','');}}>Clear dates</button>}
+    {(from||to||draftFrom||draftTo)&&<button type="button" className="secondary" onClick={()=>commit('','')}>Clear dates</button>}
     <span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:''}</span>
-    {open&&<ReportPeriodDialog from={from} to={to} onClose={()=>setOpen(false)} onApply={(start,end)=>{onApply(start,end);setOpen(false);}}/>}
+    {open&&<ReportPeriodDialog from={draftFrom} to={draftTo} onClose={()=>setOpen(false)} onApply={(start,end)=>{commit(start,end);setOpen(false);}}/>}
   </div>;
 }

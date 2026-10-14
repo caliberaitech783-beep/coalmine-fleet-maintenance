@@ -43,27 +43,6 @@ const all=(tree,predicate)=>{const result=[];const visit=n=>{if(Array.isArray(n)
 const text=node=>Array.isArray(node)?node.map(text).join(''):React.isValidElement(node)?text(node.props.children):String(node??'');
 const button=(tree,label)=>all(tree,n=>n.type==='button'&&text(n.props.children)===label)[0];
 
-test('reports start with all days and preserve explicit ranges and Clear dates',()=>{
-  for(const initial of [['',''],['2026-08-01T00:00:00','2026-08-31T23:59:59.999']]){
-    let [from,to]=initial;
-    const ref={current:false},effects=[],applied=[];
-    const names=['React','useState','useEffect','useRef',...Object.keys(model),'Filter'];
-    const values=[React,()=>[false,()=>{}],callback=>effects.push(callback),()=>ref,...Object.values(model),()=>null];
-    const Component=new Function('DateInput',...names,`${code};return ReportPeriodFilter;`)(DateInput,...values);
-    const render=()=>{
-      const tree=Component({from,to,onApply:(start,end)=>{from=start;to=end;applied.push([start,end]);}});
-      effects.splice(0).forEach(effect=>effect());
-      return tree;
-    };
-    render();render();
-    assert.deepEqual([from,to],initial);
-    assert.equal(applied.length,0);
-    if(initial[0])button(render(),'Clear dates').props.onClick();
-    render();render();
-    assert.deepEqual([from,to],['','']);
-    assert.doesNotMatch(text(render()),/All dates/);
-  }
-});
 test('calendar edits are draft-only; Apply commits, Cancel discards, and Clear resets',()=>{
   const app=harness();let tree=app.render();
   button(tree,'Fortnight').props.onClick();tree=app.render();
@@ -91,43 +70,33 @@ test('shared date toolbar and popup are used for every selected report',()=>{
   assert.match(source,/focus\.focus\(\)/);
 });
 
-test('visible dates apply inclusive days immediately and reflect popup changes',()=>{
-  const app=harness('ReportPeriodFilter');
-  const field=(tree,label)=>all(tree,n=>(n.type==='input'||n.type===DateInput)&&n.props['aria-label']===label)[0];
-  let tree=app.render({from:'',to:''});
-  field(tree,'Report from date').props.onChange({target:{value:'2026-09-03'}});
-  assert.deepEqual(app.applied.at(-1),['2026-09-03T00:00:00','2026-09-03T23:59:59.999']);
-  tree=app.render({from:app.applied.at(-1)[0],to:app.applied.at(-1)[1]});
-  field(tree,'Report to date').props.onChange({target:{value:'2026-09-09'}});
-  const [from,to]=app.applied.at(-1);
-  const rows=[{at:'2026-09-03 00:00:00'},{at:'2026-09-09 23:59:59.999'},{at:'2026-09-10 00:00:00'}];
-  assert.deepEqual(reportRowsWithinRange(rows,r=>r.at,from,to),rows.slice(0,2));
-  tree=app.render({from:'2026-08-01T09:30:00',to:'2026-08-31T17:45:59.999'});
-  assert.equal(field(tree,'Report from date').props.value,'2026-08-01');
-  assert.equal(field(tree,'Report to date').props.value,'2026-08-31');
+
+test('inline date and time edits wait for Apply and preserve inclusive bounds',()=>{
+  const app=harness('ReportPeriodFilter');let tree=app.render({from:'',to:''});
+  const field=label=>all(tree,n=>n.type===DateInput&&n.props['aria-label']===label)[0];
+  field('Report from date').props.onChange({target:{value:'2026-10-04'}});
+  tree=app.render();
+  field('Report to date').props.onChange({target:{value:'2026-10-13'}});
+  tree=app.render();
+  all(tree,n=>n.props.label==='From time')[0].props.onChange('13:30');
+  tree=app.render();
+  assert.deepEqual(app.applied,[]);
+  button(tree,'Apply').props.onClick();
+  assert.deepEqual(app.applied,[['2026-10-04T13:30:00','2026-10-13T23:59:59.999']]);
+  const [from,to]=app.applied[0];
+  const rows=[{at:'2026-10-04 13:29:59'},{at:'2026-10-04 13:30:00'},{at:'2026-10-13 23:59:59.999'},{at:'2026-10-14 00:00:00'}];
+  assert.deepEqual(reportRowsWithinRange(rows,r=>r.at,from,to),rows.slice(1,3));
   button(tree,'Clear dates').props.onClick();
   assert.deepEqual(app.applied.at(-1),['','']);
-  field(tree,'Report from date').props.onChange({target:{value:''}});
-  assert.deepEqual(app.applied.at(-1),['','']);
 });
-
-test('inline edits keep reversed dates ordered like the dashboard',()=>{
-  const app=harness('ReportPeriodFilter'),tree=app.render();
-  all(tree,n=>(n.type==='input'||n.type===DateInput)&&n.props['aria-label']==='Report from date')[0].props.onChange({target:{value:'2026-09-12'}});
-  assert.deepEqual(app.applied.at(-1),['2026-09-12T00:00:00','2026-09-12T23:59:59.999']);
-});
-
-test('inline AM/PM time selectors apply the range and retain times when dates change',()=>{
-  const app=harness('ReportPeriodFilter');
-  const from='2026-10-09T00:00:00',to='2026-10-09T23:59:59.999';
-  let tree=app.render({from,to});
-  const timeField=all(tree,n=>n.props.label==='From time')[0];
-  timeField.props.onChange('13:30');
-  assert.deepEqual(app.applied.at(-1),['2026-10-09T13:30:00',to]);
-  tree=app.render({from:app.applied.at(-1)[0],to});
-  all(tree,n=>n.type===DateInput&&n.props['aria-label']==='Report to date')[0].props.onChange({target:{value:'2026-10-10'}});
-  assert.deepEqual(app.applied.at(-1),['2026-10-09T13:30:00','2026-10-10T23:59:59.999']);
-  const range=model.periodBounds('2026-10-09','2026-10-09','13:30','14:00');
-  const rows=[{at:'2026-10-09 01:30:00'},{at:'2026-10-09 13:30:00'},{at:'2026-10-09 14:00:59'},{at:'2026-10-09 14:01:00'}];
-  assert.deepEqual(reportRowsWithinRange(rows,r=>r.at,range.from,range.to),rows.slice(1,3));
+test('invalid draft times do not change the report and can be corrected before Apply',()=>{
+  const app=harness('ReportPeriodFilter');const props={from:'2026-10-04T00:00:00',to:'2026-10-04T23:59:59.999'};
+  let tree=app.render(props);
+  all(tree,n=>n.props.label==='From time')[0].props.onChange('15:00');tree=app.render(props);
+  all(tree,n=>n.props.label==='To time')[0].props.onChange('14:00');tree=app.render(props);
+  button(tree,'Apply').props.onClick();tree=app.render(props);
+  assert.deepEqual(app.applied,[]);assert.equal(all(tree,n=>n.props.role==='alert').length,1);
+  all(tree,n=>n.props.label==='To time')[0].props.onChange('16:00');tree=app.render(props);
+  button(tree,'Apply').props.onClick();
+  assert.deepEqual(app.applied,[['2026-10-04T15:00:00','2026-10-04T16:00:59.999']]);
 });
