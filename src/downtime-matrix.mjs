@@ -27,7 +27,7 @@ export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
     if (to <= clipped) return;
     add(row)?.events.push({ref:row.ref || '—', start:clipped, end:to, hours:(to-clipped)/3600000, reason:row.complaint || row.reason || '—', open:closed == null});
   });
-  return [...groups.values()].map(row => {
+  return [...groups.values()].filter(row => row.events.length > 0).map(row => {
     row.events.sort((a,b)=>a.start-b.start);
     let total = 0, last = start;
     for (const event of row.events) { total += Math.max(0,event.end-Math.max(event.start,last)); last = Math.max(last,event.end); }
