@@ -184,6 +184,7 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
       {summaryLabel && <div className="dashboard-record-summary"><h4>{summaryLabel}</h4></div>}
       <div className="dashboard-record-toolbar-row">
         <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
+        {hideHierarchyFilters && onHourlyReport && <button type="button" className="dashboard-hourly-report-button" onClick={onHourlyReport}>Hourly In/Out report</button>}
         {!searchBesideDates && fleetSearch}
       </div>
       {horizontalScroll.maximum > 0 && <label className="dashboard-mobile-scrollbar">
