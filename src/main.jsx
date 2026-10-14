@@ -29,6 +29,7 @@ import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import {canViewUserSessions,isSessionViewOnlyUser} from "../user-session-access.mjs";
 import {canViewBdAgeingReport} from "../bd-ageing-report.mjs";
 import BdAgeingReport from "./bd-ageing-report.jsx";
+import DowntimeMatrixReport from './downtime-matrix-report.jsx';
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
@@ -7408,6 +7409,7 @@ function ReportsPage(props) {
   return <StandardReportsPage {...props} />;
 }
 function StandardReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
+  const [downtimeMatrixVisible,setDowntimeMatrixVisible] = useState(false);
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:true,error:""});
   const {equipmentRecords,transferRecords,shiftRecords} = reportMasterData;
   useEffect(() => {
@@ -7876,6 +7878,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     : { allRecipients: true, recipientLogins: [], ...userReportSchedule };
   const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || scheduleDesignationOptions[0] || reportDesignationOptions[0];
   const selectedScheduleRecipients = reportScheduleRecipients[selectedScheduleDesignation] || [];
+  if (downtimeMatrixVisible) return reportMasterData.loading ? <p role="status">Loading downtime matrix…</p> : reportMasterData.error ? <section className="panel"><p role="alert">{reportMasterData.error}</p><button onClick={()=>setDowntimeMatrixVisible(false)}>Back to reports</button></section> : <DowntimeMatrixReport requests={reportRequests} equipment={equipmentRecords} ReportSection={ReportSection} onBack={()=>setDowntimeMatrixVisible(false)} />;
   return (
     <section className="reports-page panel pagepanel" data-report-category={activeCategory.id}>
       <header>
@@ -7885,6 +7888,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
         </div>
         <div className="reports-header-actions">
           {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
+          <button type="button" className="secondary" onClick={()=>setDowntimeMatrixVisible(true)}>Downtime Matrix Report</button>
           {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
           <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!accessibleReportGroups.length}><Download /> Download reports ZIP</button>
