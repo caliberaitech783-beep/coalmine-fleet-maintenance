@@ -7047,14 +7047,16 @@ function SessionMessageInbox({session}) {
         if(!messageResponse.ok)throw new Error(messageResult.error||'Could not check session messages.');
         if(!announcementResponse.ok)throw new Error(announcementResult.error||'Could not check announcements.');
         // Direct messages first (they name one person), then announcements for everyone.
-        if(!controller.signal.aborted)setMessages([
+        if(!controller.signal.aborted)setMessages(previous=>{
+          const next=[
           ...(Array.isArray(messageResult.messages)?messageResult.messages:[]).map((item)=>({...item,kind:'message'})),
           ...(Array.isArray(announcementResult.announcements)?announcementResult.announcements:[]).map((item)=>({...item,kind:'announcement'})),
-        ]);
+          ];
+          return mobileTablePageSize()>0&&JSON.stringify(previous)===JSON.stringify(next)?previous:next;
+        });
       }catch(loadError){if(loadError.name!=='AbortError')console.warn('Session message check failed.',loadError);}
     };
-    void load();
-    const stopPolling=startVisiblePoll(load,3000);
+    const stopPolling=startVisiblePoll(load,3000,{suspendImmediately:mobileTablePageSize()>0});
     return()=>{controller.abort();stopPolling();};
   },[session?.token]);
   const current=messages[0];
@@ -7127,6 +7129,10 @@ function UserSessionsPage({session}) {
     finally{if(!quiet)setLoading(false);}
   };
   useEffect(()=>{
+    if(mobileTablePageSize()>0){
+      let initial=true;
+      return startVisiblePoll(async()=>{const quiet=!initial;initial=false;await load({quiet});},3000,{suspendImmediately:true});
+    }
     load();
     const timer=window.setInterval(()=>load({quiet:true}),3000);
     return()=>window.clearInterval(timer);

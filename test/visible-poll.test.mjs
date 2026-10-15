@@ -61,7 +61,7 @@ test("live feeds keep their cadence and reminders stay off the notification requ
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const main=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const assist=fs.readFileSync(new URL("../src/remote-assistance.jsx",import.meta.url),"utf8");
-  assert.match(main,/startVisiblePoll\(load,3000\)/);
+  assert.match(main,/startVisiblePoll\(load,3000,\{suspendImmediately:mobileTablePageSize\(\)>0\}\)/);
   assert.match(assist,/const ASSISTANCE_POLL_MS=2000;/);
   assert.match(assist,/startVisiblePoll\(poll,ASSISTANCE_POLL_MS,\{keepPolling:\(\)=>Boolean\(assistanceRef\.current\)\}\)/);
   const route=server.slice(server.indexOf("app.get('/api/notifications',"),server.indexOf("app.get('/api/notifications/:id/target'"));
@@ -69,4 +69,21 @@ test("live feeds keep their cadence and reminders stay off the notification requ
   assert.doesNotMatch(route,/await createMaintenanceReminderNotifications/);
   assert.match(server,/SELECT \* FROM unnest\(\$1::text\[\],\$2::text\[\],\$3::text\[\],\$4::text\[\]\)/);
   assert.match(server,/app\.use\('\/app-assets',express\.static\(path\.join\(staticRoot,'app-assets'\),\{immutable:true,maxAge:'1y'\}\)\);\r?\napp\.use\(express\.static\(staticRoot\)\);/);
+});
+
+test('mobile suspension cancels a pending poll and resumes once without overlap', async () => {
+  const page = fakePage(); let calls = 0; let finish;
+  const stop = startVisiblePoll(() => { calls++; return new Promise(resolve => { finish = resolve; }); }, 3000, {...page, suspendImmediately:true});
+  page.fire('focus'); page.fire('online');
+  assert.equal(calls, 1);
+  page.doc.visibilityState = 'hidden'; page.fire('visibilitychange');
+  finish(); await settle();
+  assert.equal(page.timers.size, 0);
+  page.doc.visibilityState = 'visible'; page.fire('visibilitychange');
+  assert.equal(calls, 2);
+  finish(); await settle();
+  page.doc.visibilityState = 'hidden'; page.fire('visibilitychange');
+  assert.equal(page.timers.size, 0);
+  await page.runTimers(); assert.equal(calls, 2);
+  stop();
 });

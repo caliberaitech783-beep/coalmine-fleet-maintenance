@@ -5,6 +5,7 @@ export function startVisiblePoll(run, intervalMs, {
   win = globalThis.window,
   doc = globalThis.document,
   keepPolling = () => false,
+  suspendImmediately = false,
 } = {}) {
   let timer = null;
   let running = false;
@@ -16,6 +17,7 @@ export function startVisiblePoll(run, intervalMs, {
     if (running) { queued = true; return; }
     win.clearTimeout(timer);
     timer = null;
+    if (suspendImmediately && !visible() && !keepPolling()) return;
     running = true;
     try { await run(); }
     catch {}
@@ -28,6 +30,11 @@ export function startVisiblePoll(run, intervalMs, {
     }
   };
   const resume = () => {
+    if (suspendImmediately && !visible() && !keepPolling()) {
+      win.clearTimeout(timer);
+      timer = null;
+      return;
+    }
     if (!stopped && visible() && timer === null && !running) void tick();
   };
   doc?.addEventListener?.("visibilitychange", resume);

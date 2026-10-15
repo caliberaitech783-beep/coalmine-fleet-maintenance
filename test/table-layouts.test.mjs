@@ -73,9 +73,10 @@ const descendants = (node, predicate) => Array.isArray(node) ? node.flatMap(chil
 const content = node => Array.isArray(node) ? node.map(content).join("") : React.isValidElement(node) ? content(node.props.children) : typeof node === "string" ? node : "";
 const Null = () => null;
 async function harness(source, component, bindings) {
+  const mobileWindow = await import('../src/mobile-table-window.mjs');
   let cursor = 0;
   const slots = [];
-  const scope = { React, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
+  const scope = { React, ...mobileWindow, mobileTablePageSize: () => 0, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], next => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, ...bindings };
   scope.useColumnPreferences ||= (key, columns, fallback) => scope.useState(() => fallback?.length ? fallback : columns.map(column => column.key));
   const { code } = await transformWithOxc(source, "table-layout-test.jsx", { jsx: { runtime: "classic" } });
@@ -185,4 +186,31 @@ test("Reports tables apply the same saved column order through their controlled 
   const table = descendants(tree, node => node.type === "table")[0];
   assert.deepEqual(descendants(table, node => node.props.sortKey).map(node => node.props.label), ["model", "door"]);
   assert.deepEqual(descendants(table, node => node.type === "td").slice(1).map(content), ["M-1", "D-1"]);
+});
+
+test('mobile table navigation keeps 25 mounted rows and exports all filtered records', async () => {
+  const source = readFileSync(new URL('../src/shared-actions-table.jsx', import.meta.url), 'utf8');
+  const h = React.createElement;
+  const {sections, columns} = tableModel.tableModel([
+    h('thead', {}, h('tr', {}, h('th', {}, 'Door'), h('th', {}, 'Status'))),
+    h('tbody', {}, Array.from({length:61}, (_, i) => h('tr', {key:i}, h('td', {}, `D-${i}`), h('td', {}, 'Open')))),
+  ]);
+  const render = await harness(source.slice(source.indexOf('function TableView(')), 'TableView', {
+    ...tableModel, defaultDurationSort, primaryRecordDateColumn,
+    sharedTablePageSize:()=>25, mobileTablePageSize:()=>25,
+    useTableLayouts:()=>({layouts:[]}), TableLayoutSelect:Null,
+    isDataRow:row=>tableModel.tableElements(row.props.children).length>1,
+    RecordDateRange:Null, ArrowUpDown:Null, ArrowUp:Null, ArrowDown:Null,
+  });
+  const props={sections,columns,Menu:Null,ColumnsDialog:Null,SortDialog:Null,FilterDialog:Null,ExportMenu:Null,exportTitle:'Mobile',tableProps:{},recordDateFilter:false,showRowNumbers:true};
+  let tree=render(props);
+  for(const count of [25,25,11]) {
+    const table=descendants(tree,node=>node.type==='table')[0];
+    assert.equal(descendants(table,node=>node.type==='td').length,count*3);
+    const exported=descendants(tree,node=>node.props.title==='Mobile'&&node.props.smartPrintColumns)[0];
+    assert.equal(exported.props.rows.length,61);
+    const next=descendants(tree,node=>node.type==='button'&&content(node)==='Next')[0];
+    if(count===11)assert.equal(next.props.disabled,true);
+    else { next.props.onClick(); tree=render(props); }
+  }
 });

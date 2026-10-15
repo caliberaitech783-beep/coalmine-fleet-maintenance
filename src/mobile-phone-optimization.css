@@ -1,3 +1,27 @@
+/* Phone table boundaries hand vertical gestures back to their surrounding page.
+   Modal scroll containment remains intact. Desktop rules are unchanged. */
+@media screen and (max-width: 900px) and (pointer: coarse) {
+  .manager-detail-panel > .scroll,
+  .mobile-workspace :is(.mobile-workflow-table, .mobile-breakdown-table),
+  .master-table-scroll,
+  .reports-detail-table,
+  .ticket-table-wrap {
+    overscroll-behavior-y: auto !important;
+    overscroll-behavior-x: contain;
+  }
+  .manager-detail-panel > .scroll {
+    max-height: none;
+  }
+  .mobile-table-window-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .mobile-table-window-status button { min-height: 44px; }
+}
+
 /* Final phone pass. This file intentionally loads last so mobile density rules
    are not undone by the desktop readability layer. Workflows and navigation
    remain unchanged; only phone layout, paint area and background work differ. */

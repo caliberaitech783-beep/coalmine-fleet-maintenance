@@ -7,13 +7,14 @@ import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { defaultDurationSort } from "./duration-sort.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, closedTimeAfterStartedColumns, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
+import { mobileTableWindow, sliceTableBodies } from "./mobile-table-window.mjs";
 import { useTableLayouts, TableLayoutSelect } from "./table-layouts.jsx";
 import { useColumnPreferences } from "./use-column-preferences.jsx";
 import "./table-actions.css";
 import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
-// Every table renders in windows: phones keep their 25-row pages, desktops draw
+// Phones use bounded 25-row pages; desktops draw
 // 100 rows and add the next 100 as the user scrolls near the end. Sorting,
 // filters, counts, exports and print still use every row.
 const DESKTOP_TABLE_PAGE_SIZE = 100;
@@ -93,6 +94,8 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   // Which plain column heading currently shows its sort-and-filter popover.
   const [openFilter, setOpenFilter] = useState(null);
   const [pageSize] = useState(sharedTablePageSize);
+  const [mobilePaging] = useState(() => mobileTablePageSize() > 0);
+  const [mobilePage, setMobilePage] = useState(0);
   const [visibleRowLimit, setVisibleRowLimit] = useState(sharedTablePageSize);
   useEffect(() => {
     if (!openFilter) return undefined;
@@ -128,12 +131,12 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
     else setSort({ key, direction });
     setDialog("");
   };
-  const localFilters = Object.fromEntries(filterableColumns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
-  const availableBodySelections = new Map(sections.filter((section) => section.type === "tbody").map((section) => {
+  const localFilters = useMemo(() => Object.fromEntries(filterableColumns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]])), [filterableColumns, filters]);
+  const availableBodySelections = useMemo(() => new Map(sections.filter((section) => section.type === "tbody").map((section) => {
     const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
     const selected = actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows;
     return [section, groupBySite && actual.length ? groupReportRows(selected, reportSite, reportAsset, dataRows.map(reportSite)).flatMap(group => group.rows) : selected];
-  }));
+  })), [sections, columns, localFilters, sort, groupBySite, dataRows]);
   const availableRows = [...availableBodySelections.values()].flat().filter(isDataRow);
   const siteSummary = groupBySite ? groupReportRows(availableRows, reportSite, reportAsset) : [];
   const brandOf = row => String(row.props["data-report-brand"] || "").trim().replace(/\s+/g, " ").toUpperCase();
@@ -158,9 +161,17 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const filterSignature = JSON.stringify(effectiveFilters);
   useEffect(() => {
     if (pageSize) setVisibleRowLimit(pageSize);
+    setMobilePage(0);
   }, [pageSize, filterSignature, activeSite, sort.key, sort.direction]);
+  const mobileWindow = mobileTableWindow(selectedRows.length, mobilePage, pageSize);
+  const changeMobilePage = page => {
+    setMobilePage(page);
+    const scroller = scrollingAncestor(reportTableRef.current);
+    if (scroller) scroller.scrollTop = 0;
+    else reportTableRef.current?.scrollIntoView({block: "start", behavior: "auto"});
+  };
   let remainingRows = pageSize ? visibleRowLimit : Number.POSITIVE_INFINITY;
-  const renderedBodySelections = new Map([...bodySelections].map(([section, selected]) => {
+  const renderedBodySelections = mobilePaging ? sliceTableBodies(bodySelections, mobileWindow.start, pageSize, isDataRow) : new Map([...bodySelections].map(([section, selected]) => {
     const actual = selected.filter(isDataRow);
     if (!actual.length) return [section, selected];
     const rendered = actual.slice(0, Math.max(0, remainingRows));
@@ -172,7 +183,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const moreRowsRef = useRef(null);
   useEffect(() => {
     const sentinel = moreRowsRef.current;
-    if (!hasMoreRows || !sentinel || typeof IntersectionObserver !== "function") return undefined;
+    if (mobilePaging || !hasMoreRows || !sentinel || typeof IntersectionObserver !== "function") return undefined;
     // Re-observing after each batch fires again at once while the end is still near,
     // so a tall screen fills itself without the user asking.
     const observer = new IntersectionObserver((entries) => {
@@ -180,7 +191,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
     }, { root: scrollingAncestor(sentinel), rootMargin: "0px 0px 600px 0px" });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMoreRows, pageSize, renderedRowCount]);
+  }, [mobilePaging, hasMoreRows, pageSize, renderedRowCount]);
   // Number the final displayed order, including tables with more than one body.
   // Keep this presentation column out of the data's sort/filter/column indices.
   const numberedRows = showRowNumbers ? selectedRows : [];
@@ -188,11 +199,17 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   // Distinct values per column for the heading filter popovers, taken from the full (unfiltered) table.
   const columnValues = useMemo(() => {
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-    return Object.fromEntries(columns.map((column) => [column.key, [...new Set(dataRows.map((row) => column.value(row)).filter(Boolean))].sort((a, b) => collator.compare(a, b))]));
-  }, [columns, dataRows]);
-  const exportData = ExportMenu && exportTitle ? tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
-  const printData = ExportMenu && printTitle ? exportData || tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
-  const smartPrintData = ExportMenu && (printTitle || exportTitle) ? tableExportModel(dataRows, columns, columns.map(column => column.key), localFilters, sort) : null;
+    const requestedColumns = mobilePaging ? columns.filter(column => column.key === openFilter) : columns;
+    return Object.fromEntries(requestedColumns.map((column) => [column.key, [...new Set(dataRows.map((row) => column.value(row)).filter(Boolean))].sort((a, b) => collator.compare(a, b))]));
+  }, [columns, dataRows, mobilePaging, openFilter]);
+  // Mobile already has the final filtered/sorted selection. Do not sort it
+  // again for each export format on every render; all formats retain all rows.
+  const exportModel = keys => mobilePaging
+    ? {columns: ensureJobReferenceVisibleKeys(keys, columns).map(key => columns.find(column => column.key === key)).filter(Boolean), rows: selectedRows}
+    : tableExportModel(dataRows, columns, keys, localFilters, sort);
+  const exportData = ExportMenu && exportTitle ? exportModel(visible) : null;
+  const printData = ExportMenu && printTitle ? exportData || exportModel(visible) : null;
+  const smartPrintData = ExportMenu && (printTitle || exportTitle) ? exportModel(columns.map(column => column.key)) : null;
   if (showRowNumbers) {
     const numberColumn = { key: SERIAL_COLUMN_KEY, label: SERIAL_COLUMN_LABEL, value: (row) => rowNumbers.get(row) };
     // Print can reuse the export model; decorate each distinct model just once.
@@ -320,8 +337,14 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
       }));
     })}</table>
     {pageSize > 0 && selectedRows.length > pageSize && <div className="mobile-table-window-status" role="status" ref={moreRowsRef}>
+      {mobilePaging ? <>
+        <button type="button" disabled={mobileWindow.page === 0} onClick={() => changeMobilePage(mobileWindow.page - 1)}>Previous</button>
+        <span>{mobileWindow.start + 1}–{mobileWindow.end} of {selectedRows.length} records</span>
+        <button type="button" disabled={mobileWindow.page + 1 >= mobileWindow.pages} onClick={() => changeMobilePage(mobileWindow.page + 1)}>Next</button>
+      </> : <>
       <span>Showing {renderedRowCount} of {selectedRows.length} records</span>
       {renderedRowCount < selectedRows.length && <button type="button" onClick={() => setVisibleRowLimit((current) => current + pageSize)}>Show {Math.min(pageSize, selectedRows.length - renderedRowCount)} more</button>}
+      </>}
     </div>}
   </>;
 }
