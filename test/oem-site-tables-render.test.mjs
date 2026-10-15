@@ -21,6 +21,7 @@ import { requestStatusSortRank } from "../src/request-status.mjs";
 import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { dailyUpdatesExportText } from "../src/daily-updates-order.mjs";
 import { breakdownMeterColumns } from "../breakdown-meter-columns.mjs";
+import * as mobileWindow from "../src/mobile-table-window.mjs";
 
 // Compile the real JSX components in memory, using the repository's render-test
 // harness. This does not run the site build or touch the preview's app version.
@@ -31,7 +32,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
+const bindings = { ...mobileWindow, mobileTablePageSize: () => 0, BreakdownReasonHistory: ({reason}) => reason || "—", orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };

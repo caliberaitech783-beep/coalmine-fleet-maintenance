@@ -1,0 +1,50 @@
+/* Touch layouts: an inner table must not consume vertical gestures intended
+   for its page/dialog. Keep containment on the dialog boundary, not its rows.
+   Include landscape phones and Android's desktop-site viewport. */
+@media screen and (max-width: 700px), screen and (hover: none) and (pointer: coarse) {
+  :is(
+    .scroll, .master-table-scroll, .mobile-workflow-table,
+    .mobile-breakdown-table, .reports-detail-table, .ticket-table-wrap,
+    .dashboard-asset-list, .hierarchy-matrix-scroll, .audit-table-wrap,
+    .login-activity-scroll, .vehicle-history-top-scroll,
+    .mine-oem-scroll, .bd-balance-scroll, .cdir-org-forest,
+    .daily-remarks-list
+  ) {
+    overscroll-behavior-y: auto !important;
+  }
+
+  /* These viewers already own vertical scrolling above the table. Remove the
+     inner height constraint as well as containment. overflow-y: hidden avoids
+     visible computing to auto beside overflow-x: auto; the full-height table
+     remains in normal flow, so no records are clipped. */
+  .dashboard-record-browser .dashboard-asset-list {
+    flex: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+  .dashboard-record-browser .dashboard-record-results {
+    display: block !important;
+    min-height: 0;
+    overflow: visible;
+  }
+  .dashboard-record-browser .dashboard-record-controls {
+    max-height: none;
+    overflow: visible;
+  }
+  .dashboard-asset-modal .dashboard-record-browser,
+  .hourly-breakdown-view.dashboard-record-browser {
+    display: block !important;
+    min-height: 0;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  /* The modal remains the scroll boundary even when an inner table reaches
+     its edge. Do not release scrolling onto the page behind an open dialog. */
+  .dashboard-asset-modal .dashboard-record-browser {
+    overscroll-behavior-y: contain;
+  }
+}

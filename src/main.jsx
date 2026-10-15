@@ -345,6 +345,7 @@ import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
 import "./dashboard-night.css";
 import "./no-motion.css";
+import "./mobile-scroll-containment.css";
 import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
