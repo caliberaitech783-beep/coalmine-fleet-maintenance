@@ -38,7 +38,7 @@ test('Chromium touch swipes reach the detail window and retain horizontal scroll
   await page.waitForTimeout(200);
   await drag(180,550,0,-260);
   assert.equal((await position()).top,0,'fixture reproduces the original trapped vertical swipe');
-  await page.addStyleTag({content:correction});
+  await page.addStyleTag({content:correction + ['dashboard-readability','dashboard-spacing','mobile-phone-optimization','dashboard-night','no-motion'].map(css).join('\n')});
   await page.waitForTimeout(200);
   await drag(180,550,0,-260);
   assert.ok((await position()).top>100,'swiping rows scrolls the detail window');
