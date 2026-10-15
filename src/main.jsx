@@ -7122,8 +7122,10 @@ function UserSessionsPage({session}) {
       const response=await fetch('/api/user-sessions',{cache:'no-store',headers:{Authorization:`Bearer ${session?.token||authToken}`}});
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||'Could not load user sessions.');
-      setSessions(Array.isArray(result.sessions)?result.sessions:[]);
-      setSummary(result.summary||{active:0,online:0,users:0,devices:0});
+      const nextSessions=Array.isArray(result.sessions)?result.sessions:[];
+      const nextSummary=result.summary||{active:0,online:0,users:0,devices:0};
+      setSessions(previous=>mobileTablePageSize()>0&&JSON.stringify(previous)===JSON.stringify(nextSessions)?previous:nextSessions);
+      setSummary(previous=>mobileTablePageSize()>0&&JSON.stringify(previous)===JSON.stringify(nextSummary)?previous:nextSummary);
       setError("");
     }catch(loadError){setError(loadError.message||'Could not load user sessions.');}
     finally{if(!quiet)setLoading(false);}

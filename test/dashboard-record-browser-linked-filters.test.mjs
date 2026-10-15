@@ -17,6 +17,7 @@ import { reportTime12 } from "../report-time-format.mjs";
 import { REGION_DATA } from "../region-scope.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import DateInput from '../src/date-input.mjs';
+import * as mobileWindow from '../src/mobile-table-window.mjs';
 
 const h = React.createElement;
 const names = { "dashboard-record-browser": "DashboardRecordBrowser", "shared-actions-table": "SharedActionsTable", "record-date-range": "RecordDateRange" };
@@ -25,7 +26,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   return [file, (await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } })).code + `; return ${name};`];
 })));
 const empty = () => null;
-const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
+const bindings = { ...mobileWindow, mobileTablePageSize: () => 0, BreakdownReasonHistory: ({reason}) => reason || "—", React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   matchesSmartSearch, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };

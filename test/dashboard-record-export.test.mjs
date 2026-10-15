@@ -34,6 +34,6 @@ test("chart detail lists opt into the existing PDF, Excel and Print menu", () =>
   assert.match(main, /FilterDialog=\{TableParameterFilter\} ExportMenu=\{ExportMenu\}/);
   assert.match(main, /title=\{assetDrilldownTitle\} initialRegion=/);
   assert.match(browser, /exportTitle=\{hideHierarchyFilters \? title : `\$\{title\} · \$\{view\.regionLabel\}`\}/);
-  assert.match(shared, /ExportMenu && exportTitle \? tableExportModel\(dataRows, columns, visible, localFilters, sort\) : null/);
+  assert.match(shared, /ExportMenu && exportTitle \? exportModel\(visible\) : null/);
   assert.match(shared, /<ExportMenu title=\{exportTitle \|\| printTitle\} columns=\{\(exportData \|\| printData\).columns\} rows=\{\(exportData \|\| printData\).rows\}/);
 });
