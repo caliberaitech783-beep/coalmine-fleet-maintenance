@@ -18,10 +18,12 @@ test('total summary adds open cases without modifying the verified-only summary 
   assert.deepEqual(summary.rows.map(r=>r.ref),['verified']);
   assert.deepEqual(total.rows.map(r=>r.ref),['verified','open','accepted','parts']);
   assert.equal(total.category,'general');
-  assert.deepEqual(total.columns.map(c=>[c.key,c.label]),summary.columns.map(c=>[c.key,c.label]));
+  assert.equal(total.columns.find(c=>c.key==='status').label,'Status');
+  assert.deepEqual(total.rows.map(row=>total.columns.find(c=>c.key==='status').value(row)),['Verified','Open','In progress','Awaiting parts']);
+  assert.deepEqual(total.columns.filter(c=>c.key!=='status').map(c=>[c.key,c.label]),summary.columns.map(c=>[c.key,c.label]));
   for(const row of total.rows){
     assert.equal(total.dateValue(row),'2026-10-07 09:00');
-    assert.deepEqual(total.columns.map(c=>c.value(row)),summary.columns.map(c=>c.value(row)));
+    assert.deepEqual(total.columns.filter(c=>c.key!=='status').map(c=>c.value(row)),summary.columns.map(c=>c.value(row)));
   }
   assert.ok(DEPARTMENT_REPORT_TITLES.includes(total.title));
   assert.ok(HIERARCHY_REPORT_GROUPS.find(g=>g.viewKey==='C').reports.includes(total.title));
