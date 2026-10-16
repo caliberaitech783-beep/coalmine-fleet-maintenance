@@ -66,3 +66,25 @@ test('downtime report dates resolve site shifts for daytime and midnight carryov
   assert.equal(typeof details[0].start,'string');
   assert.equal(typeof details[0].end,'string');
 });
+
+test('custom period clips breakdowns and calculates availability for selected hours', async()=>{
+  const {downtimeMatrixRange} = await import('../src/downtime-matrix.mjs');
+  const rows = downtimeMatrixRange([
+    request('2026-10-13T23:00','2026-10-14T10:00'),
+    request('2026-10-14T14:00','2026-10-14T20:00','BD2'),
+    {...request('2026-10-14T20:00','2026-10-14T21:00'),door:'EX03'},
+  ],[],'2026-10-14T08:00','2026-10-14T18:00',now);
+  assert.equal(rows.length,1);
+  assert.deepEqual(rows[0].events.map(event=>event.hours),[2,4]);
+  assert.equal(rows[0].available,4);
+  assert.deepEqual(downtimeMatrixRange([],[],'2026-10-14T18:00','2026-10-14T08:00',now),[]);
+});
+test('multi-day period uses total selected hours and merges overlaps',async()=>{
+  const {downtimeMatrixRange} = await import('../src/downtime-matrix.mjs');
+  const [row] = downtimeMatrixRange([
+    request('2026-10-13T10:00','2026-10-14T12:00'),
+    request('2026-10-14T10:00','2026-10-14T15:00','BD2'),
+  ],[],'2026-10-13T12:00','2026-10-14T18:00',now);
+  assert.equal(row.downtime,27);
+  assert.equal(row.available,3);
+});

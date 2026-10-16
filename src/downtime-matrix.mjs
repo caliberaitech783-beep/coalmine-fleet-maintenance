@@ -8,6 +8,12 @@ const identity = row => String(row.chassis || row.manufacturerSerialNo || row.ch
 export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
   const start = epoch(`${date}T00:00:00`), end = start + 86400000;
   if (!Number.isFinite(start) || downtimeToday(start) !== date || start > now) return [];
+  return downtimeMatrixRange(requests,equipment,new Date(start).toISOString(),new Date(end).toISOString(),now);
+}
+
+export function downtimeMatrixRange(requests,equipment,fromValue,toValue,now=Date.now()) {
+  const start=epoch(fromValue), end=epoch(toValue);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end<=start || start>now) return [];
   const groups = new Map();
   const add = row => {
     const site = row.reportSite || row.site || row.currentLocation || row.location || '—';
@@ -32,7 +38,7 @@ export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
     let total = 0, last = start;
     for (const event of row.events) { total += Math.max(0,event.end-Math.max(event.start,last)); last = Math.max(last,event.end); }
     const downtime = total/3600000;
-    return {...row, downtime, available:24-downtime};
+    return {...row, downtime, available:(end-start)/3600000-downtime};
   }).sort((a,b)=>a.site.localeCompare(b.site)||a.door.localeCompare(b.door,undefined,{numeric:true}));
 }
 
