@@ -3,4 +3,3 @@
 .downtime-site-tabs button span { white-space:nowrap; font-weight:700; }
 .downtime-site-tabs button[aria-pressed=true] { border-bottom-color:#7739bf; background:#7739bf12; }
 .downtime-site-tabs button:focus-visible { outline:2px solid #7739bf; outline-offset:-3px; }
-.downtime-range-filters { display:flex; flex-wrap:wrap; gap:18px; padding:18px 24px; align-items:flex-end; } .downtime-range-filters label { display:flex; flex-direction:column; gap:8px; font-weight:600; } .downtime-range-filters input,.downtime-range-filters select { padding:12px; border:1px solid var(--line,#dce3ef); border-radius:8px; background:var(--panel,#fff); color:inherit; }
