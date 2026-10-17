@@ -17,7 +17,6 @@ export function readBlobDataUrl(blob) {
 // shrink a full-page document to a tiny thumbnail just to satisfy the ceiling.
 export async function compressImageDataUrl(file) {
   if (!file || !/^image\/(jpeg|png|webp|gif)$/.test(file.type)) throw new Error('Choose a JPEG, PNG, WebP or GIF image.');
-  if (file.size <= IMAGE_TARGET_BYTES) return readBlobDataUrl(file);
   const url = URL.createObjectURL(file);
   const image = new Image();
   try {
@@ -33,15 +32,14 @@ export async function compressImageDataUrl(file) {
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       let best = '';
       for (const quality of [0.88, 0.8, 0.72]) {
-        let data = canvas.toDataURL('image/webp', quality);
-        if (!data.startsWith('data:image/webp')) data = canvas.toDataURL('image/jpeg', quality);
+        const data = canvas.toDataURL('image/webp', quality);
+        if (!data.startsWith('data:image/webp;base64,')) throw new Error('This browser cannot create WebP images. Please use a current Chrome, Edge, Firefox or Safari browser.');
         const bytes = dataUrlBytes(data);
         if (bytes <= IMAGE_TARGET_BYTES) return data;
         if (!best && bytes <= IMAGE_MAX_BYTES) best = data;
       }
       if (best) return best;
     }
-    if (file.size <= IMAGE_MAX_BYTES) return readBlobDataUrl(file);
     throw new Error('This image needs more than 100 KB to retain detail. Crop to the ticket or trip card and try again. Check that all text is readable.');
   } finally { URL.revokeObjectURL(url); }
 }

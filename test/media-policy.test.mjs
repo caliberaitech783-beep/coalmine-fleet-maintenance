@@ -26,14 +26,21 @@ test('all audio validators enforce the 1 MB boundary', () => {
 test('compression favors detail within 100 KB and rejects images that need excessive reduction', async t => {
   const originals = {Image:globalThis.Image, document:globalThis.document, create:URL.createObjectURL, revoke:URL.revokeObjectURL};
   t.after(() => {globalThis.Image=originals.Image;globalThis.document=originals.document;URL.createObjectURL=originals.create;URL.revokeObjectURL=originals.revoke;});
-  let size=80*1024, revoked=0;
+  let size=80*1024, revoked=0, outputType='image/webp';
   globalThis.Image=class {naturalWidth=3000;naturalHeight=2000;set src(value){this.onload();}};
-  globalThis.document={createElement:()=>({getContext:()=>({fillRect(){},drawImage(){}}),toDataURL:()=>data('image/webp',size)})};
+  globalThis.document={createElement:()=>({getContext:()=>({fillRect(){},drawImage(){}}),toDataURL:(type)=>{assert.equal(type,'image/webp');return data(outputType,size);}})};
   URL.createObjectURL=()=> 'blob:test';URL.revokeObjectURL=()=>revoked++;
   assert.equal(dataUrlBytes(await compressImageDataUrl({type:'image/jpeg',size:500000})),size);
   size=15000;
   assert.equal(dataUrlBytes(await compressImageDataUrl({type:'image/jpeg',size:500000})),size);
+  for (const type of ['image/jpeg','image/png','image/webp','image/gif']) {
+    assert.match(await compressImageDataUrl({type,size:1000}),/^data:image\/webp;base64,/);
+  }
   size=150000;
   await assert.rejects(compressImageDataUrl({type:'image/jpeg',size:500000}),/Crop/);
-  assert.equal(revoked,3);
+  // A small source must not bypass conversion when encoded output is too large.
+  await assert.rejects(compressImageDataUrl({type:'image/png',size:1000}),/Crop/);
+  size=15000;outputType='image/png';
+  await assert.rejects(compressImageDataUrl({type:'image/png',size:1000}),/cannot create WebP/);
+  assert.equal(revoked,9);
 });

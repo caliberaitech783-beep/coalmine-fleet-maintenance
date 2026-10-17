@@ -2,7 +2,7 @@
 
 ## Image and voice storage limits
 
-New trip-card, ticket, complaint-photo, correction-evidence and announcement images are compressed in the browser, targeting 10–20 KB and permitting up to 100 KB to retain detail. WebP is preferred with JPEG fallback. If bounded compression cannot fit the image, users must crop and retry; users should check text readability. PDFs and videos retain their existing separate limits. The API independently enforces decoded image size. Existing stored media is not recompressed.
+New trip-card, ticket, complaint-photo, correction-evidence and announcement images are converted to WebP in the browser, including sources below 20 KB, targeting 10–20 KB and permitting up to 100 KB to retain detail. Browsers without WebP encoding show an actionable error rather than saving a different format. If bounded compression cannot fit the image, users must crop and retry; users should check text readability. PDFs and videos retain their existing separate limits. The API independently enforces decoded image size. Existing stored media is not recompressed.
 
 Complaint, maintenance, ticket and session-message voice audio is limited to 1 MB. Browser recording requests mono speech with noise suppression and echo cancellation at 32 kbps, preferring Opus with MP4 fallback. Recordings stop after two minutes; actual output size is checked because browser encoders may ignore bitrate preferences. Oversized recordings require a shorter message.
 
