@@ -5,12 +5,12 @@ export function downtimePdfHeading(title,rows,columns,defaultHeading) {
   return title.startsWith('Downtime Matrix Report - ') ? title : defaultHeading(title,rows,columns);
 }
 
-export function downtimeMatrixExport(view,{site,date}) {
+export function downtimeMatrixExport(view,{site,date,rangeLabel}) {
   const groups = parseFilterValues(view.filters?.equipmentGroup).filter(value=>value!==EMPTY_FILTER_VALUE);
   const filtered = groups.length > 0;
   const dateLabel = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.split('-').reverse().join('-') : date;
   return {...view,
-    title:`Downtime Matrix Report${site ? ` - ${site}` : ''}${filtered ? ` - ${groups.join(', ')} - ${dateLabel}` : ''}`,
+    title:`Downtime Matrix Report${site ? ` - ${site}` : ''}${filtered ? ` - ${groups.join(', ')}` : ''}${rangeLabel ? ` - ${rangeLabel}` : filtered ? ` - ${dateLabel}` : ''}`,
     columns:filtered ? view.columns.filter(column=>column.key!=='equipmentGroup') : view.columns,
   };
 }

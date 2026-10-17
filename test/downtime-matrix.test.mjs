@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {downtimeMatrix} from '../src/downtime-matrix.mjs';
+import {downtimeMatrixRange} from '../src/downtime-matrix.mjs';
+test('range counts overlapping events once and clips to custom multi-day period',()=>{
+  const now=Date.parse('2026-10-15T00:00:00+05:30');
+  const records=[
+    {door:'EX01',site:'Mine',start:'2026-10-13T10:00',closedAt:'2026-10-14T12:00'},
+    {door:'EX01',site:'Mine',start:'2026-10-14T10:00',closedAt:'2026-10-14T15:00'},
+    {door:'EX02',site:'Mine',start:'2026-10-14T20:00',closedAt:'2026-10-14T21:00'},
+  ];
+  const [row]=downtimeMatrixRange(records,[],'2026-10-13T12:00','2026-10-14T18:00',now);
+  assert.equal(row.downtime,27);assert.equal(row.available,3);assert.equal(row.events.length,2);
+  assert.deepEqual(downtimeMatrixRange(records,[],'2026-10-14T18:00','2026-10-13T12:00',now),[]);
+});
 const now = Date.parse('2026-10-15T00:00:00+05:30');
 const request = (start,closedAt,ref='BD1') => ({door:'EX01',site:'Mine',start,closedAt,ref});
 test('two hour breakdown leaves 22 available hours',()=>{
