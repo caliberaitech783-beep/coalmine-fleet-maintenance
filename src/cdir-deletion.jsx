@@ -1,9 +1,10 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React,{useEffect,useState} from 'react';
 import {Trash2,RefreshCw,X} from 'lucide-react';
 import {formatDisplayDateTime} from '../date-time-format.mjs';
 import './employee-transfer.css';
 export default function CdirDeletion({token,ReportSection}){
- const [data,setData]=useState({token,loading:true,records:[],targets:[]}),[view,setView]=useState('Pending'),[search,setSearch]=useState(''),[targetSearch,setTargetSearch]=useState(''),[form,setForm]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selected,setSelected]=useState(null),[action,setAction]=useState(null);
+ const [data,setData]=useState({token,loading:true,records:[],targets:[]}),[view,setView]=useNavigationState("directory.deletions", 'Pending'),[search,setSearch]=useState(''),[targetSearch,setTargetSearch]=useState(''),[form,setForm]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selected,setSelected]=useState(null),[action,setAction]=useState(null);
  const api=async(path='',method='GET',body)=>{const response=await fetch('/api/cdir/deletion-requests'+path,{method,cache:'no-store',headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(!response.ok)throw Error(result.error||'Could not update deletion requests.');return result;};
  const load=async()=>{try{setData(current=>({...current,loading:true}));setData({...await api(),token,loading:false});}catch(err){setData({token,loading:false,records:[],targets:[]});setError(err.message);}};
  useEffect(()=>{setForm(false);setSelected(null);setAction(null);setError('');void load();},[token]);

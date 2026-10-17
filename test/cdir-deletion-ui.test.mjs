@@ -13,6 +13,7 @@ test('deletion register renders scoped decisions and exports snapshot/history th
  const row={id:1,requestNo:'CD-DEL-1',name:'EMPLOYEE',empId:'E001',site:'Corporate Office, Nagpur',status:'Pending',canApprove:true,reason:'Duplicate',record:{name:'EMPLOYEE',empId:'E001'},history:[{action:'Requested',by:'HR',at:'2026-10-09T10:00:00Z'}]};
  const slots=[{token:'fixture',loading:false,targets:[{id:2,master:'C-Dir Employee master',empId:'E001',name:'EMPLOYEE',site:row.site}],records:[row]},'Pending','','',true,false,'','',row,null];let cursor=0,sections=[];
  const bindings={React,useState:initial=>[slots[cursor++]??initial,()=>{}],useEffect:()=>{},Trash2:()=>null,RefreshCw:()=>null,X:()=>null,formatDisplayDateTime};
+ bindings.useNavigationState=(_key, initial)=>bindings.useState(initial);
  const Component=new Function(...Object.keys(bindings),code+';return CdirDeletion;')(...Object.values(bindings));
  const ReportSection=props=>{sections.push(props);return React.createElement('section',null,props.title,props.columns.flatMap(column=>props.rows.map(row=>React.createElement(React.Fragment,{key:column.key+'-'+row.id},column.render?.(row)))));};
  const render=token=>{cursor=0;sections=[];return renderToStaticMarkup(React.createElement(Component,{token,ReportSection}));};

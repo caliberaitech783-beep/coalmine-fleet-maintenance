@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React, {useEffect, useMemo, useState} from 'react';
 import {UsersRound,SlidersHorizontal,RotateCcw,FilterX} from 'lucide-react';
 import './employee-tenure-report.css';
@@ -31,7 +32,7 @@ export default function EmployeeTenureReport({token, ReportSection}) {
   const [data, setData] = useState({token: '', loading: true, error: '', directory: null});
   const [filters, setFilters] = useState({site: '', region: '', department: '', category: '', designation: ''});
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('included');
+  const [view, setView] = useNavigationState("directory.tenure", 'included');
   const [reason, setReason] = useState('');
   useEffect(() => {
     const controller = new AbortController();

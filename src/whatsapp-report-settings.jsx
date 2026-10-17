@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React, {useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Bell, Check, Clock, FileText, MessageSquare, Plus, RefreshCw, Save, Settings2, ShieldCheck, X} from 'lucide-react';
@@ -39,7 +40,7 @@ export function resetWhatsAppDeliveryRules(current) {
 export function WhatsAppReportSettingsDialog({token,onClose,onOpenReportSchedules}) {
   const [details,setDetails] = useState(null);
   const [draft,setDraft] = useState(null);
-  const [section,setSection] = useState('delivery');
+  const [section,setSection] = useNavigationState('whatsapp.settings', 'delivery');
   const [purpose,setPurpose] = useState('requestOpened');
   const [busy,setBusy] = useState('load');
   const [error,setError] = useState('');

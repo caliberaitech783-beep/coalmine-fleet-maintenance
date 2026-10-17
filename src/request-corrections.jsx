@@ -1,3 +1,4 @@
+import {useNavigationState} from './navigation-state.jsx';
 import { compressImageDataUrl } from "../media-policy.mjs";
 import React,{useEffect,useMemo,useState} from 'react';
 import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,Trash2,X} from 'lucide-react';
@@ -148,7 +149,7 @@ function NewCorrectionForm({requests,token,Dialog,onSaved,allowedTypes=[],fieldO
 export default function RequestCorrections({session,requests=[],Dialog}){
   const token=session?.token||'';
   const [state,setState]=useState({records:[],capabilities:{},loading:true,error:''});
-  const [status,setStatus]=useState('Open');
+  const [status,setStatus]=useNavigationState('corrections.tab', 'Open');
   const [query,setQuery]=useState('');
   const load=async()=>{
     setState((current)=>({...current,loading:true,error:''}));

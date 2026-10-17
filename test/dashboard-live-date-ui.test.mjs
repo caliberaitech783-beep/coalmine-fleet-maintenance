@@ -230,6 +230,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     RequestTimelineButton: Null, authToken: "",
     MaintenanceRemarks: Null,
   };
+  dependencies.useNavigationState=(_key, initial)=>dependencies.useState(initial);
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
   return {render(rows = requests, props = {}) {
     cursor = 0;

@@ -36,6 +36,7 @@ function harness() {
     useState(initial) {const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => {slots[i] = value;}];},
     ...Object.fromEntries(['ArrowDown', 'ArrowRight', 'ArrowUp', 'Info', 'MapPin', 'RotateCcw'].map(name => [name, () => null])),
   };
+ bindings.useNavigationState=(_key, initial)=>bindings.useState(initial);
   const Chart = new Function("DateInput", ...Object.keys(bindings), `${code}; return DailyBdBalanceChart;`)(DateInput, ...Object.values(bindings));
   const props = {today: '2026-09-11', sites: ['Sasti OB', 'Majri OB'], records: [
     {ref: 'OLD', site: 'Sasti OB', start: '2026-09-01', status: 'Open'},

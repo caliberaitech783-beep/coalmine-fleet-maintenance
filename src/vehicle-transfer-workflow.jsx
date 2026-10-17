@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React, {useEffect, useMemo, useState} from 'react';
 import {ArrowRightLeft, CheckCircle2, Clock, MapPin, Plus, RefreshCw, Search, Send, ShieldCheck, Truck, X} from 'lucide-react';
 import {formatDisplayDate, formatDisplayDateTime} from '../date-time-format.mjs';
@@ -100,7 +101,7 @@ function TransferForm({Dialog, equipment, sites, token, onClose, onSaved}) {
 export default function VehicleTransferWorkflow({session, Dialog, embedded = false}) {
   const [state, setState] = useState({records: [], equipment: [], sites: [], capabilities: {}, loading: true, error: ''});
   const [query, setQuery] = useState('');
-  const [activeView, setActiveView] = useState(VEHICLE_TRANSFER_VIEW.ALL);
+  const [activeView, setActiveView] = useNavigationState("vehicleTransfer.view", VEHICLE_TRANSFER_VIEW.ALL);
   const [showForm, setShowForm] = useState(false);
   const [workingId, setWorkingId] = useState('');
   const [notice, setNotice] = useState('');

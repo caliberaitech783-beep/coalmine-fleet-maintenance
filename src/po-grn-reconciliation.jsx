@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {FileBarChart,RefreshCw} from 'lucide-react';
 import DateInput from './date-input.mjs';
@@ -19,7 +20,7 @@ export default function PoGrnReconciliation({token,ReportSection}) {
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({loading:true,error:'',rows:[],receipts:[],unmatched:[],vendors:[],summary:{}});
- const [tab,setTab]=useState('items'),[filter,setFilter]=useState('all'),[vendor,setVendor]=useState('');
+ const [tab,setTab]=useNavigationState('accounts.reconciliation', 'items'),[filter,setFilter]=useState('all'),[vendor,setVendor]=useState('');
  useEffect(()=>{
   const controller=new AbortController();setData({loading:true,error:'',rows:[],receipts:[],unmatched:[],vendors:[],summary:{}});
   fetch(`/api/reports/po-grn-reconciliation?${new URLSearchParams(range)}`,{headers:{Authorization:`Bearer ${token}`},signal:controller.signal,cache:'no-store'})

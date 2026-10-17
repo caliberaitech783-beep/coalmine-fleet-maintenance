@@ -1,3 +1,4 @@
+import {useNavigationState} from './navigation-state.jsx';
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { hourlyBreakdownView, breakdownElapsed } from "./hourly-breakdown.mjs";
@@ -16,7 +17,7 @@ function moveBetweenTabs(event, index, count, choose) {
 }
 
 export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTable }) {
-  const [hours, setHours] = useState(1);
+  const [hours, setHours] = useNavigationState("dashboard.hourly.window", 1);
   const [site, setSite] = useState("");
   const [now, setNow] = useState(Date.now);
   const id = useId();

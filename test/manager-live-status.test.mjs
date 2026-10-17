@@ -68,6 +68,7 @@ function managerHarness(equipment, equipmentState = {}) {
     ActionsTable: Null, Status: Null, RequestTimelineButton: Null, MaintenanceRemarks: Null, REGION_DATA: [], formatTwelveHourDateTime: (value) => value, formatDisplayTime: (value) => value, authToken: "fixture-token",
     ShieldCheck: Null, ChevronRight: Null, Plus: Null, ManagerCreateRequestForm,
   };
+  scope.useNavigationState=(_key, initial)=>scope.useState(initial);
   const component = new Function(...Object.keys(scope), `${managerCode}; return ManagerDashboard;`)(...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component({ requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props }); } };
 }

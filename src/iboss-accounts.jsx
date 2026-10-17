@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import {recordCountLabel} from './iboss-record-count.mjs';
 import {createAccountPageLoader} from './iboss-account-loader.mjs';
 import React,{useEffect,useMemo,useState,useRef} from 'react';
@@ -21,9 +22,9 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
  const allowed=accountPrivileges(permissions);
  const visibleSections=SECTIONS.filter(([key,label])=>key==='chat'?allowed.some(value=>['Masters','Transactions'].includes(value)):allowed.includes(label));
  const accessKey=allowed.join('|');
- const [requestedSection,setSection]=useState(initialSection);
+ const [requestedSection,setSection]=useNavigationState(`accounts.${initialSection}.section`, initialSection);
  const section=visibleSections.some(([key])=>key===requestedSection)?requestedSection:visibleSections[0]?.[0];
- const [view,setView]=useState('');
+ const [view,setView]=useNavigationState(`accounts.${initialSection}.view`, '');
  const [range,setRange]=useState(()=>({from:indiaDateTimeInputValue(new Date(Date.now()-29*86400000)).slice(0,10),to:indiaDateTimeInputValue().slice(0,10)}));
  const [draft,setDraft]=useState(range),[attempt,setAttempt]=useState(0),[validation,setValidation]=useState('');
  const [data,setData]=useState({rows:[],loading:false,error:''});
@@ -32,7 +33,7 @@ export default function IbossAccounts({token,ReportSection,initialSection='dashb
  const [mergeContext,setMergeContext]=useState(null);
  const dashboardOpen=(key,options={})=>{const target=key==='merge'?'merge':ACCOUNT_SECTIONS.masters.includes(key)?'masters':'transactions';if(!visibleSections.some(([section])=>section===target))return;if(options.range){setRange(options.range);setDraft(options.range);}if(key==='merge'&&options.anchor){setDrill({chain:options.chain,key:options.anchor,focus:{step:'party',docNo:options.label}});return;}if(key==='merge'){setMergeContext(options);setSection('merge');setView('');return;}setSection(target);open(key);};
  const definition=ACCOUNT_VIEWS[view];
- useEffect(()=>{setSection(initialSection);setView('');setDrill(null);setValidation('');},[initialSection,accessKey]);
+ useEffect(()=>{if(view && !ACCOUNT_SECTIONS[section]?.includes(view))setView('');setDrill(null);setValidation('');},[initialSection,accessKey,section]);
  useEffect(()=>{
   if(!view)return;
   setData({rows:[],loading:true,error:''});

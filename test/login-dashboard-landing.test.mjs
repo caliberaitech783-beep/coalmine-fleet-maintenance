@@ -26,5 +26,5 @@ test("normal user login starts on its dashboard section", () => {
   const end = source.indexOf("function App()", start);
   const normal = source.slice(start, end);
 
-  assert.match(normal, /useState\(embedded\?"profile":"dashboard"\)/);
+  assert.match(normal, /useNavigationState\([^\n]+embedded\?"profile":"dashboard"\)/);
 });

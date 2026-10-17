@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React,{useEffect,useState} from 'react';
 import {ArrowRightLeft,BookUser,Users,Search,RefreshCw,Send,X} from 'lucide-react';
 import {formatDisplayDate,formatDisplayDateTime} from '../date-time-format.mjs';
@@ -26,7 +27,7 @@ async function api(token,path,method='GET',body){
 }
 export default function EmployeeTransfer({token,ReportSection}){
   const [data,setData]=useState({token,records:[],sites:[],loading:true,error:''});
-  const [view,setView]=useState('All'),[query,setQuery]=useState(''),[form,setForm]=useState(false),[empId,setEmpId]=useState(''),[employee,setEmployee]=useState(null),[details,setDetails]=useState({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selected,setSelected]=useState(null),[action,setAction]=useState(null),[note,setNote]=useState('');
+  const [view,setView]=useNavigationState('directory.transfers', 'All'),[query,setQuery]=useState(''),[form,setForm]=useState(false),[empId,setEmpId]=useState(''),[employee,setEmployee]=useState(null),[details,setDetails]=useState({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selected,setSelected]=useState(null),[action,setAction]=useState(null),[note,setNote]=useState('');
   const load=async()=>{setData(current=>({...current,loading:true,error:''}));try{const result=await api(token,'employee-transfers');setData({...result,token,loading:false,error:''});}catch(err){setData({token,records:[],sites:[],loading:false,error:err.message});}};
   useEffect(()=>{setSelected(null);setEmployee(null);setForm(false);void load();},[token]);
   const lookup=async event=>{event.preventDefault();if(busy)return;setBusy(true);setEmployee(null);setError('');try{const result=await api(token,`employee-transfers/lookup?empId=${encodeURIComponent(empId.trim())}`);setEmployee(result);setDetails(result.record);}catch(err){setError(err.message);}finally{setBusy(false);}};

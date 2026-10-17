@@ -1,3 +1,4 @@
+import {useNavigationState} from './navigation-state.jsx';
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw, AlertTriangle, X } from "lucide-react";
@@ -102,7 +103,7 @@ function PeopleSite({ entry, onDetail }) {
 
 /** Read-only, site-wise organisation pages: access structure, hierarchy levels, reporting structure, people by designation. */
 export default function OrganisationChartView({ view = "reporting", chart, loading = false, error = "", updatedAt = 0, onRefresh }) {
-  const [activeSite, setActiveSite] = useState("all");
+  const [activeSite, setActiveSite] = useNavigationState("organisation.site", "all");
   const [detail, setDetail] = useState(null);
   const openDetail = (kind, site = "", extra = "") => setDetail(organisationDetail(chart, kind, site, extra));
   const { sites, companyWide } = chart.sites;

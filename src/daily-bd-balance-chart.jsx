@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React, {useMemo, useState} from 'react';
 import {ArrowDown, ArrowRight, ArrowUp, Info, MapPin, RotateCcw} from 'lucide-react';
 import {DAILY_BD_METRICS, buildDailyBdBalance, shiftBdDate} from './daily-bd-balance.mjs';
@@ -32,7 +33,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const [site, setSite] = useState('');
   const [range, setRange] = useState({days: 1, from: '', to: ''});
   const [rangeError, setRangeError] = useState('');
-  const [view, setView] = useState('chart');
+  const [view, setView] = useNavigationState("dashboard.dailyBalance", 'chart');
   const activeSite = sites.includes(site) ? site : '';
   const activeShift = shiftOptions.some(option => option.key === shift) ? shift : DAILY_BD_ALL_SHIFTS;
   const activeShiftLabel = shiftOptions.find(option => option.key === activeShift)?.label || 'All shifts';

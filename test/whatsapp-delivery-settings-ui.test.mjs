@@ -25,6 +25,7 @@ function harness({settings=policy.defaultWhatsAppReportSettings(),section='deliv
     fetch:async(url,init)=>{requests.push({url,...init});return {...details,settings:JSON.parse(init.body).settings};},
     ...Object.fromEntries(['Bell','Check','Clock','FileText','MessageSquare','Plus','RefreshCw','Save','Settings2','ShieldCheck','X'].map(name=>[name,()=>null])),
   };
+ bindings.useNavigationState=(_key, initial)=>bindings.useState(initial);
   const api=new Function(...Object.keys(bindings),`${code};return {WhatsAppReportSettingsDialog,resetWhatsAppDeliveryRules};`)(...Object.values(bindings));
   return {
     render(){cursor=0;return api.WhatsAppReportSettingsDialog({token:'fixture',onClose:()=>closed.push(true),onOpenReportSchedules});},

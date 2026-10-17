@@ -1,3 +1,4 @@
+import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import { compressImageDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
@@ -368,6 +369,7 @@ const storedSession = (() => {
     return null;
   }
 })();
+configureNavigation(storedSession);
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
 // Two languages chosen at sign-in. Language 1 is the reading and default speech
@@ -393,6 +395,7 @@ const clientDeviceId = (() => {
   }
 })();
 const clearStoredSession = () => {
+  resetNavigation();
   authToken = "";
   currentEmployeeName = "";
   localStorage.removeItem("nerveCenterSession");
@@ -1572,14 +1575,14 @@ function ManagerCreateRequestForm({equipmentRecords, equipmentLoaded, assignedLo
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark, TimelineButton = null, canCreateRequest = false, onCreateRequest }) {
   const [creatingRequest, setCreatingRequest] = useState(false);
   const [reopeningBreakdown,setReopeningBreakdown]=useState(false);
-  const [queueTab,setQueueTab]=useState("active");
+  const [queueTab,setQueueTab]=useNavigationState("main.queueTab", "active");
   const [firstTripReminderDismissed,setFirstTripReminderDismissed]=useState(false);
   const [requestUpdate, setRequestUpdate] = useState(null);
   const [productionFirstTrip, setProductionFirstTrip] = useState(null);
   const [managerDrilldown,setManagerDrilldown]=useState("");
   const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
-  const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
+  const [activeManagerRole,setActiveManagerRole]=useNavigationState("main.activeManagerRole", availableRoles[0]||"Production Manager");
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
   const managerDataReady = equipmentLoaded && requestsLoaded;
   const managerReconnecting = managerDataReady && Boolean(equipmentLoadError || requestsError);
@@ -1841,7 +1844,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendFrom, setBreakdownTrendFrom] = useState(() => localDateKey(new Date()));
   const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
   // Open the current breakdown fleet by default after login.
-  const [fleetChartMode, setFleetChartMode] = useState("breakdown");
+  const [fleetChartMode, setFleetChartMode] = useNavigationState("dashboard.fleetChartMode", "breakdown");
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
   useEffect(() => {
@@ -1855,11 +1858,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     window.addEventListener("nerve-center:dashboard-home", showBreakdownDashboard);
     return () => window.removeEventListener("nerve-center:dashboard-home", showBreakdownDashboard);
   }, []);
-  const [oemView, setOemView] = useState("chart");
+  const [oemView, setOemView] = useNavigationState("main.oemView", "chart");
   const [oemDrilldownCategory, setOemDrilldownCategory] = useState({});
   const [oemToolbarTarget, setOemToolbarTarget] = useState(null);
   const [oemViewToolbarTarget, setOemViewToolbarTarget] = useState(null);
-  const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
+  const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useNavigationState("dashboard.hourly", false);
   const openBreakdownList = () => setAssetDrilldown("fleet-breakdown:account");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
@@ -1867,7 +1870,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendFrom, setRequestTrendFrom] = useState(() => localDateKey(new Date()));
   const [requestTrendRegion, setRequestTrendRegion] = useState("all");
   const [requestTrendTo, setRequestTrendTo] = useState(() => localDateKey(new Date()));
-  const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
+  const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useNavigationState("main.maintenanceAvailabilityTab", "breakdown");
   const [throughputFiltersHidden, setThroughputFiltersHidden] = useState(false);
   // Site-wise BD movement defaults to today to show the opening balance.
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
@@ -7086,7 +7089,7 @@ function UserSessionsPage({session}) {
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [query,setQuery]=useState("");
-  const [status,setStatus]=useState("All");
+  const [status,setStatus]=useNavigationState("sessions.tab", "All");
   const [closingId,setClosingId]=useState("");
   const [messageTarget,setMessageTarget]=useState(null);
   const [messageNotice,setMessageNotice]=useState("");
@@ -7427,7 +7430,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       }).catch(error => {if(!controller.signal.aborted) setReportMasterData({equipmentRecords:[],transferRecords:[],shiftRecords:[],loading:false,error:error.message});});
     return () => controller.abort();
   },[session?.token,activeReportCategory]);
-  const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
+  const [selectedReportByCategory, setSelectedReportByCategory] = useNavigationState("main.selectedReportByCategory", {});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
   const [reportScheduleScope, setReportScheduleScope] = useState("personal");
   const [reportScheduleSettings, setReportScheduleSettings] = useState(defaultHierarchyReportScheduleSettings);
@@ -9542,9 +9545,9 @@ function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, got
     code: String(record.code || record.shortName || "").trim() || `REG-${index + 1}`,
     sitesList: regionSites(record),
   }));
-  const [activeRegionCode, setActiveRegionCode] = useState(() => normalizedRegions[0]?.code || "WCL");
+  const [activeRegionCode, setActiveRegionCode] = useNavigationState("main.activeRegionCode", () => normalizedRegions[0]?.code || "WCL");
   const activeRegion = normalizedRegions.find((region) => region.code === activeRegionCode) || normalizedRegions[0];
-  const [activeSite, setActiveSite] = useState("");
+  const [activeSite, setActiveSite] = useNavigationState("main.activeSite", "");
   const [query, setQuery] = useState("");
   const [equipmentRecords] = useMasterRecords("Equipment master", vehicles);
   const visibleSites = (activeRegion?.sitesList || []).filter((site) => matchesSmartSearch(query, activeRegion?.name, activeRegion?.code, site));
@@ -11210,13 +11213,13 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   // MIS and General users already receive the correct site-wide feed and must
   // not start a second identical poller.
   const needsDedicatedDashboardFeed = !embedded && mobileRole === "Production User";
-  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [productionFirstTrip, setProductionFirstTrip] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
-  const [section,setSection]=useState(embedded?"profile":"dashboard");
-  const [directoryView, setDirectoryView] = useState("directory");
+  const [show, setShow] = useState(false), [tab, setTab] = useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.tab`, "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [productionFirstTrip, setProductionFirstTrip] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
+  const [section,setSection]=useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.section`, embedded?"profile":"dashboard");
+  const [directoryView, setDirectoryView] = useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.directoryView`, "directory");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
-  const [userReportCategory, setUserReportCategory] = useState("general");
+  const [userReportCategory, setUserReportCategory] = useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.userReportCategory`, "general");
   const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
   const dashboardLoader=useRef(null);
   const dashboardRequests=needsDedicatedDashboardFeed ? dashboardState.records : requests;
@@ -11495,14 +11498,14 @@ const AppBackgroundServices = React.memo(function AppBackgroundServices({ sessio
 
 function App() {
   const [session, setSession] = useState(storedSession?.token ? storedSession : null),
-    [active, setActive] = useState(LOGIN_LANDING_PAGE),
+    [active, setActive] = useNavigationState("app.page", LOGIN_LANDING_PAGE),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [equipmentLocations, setEquipmentLocations] = useState([]),
     [equipmentCategory, setEquipmentCategory] = useState("all"),
     [breakdownFleetFilter, setBreakdownFleetFilter] = useState(""),
     [breakdownFleetSites, setBreakdownFleetSites] = useState([]),
-    [activeReportCategory, setActiveReportCategory] = useState("general"),
+    [activeReportCategory, setActiveReportCategory] = useNavigationState("main.activeReportCategory", "general"),
     [requests, setRequests] = useState([]),
     [requestState, setRequestState] = useState({ token: "", loaded: false, error: "", updatedAt: 0 }),
     [menu, setMenu] = useState(false),
@@ -11513,10 +11516,10 @@ function App() {
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }),
     [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null),
-    [accountWorkspace,setAccountWorkspace]=useState("accounts"),
-    [accountDirectoryView,setAccountDirectoryView]=useState("directory");
+    [accountWorkspace,setAccountWorkspace]=useNavigationState("main.accountWorkspace", "accounts"),
+    [accountDirectoryView,setAccountDirectoryView]=useNavigationState("main.accountDirectoryView", "directory");
   const menuLoadStartedAt = useRef(performance.now());
-  const pageHistory = useRef([LOGIN_LANDING_PAGE]);
+  const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);
   const requestResponseCache = useRef({token: "", etag: ""});
   // Commit the selected navigation item immediately. Only the expensive page
@@ -11890,6 +11893,8 @@ function App() {
       return details;
     };
   const completeLogin = (nextSession) => {
+    resetNavigation();
+    configureNavigation(nextSession);
     setActive(LOGIN_LANDING_PAGE);
     pageHistory.current = [LOGIN_LANDING_PAGE];
     if(nextSession.accountsPortal&&ibossAccountsAllowed(nextSession)){
@@ -12000,7 +12005,7 @@ function App() {
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
-    <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
+    <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection} initialView={accountDirectoryView} onViewChange={setAccountDirectoryView}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
     <AppBackgroundServices session={session} logout={logout} />
   </div>;
   if (session.role === "normal" && !["HR User","HR Manager"].includes(session.assignedRole))

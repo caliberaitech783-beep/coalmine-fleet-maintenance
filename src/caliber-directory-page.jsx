@@ -1,3 +1,4 @@
+import { useNavigationState } from './navigation-state.jsx';
 import React,{useEffect,useMemo,useState} from 'react';
 import {runDownloadNotice} from './download-notice.mjs';
 import {
@@ -111,7 +112,7 @@ export function OrganisationView({model,rootPerson,rootIds,onSelect,onShowAll,fi
 export default function CaliberDirectoryPage({token}){
   const [editing,setEditing]=useState(null);
   const [state,setState]=useState({loading:true,error:'',directory:null});
-  const [attempt,setAttempt]=useState(0),[scope,setScope]=useState('all'),[accessTab,setAccessTab]=useState('all'),[view,setView]=useState('dashboard'),[selected,setSelected]=useState(null),[organisationRoot,setOrganisationRoot]=useState(null);
+  const [attempt,setAttempt]=useState(0),[scope,setScope]=useState('all'),[accessTab,setAccessTab]=useNavigationState("directory.access", 'all'),[view,setView]=useNavigationState("directory.view", 'dashboard'),[selected,setSelected]=useState(null),[organisationRoot,setOrganisationRoot]=useState(null);
   const [filters,setFilters]=useState({region:ALL,site:ALL,department:ALL,designation:ALL,category:ALL,name:''});
   useEffect(()=>{const controller=new AbortController();setState({loading:true,error:'',directory:null});fetch('/api/cdir/directory',{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal}).then(async response=>{const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not load the directory.');if(!result.matrix)throw new Error('Directory records are unavailable.');setState({loading:false,error:'',directory:result});}).catch(error=>{if(!controller.signal.aborted)setState({loading:false,error:error.message,directory:null});});return()=>controller.abort();},[token,attempt]);
   const directory=state.directory,viewer=directory?.viewer||{};

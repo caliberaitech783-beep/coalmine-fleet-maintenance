@@ -1,3 +1,4 @@
+import {useNavigationState} from './navigation-state.jsx';
 import React, {useEffect, useState} from 'react';
 import {canViewBdAgeingReport} from '../bd-ageing-report.mjs';
 import {formatDisplayDateTime} from '../date-time-format.mjs';
@@ -23,7 +24,7 @@ export default function BdAgeingReport({session, ReportSection, onBack}) {
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(true);
   const [refresh,setRefresh] = useState(0);
-  const [ageing,setAgeing] = useState('all');
+  const [ageing,setAgeing] = useNavigationState('reports.ageing.tab', 'all');
   const [region,setRegion] = useState('all');
   const [site,setSite] = useState('all');
   const view = bdAgeingView(data?.groups || [],{ageing,region,site});

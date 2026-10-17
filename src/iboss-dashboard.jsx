@@ -1,3 +1,4 @@
+import {useNavigationState} from './navigation-state.jsx';
 import {ageingAsOnRange} from './iboss-ageing-as-on.mjs';
 import {fetchAccountsReport} from './iboss-accounts-response.mjs';
 import FinanceCharts from './iboss-finance-charts.jsx';
@@ -79,7 +80,7 @@ function MetricDetails({metric,range:initialRange,token,ReportSection,preview,cl
 }
 
 export default function IbossDashboard({token,ReportSection,onOpen:openReport,preview=null}){
- const [mode,setMode]=useState('management');
+ const [mode,setMode]=useNavigationState('accounts.dashboard.mode', 'management');
  const [range,setRange]=useState(()=>preview?{from:preview.from,to:preview.to}:dashboardFinancialYearRange());
  const onOpen=(key,options={})=>openReport(key,{range,...options});
  const [companies,setCompanies]=useState([]);
