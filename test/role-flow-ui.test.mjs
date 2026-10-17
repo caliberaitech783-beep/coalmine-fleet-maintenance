@@ -56,7 +56,7 @@ function harness(name, extra = {}) {
   };
   const scope = { AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", isIdleVehicleRequest,
     ...requestEquipment,
-    React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
+    React, useState, useNavigationState: (_key, initial) => useState(initial), useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
