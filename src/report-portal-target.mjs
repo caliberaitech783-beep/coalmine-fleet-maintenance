@@ -6,6 +6,7 @@ export function reportPortalTarget(doc = document) {
 
 export function sameReportView(previous, next) {
   return previous?.sourceRows === next.sourceRows &&
+    JSON.stringify(previous.filters || {}) === JSON.stringify(next.filters || {}) &&
     previous.columns.length === next.columns.length &&
     previous.columns.every((column, index) => column.key === next.columns[index].key) &&
     previous.rows.length === next.rows.length &&

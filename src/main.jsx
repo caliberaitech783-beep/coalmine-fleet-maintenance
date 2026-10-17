@@ -4251,7 +4251,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const exportViewRef = useRef(null);
   useEffect(() => {
     if (!onExportViewChange) return;
-    const next = {sourceRows: rows, rows: sortedRows, columns: displayedColumns};
+    const next = {sourceRows: rows, rows: sortedRows, columns: displayedColumns, filters:columnFilters};
     if (!sameReportView(exportViewRef.current, next)) { exportViewRef.current = next; onExportViewChange(next); }
   });
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
@@ -7334,7 +7334,7 @@ function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Bac
     </div>
   </section>;
 }
-function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", showSearch = true, emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, controls = null, exportLabel = "Generate", exportTransform, children }) {
   if (category === "iboss-accounts") exportLabel = "Print/Export";
   const [equipmentGroupFilter, setEquipmentGroupFilter] = useState("");
   const showEquipmentGroupFilter = title === "Total Summary Report";
@@ -7350,6 +7350,8 @@ function ReportSection({ title, description, category = "general", icon: ReportI
   const [searchQuery, setSearchQuery] = useState(query);
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
   const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
+  const exportData = {title, columns:exportView?.sourceRows === rows ? exportView.columns : visibleColumns, rows:exportView?.sourceRows === rows ? exportView.rows : rows, filters:exportView?.sourceRows === rows ? exportView.filters : {}};
+  const transformedExport = exportTransform ? exportTransform(exportData) : exportData;
   return (
     <div className="reports-section generated-report-section" data-category={category}>
       <div className="reports-section-heading">
@@ -7363,7 +7365,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         <div className="generated-report-heading-actions">
           {headingControl}
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
-          <ExportMenu title={title} columns={exportView?.sourceRows === rows ? exportView.columns : visibleColumns} rows={exportView?.sourceRows === rows ? exportView.rows : rows} smartLabels={category === "employee-tenure"} className="secondary" label={exportLabel} />
+          <ExportMenu title={transformedExport.title} columns={transformedExport.columns} rows={transformedExport.rows} smartLabels={category === "employee-tenure"} className="secondary" label={exportLabel} />
         </div>
       </div>
       {controls}

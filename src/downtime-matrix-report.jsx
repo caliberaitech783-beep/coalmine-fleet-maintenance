@@ -1,6 +1,7 @@
 import React, {useMemo,useState} from 'react';
 import {downtimeMatrix,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes} from './downtime-matrix.mjs';
 import './downtime-matrix-report.css';
+import {downtimeMatrixExport} from './downtime-matrix-export.mjs';
 
 const hours = downtimeHoursMinutes;
 const hour = value => value == null ? '—' : new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true}).format(new Date(value));
@@ -30,6 +31,6 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
       {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><span>{value}</span></button>)}
     </div>
     <p>Breakdowns spanning midnight are split at the day boundary. Overlaps count once in daily downtime. Daily totals repeat for each breakdown of the same machine; today's available hours are provisional. To hour at midnight is 12:00 AM on the following day.</p>
-    <ReportSection title="Downtime Matrix Report" description={`${date} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected day and site." />
+    <ReportSection title="Downtime Matrix Report" exportTransform={view=>downtimeMatrixExport(view,{site:selectedSite,date})} description={`${date} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected day and site." />
   </section>;
 }

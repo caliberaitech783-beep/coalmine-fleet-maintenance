@@ -12,7 +12,8 @@ test('total summary equipment group filters the common table/export rows',()=>{
   assert.deepEqual(run('Total Summary Report','',scoped),scoped);
   assert.deepEqual(run('Total Summary Report','EXCAVATORS',scoped),[]);
   assert.deepEqual(run('Summary Report','VOLVO TIPPERS',scoped),scoped);
-  assert.match(section,/<ExportMenu[^\n]*rows=\{exportView\?\.sourceRows === rows \? exportView.rows : rows\}/);
+  assert.match(section,/const exportData = \{title, columns:[^\n]*rows:exportView\?\.sourceRows === rows \? exportView.rows : rows/);
+  assert.match(section,/<ExportMenu[^\n]*rows=\{transformedExport.rows\}/);
   assert.match(section,/<ReportTable[\s\S]*rows=\{rows\}/);
 });
 
@@ -74,7 +75,7 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportsSource, /category: "maintenance", title: "Idle with PM verif\."/);
   assert.match(reportsSource, /category: "mis", title: "On Road with first trip veri\."/);
   assert.match(reportsSource, /liveEquipmentRoadStatuses\(equipmentRecords, reportRequests\)/);
-  assert.match(reportsSource, /<ExportMenu title=\{title\} columns=\{exportView\?\.sourceRows === rows \? exportView\.columns : visibleColumns\} rows=\{exportView\?\.sourceRows === rows \? exportView\.rows : rows\}/);
+  assert.match(reportsSource, /<ExportMenu title=\{transformedExport.title\} columns=\{transformedExport.columns\} rows=\{transformedExport.rows\}/);
   assert.match(reportsSource, /label=\{exportLabel\}/);
   assert.ok(reportsSource.includes('column.key === "status" && !column.render ? { ...column, render: (row) => <Status>'), "department report status renders as a pill");
 });
