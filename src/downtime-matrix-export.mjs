@@ -1,5 +1,10 @@
 import {parseFilterValues,EMPTY_FILTER_VALUE} from './multi-value-filter.mjs';
 
+export function downtimePdfHeading(title,rows,columns,defaultHeading) {
+  // The matrix export already includes its selected site, group and date.
+  return title.startsWith('Downtime Matrix Report - ') ? title : defaultHeading(title,rows,columns);
+}
+
 export function downtimeMatrixExport(view,{site,date}) {
   const groups = parseFilterValues(view.filters?.equipmentGroup).filter(value=>value!==EMPTY_FILTER_VALUE);
   const filtered = groups.length > 0;

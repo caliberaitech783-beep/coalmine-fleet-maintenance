@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {downtimeMatrixExport} from '../src/downtime-matrix-export.mjs';
+import {downtimeMatrixExport,downtimePdfHeading} from '../src/downtime-matrix-export.mjs';
+import {reportPdfHeading} from '../report-refinements.mjs';
 import {sameReportView} from '../src/report-portal-target.mjs';
 const columns=[{key:'door'},{key:'equipmentGroup'},{key:'start'}];
 const rows=[{door:'EX01',equipmentGroup:'EXCAVATOR'}];
 const context={site:'Dhoptala OC (2nd)',date:'2026-10-17'};
+test('PDF heading keeps the selected site exactly once',()=>{
+  const view=downtimeMatrixExport({columns,rows,filters:{equipmentGroup:'EXCAVATOR'}},context);
+  const result=downtimePdfHeading(view.title,[{site:context.site}],view.columns,reportPdfHeading);
+  assert.equal(result,view.title);
+  assert.equal(result.split(context.site).length-1,1);
+  assert.equal(downtimePdfHeading('Other Report',[{site:context.site}],[],reportPdfHeading),'Other Report - Dhoptala OC (2nd)');
+});
 test('filtered export names group and selected day and omits redundant column',()=>{
   const result=downtimeMatrixExport({columns,rows,filters:{equipmentGroup:'EXCAVATOR'}},context);
   assert.equal(result.title,'Downtime Matrix Report - Dhoptala OC (2nd) - EXCAVATOR - 17-10-2026');
