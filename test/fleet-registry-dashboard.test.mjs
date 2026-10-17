@@ -174,10 +174,10 @@ test("the region and site graph title identifies the current view and only count
   assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
 });
 
-test("breakdown segment clicks open only that site and category of off-road assets", () => {
+test("breakdown segment clicks initially select the site and retain category while allowing regional navigation", () => {
   assert.match(source, /event\.target\.closest\("\.mine-fleet-breakdown-segment"\)\?\.closest\("\.mine-fleet-bar-column"\)/);
   assert.match(source, /\x60offroad-site:\$\{site\.name\}\|\$\{segmentColumn\.classList\.contains\("vehicles"\) \? "vehicles" : "equipment"\}\x60/);
-  assert.match(source, /const \[offroadSite, offroadCategory = ""\] = key\.startsWith\("offroad-site:"\) \? key\.slice\(13\)\.split\("\|"\) : \["", ""\];/);
+  assert.match(source, /const offroadCategory = key\.startsWith\("offroad-site:"\) \? key\.slice\(13\)\.split\("\|"\)\[1\] \|\| "" : "";/);
   assert.match(source, /key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment"/);
   assert.match(source, /key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles"/);
   assert.match(source, /assetDrilldown\.startsWith\("offroad-site:"\) \? assetDrilldown\.slice\(13\)\.split\("\|"\)\[0\] : assetDrilldown\.startsWith\("site:"\)/);

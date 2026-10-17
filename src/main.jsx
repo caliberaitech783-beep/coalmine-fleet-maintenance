@@ -2390,6 +2390,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
       // Region/site BD Balance tabs need the entire authorised snapshot. The
       // clicked location is an initial browser selection, not a data restriction.
+      // Keep equipment/vehicle segment scope; only location is navigable here.
       const hierarchyBalance = key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:");
       const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance" || hierarchyBalance;
       const offroadCategory = key.startsWith("offroad-site:") ? key.slice(13).split("|")[1] || "" : "";
