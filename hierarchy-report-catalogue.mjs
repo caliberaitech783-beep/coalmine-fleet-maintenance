@@ -19,6 +19,7 @@ export const HIERARCHY_REPORTS={
   maintenancePending:'Maintenance Status Pending',
   productionVsMisFirstTrip:'Production vs MIS First Trip Report',
   repairTat:'Turn Around Time for Repair',
+  percentage:'Percentage Report',
   openOffRoad:'Open Off road Cases',
   availability:'Availability Report',
   arrivalRedFlag:'Vehicle Arrival Red Flag Report',
@@ -38,7 +39,7 @@ export const HIERARCHY_REPORT_GROUPS=[
     HIERARCHY_REPORTS.totalSubmitted,HIERARCHY_REPORTS.ticketAcceptance,HIERARCHY_REPORTS.maintenancePending,HIERARCHY_REPORTS.productionVsMisFirstTrip,
   ]},
   {group:'Maintenance Report',viewKey:'M',className:'maintenance',reports:[
-    HIERARCHY_REPORTS.repairTat,HIERARCHY_REPORTS.availability,HIERARCHY_REPORTS.arrivalRedFlag,
+    HIERARCHY_REPORTS.repairTat,HIERARCHY_REPORTS.availability,HIERARCHY_REPORTS.arrivalRedFlag,HIERARCHY_REPORTS.percentage,
   ]},
   {group:'MIS Report',viewKey:'S',className:'mis',reports:[
     HIERARCHY_REPORTS.mismatch30,HIERARCHY_REPORTS.unverified,HIERARCHY_REPORTS.misVerificationTime,HIERARCHY_REPORTS.totalFleet,HIERARCHY_REPORTS.misInOut,HIERARCHY_REPORTS.misRedFlag,

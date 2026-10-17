@@ -58,7 +58,8 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportStyles, /\.reports-category-tabs button\[data-category="maintenance"\]/);
   assert.match(reportStyles, /\.generated-report-section \.reports-detail-table/);
   assert.match(reportsSource, /selectedReportByCategory/);
-  assert.match(reportsSource, /selectedReport && \(/);
+  assert.match(reportsSource, /selectedReport && !selectedReport.aggregateRows && \(/);
+  assert.match(reportsSource, /selectedReport\?\.aggregateRows && <RepairPercentageReport/);
   assert.doesNotMatch(reportsSource, /Search reports, references, sites/);
   assert.doesNotMatch(reportsSource, /className="reports-subtype-summary"/);
   assert.match(reportsSource, /category: "production", title: "Location wise opened BD"/);

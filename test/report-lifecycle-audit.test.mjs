@@ -28,15 +28,15 @@ test('every lifecycle phase appears in the appropriate reports regardless of emp
   assert.deepEqual(refs('Vehicle Arrival Red Flag Report'),['VERIFIED']);
   assert.deepEqual(refs('MIS Red Flag Report'),['VERIFIED']);
   assert.deepEqual(refs('Total Request Submitted Report'),requests.map(row=>row.ref));
-  for(const report of reports)for(const row of report.rows)for(const column of report.columns){
+  for(const report of reports)for(const row of report.aggregateRows ? report.aggregateRows(report.rows) : report.rows)for(const column of report.columns){
     assert.notEqual(String(column.value(row)),'NaN',`${report.title}: ${column.key}`);
     assert.notEqual(String(column.value(row)),'Invalid Date',`${report.title}: ${column.key}`);
   }
 });
 
-test('all 31 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
+test('all 32 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
   const tables=buildDirectorReportTables({requests,equipmentRecords:equipment,now});
-  assert.equal(tables.length,31);
+  assert.equal(tables.length,32);
   for(const table of tables){
     // The /api/exports/pdf route accepts up to 48 report columns (server.mjs).
     assert.ok(table.columns.length>0 && table.columns.length<=48,`${table.title}: ${table.columns.length} columns`);
