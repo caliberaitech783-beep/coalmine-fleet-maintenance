@@ -1128,9 +1128,10 @@ test("every site equipment and vehicle total opens exactly its registered assets
         assert.equal(details.title, `${site.site} · ${category === "vehicles" ? "Vehicle" : "Equipment"} records`);
         if (mode === "breakdown" && site[`${category}Bd`]) {
           const breakdown = clickSite(true);
-          assert.equal(breakdown.rows.length, site[`${category}Bd`]);
+          assert.equal(detailView(tree).rows.length, site[`${category}Bd`]);
+          assert.ok(breakdown.rows.length >= site[`${category}Bd`], 'BD Balance supplies all authorised sites for region totals');
           assert.match(breakdown.title, /BD Balance$/);
-          assert.ok(breakdown.rows.every((row) => expectedIds.includes(row.id)));
+          assert.ok(detailView(tree).rows.every((row) => expectedIds.includes(row.id)));
         }
       }
     }

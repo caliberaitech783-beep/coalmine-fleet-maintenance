@@ -2392,12 +2392,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       // clicked location is an initial browser selection, not a data restriction.
       const hierarchyBalance = key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:");
       const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance" || hierarchyBalance;
-      const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
-      const [offroadSite, offroadCategory = ""] = key.startsWith("offroad-site:") ? key.slice(13).split("|") : ["", ""];
+      const offroadCategory = key.startsWith("offroad-site:") ? key.slice(13).split("|")[1] || "" : "";
       return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
         && (key !== "fleet-breakdown:balance" || !oemChart.rows.some(row => row.record === record))
-        && (hierarchyBalance || !offroadSite || recordBelongsToSite(record, offroadSite))
-        && (hierarchyBalance || !key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
         && ((key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles") || ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())));
     }
