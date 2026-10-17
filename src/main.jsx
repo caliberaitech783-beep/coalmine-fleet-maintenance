@@ -1,3 +1,4 @@
+import { compressImageDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
 import {TENDER_PERMISSION_OPTIONS,TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from '../tender-permissions.mjs';
@@ -5646,15 +5647,15 @@ function EnhancedSpeechComplaint({
     const languageName = speechLanguages.find(([code]) => code === lang)?.[1] || "selected language";
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
       if (!mounted.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       mediaStream.current = stream;
       audioChunks.current = [];
-      const preferredType = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((type) => window.MediaRecorder.isTypeSupported?.(type));
-      const mediaRecorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
+      const preferredType = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((type) => window.MediaRecorder.isTypeSupported?.(type));
+      const mediaRecorder = new MediaRecorder(stream, { ...(preferredType ? { mimeType: preferredType } : {}), audioBitsPerSecond: 32000 });
       recorder.current = mediaRecorder;
       mediaRecorder.ondataavailable = (event) => {
         if (event.data?.size) audioChunks.current.push(event.data);
@@ -5668,9 +5669,9 @@ function EnhancedSpeechComplaint({
           setNote("No audio was captured. Please try recording again.");
           return;
         }
-        if (blob.size > 3 * 1024 * 1024) {
+        if (blob.size > AUDIO_MAX_BYTES) {
           setAudioData("");
-          setNote("Recording is too large. Please record a shorter message.");
+          setNote("Recording exceeds 1 MB. Please record a shorter message.");
           return;
         }
         const reader = new FileReader();
@@ -5690,7 +5691,7 @@ function EnhancedSpeechComplaint({
       audioOnlyMode.current = true;
       setListening(true);
       setNote("Recording audio… live transcription is unavailable in this browser. Tap Stop when finished.");
-      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 45 seconds. Audio saved."), 45000);
+      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 2 minutes. Audio saved."), 120000);
       return;
     }
     const r = new Speech();
@@ -5714,7 +5715,7 @@ function EnhancedSpeechComplaint({
       setListening(true);
       setNote(`Listening in ${languageName}… pause up to 12 seconds while speaking.`);
       resetSilence();
-      maxTimer.current = setTimeout(stop, 45000);
+      maxTimer.current = setTimeout(stop, 120000);
     };
     r.onresult = (e) => {
       if (!mounted.current) return;
@@ -5770,7 +5771,7 @@ function EnhancedSpeechComplaint({
       audioOnlyMode.current = true;
       setListening(true);
       setNote("Recording audio… live transcription could not start. Tap Stop when finished.");
-      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 45 seconds. Audio saved."), 45000);
+      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 2 minutes. Audio saved."), 120000);
     }
   };
   return (
@@ -5824,6 +5825,7 @@ function EnhancedSpeechComplaint({
 }
 const SpeechComplaint = EnhancedSpeechComplaint;
 function readMeterEvidence(file) {
+  if (file?.type.startsWith("image/")) return compressImageDataUrl(file);
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error("Select a KMR/HMR evidence file."));
     if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) || file.size > 5 * 1024 * 1024) {
@@ -6859,14 +6861,14 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
       return;
     }
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
       if(!mountedRef.current){stream.getTracks().forEach((track)=>track.stop());return;}
       streamRef.current=stream;
       chunksRef.current=[];
       setAudioData("");
       setRecordingSeconds(0);
-      const preferredType=["audio/mp4","audio/webm;codecs=opus","audio/webm"].find((type)=>window.MediaRecorder.isTypeSupported?.(type));
-      const recorder=preferredType?new MediaRecorder(stream,{mimeType:preferredType}):new MediaRecorder(stream);
+      const preferredType=["audio/webm;codecs=opus","audio/mp4","audio/webm"].find((type)=>window.MediaRecorder.isTypeSupported?.(type));
+      const recorder=new MediaRecorder(stream,{...(preferredType?{mimeType:preferredType}:{}),audioBitsPerSecond:32000});
       recorderRef.current=recorder;
       recorder.ondataavailable=(event)=>{if(event.data?.size)chunksRef.current.push(event.data);};
       recorder.onstop=()=>{
@@ -6877,7 +6879,7 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
         const mimeType=String(recorder.mimeType||preferredType||"audio/webm").split(";")[0];
         const blob=new Blob(chunksRef.current,{type:mimeType});
         if(!blob.size){setError("No voice was captured. Please record again.");return;}
-        if(blob.size>3*1024*1024){setError("Voice message is too large. Record a shorter message.");return;}
+        if(blob.size>AUDIO_MAX_BYTES){setError("Voice message exceeds 1 MB. Record a shorter message.");return;}
         const reader=new FileReader();
         reader.onload=()=>{if(mountedRef.current){setAudioData(String(reader.result||""));setRecordingNote("Voice message ready. Play it before sending if needed.");}};
         reader.onerror=()=>{if(mountedRef.current)setError("Could not prepare the voice message. Please record again.");};
@@ -6887,7 +6889,7 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
       setRecording(true);
       setRecordingNote("Recording from your microphone...");
       elapsedTimerRef.current=window.setInterval(()=>setRecordingSeconds((value)=>value+1),1000);
-      maximumTimerRef.current=window.setTimeout(stopRecording,60000);
+      maximumTimerRef.current=window.setTimeout(stopRecording,120000);
     }catch{
       releaseMicrophone();
       setRecording(false);
@@ -6924,28 +6926,6 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
   </Modal>;
 }
 
-// Pasted screenshots and photos are scaled to at most 1600 px and re-encoded as
-// JPEG on a white background, so an announcement image stays a few hundred KB.
-const ANNOUNCEMENT_IMAGE_MAX_SIDE=1600;
-function shrinkAnnouncementImage(file){
-  return new Promise((resolve,reject)=>{
-    if(!file||!/^image\/(png|jpeg|webp|gif)$/.test(file.type))return reject(new Error('Paste or choose a PNG, JPEG, WebP or GIF image.'));
-    const url=URL.createObjectURL(file),image=new Image();
-    image.onload=()=>{
-      const scale=Math.min(1,ANNOUNCEMENT_IMAGE_MAX_SIDE/Math.max(image.naturalWidth,image.naturalHeight));
-      const canvas=document.createElement('canvas');
-      canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
-      const context=canvas.getContext('2d');
-      context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
-      context.drawImage(image,0,0,canvas.width,canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/jpeg',0.85));
-    };
-    image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('This image could not be read.'));};
-    image.src=url;
-  });
-}
-
 // Loads an announcement image with the signed-in token (an <img src> cannot send it).
 function AnnouncementImage({id,token,className="announcement-image"}) {
   const [src,setSrc]=useState("");
@@ -6969,7 +6949,7 @@ function AnnouncementComposer({session,onClose,onSent}) {
   const imageInput=useRef(null);
   const attachImage=async(file)=>{
     setError("");
-    try{setImage(await shrinkAnnouncementImage(file));}
+    try{setImage(await compressImageDataUrl(file));}
     catch(imageError){setError(imageError.message);}
   };
   const pasteImage=(event)=>{
@@ -10178,7 +10158,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         {etcDelayed && <label className="full">Delayed reason *<select name="delayedReason" required defaultValue={etcDelayedReasonOptions.includes(request.delayedReason) ? request.delayedReason : ""} key={editCategory}><option value="">Select delayed reason</option>{etcDelayedReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><small>The ETC is being pushed later. Reasons shown are for breakdown type {editCategory || "Breakdown"}.</small></label>}
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(displayedInitialEtcLabel)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} required={requireMeters} />
-        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
+        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "Images compressed to 100 KB maximum · PDF maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
@@ -10264,7 +10244,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       <div className="formgrid">
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly required={requireMeters} />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required={requireMeters} />
-        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>
+        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "Images compressed to 100 KB maximum · PDF maximum 5 MB"}</small></label>
         <label>Closing date *<DateInput name="closingDate" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (12-hour with seconds) *<input name="closingTime" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {displayDateTime(request.closedAt)}. The original and replacement will be retained.</small></label>}
@@ -10345,20 +10325,15 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const submitLock = useRef(false);
   const closeDialog = () => { if (!submitLock.current) close(); };
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
-  const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read the trip-card image."));
-    reader.readAsDataURL(file);
-  });
+  const fileAsDataUrl = (file) => compressImageDataUrl(file);
   return <Modal title={`Verify closed request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
       const form = new FormData(event.currentTarget);
       if (!tripCardFile) return setFormError("Upload the first-trip card image.");
-      if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
-        return setFormError("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
+      if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type))) {
+        return setFormError("Upload a JPEG, PNG, or WebP trip-card image compressed to 100 KB maximum.");
       }
       setFormError("");
       submitLock.current = true;
@@ -10403,7 +10378,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
             setTripCardFile(file);
             setTripCardPreview(file ? URL.createObjectURL(file) : "");
           }} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button>
-          <small>JPEG, PNG or WebP · maximum 5 MB</small>
+          <small>Images target 10–20 KB · maximum 100 KB · check text readability</small>
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
         <label className="full">Trip-card update remark (optional)
@@ -10467,6 +10442,7 @@ function ProductionFirstTripForm({ request, close, onSave }) {
 
 const ticketCategories = ["General", "Production", "Maintenance", "MIS", "Equipment", "System access"];
 function readTicketAttachment(file) {
+  if (file?.type.startsWith("image/")) return compressImageDataUrl(file);
   return new Promise((resolve, reject) => {
     if (!file) return resolve("");
     const supported = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
@@ -10536,7 +10512,7 @@ function TicketCreateForm({ session, close, onCreated }) {
 
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
-        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Images compressed to 100 KB maximum · video maximum 10 MB"}</small></label>
       </div>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving || !sitesLoaded || (session?.role !== "super" && !ticketSites.length)}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
@@ -10594,7 +10570,7 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   return <Modal title={`Resolve ${ticket.reference}`} close={dismiss}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
       <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
-      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Images compressed to 100 KB maximum · video maximum 10 MB"}</small></label>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>

@@ -1,3 +1,4 @@
+import { dataUrlBytes, IMAGE_MAX_BYTES } from "./media-policy.mjs";
 /**
  * Announcements: an Admin or Super Admin broadcasts a short text to every user.
  * Each user sees it as a blocking popup until they close it. Closing is
@@ -16,7 +17,7 @@ export function normalizeAnnouncement(value = "") {
 export function announcementImageError(image = "") {
   if (!image) return "";
   if (typeof image !== "string" || !ANNOUNCEMENT_IMAGE_PATTERN.test(image)) return "Attach a PNG, JPEG, WebP or GIF image.";
-  if (image.length > ANNOUNCEMENT_IMAGE_MAX_CHARS) return "The image is too large. Use a smaller image.";
+  if (dataUrlBytes(image) > IMAGE_MAX_BYTES) return "The image is too large. Use a smaller image.";
   return "";
 }
 

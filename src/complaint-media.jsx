@@ -8,7 +8,7 @@ export function ComplaintMediaInputs() {
       <button type="button" className="camera-upload-button" onClick={event=>capturePhotoForInput(event.currentTarget.previousElementSibling)}>Take photo</button></label>
     <label>Video<input name="complaintVideo" type="file" accept="video/mp4,video/webm,video/quicktime" />
       <button type="button" className="camera-upload-button" onClick={event=>capturePhotoForInput(event.currentTarget.previousElementSibling,{accept:'video/mp4,video/webm,video/quicktime'})}>Record video</button></label>
-    <small>One photo and one video, up to 5 MB each. Camera recording depends on your device and browser. Text and voice input remain available.</small>
+    <small>One photo and one video, photos compressed to 100 KB maximum and videos up to 5 MB. Camera recording depends on your device and browser. Text and voice input remain available.</small>
   </fieldset>;
 }
 export function ComplaintMediaView({request,token,Dialog}) {

@@ -145,7 +145,7 @@ export function requestCorrectionValidationError({type,reason,evidenceData,evide
   if(!requestCorrectionType(type))return 'Select a valid correction type.';
   const cleanReason=String(reason||'').trim();
   if(cleanReason.length<10||cleanReason.length>1000)return 'Enter a correction reason between 10 and 1,000 characters.';
-  if(!validCorrectionEvidence(evidenceData))return 'Upload a JPG, PNG, or WebP correction image up to 5 MB.';
+  if(!validCorrectionEvidence(evidenceData))return 'Upload a JPG, PNG, or WebP correction image up to 100 KB.';
   if(!String(evidenceName||'').trim())return 'The correction image needs a file name.';
   try{normalizeRequestCorrectionChanges(type,proposedChanges,originalValues)}catch(error){return error.message}
   return '';
@@ -160,7 +160,7 @@ export function validCorrectionEvidence(value=''){
   const match=String(value).match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
   if(!match)return false;
   const padding=match[1].endsWith('==')?2:match[1].endsWith('=')?1:0;
-  return Math.floor((match[1].length*3)/4)-padding<=5*1024*1024;
+  return Math.floor((match[1].length*3)/4)-padding<=100*1024;
 }
 
 export function requestCorrectionChangedFields(type,original={},proposed={}){

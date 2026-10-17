@@ -1,5 +1,5 @@
 export const SESSION_MESSAGE_MAX_LENGTH = 500;
-export const SESSION_MESSAGE_MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+export const SESSION_MESSAGE_MAX_AUDIO_BYTES = 1024 * 1024;
 
 export function normalizeSessionMessage(value = "") {
   return String(value ?? "").trim();
@@ -24,6 +24,6 @@ export function sessionMessagePayloadValidationError({message = "", audioData = 
   const normalizedMessage = normalizeSessionMessage(message);
   if (!normalizedMessage && !audioData) return "Record a voice message or write a message before sending.";
   if (normalizedMessage.length > SESSION_MESSAGE_MAX_LENGTH) return `Keep the message within ${SESSION_MESSAGE_MAX_LENGTH} characters.`;
-  if (!validSessionMessageAudioDataUrl(audioData)) return "Voice message must be a supported recording up to 3 MB.";
+  if (!validSessionMessageAudioDataUrl(audioData)) return "Voice message must be a supported recording up to 1 MB.";
   return "";
 }

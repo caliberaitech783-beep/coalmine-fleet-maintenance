@@ -5788,8 +5788,8 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const attachmentType=String(req.body?.attachmentType||'').slice(0,100);
     if(!priority)return res.status(400).json({error:'Select a ticket priority.'});
     if(!message&&!messageAudio)return res.status(400).json({error:'Write a message or record an audio message.'});
-    if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
-    if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
+    if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 1 MB.'});
+    if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image up to 100 KB or video up to 10 MB.'});
     const user=await currentUserRecord(req.session,client);
     const assignedSites=userSiteSelection(user);
     const site=req.session.role==='super'
@@ -5854,8 +5854,8 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     const reference=String(req.body?.reference||'').trim();
     if(!reference)return res.status(400).json({error:'Ticket reference is required.'});
     if(!resolution&&!resolutionAudio)return res.status(400).json({error:'Write a resolution message or record resolution audio.'});
-    if(!validTicketMediaDataUrl(resolutionAudio,{kind:'audio'}))return res.status(400).json({error:'Resolution audio must be a supported recording up to 3 MB.'});
-    if(!validTicketMediaDataUrl(resolutionAttachmentData))return res.status(400).json({error:'Upload a supported resolution image or video up to 10 MB.'});
+    if(!validTicketMediaDataUrl(resolutionAudio,{kind:'audio'}))return res.status(400).json({error:'Resolution audio must be a supported recording up to 1 MB.'});
+    if(!validTicketMediaDataUrl(resolutionAttachmentData))return res.status(400).json({error:'Upload a supported resolution image up to 100 KB or video up to 10 MB.'});
     await client.query('BEGIN');
     const result=await client.query(`UPDATE crm_tickets SET status='Resolved',resolution_message=$1,resolution_audio=$2,
       resolution_attachment_data=$3,resolution_attachment_name=$4,resolution_attachment_type=$5,resolved_by=$6,resolved_at=NOW(),resolution_acknowledged_at=NULL
@@ -6987,9 +6987,9 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
-    if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
+    if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 1 MB.'});
     const complaintMedia=req.body?.complaintMedia??[];
-    if(req.body?.complaintMedia!==undefined&&!validComplaintMedia(complaintMedia))return res.status(400).json({error:'Attach at most one photo and one video, in supported formats, up to 5 MB each.'});
+    if(req.body?.complaintMedia!==undefined&&!validComplaintMedia(complaintMedia))return res.status(400).json({error:'Attach at most one photo and one video, in supported formats, photos up to 100 KB and videos up to 5 MB.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     const requester=await currentUserRecord(req.session);
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
@@ -7125,7 +7125,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     // Validate supplied data here; Maintenance User completeness is checked under the row lock.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
-    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card (images up to 100 KB, PDF up to 5 MB).`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(maintenanceMetersRequired(req.session)&&req.body?.openingMeterReading===undefined){
@@ -7186,7 +7186,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and 12-hour time with AM/PM.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
-    if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
+    if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 1 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1`,[reference]);
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
@@ -7220,7 +7220,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
     if(closingMeterReading&&!validMeterReading(closingMeterReading))throw Object.assign(new Error('Enter a valid closing HMR/KMR reading.'),{status:400});
     validateClosingMeterReadings(before,{meterType,openingMeterReadings,openingMeterReading,closingMeterReadings,closingMeterReading});
-    if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.'),{status:400});
+    if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card (images up to 100 KB, PDF up to 5 MB).'),{status:400});
     if(openingMeterReading||openingMeterFile||closingMeterReading||closingMeterFile||Object.keys(openingMeterReadings).length||Object.keys(closingMeterReadings).length){
       const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
       if(!['KMR','HMR'].includes(effectiveMeterType))throw Object.assign(new Error('Choose a valid KMR/HMR meter type.'),{status:400});
@@ -7529,7 +7529,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const closingMeterReadings=req.body?.closingMeterReadings ?? {};
     if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and 12-hour time with AM/PM.'});
-    if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
+    if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 100 KB.'});
     if((closingMeterReading&&!validMeterReading(closingMeterReading))||(!closingMeterReading&&!Object.keys(closingMeterReadings).length))return res.status(400).json({error:'Enter a valid closing HMR or KMR reading.'});
     const misUser=await currentUserRecord(req.session);
     const misScope=userSiteScope(misUser);

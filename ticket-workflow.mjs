@@ -7,9 +7,9 @@ export function validTicketMediaDataUrl(value, {kind = "attachment"} = {}) {
   const match = String(value).match(dataUrlPattern);
   if (!match) return false;
   const mime = match[1].toLowerCase();
-  const bytes = Math.floor(match[2].length * 3 / 4);
-  if (kind === "audio") return ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"].includes(mime) && bytes <= 3 * 1024 * 1024;
-  return (["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"].includes(mime)) && bytes <= 10 * 1024 * 1024;
+  const bytes = Math.floor(match[2].length * 3 / 4) - (match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0);
+  if (kind === "audio") return ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav"].includes(mime) && bytes <= 1024 * 1024;
+  return (["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"].includes(mime)) && bytes <= (mime.startsWith("image/") ? 100 * 1024 : 10 * 1024 * 1024);
 }
 
 export function ticketSiteSlug(site) {

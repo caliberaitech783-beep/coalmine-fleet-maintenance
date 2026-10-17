@@ -1,3 +1,4 @@
+import { compressImageDataUrl } from "../media-policy.mjs";
 import React,{useEffect,useMemo,useState} from 'react';
 import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,Trash2,X} from 'lucide-react';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields,requestCorrectionReviewRemarkError} from '../request-correction-policy.mjs';
@@ -118,9 +119,11 @@ function NewCorrectionForm({requests,token,Dialog,onSaved,allowedTypes=[],fieldO
   const readEvidence=async(file)=>{
     setError('');
     if(!file){setEvidence(null);return}
-    if(!/^image\/(jpeg|png|webp)$/.test(file.type)||file.size>5*1024*1024){setEvidence(null);setError('Upload a JPG, PNG, or WebP image up to 5 MB.');return}
-    const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Could not read the selected image.'));reader.readAsDataURL(file)});
-    setEvidence({data,name:file.name,type:file.type});
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type)){setEvidence(null);setError('Upload a JPG, PNG, or WebP image compressed to 100 KB maximum.');return}
+    try {
+      const data=await compressImageDataUrl(file);
+      setEvidence({data,name:file.name,type:data.slice(5,data.indexOf(';'))});
+    } catch(error) { setEvidence(null);setError(error.message); }
   };
   const submit=async(event)=>{
     event.preventDefault();setWorking(true);setError('');
@@ -136,7 +139,7 @@ function NewCorrectionForm({requests,token,Dialog,onSaved,allowedTypes=[],fieldO
     <div className="correction-form-grid top"><SearchableSelect label="Maintenance request" options={requestOptions} value={reference} onChange={setReference} required placeholder="Search request, door, equipment, chassis, or site" emptyText="No matching maintenance request found." /><label><span>Correction type *</span><select value={type} onChange={(event)=>setType(event.target.value)}>{correctionTypes.map((key)=><option key={key} value={key}>{REQUEST_CORRECTION_TYPES[key].label}</option>)}</select></label></div>
     {selected&&<><div className="correction-request-summary"><b><RequestTimelineButton reference={selected.ref} token={token} Dialog={Dialog} /></b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
     <label><span>Reason for correction * (minimum 10 characters)</span><textarea rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} placeholder="Explain the error, the correct value, and why the record must be changed." required /></label>
-    <label className="correction-upload"><ImageUp /><span><b>{evidence?.name||'Upload correction evidence *'}</b><small>JPG, PNG, or WebP · maximum 5 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>readEvidence(event.target.files?.[0])} required={!evidence} /></label>
+    <label className="correction-upload"><ImageUp /><span><b>{evidence?.name||'Upload correction evidence *'}</b><small>JPG, PNG, or WebP · compressed to 100 KB maximum</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>readEvidence(event.target.files?.[0])} required={!evidence} /></label>
     {error&&<div className="correction-notice error">{error}</div>}
     <div className="correction-submit"><button type="submit" className="primary" disabled={working||!selected||!evidence||reason.trim().length<10}><Send /> {working?'Sending…':'Request PM approval'}</button></div>
   </form>;
