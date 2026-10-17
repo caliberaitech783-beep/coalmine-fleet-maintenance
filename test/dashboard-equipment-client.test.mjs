@@ -63,8 +63,8 @@ test("fleet records and scope are applied atomically without profile-based doubl
   assert.match(dashboard,/scope:equipmentScope/);
   assert.match(dashboard,/Array\.isArray\(equipmentScope\?\.allowedSites\)/);
   assert.match(dashboard,/equipmentScope\?\.restrictToScope===true/);
-  assert.match(dashboard,/const scopedBreakdowns=equipmentLoaded\?/);
-  assert.match(dashboard,/restrictToScope\?\[\]:requests\):\[\];/);
+  assert.match(dashboard,/const scopedBreakdowns=useMemo\(\(\)=>equipmentLoaded\?/);
+  assert.match(dashboard,/restrictToScope\?\[\]:requests\):\[\],\[equipmentLoaded,normalizedAllowedSites,requests,restrictToScope\]\)/);
   assert.doesNotMatch(dashboard,/allowedSites = null|allowedRegions = null/);
   assert.doesNotMatch(dashboard,/profileManagerSites|profileLocation\?\[profileLocation\]/);
 });
@@ -81,8 +81,8 @@ test("a failed profile request cannot turn an otherwise valid fleet response int
   assert.match(app,/requestsLoaded\s*\? <Dashboard/);
   assert.doesNotMatch(app,/profileManagerSites|allowedSites=\{|allowedRegions=\{|restrictToScope=/);
   assert.doesNotMatch(normal,/allowedSites=\{|allowedRegions=\{|restrictToScope/);
-  assert.match(dashboard,/const scopedBreakdowns=equipmentLoaded\?/);
-  assert.match(dashboard,/restrictToScope\?\[\]:requests\):\[\];/);
+  assert.match(dashboard,/const scopedBreakdowns=useMemo\(\(\)=>equipmentLoaded\?/);
+  assert.match(dashboard,/restrictToScope\?\[\]:requests\):\[\],\[equipmentLoaded,normalizedAllowedSites,requests,restrictToScope\]\)/);
   assert.match(dashboard,/equipmentLoaded \? maintenanceAvailabilityTab === "breakdown"/);
   assert.match(dashboard,/equipmentLoaded\?<><div className="mine-request-lifecycle-summary"/);
   assert.match(dashboard,/equipmentLoaded\?<div className="mine-breakdown-trend-body"/);

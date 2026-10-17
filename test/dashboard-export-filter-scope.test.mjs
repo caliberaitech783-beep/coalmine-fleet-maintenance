@@ -29,7 +29,7 @@ test('region, site and authorized scope intersect, including zero matches and re
   assert.deepEqual(scope().sites,['Sasti OC','Majri OC','Jayant OC']);
 });
 test('site and shift predicates are combined before dashboard exports receive requests',()=>{
-  const values={selectedRegion:null,dashboardSite:'Sasti OC',activeSites:['Sasti OC'],recordBelongsToSite,
+  const values={useMemo:fn=>fn(),dashboardShift:'A',shiftRecords:[],selectedRegion:null,dashboardSite:'Sasti OC',activeSites:['Sasti OC'],recordBelongsToSite,
     requestHasSelectedDashboardShift:r=>r.shift==='A',scopedBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2},{site:'Majri OC',shift:'A',id:3}]};
   const code=source.slice(source.indexOf('  const locationBreakdowns ='),source.indexOf('  const {liveRequests:',source.indexOf('  const locationBreakdowns =')));
   const rows=new Function(...Object.keys(values),code+'return locationBreakdowns;')(...Object.values(values));

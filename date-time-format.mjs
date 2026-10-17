@@ -7,6 +7,10 @@ const LOCAL_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[T\s\u00b7\u00c2]+(\d{2
 const TIME_ONLY_PATTERN = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
 
 const pad = (value) => String(value).padStart(2, '0');
+const indiaPartsFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: INDIA_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+});
 
 function localDate(value) {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -39,16 +43,7 @@ function localDate(value) {
 function indiaParts(value) {
   const date = localDate(value);
   if (!date) return null;
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: INDIA_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
+  const parts = indiaPartsFormatter.formatToParts(date);
   return Object.fromEntries(parts.map(({type, value: partValue}) => [type, partValue]));
 }
 

@@ -1909,11 +1909,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setDashboardFrom((from) => bound === "from" || !from || value < from ? value : from);
     setDashboardTo((to) => bound === "to" || !to || value > to ? value : to);
   };
-  const normalizedAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
-  const normalizedAllowedRegions=Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null;
+  const normalizedAllowedSites=useMemo(()=>Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null,[equipmentScope]);
+  const normalizedAllowedRegions=useMemo(()=>Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null,[equipmentScope]);
   const restrictToScope=equipmentScope?.restrictToScope===true;
-  const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
-  const scopedBreakdowns=equipmentLoaded?(normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests):[];
+  const scopedEquipment=useMemo(()=>normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords,[normalizedAllowedSites,equipmentRecords,restrictToScope]);
+  const scopedBreakdowns=useMemo(()=>equipmentLoaded?(normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests):[],[equipmentLoaded,normalizedAllowedSites,requests,restrictToScope]);
   const requestMatchesDashboardShift = (record = {}, value) => timestampMatchesDashboardShift(value,{site:record.site||record.reportSite||record.currentLocation||record.location,shifts:shiftRecords,shift:dashboardShift});
   const requestHasSelectedDashboardShift = (record = {}) => dashboardShift === "all" || [
     record.start,record.createdAt,record.acceptedAt,record.inProgressAt,record.closedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,record.idealRequestedAt,record.idealApprovedAt,
@@ -1931,24 +1931,24 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return record.start || record.startedAt || record.createdAt;
   };
   const requestMatchesLifecycleShift = (record = {}, event = "") => dashboardShift === "all" || requestMatchesDashboardShift(record, dashboardLifecycleShiftTimestamp(record, event));
-  const availableRegions=subsidiaryData.filter((region)=>{
+  const availableRegions=useMemo(()=>subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
-  });
+  }),[subsidiaryData,normalizedAllowedRegions,normalizedAllowedSites]);
   const selectedRegion = availableRegions.find((region) => region.code === dashboardRegion);
-  const selectedSites = (selectedRegion?.sites || [...new Set([...availableRegions.flatMap(region => region.sites), ...scopedEquipment.map(record => record.currentLocation || record.location || record.site), ...scopedBreakdowns.map(record => record.site)].filter(Boolean))]).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)));
-  const activeSites = dashboardSite !== "all" ? [dashboardSite] : selectedSites;
-  const visibleEquipment = selectedRegion || dashboardSite !== "all" ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
-  const resolveEquipment = createFleetAssetResolver(visibleEquipment);
+  const selectedSites = useMemo(() => (selectedRegion?.sites || [...new Set([...availableRegions.flatMap(region => region.sites), ...scopedEquipment.map(record => record.currentLocation || record.location || record.site), ...scopedBreakdowns.map(record => record.site)].filter(Boolean))]).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))), [selectedRegion,availableRegions,scopedEquipment,scopedBreakdowns,normalizedAllowedSites]);
+  const activeSites = useMemo(() => dashboardSite !== "all" ? [dashboardSite] : selectedSites, [dashboardSite,selectedSites]);
+  const visibleEquipment = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment, [selectedRegion,dashboardSite,scopedEquipment,activeSites]);
+  const resolveEquipment = useMemo(() => createFleetAssetResolver(visibleEquipment), [visibleEquipment]);
   const equipmentForRequest = (request = {}) => {
     const {assetIndex} = resolveEquipment(request);
     return assetIndex === null ? undefined : visibleEquipment[assetIndex];
   };
-  const locationBreakdowns = selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site)) && requestHasSelectedDashboardShift(record)) : scopedBreakdowns.filter(requestHasSelectedDashboardShift);
-  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardFrom, dashboardTo);
-  const visibleBreakdowns = historicalRequests
-    .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
-  const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
+  const locationBreakdowns = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site)) && requestHasSelectedDashboardShift(record)) : scopedBreakdowns.filter(requestHasSelectedDashboardShift), [selectedRegion,dashboardSite,scopedBreakdowns,activeSites,dashboardShift,shiftRecords]);
+  const {liveRequests: liveBreakdowns, historicalRequests} = useMemo(() => splitDashboardRequests(locationBreakdowns, dashboardFrom, dashboardTo), [locationBreakdowns,dashboardFrom,dashboardTo]);
+  const visibleBreakdowns = useMemo(() => historicalRequests
+    .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveEquipment,visibleEquipment]);
+  const liveFleetCounts = useMemo(() => fleetChartCounts(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
@@ -1985,7 +1985,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownTrendPeriodDays = actualTrendDays.length;
   const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendPeriodDays ? (breakdownTrendTotal / breakdownTrendPeriodDays).toFixed(1) : "0.0";
-  const kpis = liveEquipmentMetrics(visibleEquipment, liveBreakdowns);
+  const kpis = useMemo(() => liveEquipmentMetrics(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
   const throughputRegions = availableRegions.filter((region) => !selectedRegion || region.code === selectedRegion.code);
   const selectedThroughputRegion = throughputRegions.find((region) => region.code === throughputRegion);
   const throughputSiteOptions = (selectedThroughputRegion?.sites || []).filter((site) => trendAvailableSites.includes(site));
@@ -3323,9 +3323,9 @@ function useSortableRows(rows, defaultSort = "", valueForKey = (row, key) => row
   const sortedRows = useMemo(() => {
     if (!sort.key) return rows;
     const durationColumn = typeof durationSorting === "function" ? durationSorting(sort.key) : durationSorting && isDurationColumn("", sort.key);
-    return rows.map((row, index) => ({ row, index })).sort((left, right) => {
-      const a = comparableValue(valueForKey(left.row, sort.key));
-      const b = comparableValue(valueForKey(right.row, sort.key));
+    return rows.map((row, index) => ({ row, index, value: comparableValue(valueForKey(row, sort.key)) })).sort((left, right) => {
+      const a = left.value;
+      const b = right.value;
       if (durationColumn) return compareDurationValues(a, b, sort.direction) || left.index - right.index;
       let result;
       if (typeof a === "number" && typeof b === "number") result = a - b;
@@ -7528,7 +7528,8 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     : formatDisplayDateTime(value);
   const reportRequestStatus = requestStatusLabel;
   const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
-  const vehicleHistoryReportRows = useMemo(() => vehicleFleetRows(equipmentRecords, reportRequests, transferRecords), [equipmentRecords, reportRequests, transferRecords]);
+  const needsVehicleReports = activeCategory.id === "vehicle-history" || reportZipOpen;
+  const vehicleHistoryReportRows = useMemo(() => needsVehicleReports ? vehicleFleetRows(equipmentRecords, reportRequests, transferRecords) : [], [needsVehicleReports,equipmentRecords, reportRequests, transferRecords]);
   const breakdownRegionSites = breakdownRegion === "all" ? null : REGION_DATA.find((region) => region.code === breakdownRegion)?.sites || [];
   const breakdownSiteOptions = useMemo(() => {
     const configured = breakdownRegion === "all" ? REGION_DATA.flatMap((region) => region.sites) : breakdownRegionSites;
@@ -7537,8 +7538,8 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       .filter((site) => !breakdownRegionSites || breakdownRegionSites.some((allowed) => displaySiteName(allowed) === displaySiteName(site)))
       .sort((left, right) => sortCollator.compare(left, right));
   }, [breakdownRegion, reportRequests]);
-  const maximumVehicleBreakdownRows = useMemo(() => vehicleBreakdownSummaryRows(reportRequests, {month: breakdownMonth, sites: breakdownRegionSites, site: breakdownSite}), [reportRequests, breakdownMonth, breakdownRegion, breakdownSite]);
-  const vehicleCommonRemarksRows = useMemo(() => vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows), [equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows]);
+  const maximumVehicleBreakdownRows = useMemo(() => needsVehicleReports ? vehicleBreakdownSummaryRows(reportRequests, {month: breakdownMonth, sites: breakdownRegionSites, site: breakdownSite}) : [], [needsVehicleReports,reportRequests, breakdownMonth, breakdownRegion, breakdownSite]);
+  const vehicleCommonRemarksRows = useMemo(() => needsVehicleReports ? vehicleCommonRemarkRows(equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows) : [], [needsVehicleReports,equipmentRecords, reportRequests, transferRecords, vehicleHistoryReportRows]);
   const fleetStatusRows = useMemo(() => {
     const roadStatuses = liveEquipmentRoadStatuses(equipmentRecords, reportRequests);
     return equipmentRecords.map((record, index) => ({
@@ -7700,11 +7701,11 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
-  const departmentReports = useMemo(() => buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
+  const departmentReports = useMemo(() => buildDepartmentReports({ requests: shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances, includeAvailabilityRows: activeCategory.id === "maintenance" || reportZipOpen }).map((report) => ({
     ...report,
     // Department reports return plain status text; render it as the same coloured pill the other reports use.
     columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
-  })), [shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, reportFrom, availabilityFrom, reportTo, availabilityTo, reportNow, showAllAcceptances]);
+  })), [shiftScopedReportRequests, equipmentRecords, transferRecords, shiftRecords, reportFrom, availabilityFrom, reportTo, availabilityTo, reportNow, showAllAcceptances, activeCategory.id, reportZipOpen]);
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"&&!REMOVED_REPORT_TITLES.has(report.title)),
     {category: "vehicle-history", title: VEHICLE_HISTORY_REPORT, description: "Every vehicle with its door number, latest available driver, make, model, location, identity details, and lifetime breakdown count. Select a door number for the complete chronology.", rows: vehicleHistoryReportRows, columns: vehicleHistoryOverviewColumns, dateValue: (row) => row.latestBreakdownAt || reportGeneratedAt, emptyMessage: "No vehicles are available in the equipment master or request history", rowKey: (row) => `vehicle-${row.vehicleKey}`},
@@ -7726,11 +7727,13 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
   const invalidReportRange = Boolean(reportFrom && reportTo && !validReportDateRange(reportFrom, reportTo));
+  const reportFromEpoch = reportFrom ? indiaDateTimeEpoch(reportFrom) : null;
+  const reportToEpoch = reportTo ? indiaDateTimeEpoch(reportTo) : null;
   const selectedReportRows = invalidReportRange ? [] : reportRowsForShift(selectedReport,(selectedReport?.rows || []).filter(row => {
     if (selectedReport.title === "Open Off road Cases" && offRoadAge === "ten" && !olderThanTenDays(row, reportNow)) return false;
     if (selectedReport.title === "Availability Report" || (!reportFrom && !reportTo)) return true;
     const timestamp = indiaDateTimeEpoch(selectedReport.dateValue?.(row));
-    return Number.isFinite(timestamp) && (!reportFrom || timestamp >= indiaDateTimeEpoch(reportFrom)) && (!reportTo || timestamp <= indiaDateTimeEpoch(reportTo));
+    return Number.isFinite(timestamp) && (reportFromEpoch === null || timestamp >= reportFromEpoch) && (reportToEpoch === null || timestamp <= reportToEpoch);
   }));
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));

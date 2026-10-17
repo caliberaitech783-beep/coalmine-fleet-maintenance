@@ -8,11 +8,11 @@ const brandStyles = fs.readFileSync(new URL("../src/brand-theme.css", import.met
 
 test("dashboard region selection exposes its sites and filters every scoped data source", () => {
   assert.match(source, /const \[dashboardSite, setDashboardSite\] = useState\("all"\)/);
-  assert.match(source, /const selectedSites = \(selectedRegion\?\.sites \|\|/);
-  assert.match(source, /const activeSites = dashboardSite !== "all" \? \[dashboardSite\] : selectedSites/);
-  assert.match(source, /visibleEquipment = selectedRegion \|\| dashboardSite !== "all" \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
+  assert.match(source, /const selectedSites = useMemo\(\(\) => \(selectedRegion\?\.sites \|\|/);
+  assert.match(source, /const activeSites = useMemo\(\(\) => dashboardSite !== "all" \? \[dashboardSite\] : selectedSites/);
+  assert.match(source, /visibleEquipment = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
   assert.doesNotMatch(source, /visibleUsers = selectedRegion/);
-  assert.match(source, /locationBreakdowns = selectedRegion \|\| dashboardSite !== "all" \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
+  assert.match(source, /locationBreakdowns = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
   assert.doesNotMatch(source, /selectedRegion && <label className="mine-site-filter">/);
   assert.match(source, /<select aria-label="Site" value=\{dashboardSite\}/);
   assert.match(source, /selectedSites\.map\(\(site\) => <option key=\{site\} value=\{site\}>\{site\}<\/option>\)/);
@@ -26,8 +26,8 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
-  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
-  assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);
+  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = useMemo\(\(\) => splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
+  assert.match(source, /const visibleBreakdowns = useMemo\(\(\) => historicalRequests\s*\.map/);
   assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
   assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
