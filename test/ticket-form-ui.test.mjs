@@ -66,7 +66,7 @@ function harness(config,{fetch:fetchImpl=async()=>response(),readAttachment}={})
   class FileReader{
     readAsDataURL(file){if(file.failRead)this.onerror();else{this.result=file.data||'data:image/png;base64,dGVzdA==';this.onload();}}
   }
-  const readTicketAttachment=readAttachment||new Function('FileReader',`${attachmentSource};return readTicketAttachment;`)(FileReader);
+  const readTicketAttachment=readAttachment||new Function('FileReader','compressImageDataUrl',`${attachmentSource};return readTicketAttachment;`)(FileReader, async file => { if(file.size > 100*1024) throw new Error('Crop the image to fit 100 KB.'); return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read image.'));reader.readAsDataURL(file);}); });
   const scope={userSiteSelection,React,useState,useRef,useEffect,Modal:Null,EnhancedSpeechComplaint:Null,Send:Null,CheckCircle2:Null,readTicketAttachment,
     alert:()=>assert.fail('Ticket forms must use inline feedback, not native alert'),
     FormData:class {constructor(values){this.values=values;}get(key){return this.values[key]??'';}},
@@ -141,7 +141,7 @@ for(const config of configurations){
     for(const file of [{name:'bad.txt',type:'text/plain',size:12},{name:'large.png',type:'image/png',size:10*1024*1024+1},{name:'bad.png',type:'image/png',size:12,failRead:true}]){
       const app=harness(config);
       let tree=app.attach(app.render(),file);await app.submit(tree);tree=app.render();
-      assert.match(inlineError(tree),file.failRead?/Could not read/:/up to 10 MB/);
+      assert.match(inlineError(tree),file.failRead?/Could not read/:file.type.startsWith("image/")?/100 KB/:/up to 10 MB/);
       assert.equal(app.calls.length,0);assert.equal(app.closed,0);assert.equal(button(tree,'Cancel').props.disabled,false);
       tree=app.attach(tree,null);await app.submit(tree);assert.equal(app.calls.length,1);assert.equal(app.closed,1);
     }

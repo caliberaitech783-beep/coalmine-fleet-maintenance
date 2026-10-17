@@ -70,7 +70,7 @@ function harness(name, extra = {}) {
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
-  const scope = { isIdleVehicleRequest,requestStatusLabel,
+  const scope = { AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", isIdleVehicleRequest,requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,
