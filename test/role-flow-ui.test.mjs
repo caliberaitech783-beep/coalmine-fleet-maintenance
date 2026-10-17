@@ -77,6 +77,7 @@ function harness(name, extra = {}) {
     ...Object.fromEntries(["Wrench", "Plus", "ShieldCheck", "CheckCircle2", "X", "ChevronRight", "Flag"].map(name => [name, Null])),
     ...extra,
   };
+  scope.useNavigationState=(_key,initial)=>scope.useState(initial);
   const component = new Function("DateInput", ...Object.keys(scope), `${codes[name]}; return ${name};`)(DateInput, ...Object.values(scope));
   return {render(props) { cursor = 0; return component(name === "ManagerDashboard" ? {requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props} : props); }};
 }

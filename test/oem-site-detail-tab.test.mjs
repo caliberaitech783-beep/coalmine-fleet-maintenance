@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('OEM BD retains its chart and adds a site-wise detail report view',()=>{
-  assert.match(source,/\[oemView, setOemView\] = useState\("chart"\)/);
+  assert.match(source,/\[oemView, setOemView\] = useNavigationState\("main\.oemView", "chart"\)/);
   assert.match(source,/\["details", "Site-wise detailing"\]/);
   assert.match(source,/aria-pressed=\{oemView === view\}/);
   assert.match(source,/oemView === "details" \? <section/);

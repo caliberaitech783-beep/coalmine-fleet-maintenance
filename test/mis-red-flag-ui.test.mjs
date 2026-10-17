@@ -70,6 +70,7 @@ function harness(){
     visibleInMisRequests:()=>true,visibleInMisHistory:()=>true,visibleInProductionHistory:()=>true,visibleInMaintenanceHistory:()=>true,preventTableAutoScroll:()=>{},
     isProductionFirstTripPending:()=>false,
   };
+  scope.useNavigationState=(_key,initial)=>scope.useState(initial);
   for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck','Wrench','Plus','ChevronRight'])scope[icon]=Null;
   const components=new Function('DateInput',...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(DateInput,...Object.values(scope));
   components.ActualRequestEditForm=new Function('DateInput',...Object.keys(scope),`${compiledEditor};return RequestEditForm;`)(DateInput,...Object.values(scope));

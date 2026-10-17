@@ -30,6 +30,7 @@ test("region totals open the entire region, site totals retain only the chosen s
     useMasterRecords: () => [equipment],
     ...Object.fromEntries([...component.matchAll(/<([A-Z]\w*)\b/g)].map((match) => [match[1], () => null])),
     Gauge: () => null, CheckCircle2: () => null, AlertTriangle: () => null, Clock: () => null};
+  bindings.useNavigationState=(_key,initial)=>bindings.useState(initial);
   const Component = new Function(...Object.keys(bindings), `${code}; return RegionMasterPage;`)(...Object.values(bindings));
   const render = () => {cursor = 0; return Component({records: [{code: "WCL", sites}, {code: "NCL", sites: ["Jayant OB"]}], requests,
     gotoEquipment: (...args) => {opened = args;}});};
