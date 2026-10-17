@@ -1,3 +1,4 @@
+import {createRowSearchIndex} from "../src/indexed-smart-search.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -76,7 +77,7 @@ async function harness(source, component, bindings) {
   const mobileWindow = await import('../src/mobile-table-window.mjs');
   let cursor = 0;
   const slots = [];
-  const scope = { React, ...mobileWindow, mobileTablePageSize: () => 0, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
+  const scope = { createRowSearchIndex, React, ...mobileWindow, mobileTablePageSize: () => 0, useEffect() {}, useMemo: fn => fn(), useDeferredValue: value => value, useRef: () => ({ current: null }),
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], next => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, ...bindings };
   scope.useColumnPreferences ||= (key, columns, fallback) => scope.useState(() => fallback?.length ? fallback : columns.map(column => column.key));
   const { code } = await transformWithOxc(source, "table-layout-test.jsx", { jsx: { runtime: "classic" } });
