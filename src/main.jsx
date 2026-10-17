@@ -2388,13 +2388,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         && categories.includes(String(record.category || "").trim().toLowerCase()));
     }
     if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
-      const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance";
+      // Region/site BD Balance tabs need the entire authorised snapshot. The
+      // clicked location is an initial browser selection, not a data restriction.
+      const hierarchyBalance = key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:");
+      const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance" || hierarchyBalance;
       const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
       const [offroadSite, offroadCategory = ""] = key.startsWith("offroad-site:") ? key.slice(13).split("|") : ["", ""];
       return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
         && (key !== "fleet-breakdown:balance" || !oemChart.rows.some(row => row.record === record))
-        && (!offroadSite || recordBelongsToSite(record, offroadSite))
-        && (!key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
+        && (hierarchyBalance || !offroadSite || recordBelongsToSite(record, offroadSite))
+        && (hierarchyBalance || !key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
         && ((key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles") || ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())));
     }
@@ -2458,7 +2461,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
   const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix)) || key.startsWith("entered-today:");
-  const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
+  const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) || key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:") ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   // Building fleetAssetRequestDetails links every visible asset to its active
   // request. Do it only while a drilldown is open; the closed dashboard does
