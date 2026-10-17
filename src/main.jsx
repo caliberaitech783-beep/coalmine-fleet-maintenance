@@ -5168,15 +5168,21 @@ function Equipment({
     [editing, setEditing] = useState(null),
     [savingEdit, setSavingEdit] = useState(false),
     [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const roadStatusFor = (record) => Array.isArray(statusRequests)
+    ? liveEquipmentRoadStatus(record, statusRequests)
+    : equipmentRoadStatus(record);
+  const roadStatusLabel = (status) => ({onroad: "On road", offroad: "Off road", idle: "Idle"}[status] || "Status not set");
   const equipmentColumns = [
       ["currentLocation", "Current location"], ["equipmentName", "Equipment name"],
       ["category", "Equipment category"], ["group", "Equipment group"],
       ["itemName", "Item name"], ["itemSpecification", "Item specification name"],
       ["acquisitionDate", "Acquisition date"], ["make", "Make"], ["model", "Model"],
       ["manufacturerSerialNo", "Manufacturer serial no."], ["engineNo", "Engine no."],
-      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"], ["status", "Fleet status"],
+      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"], ["status", "Equipment status (saved)"], ["liveStatus", "Live fleet status"],
     ],
     equipmentValue = (record, key) => {
+      if (key === "status") return roadStatusLabel(equipmentRoadStatus(record));
+      if (key === "liveStatus") return roadStatusLabel(roadStatusFor(record));
       if (key === "group") return equipmentGroupValue(record);
       if (key === "currentLocation") return record.currentLocation || record.location;
       if (key === "equipmentName") return record.equipmentName || record.door;
@@ -5215,9 +5221,6 @@ function Equipment({
           .filter(Boolean),
       ]),
     ];
-  const roadStatusFor = (record) => Array.isArray(statusRequests)
-    ? liveEquipmentRoadStatus(record, statusRequests)
-    : equipmentRoadStatus(record);
   let rows = records.filter(
     (v) =>
       (road === "all" ||
@@ -5291,7 +5294,7 @@ function Equipment({
         </div>
         <div className="master-actions-slot" ref={setActionsToolbarTarget} />
         <select value={road} onChange={(e) => setRoad(e.target.value)}>
-          <option value="all">All road statuses</option>
+          <option value="all">All live road statuses</option>
           <option value="onroad">On Road</option>
           <option value="offroad">Off Road</option>
           <option value="idle">Idle</option>
@@ -5366,7 +5369,8 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
-                  <td><Status>{roadStatusFor(v)==="onroad"?"On road":roadStatusFor(v)==="offroad"?"Off road":roadStatusFor(v)==="idle"?"Idle":"Status not set"}</Status></td>
+                  <td><Status>{equipmentValue(v, "status")}</Status></td>
+                  <td><Status>{equipmentValue(v, "liveStatus")}</Status></td>
                   <td className="row-actions" onClick={(event) => event.stopPropagation()}>
                     {v.id ? (
                       <>
@@ -5383,7 +5387,7 @@ function Equipment({
               ))
             ) : (
               <tr>
-                <td colSpan="15" className="empty-state">
+                <td colSpan={equipmentColumns.length + 1} className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
@@ -5420,10 +5424,11 @@ function Equipment({
       {editing && (
         <Modal title="Edit equipment record" close={() => !savingEdit && setEditing(null)}>
           <form className="form master-form" onSubmit={saveEquipmentEdit}>
+            <p role="note">Live fleet status: <strong>{equipmentValue(editing, "liveStatus")}</strong>. Equipment status below is the saved master value. Saving On road does not close an active breakdown or resolve a pending idle approval; complete that request in its workspace to update the live status.</p>
             <div className="formgrid">
               {equipmentEditFields.map(([key, label]) => (
                 <label key={key}>{label}
-                  {key==="status"?<select name={key} defaultValue={editing[key]||"Operational"}><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select>:<input name={key} defaultValue={editing[key] || ""} />}
+                  {key==="status"?<select name={key} defaultValue={{onroad:"Operational",offroad:"Off road",idle:"Idle"}[equipmentRoadStatus(editing)]||""}><option value="">Status not set</option><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select>:<input name={key} defaultValue={editing[key] || ""} />}
                 </label>
               ))}
             </div>
