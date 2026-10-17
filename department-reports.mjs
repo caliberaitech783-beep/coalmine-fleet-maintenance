@@ -12,10 +12,11 @@ import {formatShiftDateTime} from './shift-report-time.mjs';
 import {requestShiftColumns} from './request-shift.mjs';
 import {STAGE_TIMING_GAPS,STAGE_TIMING_TOTALS,stageTimingRow,stageGapLabel,slowestStageLabel} from './stage-timing-report.mjs';
 import {withBreakdownMeterColumns} from './breakdown-meter-columns.mjs';
+import {PERCENTAGE_REPORT_TITLE, percentageColumns, repairPercentageRows} from './repair-percentage-report.mjs';
 
 const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report', 'Request Stage Timing'];
 export const TOTAL_SUMMARY_REPORT_TITLE = 'Total Summary Report';
-export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6).flatMap(title => title === 'Summary Report' ? [title,TOTAL_SUMMARY_REPORT_TITLE] : [title]);
+export const DEPARTMENT_REPORT_TITLES = [...REPORT_TITLES.filter((_,index) => index !== 6).flatMap(title => title === 'Summary Report' ? [title,TOTAL_SUMMARY_REPORT_TITLE] : [title]),PERCENTAGE_REPORT_TITLE];
 export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
 // Availability, fleet, transfer and In/Out reports list assets or daily counts, not breakdown requests.
 const NON_BREAKDOWN_REPORTS = new Set([REPORT_TITLES[2], REPORT_TITLES[6], REPORT_TITLES[7], REPORT_TITLES[8]]);
@@ -209,5 +210,8 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       col('closedBy','Closed by',row=>row.closedBy||'Not recorded'),
     );
   }
-  return reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:requestShiftColumns(withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)}),item.rows,shiftRecords)});
+  return [...reports.map(item => NON_BREAKDOWN_REPORTS.has(item.title) ? item : {...item,columns:requestShiftColumns(withBreakdownMeterColumns(item.columns,{closing:!OPEN_ONLY_REPORTS.has(item.title)}),item.rows,shiftRecords)}), {
+    ...report('maintenance',PERCENTAGE_REPORT_TITLE,'All breakdown requests, open and closed. Percentage = category requests / total matching requests × 100. Dates use production submission. Archived requests are excluded.',percentageColumns,requests.filter(row=>!row.archivedAt && !row.archived_at),row=>row.start || row.createdAt),
+    aggregateRows:repairPercentageRows,
+  }];
 }

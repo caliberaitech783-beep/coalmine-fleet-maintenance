@@ -120,6 +120,7 @@ import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
 import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../department-reports.mjs";
+import RepairPercentageReport from './repair-percentage-report.jsx';
 import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
@@ -7853,11 +7854,12 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
-        report={...report,columns:requestShiftColumns(report.columns,report.rows,shiftRecords)};
+        report={...report,columns:report.aggregateRows ? report.columns : requestShiftColumns(report.columns,report.rows,shiftRecords)};
         const zipRequests = selectedReportShift === ALL_SHIFTS_KEY ? reportRequests : reportRequests.filter((row) => requestMatchesSelectedReportShift(row,selectedReportShift));
-        const filteredRows = reportRowsForShift(report,report.title === "Availability Report"
+        let filteredRows = reportRowsForShift(report,report.title === "Availability Report"
           ? buildDepartmentReports({requests:zipRequests,equipmentRecords,transferRecords,shiftRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
           : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo), selectedReportShift);
+        if (report.aggregateRows) filteredRows = report.aggregateRows(filteredRows);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetchPdfExport("/api/exports/pdf", {
           method: "POST",
@@ -8052,7 +8054,8 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
         <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
         <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>
       </div>}
-      {selectedReport && (
+      {selectedReport?.aggregateRows && <RepairPercentageReport rows={selectedReportRows} ReportSection={ReportSection} />}
+      {selectedReport && !selectedReport.aggregateRows && (
         <ReportSection
           key={`${selectedReport.category}-${selectedReport.title}`}
           title={selectedReport.title}

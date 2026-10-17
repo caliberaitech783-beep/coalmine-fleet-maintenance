@@ -83,7 +83,7 @@ test('shift master timings are shown beside report event timestamps when shift r
 test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
-  assert.equal(reports.filter(r=>r.category==='maintenance').length,4);
+  assert.equal(reports.filter(r=>r.category==='maintenance').length,5);
   assert.equal(reports.filter(r=>r.category==='mis').length,6);
   assert.equal(reports.filter(r=>r.category==='production').length,4);
   assert.ok(!reports.some(r=>r.title==='Vehicle Transfer Report'));
