@@ -37,7 +37,7 @@ test('meter columns sit beside the breakdown reason and closing readings beside 
 
 test('every department breakdown report carries HMR and KMR; asset and count reports do not', () => {
   const reports=buildDepartmentReports({requests:[tipper,dozer],equipmentRecords:[],from:'2026-09-01',to:'2026-09-30',now:new Date('2026-09-22T00:00:00+05:30')});
-  const assetReports=new Set(['Availability Report','Total Fleet','Total In and out count report','Percentage Report']);
+  const assetReports=new Set(['Availability Report','Total Fleet','Total In and out count report']);
   const openOnly=new Set(['Open Off road Cases','Maintenance Status Pending']);
   for(const report of reports){
     const keys=report.columns.map(column=>column.key);
