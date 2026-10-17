@@ -11,6 +11,7 @@ import {requestStatusSortRank} from "../src/request-status.mjs";
 import {filterRecordsByDate} from "../src/record-date-range.mjs";
 import {formatDisplayDateTime} from "../date-time-format.mjs";
 import {tableModel, dateColumnsFirst, tableExportModel} from "../src/table-actions-model.mjs";
+import {createRowSearchIndex} from "../src/indexed-smart-search.mjs";
 
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
@@ -21,6 +22,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
 test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
   const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
+    useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
@@ -38,6 +40,7 @@ test("BD Balance places location, reasons and meter readings beside their reques
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
   const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
+    useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const timingColumns = ["Closed", "MIS verified at", "First trip time"];
@@ -87,6 +90,7 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
   const slots = [];
   let cursor = 0;
   const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
+    useMemo: fn => fn(), useDeferredValue: value => value, createRowSearchIndex,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Component = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));

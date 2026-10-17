@@ -1,10 +1,10 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState, useMemo, useDeferredValue } from "react";
 import { ChevronLeft, ChevronRight, Eye, RotateCcw } from "lucide-react";
 import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipmentGroupLabel, equipmentMachineLabel } from "./dashboard-drilldown-model.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "./request-status.mjs";
 import { filterRecordsByDate } from "./record-date-range.mjs";
-import { matchesSmartSearch } from "../smart-search.mjs";
+import { createRowSearchIndex } from "./indexed-smart-search.mjs";
 import { dailyUpdatesExportText } from "./daily-updates-order.mjs";
 import BreakdownReasonHistory from "./breakdown-reason-history.jsx";
 
@@ -79,9 +79,12 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
   // Opening balances already select carried requests in the parent; Started must not filter them again.
   // Idle drilldowns display vehicle state; other lists retain maintenance request status.
   const idleDateFilter = lifecycleEvent === "idle" || /\bidle\b/i.test(title);
-  const datedRows = movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => idleDateFilter ? record.requestIdleAt : record.requestStart) : rows;
+  const datedRows = useMemo(() => movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => idleDateFilter ? record.requestIdleAt : record.requestStart) : rows, [rows, movementDateControl, showDateFilter, recordDateRange, idleDateFilter]);
+  const searchIndex = useMemo(() => createRowSearchIndex(), [rows]);
+  const deferredSearch = useDeferredValue(searchQuery);
+  const searchedRows = useMemo(() => deferredSearch.trim() ? datedRows.filter(searchIndex(deferredSearch)) : datedRows, [datedRows, deferredSearch, searchIndex]);
   // With no internal hierarchy, the parent supplies the complete filtered selection.
-  const view = drilldownView(datedRows.filter((row) => matchesSmartSearch(searchQuery, row)), regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped });
+  const view = useMemo(() => drilldownView(searchedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped }), [searchedRows, regions, hideHierarchyFilters, filters, rowsAreScoped]);
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);

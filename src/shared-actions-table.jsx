@@ -198,15 +198,15 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const rowNumbers = new Map(numberedRows.map((row, index) => [row, index + 1]));
   // Distinct values per column for the heading filter popovers, taken from the full (unfiltered) table.
   const columnValues = useMemo(() => {
+    if (!openFilter) return {};
+    const column = columns.find(column => column.key === openFilter);
+    if (!column) return {};
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-    const requestedColumns = mobilePaging ? columns.filter(column => column.key === openFilter) : columns;
-    return Object.fromEntries(requestedColumns.map((column) => [column.key, [...new Set(dataRows.map((row) => column.value(row)).filter(Boolean))].sort((a, b) => collator.compare(a, b))]));
-  }, [columns, dataRows, mobilePaging, openFilter]);
-  // Mobile already has the final filtered/sorted selection. Do not sort it
-  // again for each export format on every render; all formats retain all rows.
-  const exportModel = keys => mobilePaging
-    ? {columns: ensureJobReferenceVisibleKeys(keys, columns).map(key => columns.find(column => column.key === key)).filter(Boolean), rows: selectedRows}
-    : tableExportModel(dataRows, columns, keys, localFilters, sort);
+    return {[column.key]: [...new Set(dataRows.map((row) => column.value(row)).filter(Boolean))].sort((a, b) => collator.compare(a, b))};
+  }, [openFilter, columns, dataRows]);
+  // Rows are already filtered/sorted per body above and assigned below. Only
+  // project columns here; repeating selection for each export model is wasteful.
+  const exportModel = keys => ({columns: ensureJobReferenceVisibleKeys(keys, columns).map(key => columns.find(column => column.key === key)).filter(Boolean), rows: selectedRows});
   const exportData = ExportMenu && exportTitle ? exportModel(visible) : null;
   const printData = ExportMenu && printTitle ? exportData || exportModel(visible) : null;
   const smartPrintData = ExportMenu && (printTitle || exportTitle) ? exportModel(columns.map(column => column.key)) : null;

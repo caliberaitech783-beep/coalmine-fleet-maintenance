@@ -127,6 +127,7 @@ import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading as defaultRep
 import {downtimePdfHeading} from './downtime-matrix-export.mjs';
 const reportPdfHeading = (title,rows,columns) => downtimePdfHeading(title,rows,columns,defaultReportPdfHeading);
 import { matchesSmartSearch } from "../smart-search.mjs";
+import { createRowSearchIndex } from "./indexed-smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
@@ -4208,7 +4209,7 @@ function ActionsTable(props) {
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "", onExportViewChange = null, onResetSearch = null }) {
   const {shifts}=useRequestShiftData();
-  columns=requestShiftColumns(columns,rows,shifts);
+  columns=useMemo(() => requestShiftColumns(columns,rows,shifts), [columns,rows,shifts]);
   const [appliedColumns, applyColumns] = useColumnPreferences(layoutKey || "report-table", columns, visibleColumnKeys);
   const notifyColumnsChange = onVisibleColumnsChange;
   visibleColumnKeys = appliedColumns;
@@ -4228,19 +4229,29 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const displayedColumnKeys = ensureJobReferenceVisibleKeys(visibleColumnKeys.length ? visibleColumnKeys : allColumnKeys, columns);
   const displayedColumns = displayedColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   const activeFilterColumn = openFilter ? columns.find((column) => column.key === openFilter) : null;
-  const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
-  const filteredRows = rows.filter((row) =>
-    matchesSmartSearch(deferredQuery, row) &&
-    tableRowMatchesFilters(row, columns, columnFilters),
-  );
+  const columnValues = useMemo(() => activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {}, [rows, activeFilterColumn]);
+  const searchIndex = useMemo(() => createRowSearchIndex(), [rows]);
+  const filteredRows = useMemo(() => {
+    const matchesQuery = searchIndex(deferredQuery);
+    const activeColumns = columns.filter(column => columnFilters[column.key]);
+    return rows.filter(row => matchesQuery(row) && tableRowMatchesFilters(row, activeColumns, columnFilters));
+  }, [rows, columns, columnFilters, deferredQuery, searchIndex]);
+  const sortValueForKey = useMemo(() => {
+    const byKey = new Map(columns.map(column => [column.key, column]));
+    return (row, key) => {
+      const column = byKey.get(key);
+      return column?.sortValue?.(row) ?? column?.value?.(row);
+    };
+  }, [columns]);
+  const durationSortForKey = useMemo(() => {
+    const byKey = new Map(columns.map(column => [column.key, column]));
+    return key => isDurationColumn(byKey.get(key)?.label, key);
+  }, [columns]);
   const [sortedRows, sort, changeSort] = useSortableRows(
     filteredRows,
     defaultDurationSort(columns),
-    (row, key) => {
-      const column = columns.find((item) => item.key === key);
-      return column?.sortValue?.(row) ?? column?.value?.(row);
-    },
-    (key) => isDurationColumn(columns.find((column) => column.key === key)?.label, key),
+    sortValueForKey,
+    durationSortForKey,
   );
   const updateColumnFilter = (key, value) => {
     setColumnFilters((current) => {

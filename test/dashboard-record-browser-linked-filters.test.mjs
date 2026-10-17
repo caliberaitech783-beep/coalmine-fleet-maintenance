@@ -16,6 +16,7 @@ import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { REGION_DATA } from "../region-scope.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
+import { createRowSearchIndex } from "../src/indexed-smart-search.mjs";
 import DateInput from '../src/date-input.mjs';
 import * as mobileWindow from '../src/mobile-table-window.mjs';
 
@@ -27,7 +28,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
 })));
 const empty = () => null;
 const bindings = { ...mobileWindow, mobileTablePageSize: () => 0, BreakdownReasonHistory: ({reason}) => reason || "—", React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
-  matchesSmartSearch, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
+  matchesSmartSearch, createRowSearchIndex, useDeferredValue: value => value, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {

@@ -20,8 +20,8 @@ test("the next window loads automatically as the end of the table nears", () => 
 });
 
 test("exports, print and counts still use every row, not only the rendered window", () => {
-  assert.match(shared, /tableExportModel\(dataRows, columns, keys, localFilters, sort\)/);
   assert.match(shared, /rows: selectedRows/);
+  assert.match(shared, /data\.rows = selectedRows/, 'exports reuse the full selected rows, not the rendered window');
   assert.match(shared, /\$\{selectedRows\.length\} of \$\{dataRows\.length\} records/);
 });
 

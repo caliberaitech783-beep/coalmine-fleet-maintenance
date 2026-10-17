@@ -9,6 +9,7 @@ import { REGION_DATA } from "../region-scope.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "../src/request-status.mjs";
 import { filterRecordsByDate } from "../src/record-date-range.mjs";
+import { createRowSearchIndex } from "../src/indexed-smart-search.mjs";
 
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const expression = main.match(/const hideFleetChartLocation = (.+);/)[1];
@@ -20,6 +21,7 @@ const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", impor
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
 const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
+  useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null };
 const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
 const row = { id: "asset-1", door: "E08-MH34BZ2407", category: "Vehicles", currentLocation: "Majri OB", model: "PRO8035L", manufacturerSerialNo: "CHASSIS-1" };

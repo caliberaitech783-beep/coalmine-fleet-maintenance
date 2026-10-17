@@ -8,6 +8,7 @@ test('dashboard print uses the current table view and precedes Actions', () => {
   const browser = readFileSync(new URL('../src/dashboard-record-browser.jsx', import.meta.url), 'utf8');
   assert.match(shared, /printTitle = ""/);
   assert.match(shared, /printTitle \? exportData \|\| exportModel\(visible\)/);
+  assert.match(shared, /data\.rows = selectedRows/, 'print uses the already filtered and sorted selection');
   assert.ok(shared.indexOf('<ExportMenu printOnly') < shared.indexOf('<Menu resetLabel'));
   assert.match(browser, /<ActionsTable key=\{tableKey\}[^\n]+ printTitle=/);
   assert.match(main, /dashboard-breakdown-day-table"><ActionsTable printTitle=/);

@@ -15,7 +15,7 @@ test('dashboard icon searches cards rather than opening fleet records', () => {
   const cards = new Function(`return ${main.match(/const dashboardSearchCards = (\[[\s\S]*?\]);/)[1]}`)();
   assert.deepEqual(cards.filter(card => matchesSmartSearch('daily bd balance', card.title)).map(card => card.selector), ['.daily-bd-balance']);
   assert.ok(main.includes('target.scrollIntoView'));
-  assert.ok(browser.includes('datedRows.filter((row) => matchesSmartSearch(searchQuery, row))'));
+  assert.ok(browser.includes('datedRows.filter(searchIndex(deferredSearch))'));
   assert.ok(browser.includes('aria-label="Search fleet"'));
   const rows = [{door: 'V606-96911', site: 'Sasti OB', model: 'FMX'}, {door: 'D2', site: 'Majri OB'}];
   assert.deepEqual(rows.filter(row => matchesSmartSearch('v606 96911 sasti', row)), [rows[0]]);
