@@ -34,7 +34,7 @@ import BdAgeingReport from "./bd-ageing-report.jsx";
 import DowntimeMatrixReport from './downtime-matrix-report.jsx';
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { useState, useRef, useEffect, useMemo, useDeferredValue } from "react";
+import React, { useState, useRef, useEffect, useMemo, useDeferredValue, useCallback } from "react";
 import TelegramSiteGroups from './telegram-site-groups.jsx';
 import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
@@ -1811,6 +1811,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
+  const [movementBrowseScope, setMovementBrowseScope] = useState(null);
+  const updateMovementBrowseScope = useCallback(({ region, site }) => {
+    setMovementBrowseScope({ key: assetDrilldown, region, site });
+  }, [assetDrilldown]);
   const [cardSearchOpen, setCardSearchOpen] = useState(false);
   const dashboardSearchCards = [
     {title: "Total Fleet", selector: ".mine-fleet-region-chart"},
@@ -2386,7 +2390,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }
     if (key.startsWith("balance:")) {
       const [metric, from, to, site] = key.slice(8).split("|");
-      const records = site ? locationBreakdowns.filter((record) => recordBelongsToSite(record, site)) : locationBreakdowns;
+      // The browser selects the clicked site; its region/site totals need the
+      // complete parent snapshot, still restricted by account/dashboard scope.
+      const records = locationBreakdowns;
       return requestAssetRows(dailyBdRecordsForMetric(records, from, to, metric, { matchesShift: requestMatchesMovementShift }).map((record) => metric === "undated" ? record : ({
         ...record,
         start: [record.start, record.startedAt, record.createdAt].find((value) => requestDateKey(value)),
@@ -2446,7 +2452,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => requestStatusLabel(record).toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("movement:")) {
       const [metric, start, end, site, type] = key.slice(9).split("|");
-      const records = site ? throughputRequests.filter((record) => recordBelongsToSite(record, site)) : throughputRequests;
+      const records = throughputRequests;
       return requestAssetRows(movementRequestRowsForShift(records, start, end, metric, type));
     }
     if (key.startsWith("trend:")) {
@@ -2477,10 +2483,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // request. Do it only while a drilldown is open; the closed dashboard does
   // not consume these rows at all.
   const assetDrilldownRows = !assetDrilldown ? [] : requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
+  const movementDrilldown = assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("balance:");
   const assetDrilldownRegions = availableRegions.map((region) => ({
     ...region,
-    sites: region.sites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))),
-  }));
+    sites: region.sites.filter((site) => (!normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)))
+      && (!movementDrilldown || ((!selectedRegion && dashboardSite === "all") || activeSites.some(active => recordBelongsToSite({ site }, active)))
+        && (!assetDrilldown.startsWith("movement:") || inThroughputScope({ site })))),
+  })).filter(region => !movementDrilldown || region.sites.length);
   const siteScopedDrilldown = assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("site-status:");
   const showFleetSiteTabs = ["all", "fleet-breakdown:account", "fleet-breakdown:balance", "fleet-breakdown:all"].includes(assetDrilldown) || assetDrilldown.startsWith("entered-today:");
   const fleetSiteTabRows = showFleetSiteTabs ? oemDetailReportRows(groupOemRecordsBySite(assetDrilldownRows, assetDrilldownRegions), true) : assetDrilldownRows;
@@ -2501,14 +2510,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // These Total Fleet chart lists already name their single site in the modal title.
   const hideFleetChartLocation = ["site-total:", "site:", "offroad-site:"].some((prefix) => assetDrilldown.startsWith(prefix));
   const hideFleetChartCategory = /^(?:site-total|offroad-site):.+\|(equipment|vehicles)$/.test(assetDrilldown);
-  const initialDrilldownSite = siteScopedSite || siteTotalDrilldownParts[0] || movementDrilldownParts[3] || (stagePipelineDrilldownSite && stagePipelineDrilldownSite !== "all" ? stagePipelineDrilldownSite : "") || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
-  const initialDrilldownRegion = assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
+  const currentMovementScope = movementDrilldown && movementBrowseScope?.key === assetDrilldown ? movementBrowseScope : null;
+  const initialDrilldownSite = currentMovementScope ? currentMovementScope.site : siteScopedSite || siteTotalDrilldownParts[0] || movementDrilldownParts[3] || (stagePipelineDrilldownSite && stagePipelineDrilldownSite !== "all" ? stagePipelineDrilldownSite : "") || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
+  const initialDrilldownRegion = currentMovementScope ? currentMovementScope.region : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = assetDrilldown.startsWith("entered-today:") || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("balance:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "mis" ? "Open in MIS" : lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance", "active-balance": "BD Balance", idle: "Idle Vehicles", runningbd: "Running with BD", undated: "Requests needing date correction" };
-  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}` : "";
+  const movementScopeLabel = initialDrilldownSite || (initialDrilldownRegion && initialDrilldownRegion !== "all" ? initialDrilldownRegion === "unmapped" ? "Other / unassigned" : initialDrilldownRegion : "All sites in dashboard scope");
+  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementScopeLabel} · ${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
@@ -2543,6 +2554,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Request lifecycle", metric: "Idle", value: requestLifecycleRows.idle.length, scope: requestLifecycleRangeLabel, details: `${dashboardScopeLabel}${dashboardShiftDetail}` },
   ];
   const openAssetDrilldown = (key) => {
+    setMovementBrowseScope(null);
     setBreakdownDayReturnSite("");
     setAssetDrilldown(key);
   };
@@ -2558,11 +2570,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const movementKey = (metric = "all", site = "", type = "", start = breakdownSummaryStartKey, end = breakdownSummaryEndKey) => `movement:${metric}|${start}|${end}|${site}|${type}`;
   const openBreakdownDay = (day, metric) => {
+    setMovementBrowseScope(null);
     setBreakdownDayReturnSite(breakdownDetailSite);
     setAssetDrilldown(movementKey(metric, breakdownDetailSite, "", day.date, day.date));
     setBreakdownDetailSite("");
   };
   const closeAssetDrilldown = () => {
+    setMovementBrowseScope(null);
     setAssetDrilldown("");
     if (breakdownDayReturnSite) setBreakdownDetailSite(breakdownDayReturnSite);
     setBreakdownDayReturnSite("");
@@ -2821,6 +2835,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       {assetDrilldown && <Modal className={`dashboard-asset-modal${showFleetSiteTabs ? " fleet-site-tabs-modal" : ""}`} overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
         <DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} groupBySite={showFleetSiteTabs} hideHierarchyFilters={showFleetSiteTabs} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+          includeEmptySites={movementDrilldown} onScopeChange={movementDrilldown ? updateMovementBrowseScope : null}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
             value: encodeDateRange(movementDrilldownParts[1], movementDrilldownParts[2]),
@@ -2831,7 +2846,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               const parts = [...movementDrilldownParts];
               parts[1] = start;
               parts[2] = end;
-              setAssetDrilldown(`${assetDrilldown.startsWith("balance:") ? "balance" : "movement"}:${parts.join("|")}`);
+              const key = `${assetDrilldown.startsWith("balance:") ? "balance" : "movement"}:${parts.join("|")}`;
+              setMovementBrowseScope({ key, region: initialDrilldownRegion, site: initialDrilldownSite });
+              setAssetDrilldown(key);
             },
           } : null}
         />

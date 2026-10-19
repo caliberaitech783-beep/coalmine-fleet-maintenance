@@ -26,7 +26,7 @@ test("site-scoped charts open the shared list with their site selected", async (
   assert.match(source, /status === "all" \? atSite : atSite\.filter/);
 
   // Site-specific charts preserve their selection in the shared list filters.
-  assert.match(source, /const initialDrilldownSite = siteScopedSite/);
+  assert.match(source, /const initialDrilldownSite = currentMovementScope \? currentMovementScope.site : siteScopedSite/);
   assert.match(source, /initialRegion=\{initialDrilldownRegion\} initialSite=\{initialDrilldownSite\}/);
   assert.match(source, /<DashboardRecordBrowser key=\{assetDrilldown\}/);
 

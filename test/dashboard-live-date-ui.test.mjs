@@ -219,7 +219,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
     availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
     dashboardKpiExportColumns: [],
-    React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
+    React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useCallback: callback => callback, useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel, isIdleVehicleRequest,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
@@ -470,8 +470,36 @@ test("OEM panel, plain heading and chart backgrounds have no list action; its co
 // Check the actual final browser filtering, not just the Dashboard's input props.
 const detailView = (tree) => {
   const props = findAll(tree, (node) => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0].props;
-  return model.drilldownView(props.rows, props.regions, {region: props.initialRegion, site: props.initialSite}, {rowsAreScoped: props.rowsAreScoped});
+  return model.drilldownView(props.rows, props.regions, {region: props.initialRegion, site: props.initialSite}, {rowsAreScoped: props.rowsAreScoped, includeEmptySites: props.includeEmptySites});
 };
+
+test("day-wise site navigation updates the title and export scope without losing other NCL sites", () => {
+  const regions = [{code: "NCL", sites: ["Jayant OC", "Dudhichua OC", "Dudhichua East OC"]}];
+  const rows = [
+    ...Array.from({length: 24}, (_, id) => ({ref: `J-${id}`, site: "Jayant OC", start: "2026-09-01", status: "Open"})),
+    ...Array.from({length: 7}, (_, id) => ({ref: `D-${id}`, site: "Dudhichua OC", start: "2026-09-01", status: "Open"})),
+  ];
+  const view = harness({regions, allowedSites: [], restrictToScope: false});
+  let tree = view.render(rows);
+  findAll(tree, node => typeof node.props.onInspect === "function" && node.props.today)[0].props.onInspect("open", "2026-09-09", "2026-09-09", "Jayant OC");
+  tree = view.render(rows);
+  const browserProps = () => findAll(tree, node => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0].props;
+  assert.equal(detailView(tree).rows.length, 24);
+  assert.equal(detailView(tree).regionTotal, 31);
+  for (const [site, count, title] of [["Dudhichua OC", 7, "Dudhichua OC"], ["Dudhichua East OC", 0, "Dudhichua East OC"], ["", 31, "NCL"]]) {
+    browserProps().onScopeChange({region: "NCL", site});
+    tree = view.render(rows);
+    assert.equal(detailView(tree).rows.length, count);
+    assert.ok(browserProps().title.startsWith(`${title} · BD Open`));
+    assert.ok(text(byClass(tree, "dashboard-asset-modal").props.title).startsWith(title));
+  }
+  browserProps().movementDateControl.onChange(encodeDateRange("2026-09-08", "2026-09-08"));
+  tree = view.render(rows);
+  assert.equal(detailView(tree).rows.length, 31);
+  assert.equal(browserProps().initialRegion, "NCL");
+  assert.equal(browserProps().initialSite, "");
+  assert.match(browserProps().title, /08-09-26/);
+});
 
 test("daily BD chart sits directly below Total Fleet and every metric opens its exact scoped requests", () => {
   const rows = [...requests, {ref: "MAJRI", site: "Majri OB", start: "2026-09-09 12:00", status: "Open"}];

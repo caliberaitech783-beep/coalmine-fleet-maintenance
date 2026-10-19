@@ -28,7 +28,7 @@ export function changeDrilldownFilter(filters, name, value) {
 
 // Only an explicitly access-scoped caller may retain rows outside the site catalogue.
 // Region/site tabs classify that snapshot; they must not silently discard its records.
-export function drilldownView(rows = [], regions = [], filters = {}, { rowsAreScoped = false } = {}) {
+export function drilldownView(rows = [], regions = [], filters = {}, { rowsAreScoped = false, includeEmptySites = false } = {}) {
   const allowedRegions = regions.filter(({ code }) => ["NCL", "WCL"].includes(code));
   const siteLabels = new Map();
   for (const region of allowedRegions) for (const site of region.sites) {
@@ -55,6 +55,17 @@ export function drilldownView(rows = [], regions = [], filters = {}, { rowsAreSc
   let filteredRows = selection.region === "all" ? entries : entries.filter((entry) => entry.region === selection.region);
   const regionTotal = filteredRows.length;
   const siteOptions = optionsFor(filteredRows, (entry) => entry.site);
+  // Movement lists keep permitted zero-count sites selectable. A site with no
+  // matching requests must not disappear or silently fall back to All sites.
+  if (includeEmptySites) {
+    for (const region of allowedRegions.filter(region => selection.region === "all" || region.code === selection.region)) {
+      for (const site of region.sites) {
+        const value = siteLabels.get(canonicalSiteName(site));
+        if (!siteOptions.some(option => canonicalSiteName(option.value) === canonicalSiteName(value))) siteOptions.push({ value, count: 0 });
+      }
+    }
+    siteOptions.sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }));
+  }
   const options = { site: siteOptions };
   let parentChanged = Boolean(filters.region && filters.region !== selection.region);
   for (const [name, labelOf] of [["site", null], ["category", equipmentCategoryLabel], ["group", equipmentGroupLabel], ["machine", equipmentMachineLabel]]) {

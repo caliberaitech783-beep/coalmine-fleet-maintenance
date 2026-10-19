@@ -382,7 +382,7 @@ th.report-wrap-header .sort-header>span{white-space:normal;overflow-wrap:break-w
 .incoming-notification .notification-message.compact .notification-meta{display:flex!important;align-items:center!important;flex-wrap:nowrap!important;gap:8px!important;min-width:0!important;margin:0!important;white-space:nowrap!important}
 .incoming-notification .notification-message.compact .notification-site{max-width:min(420px,42vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px!important;line-height:1.25!important;padding:3px 8px!important}
 .incoming-notification .notification-message.compact .notification-category{flex:0 0 auto;font-size:13px!important;line-height:1.25!important}
-.incoming-notification .notification-message.compact .notification-details{display:block!important;grid-column:1/-1;min-width:0!important;color:#213d63!important;font-size:13px!important;line-height:1.35!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important}
+.incoming-notification .notification-message.compact .notification-details{display:block!important;grid-column:1/-1;min-width:0!important;color:inherit!important;font-size:14px!important;line-height:1.5!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important}
 .notification-category.production{--notification-category-color:#2563eb}
 .notification-category.maintenance{--notification-category-color:#b45309}
 .notification-category.mis{--notification-category-color:#15803d}

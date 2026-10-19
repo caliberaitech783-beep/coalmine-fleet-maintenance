@@ -1016,9 +1016,13 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-site-bar i.idle { background: #dda13d; }
 .dashboard-maintenance-availability-state { min-height: 180px; }
 .overlay.dashboard-breakdown-movement-overlay { padding: 0; }
-.overlay .modal.dashboard-breakdown-movement-modal { width: 100%; max-width: none; min-width: 0; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; resize: none; }
-.modal.dashboard-breakdown-movement-modal > header { position: sticky; top: 0; z-index: 4; background: var(--surface); }
-.modal.dashboard-breakdown-movement-modal > header h3 { background: transparent; color: var(--ink); padding: 0; }
+.overlay .modal.dashboard-breakdown-movement-modal { width: 100%; max-width: none; min-width: 0; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; resize: none; display: flex; flex-direction: column; overflow: hidden; }
+/* Keep the title outside the scrolling content. A transparent sticky header
+   let the date controls pass behind the site chip and title. */
+.modal.dashboard-breakdown-movement-modal > header { position: relative; flex: 0 0 auto; gap: 12px; background: var(--panel, #fff); }
+.modal.dashboard-breakdown-movement-modal > header h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; background: transparent; color: var(--ink); padding: 0; }
+.modal.dashboard-breakdown-movement-modal > header > button { flex-shrink: 0; }
+.modal.dashboard-breakdown-movement-modal > .dashboard-breakdown-movement-detail { flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; align-content: start; }
 .dashboard-breakdown-site-title { display: inline-block; background: var(--brand-purple, #522e90); color: #fff; padding: 10px 16px; border-radius: 8px; }
 .dashboard-breakdown-movement-detail .dashboard-breakdown-road-mix,
 .dashboard-breakdown-movement-detail .dashboard-breakdown-day-help,

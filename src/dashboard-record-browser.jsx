@@ -66,7 +66,7 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null, columnTransform = null, toolbarTarget: hostToolbarTarget = null, summaryTarget = null, movementDateControl = null, regions, rowsAreScoped = false, groupBySite = false, title = "Chart records", summaryLabel = "", initialRegion = "", initialSite = "", hideHierarchyFilters = false, hideFleetSearch = false, showDateFilter = true, showRowNumbers = true, hideCurrentLocation = false, hideSiteColumn = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, bdBalanceColumns = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null, Remarks = null }) {
+export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null, columnTransform = null, toolbarTarget: hostToolbarTarget = null, summaryTarget = null, movementDateControl = null, regions, rowsAreScoped = false, includeEmptySites = false, onScopeChange = null, groupBySite = false, title = "Chart records", summaryLabel = "", initialRegion = "", initialSite = "", hideHierarchyFilters = false, hideFleetSearch = false, showDateFilter = true, showRowNumbers = true, hideCurrentLocation = false, hideSiteColumn = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, bdBalanceColumns = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null, Remarks = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
@@ -84,7 +84,10 @@ export default function DashboardRecordBrowser({ rows, toolbarAfterCount = null,
   const deferredSearch = useDeferredValue(searchQuery);
   const searchedRows = useMemo(() => deferredSearch.trim() ? datedRows.filter(searchIndex(deferredSearch)) : datedRows, [datedRows, deferredSearch, searchIndex]);
   // With no internal hierarchy, the parent supplies the complete filtered selection.
-  const view = useMemo(() => drilldownView(searchedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped }), [searchedRows, regions, hideHierarchyFilters, filters, rowsAreScoped]);
+  const view = useMemo(() => drilldownView(searchedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped, includeEmptySites }), [searchedRows, regions, hideHierarchyFilters, filters, rowsAreScoped, includeEmptySites]);
+  useEffect(() => {
+    onScopeChange?.({ region: view.selection.region, site: view.selection.site });
+  }, [onScopeChange, view.selection.region, view.selection.site]);
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);

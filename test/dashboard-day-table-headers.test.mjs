@@ -7,3 +7,10 @@ test('day-wise BD movement headers use a larger readable font without changing b
   assert.match(css,/\.dashboard-breakdown-movement-modal \.dashboard-breakdown-day-table th \{[^}]*font-size: 14px !important;[^}]*font-weight: 700;/);
   assert.match(css,/\.dashboard-breakdown-day-table th \{[^}]*position: sticky;/);
 });
+
+test('movement header does not scroll over date controls and reserves its own height',()=>{
+  const css=readFileSync(new URL('../src/dashboard-concept-a.css',import.meta.url),'utf8');
+  assert.match(css,/\.overlay \.modal\.dashboard-breakdown-movement-modal \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow: hidden;/);
+  assert.match(css,/\.modal\.dashboard-breakdown-movement-modal > header \{[^}]*position: relative;[^}]*flex: 0 0 auto;[^}]*background: var\(--panel, #fff\)/);
+  assert.match(css,/\.modal\.dashboard-breakdown-movement-modal > \.dashboard-breakdown-movement-detail \{[^}]*min-height: 0;[^}]*overflow: auto;/);
+});
