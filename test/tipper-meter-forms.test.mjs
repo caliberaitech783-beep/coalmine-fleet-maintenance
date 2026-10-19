@@ -11,6 +11,7 @@ import * as equipment from "../request-equipment.mjs";
 import * as workflow from "../request-workflow.mjs";
 import {approvedDelayedReason} from '../delayed-reason.mjs';
 import DateInput from '../src/date-input.mjs';
+import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
 import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from '../info-pulse-data.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -21,6 +22,7 @@ const snippet = source.slice(source.indexOf("function MeterReadingFields"), sour
 // Meter payload tests begin after the separately tested On road/Idle decision.
 const transformed = await transformWithOxc(snippet.replace('const idleDecision = useRef(false);','const idleDecision = useRef(true);'), "request-forms.jsx", {jsx: {runtime: "classic"}});
 const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseRequestForm};", {
+  siteUpdateSafety: createSiteUpdateSafety(),
   React, ...equipment,
   useState: value => [typeof value === "function" ? value() : value, () => {}],
   useRef: value => ({current: value}),

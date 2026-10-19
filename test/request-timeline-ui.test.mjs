@@ -12,6 +12,7 @@ import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { renderToStaticMarkup } from "react-dom/server";
 import DateInput from '../src/date-input.mjs';
 import { stageTimingSteps } from "../stage-timing-report.mjs";
+import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
@@ -92,6 +93,7 @@ function harness(name, extra = {}) {
     alert() {assert.fail("workflow errors must not use native alerts");},
     ...extra,
   };
+  scope.siteUpdateSafety = createSiteUpdateSafety();
   const compiled = formCode[name] || code;
   const component = new Function("DateInput", ...Object.keys(scope), `${compiled}; return ${name};`)(DateInput, ...Object.values(scope));
   return {

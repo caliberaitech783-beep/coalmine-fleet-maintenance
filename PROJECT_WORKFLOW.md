@@ -20,7 +20,7 @@ The approved release enables the chatbot for connected eligible BDMS users by de
 
 This is the maintainer guide for the Caliber Pulse breakdown and fleet-management application. It describes the current source in this repository, the production flow, and the rules that connect users, masters, requests, reports, and deployment.
 
-Production URL: [https://bdms.cmll.in/](https://bdms.cmll.in/)
+Production URL: [https://pulse.cmll.in/](https://pulse.cmll.in/)
 
 ## 1. What the application does
 
@@ -114,7 +114,7 @@ For an isolated loopback PostgreSQL fixture that does not enable TLS, also set
 
 1. The browser loads `index.html`, then `src/main.jsx` mounts `<App />`.
 2. The app restores `nerveCenterSession` from `localStorage` or `sessionStorage` if present.
-3. The app checks `/api/app-version` every 10 seconds. A changed version clears browser sessions and reloads the login page. This is how a newly deployed UI logs out stale users.
+3. The app checks `/api/app-version` on a device-adaptive interval based on 60 seconds and on focus/pageshow. A changed version starts a one-minute refresh countdown and preserves valid browser sessions. Refresh waits for active request submissions (including photo preparation), writes, parsing/recovery and a two-second settling period. A failed or uncertain save pauses automatic refresh until the user checks the result and explicitly confirms **Refresh after checking**; this is not a guarantee that unsaved forms are persisted.
 4. The Express process starts listening immediately, then runs PostgreSQL migrations. If migration fails, the server retries every 30 seconds.
 5. Successful migration seeds the six repair types once: Breakdown, Accidental, Preventive, Aggregate Repair, Super Structure, and WGM.
 6. Each master page calls `GET /api/masters`. Master loaders remain visible until the request completes. The app displays a short data-load toast after a menu loads.
@@ -363,7 +363,7 @@ The tracked GitHub workflows run on pushes to `azure-hosting` or `azure-hosting-
 5. Log in to Azure using GitHub federated credentials stored as repository secrets.
 6. Deploy the artifact to App Service `coalmine-fleet-azure-783` in the Production slot.
 
-`npm run build` creates a new random `APP_VERSION`, builds the frontend to `dist`, writes `dist/app-version.txt`, and writes the static hosting metadata under `dist/.openai`. The server reads the version file and clears all active sessions when it changes.
+`npm run build` derives a stable `APP_VERSION` from the deployment source, builds the frontend to `dist`, writes `dist/app-version.txt`, and writes static hosting metadata under `dist/.openai`. The server records a changed UI version without clearing active sessions.
 
 ### Safe release checklist
 
@@ -378,7 +378,7 @@ git status --short
 Commit only intentional source, test, documentation, and workflow files. Do not add `node_modules`, `dist`, deployment ZIPs, `.azure-cli`, or historical `azure-*` folders. Push the branch used by the configured GitHub workflow, then verify:
 
 ~~~powershell
-Invoke-WebRequest https://bdms.cmll.in/api/health | Select-Object -ExpandProperty Content
+Invoke-WebRequest https://pulse.cmll.in/api/health | Select-Object -ExpandProperty Content
 ~~~
 
 Expected health output contains `"status":"ok"` and `"database":"connected"`.
@@ -415,7 +415,11 @@ If a user still reports a server error, the Log Stream line tagged `[500]` names
 
 ### A newly deployed UI is not visible
 
-The browser checks `/api/app-version` and should log out and reload automatically. If a stale tab remains, open the site again and confirm the response headers are not serving an old deployment.
+The browser checks `/api/app-version` and reloads after its countdown when request saves are safe to leave; a valid sign-in is preserved. If refresh is paused after a failed save, check the request and unsaved work before confirming the refresh. If a stale tab remains, open the site again and confirm the response headers are not serving an old deployment.
+
+### An API error appears to sign the user out
+
+`src/session-expiry-guard.mjs` captures the actual outgoing Bearer credential. Only a same-origin API 401 sent with the still-current token initiates a separate, bounded `/api/session-heartbeat` validation. Concurrent failures share that validation. Sign-in is cleared only when this endpoint returns its explicit JSON expiry response and the token remains current. Public requests, late responses from an old login, network failures, gateway responses and feature-specific errors do not erase a valid session. The failed request is still returned to its caller and writes are never replayed. Expiring one tab preserves a newer login saved by another tab. Actual revocation and the 30-day session lifetime remain enforced by the server.
 
 ### CSV import fails
 

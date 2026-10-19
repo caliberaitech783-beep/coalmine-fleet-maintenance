@@ -167,6 +167,8 @@ import {profileHeaderDesignation, profileHeaderName} from "./profile-designation
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
 import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
+import {authenticatedApiRequest,createSessionExpiryGuard,removeMatchingStoredSession} from "./session-expiry-guard.mjs";
+import {siteUpdateSafety} from "./site-update-safety.mjs";
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace, requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
@@ -394,12 +396,12 @@ const clientDeviceId = (() => {
     return "";
   }
 })();
-const clearStoredSession = () => {
+const clearStoredSession = (expiredToken) => {
   resetNavigation();
   authToken = "";
   currentEmployeeName = "";
-  localStorage.removeItem("nerveCenterSession");
-  sessionStorage.removeItem("nerveCenterSession");
+  try { removeMatchingStoredSession(localStorage, expiredToken); } catch {}
+  try { removeMatchingStoredSession(sessionStorage, expiredToken); } catch {}
 };
 const recordUserActivity = ({module = "Application", action = "Use application", targetReference = "", reason = ""} = {}) => {
   if (!authToken) return;
@@ -410,11 +412,17 @@ const recordUserActivity = ({module = "Application", action = "Use application",
     body: JSON.stringify({module, action, targetReference, reason}),
   }).catch(() => {});
 };
-// An authenticated 401 means this specific token is no longer valid (for
-// example after a password change), so return to sign-in instead of surfacing
-// it as an unrelated save error. Ordinary UI deployments preserve sessions.
+// Confirm expiry for the credential actually sent. A public/background error
+// or a late response for an older login must not clear the current session.
 if (typeof window !== "undefined" && typeof window.fetch === "function" && !window.__sessionExpiryFetch) {
   const nativeFetch = window.fetch.bind(window);
+  const sessionExpiry = createSessionExpiryGuard({
+    fetch: nativeFetch, getToken: () => authToken, deviceId: clientDeviceId,
+    onExpired: (token) => {
+      clearStoredSession(token);
+      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
+    },
+  });
   window.__sessionExpiryFetch = true;
   window.fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input?.url || "";
@@ -428,17 +436,21 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
     // false-positive permission text), so the transport helper uses the
     // server's JSON-compatible text/plain path for those requests.
     if (url.startsWith("/api/")) requestInit = edgeSafeJsonInit(requestInit);
+    const authenticatedRequest = authenticatedApiRequest(input, requestInit, {origin: window.location.origin, token: authToken});
     // While a deployment restarts the app the gateway answers 502/503/504 for
     // a few seconds. Read-only API calls wait and retry instead of showing an
     // error; writes are never replayed because the server may have applied them.
-    const response = await fetchWithTransientRetry(nativeFetch, input, requestInit, {
-      onRetry: ({attempt, reason, status}) => console.warn(`Retrying ${url} after a transient ${reason === "status" ? `HTTP ${status}` : "network failure"} (attempt ${attempt + 1}).`),
-    });
-    if (response.status === 401 && authToken && url.startsWith("/api/") && !url.startsWith("/api/login")) {
-      clearStoredSession();
-      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
+    const finishWrite = siteUpdateSafety.beginApiWrite(input, requestInit);
+    try {
+      const response = await fetchWithTransientRetry(nativeFetch, input, requestInit, {
+        onRetry: ({attempt, reason, status}) => console.warn(`Retrying ${url} after a transient ${reason === "status" ? `HTTP ${status}` : "network failure"} (attempt ${attempt + 1}).`),
+      });
+      await sessionExpiry.check(response, authenticatedRequest);
+      finishWrite({ok: response.ok});
+      return response;
+    } finally {
+      finishWrite();
     }
-    return response;
   };
 }
 const subsidiaryData = REGION_DATA;
@@ -6017,10 +6029,12 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     setSubmitting(true);
     setCheckingConflict(false);
     setDuplicateConflict(null);
+    const finishSubmission = siteUpdateSafety.beginWrite();
     try {
       if (fd.get("complaintPhoto")?.size || fd.get("complaintVideo")?.size) request.complaintMedia = await readComplaintMedia(fd);
       await submitMaintenanceRequest(onSubmit, request);
       close();
+      finishSubmission({ok: true});
     } catch (error) {
       if (error?.duplicate) {
         const conflict = {...error, message: error.message || activeRequestConflictMessage(error, request.door)};
@@ -6028,6 +6042,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         alert(conflict.message);
       } else alert(error?.message || "Could not save request. Please retry.");
     } finally {
+      finishSubmission();
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -10147,12 +10162,14 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       setFormError("");
       submitLock.current = true;
       setSubmitting(true);
+      const finishSubmission = siteUpdateSafety.beginWrite();
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         await onSave({ref: request.ref, category: editCategory, ...(form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility, responsibilityChangeReason: String(form.get("responsibilityChangeReason") || "").trim()} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
-      finally { submitLock.current = false; setSubmitting(false); }
+      finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="formgrid">
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
@@ -10242,13 +10259,15 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       setFormError("");
       submitLock.current = true;
       setSubmitting(true);
+      const finishSubmission = siteUpdateSafety.beginWrite();
       try {
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
         await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
-      finally { submitLock.current = false; setSubmitting(false); }
+      finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
@@ -10361,6 +10380,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
       setFormError("");
       submitLock.current = true;
       setSubmitting(true);
+      const finishSubmission = siteUpdateSafety.beginWrite();
       try {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
@@ -10369,9 +10389,11 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
         // request uses KMR. Keep the legacy scalar tied to the server's type.
         const meterType = ["HMR", "KMR"].includes(request.meterType) ? request.meterType : "HMR";
         await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripRemark: String(form.get("firstTripRemark") || "").trim(), firstTripCardImage, closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || ""});
+        finishSubmission({ok: true});
       } catch (error) {
         setFormError(error?.message || "Could not verify this request. Please try again.");
       } finally {
+        finishSubmission();
         submitLock.current = false;
         setSubmitting(false);
       }
@@ -11571,19 +11593,14 @@ function App() {
   useEffect(()=>{
     if(!session?.token)return undefined;
     let lastHeartbeatAt=0,closed=false;
-    const closeInvalidSession=()=>{
-      if(closed)return;
-      closed=true;
-      clearStoredSession();
-      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
-    };
     const heartbeat=async(force=false)=>{
       if(closed)return;
       if(!force&&Date.now()-lastHeartbeatAt<30000)return;
       lastHeartbeatAt=Date.now();
       try{
-        const response=await fetch('/api/session-heartbeat',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});
-        if(response.status===401)closeInvalidSession();
+        // The shared interceptor validates expiry and ignores stale-token
+        // responses; the activity timer must not bypass that protection.
+        await fetch('/api/session-heartbeat',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});
       }catch{}
     };
     let activityHeartbeatHandle=null,activityHeartbeatUsesIdle=false;
@@ -11796,7 +11813,7 @@ function App() {
       clearStoredSession();
       setSession(null);
     },
-    addRequest = async (request) => {
+    addRequest = async (request) => siteUpdateSafety.runWrite(async () => {
       requestLoadSequence.current += 1;
       const response = await fetch("/api/requests", {
         method: "POST",
@@ -11816,8 +11833,8 @@ function App() {
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== saved.ref)]);
       notifyRequestChange(window);
       return saved;
-    },
-    updateRequest = async (reference, payload, action = "edit") => {
+    }),
+    updateRequest = async (reference, payload, action = "edit") => siteUpdateSafety.runWrite(async () => {
       const endpoint = action === "breakdown-responsibility" ? `/api/requests/${encodeURIComponent(reference)}/breakdown-responsibility` : action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "production-first-trip" ? `/api/requests/${encodeURIComponent(reference)}/production-first-trip` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
       const before = requests.find((row) => row.ref === reference) || {ref: reference};
       const confirmUncertainWrite = async () => {
@@ -11870,8 +11887,8 @@ function App() {
       setRequests((current) => current.map((row) => Array.isArray(saved.updatedRequests) ? saved.updatedRequests.find(updated=>updated.ref===row.ref)||row : row.ref === reference ? saved : row));
       notifyRequestChange(window);
       return saved;
-    },
-    addDailyRemark = async (reference, payload) => {
+    }),
+    addDailyRemark = async (reference, payload) => siteUpdateSafety.runWrite(async () => {
       const response = await fetch(`/api/requests/${encodeURIComponent(reference)}/daily-remarks`, {method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},body:JSON.stringify(payload)});
       const saved=await response.json().catch(()=>({}));
       if(!response.ok){const error=new Error(saved.error||"Could not save the daily update");error.code=saved.code;throw error;}
@@ -11879,7 +11896,7 @@ function App() {
       setRequests((current)=>current.map((row)=>row.ref===reference?saved:row));
       notifyRequestChange(window);
       return saved;
-    },
+    }),
     deleteRequest = async (reference) => {
       const reason = window.prompt(`Enter the reason for deleting ${reference}:`, "");
       if (reason === null) return;
@@ -12107,6 +12124,8 @@ function App() {
 function SiteUpdateCountdown() {
   const [update, setUpdate] = useState(null);
   const [seconds, setSeconds] = useState(60);
+  const [refreshState, setRefreshState] = useState({reason: "countdown", canRefreshNow: false});
+  const reloaded = useRef(false);
   useEffect(() => {
     let stopped = false;
     let checking = false;
@@ -12141,12 +12160,12 @@ function SiteUpdateCountdown() {
   }, []);
   useEffect(() => {
     if (!update) return;
-    let reloaded = false;
     const tick = () => {
-      const remaining = Math.max(0, Math.ceil((update.deadline - Date.now()) / 1000));
-      setSeconds(remaining);
-      if (remaining === 0 && !reloaded) {
-        reloaded = true;
+      const state = siteUpdateSafety.getState(update.deadline);
+      setSeconds(state.remainingSeconds);
+      setRefreshState(current => current.reason === state.reason && current.canRefreshNow === state.canRefreshNow ? current : state);
+      if (state.canRefresh && !reloaded.current) {
+        reloaded.current = true;
         // Keep the valid stored session when loading the newly deployed assets.
         window.location.replace(`/?updated=${encodeURIComponent(update.version)}`);
       }
@@ -12160,9 +12179,18 @@ function SiteUpdateCountdown() {
     };
   }, [update]);
   if (!update) return null;
+  const waiting = seconds === 0 && refreshState.reason !== "ready";
+  const needsReview = waiting && refreshState.reason === "save-failed";
+  const refreshAfterReview = () => {
+    if (reloaded.current || !siteUpdateSafety.getState(update.deadline).canRefreshNow) return;
+    if (!window.confirm("Have you checked that your request was saved and finished any unsaved work? Refreshing will reload this page.")) return;
+    if (!siteUpdateSafety.acknowledgeFailures()) return;
+    reloaded.current = true;
+    window.location.replace(`/?updated=${encodeURIComponent(update.version)}`);
+  };
   return <div role="status" aria-live="polite" style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",zIndex:2147483647,width:"min(640px, calc(100% - 32px))",display:"flex",alignItems:"center",gap:20,padding:"16px 20px",background:"#10213f",color:"#fff",border:"1px solid #49617f",borderRadius:12,boxShadow:"0 8px 30px #0003"}}>
-    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>New update — refreshing in one minute</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>This page will refresh automatically after the countdown. Please finish and save your current work.</span></div>
-    <b role="timer" aria-live="off" aria-label={`${seconds} seconds until refresh`} style={{fontSize:26,fontVariantNumeric:"tabular-nums"}}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b>
+    <div style={{flex:1}}><strong style={{display:"block",fontSize:14,marginBottom:5}}>{waiting ? "New update — refresh paused" : "New update — refreshing in one minute"}</strong><span style={{fontSize:12,lineHeight:1.5,color:"#c4d2e9"}}>{needsReview ? "A save needs checking. Review your request and any unsaved details before refreshing." : waiting ? "Waiting for your request to finish saving. This update does not sign you out." : "Please finish and save your work. The refresh will wait for an active request save and keep your valid sign-in."}</span>{needsReview && <button type="button" disabled={!refreshState.canRefreshNow} onClick={refreshAfterReview} style={{display:"block",marginTop:8}}>Refresh after checking</button>}</div>
+    {!waiting && <b role="timer" aria-live="off" aria-label={`${seconds} seconds until refresh`} style={{fontSize:26,fontVariantNumeric:"tabular-nums"}}>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b>}
   </div>;
 }
 

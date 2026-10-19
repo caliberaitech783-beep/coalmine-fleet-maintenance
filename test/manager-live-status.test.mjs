@@ -12,6 +12,7 @@ import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mj
 import { isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import {isNetworkFailure, isTransientStatus} from "../src/api-transient-retry.mjs";
 import {requestWriteConnectionMessage, requestWriteOutcomeConfirmed} from "../src/request-write-recovery.mjs";
+import {createSiteUpdateSafety} from "../src/site-update-safety.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const managerSource = source.slice(source.indexOf("function ManagerDashboard("), source.indexOf("function Dashboard("));
@@ -283,6 +284,7 @@ function mutationHarness({ ok = true, status = ok ? 200 : 409, saved = { ...clos
   const calls = [];
   const win = { prompt: () => reason };
   const scope = {
+    siteUpdateSafety: createSiteUpdateSafety(),
     window: win, session: { token: "fixture-token" }, authToken: "fixture-token", requests: initial, requestLoadSequence: { current: 0 },
     setRequests: (update) => { rows = typeof update === "function" ? update(rows) : update; events.push("local-state"); },
     notifyRequestChange: (window) => { assert.equal(window, win); events.push("notify"); },

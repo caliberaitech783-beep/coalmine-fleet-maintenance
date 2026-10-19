@@ -14,6 +14,7 @@ import {defaultDurationSort} from '../src/duration-sort.mjs';
 import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
 import DateInput from '../src/date-input.mjs';
 import {managerRoleSelection} from '../admin-access.mjs';
+import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
@@ -70,6 +71,7 @@ function harness(){
     visibleInMisRequests:()=>true,visibleInMisHistory:()=>true,visibleInProductionHistory:()=>true,visibleInMaintenanceHistory:()=>true,preventTableAutoScroll:()=>{},
     isProductionFirstTripPending:()=>false,
   };
+  scope.siteUpdateSafety = createSiteUpdateSafety();
   scope.useNavigationState=(_key,initial)=>scope.useState(initial);
   for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck','Wrench','Plus','ChevronRight'])scope[icon]=Null;
   const components=new Function('DateInput',...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(DateInput,...Object.values(scope));

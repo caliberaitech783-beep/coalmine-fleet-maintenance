@@ -11,6 +11,7 @@ import { recordsForSite } from '../site-location.mjs';
 import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
 import { submitMaintenanceRequest } from '../request-submit.mjs';
 import DateInput from '../src/date-input.mjs';
+import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -42,6 +43,7 @@ function harness(code, name, extra = {}) {
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
   const scope = { AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  scope.siteUpdateSafety = createSiteUpdateSafety();
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }

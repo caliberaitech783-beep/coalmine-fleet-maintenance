@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {requestMeterReadings,requestMeterTypeForRequest} from '../request-equipment.mjs';
 import {validateClosingMeterReadings} from '../request-workflow.mjs';
+import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const form=source.slice(source.indexOf('function VerifyRequestForm('),source.indexOf('function ProductionFirstTripForm('));
 const start=form.indexOf('        const closingMeterReadings =');
 const end=form.indexOf('\n      } catch',start);
-const submit=new Function('request','equipmentRecords','meterReadingsFromForm','requestMeterTypeForRequest','form','onSave','firstTripDone','firstTripCardImage','return (async()=>{'+form.slice(start,end)+'})();');
+const submitBody=new Function('finishSubmission','request','equipmentRecords','meterReadingsFromForm','requestMeterTypeForRequest','form','onSave','firstTripDone','firstTripCardImage','return (async()=>{'+form.slice(start,end)+'})();');
+const submit=(...args)=>submitBody(createSiteUpdateSafety().beginWrite(),...args);
 
 for(const primary of ['KMR','HMR'])test(`verification keeps ${primary} identity with and without Equipment Master visibility`,async()=>{
   const request={meterType:primary,door:'V513',equipmentGroup:'VOLVO TIPPERS',openingMeterReadings:{HMR:'100',KMR:'2000'}};

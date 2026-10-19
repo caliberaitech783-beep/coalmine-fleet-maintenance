@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {isIdleVehicleRequest} from '../request-idle.mjs';
 import { submitMaintenanceRequest } from "../request-submit.mjs";
+import {createSiteUpdateSafety} from "../src/site-update-safety.mjs";
 import { parseRequestTimelineTimestamp, validateRequestTimelineChange } from "../request-timeline.mjs";
 
 const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -115,6 +116,7 @@ function addRequestHarness(fetch) {
   let rows = [], refreshes = 0;
   const snippet = client.slice(client.indexOf("    addRequest = async"), client.indexOf("    updateRequest = async")).trim().replace(/,$/, ";");
   const add = evaluate(`const ${snippet} return addRequest;`, {
+    siteUpdateSafety: createSiteUpdateSafety(),
     fetch, session: { token: "test" }, authToken: "test",
     requestLoadSequence: { current: 0 }, notifyRequestChange: () => {}, window: {},
     setRequests: update => { rows = update(rows); },
@@ -197,6 +199,7 @@ test("without a chassis, two submit events still save once and close after persi
   const start = client.indexOf("  const submit = async (e) =>", client.indexOf("function MaintenanceForm"));
   const end = client.indexOf("  return (", start);
   const submit = evaluate(`${client.slice(start, end)} return submit;`, {
+    siteUpdateSafety: createSiteUpdateSafety(),
     submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null, existingReason:"",
     FormData: class { get(name) { return request[name] || ""; } },
     requestEquipmentMeterType: () => "HMR", v: {}, equipmentDetails: {...request, chassis: ""},

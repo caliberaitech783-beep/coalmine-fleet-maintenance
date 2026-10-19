@@ -12,10 +12,12 @@ test('super-only routes answer a missing session with 401, not 403',()=>{
   assert.doesNotMatch(requireSuper,/status\(403\)\.json\(\{error:'Your sign-in has expired/);
 });
 
-test('the UI signs out and returns to the login screen when an API call reports an expired session',()=>{
+test('the UI validates an authenticated 401 before returning to sign-in',()=>{
   assert.match(ui,/window\.fetch = async \(input, init\) => \{/);
-  assert.match(ui,/response\.status === 401 && authToken && url\.startsWith\("\/api\/"\) && !url\.startsWith\("\/api\/login"\)/);
-  assert.match(ui,/clearStoredSession\(\);\s*window\.location\.replace\(`\/\?\$\{SESSION_EXPIRED_PARAM\}=1`\)/);
+  assert.match(ui,/authenticatedApiRequest\(input, requestInit, \{origin: window\.location\.origin, token: authToken\}\)/);
+  assert.match(ui,/await sessionExpiry\.check\(response, authenticatedRequest\)/);
+  assert.match(ui,/onExpired: \(token\) => \{\s*clearStoredSession\(token\);\s*window\.location\.replace\(`\/\?\$\{SESSION_EXPIRED_PARAM\}=1`\)/);
+  assert.doesNotMatch(ui,/closeInvalidSession|if\(response\.status===401\)\s*clearStoredSession/);
   assert.match(ui,/params\.has\(SESSION_EXPIRED_PARAM\)/);
   assert.match(ui,/Your sign-in has expired or was closed\. Please sign in again\./);
 });
