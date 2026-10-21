@@ -7396,6 +7396,7 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
   try{
     const manager=await currentUserRecord(req.session);
     const designation=flowDesignationForUser(manager,{permissions:req.session.permissions,assignedRole:req.session.assignedRole});
+    // Maintenance users share the approval action, but retain their ordinary assigned-site scope.
     const maintenanceUser=req.session.role==='normal'&&req.session.assignedRole==='Maintenance User';
     const canApproveIdle=maintenanceUser||(req.session.role==='super'&&(designation?.key==='projectManager'||req.session.permissions?.adminLevel==='Manager'));
     if(!canApproveIdle)return res.status(403).json({error:'Only an assigned manager or Maintenance User can approve an Idle request.'});
