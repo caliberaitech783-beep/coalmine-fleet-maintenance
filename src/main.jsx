@@ -1,4 +1,5 @@
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
+import {useMisSharedSignIn} from './mis-shared-signin.jsx';
 import { compressImageDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
@@ -11567,6 +11568,7 @@ function App() {
     [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null),
     [accountWorkspace,setAccountWorkspace]=useNavigationState("main.accountWorkspace", "accounts"),
     [accountDirectoryView,setAccountDirectoryView]=useNavigationState("main.accountDirectoryView", "directory");
+  useMisSharedSignIn(session);
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);

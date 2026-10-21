@@ -1,4 +1,5 @@
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
+import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -1433,6 +1434,7 @@ app.use((req,res,next)=>{
 // Audit interception is registered first so malformed and oversized request
 // bodies are also logged.
 app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
+const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
@@ -8557,6 +8559,7 @@ function setStaggeredInterval(task,intervalMs,offsetMs=0){
 async function initializeDatabase(){
   try{
     await migrate();
+    await misSharedSignIn.initialize();
     databaseReady=true;
     databaseError='';
     await seedCdirMasters()
