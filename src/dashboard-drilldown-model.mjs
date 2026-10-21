@@ -6,7 +6,7 @@ export const equipmentGroupLabel = (record = {}) => equipmentGroupValue(record, 
 export const equipmentCategoryLabel = (record = {}) => ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())
   ? "Total vehicles"
   : ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()) ? "Total equipment" : "Unclassified";
-export const equipmentMachineLabel = (record = {}) => String(equipmentDoorNumber(record) || record.door || record.registration || record.reg || record.manufacturerSerialNo || record.chassisNo || record.equipmentName || "Unidentified").trim() || "Unidentified";
+export const equipmentMachineLabel = (record = {}) => equipmentDoorNumber(record) || "Not recorded";
 
 const filterOrder = ["region", "site", "category", "group", "machine"];
 const recordSite = (record) => Object.hasOwn(record, "requestSite") ? String(record.requestSite || "").trim() : equipmentSiteName(record);

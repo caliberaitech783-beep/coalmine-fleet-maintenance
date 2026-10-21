@@ -39,7 +39,7 @@ test("builds request details from current and legacy equipment fields", () => {
   assert.equal(requestEquipmentDetails({ itemName: "Dozer", location: "Lalpeth OB" }).site, "Lalpeth OB");
 });
 
-test("selected imported equipment supplies a door identifier when the door field is blank", () => {
+test("selected imported equipment keeps a missing master door blank", () => {
   assert.deepEqual(
     requestEquipmentDetails({
       id: 228,
@@ -52,7 +52,7 @@ test("selected imported equipment supplies a door identifier when the door field
     {
       equipment: "PL69–MP66ZB8422",
       group: "",
-      door: "PL69–MP66ZB8422",
+      door: "",
       reg: "",
       chassis: "",
       make: "",

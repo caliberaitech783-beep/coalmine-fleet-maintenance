@@ -40,7 +40,7 @@ test('the overdue and closure reasons keep their label, the ETC reads due in or 
   assert.equal(w1['Delay reason recorded'], '');
   assert.deepEqual([w1.ETC, w1['ETC status'], w1['Daily updates']], ['Not set', 'Not set', '1']);
   assert.equal(w1['Latest daily update'], `${stamp('2026-09-16 08:00')} · Opened gear box · Delayed reason: Spares not in stock`);
-  assert.deepEqual([v167['Equipment / Vehicle'], v167['Equipment group'], v167.Status, v167['Standing tier']], ['MH34BZ3284', 'Volvo tipper', 'Accepted', 'Under 12h']);
+  assert.deepEqual([v167['Equipment / Vehicle'], v167['Equipment group'], v167.Status, v167['Standing tier']], ['Not recorded', 'Volvo tipper', 'Accepted', 'Under 12h']);
   assert.equal(v167['Delay reason'], 'Closure delay reason: Waiting for MIS closure');
   assert.deepEqual([v167['Down for'], v167.ETC, v167['ETC status']], ['4h 58m', stamp('2026-09-16 13:30'), 'Due in 2h 30m']);
   assert.deepEqual([o1['Standing tier'], o1.ETC, o1['ETC status'], o1['Daily updates'], o1['Latest daily update']], ['Under 12h', 'Not recorded', 'Not recorded', '0', '']);

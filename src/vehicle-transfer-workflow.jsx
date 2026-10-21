@@ -15,7 +15,7 @@ const indiaDateInput = () => {
   return `${value.year}-${value.month}-${value.day}`;
 };
 
-const equipmentLabel = (record = {}) => [record.door || record.reg || record.equipmentName, record.equipmentName, record.make, record.modelNo || record.model]
+const equipmentLabel = (record = {}) => [record.door || 'Door not recorded', record.equipmentName, record.make, record.modelNo || record.model]
   .filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ') || 'Unnamed vehicle';
 
 function TransferStatus({record}) {

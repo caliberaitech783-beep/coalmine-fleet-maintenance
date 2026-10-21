@@ -20,11 +20,11 @@ const requests = [
   {ref: "REQ-4", door: "EX-20", start: "2026-09-11 09:00", status: "Closed", maintenanceWork: "Serviced"},
 ];
 
-test('registration fallback keeps fleet history and driver attached to the same vehicle',()=>{
+test('a missing master door stays blank while fleet history and driver remain attached',()=>{
   const equipment={door:'',reg:'UP64AT9857',equipmentName:'UP64AT9857',chassisNo:'CH123'};
   const request={...equipment,ref:'REQ-REG',start:'2026-09-27 10:00',driverName:'Driver'};
   const [row]=vehicleFleetRows([equipment],[request]);
-  assert.equal(row.reportDoor,'UP64AT9857');
+  assert.equal(row.reportDoor,'');
   assert.equal(row.breakdownCount,1);
   assert.equal(row.driverName,'Driver');
   assert.equal(vehicleRepairHistoryRows([request],row)[0].ref,'REQ-REG');
@@ -64,7 +64,7 @@ test("fleet, month ranking, and common remarks aggregate each vehicle without lo
   assert.equal(remarks.find((row) => row.reportDoor === "V-173").breakdownReason, "Hydraulic leak");
 });
 
-test("imported vehicle labels populate door and join their recorded driver history", () => {
+test("imported vehicle labels do not replace a missing door or lose driver history", () => {
   const equipment = [{
     door: "", reg: "2329890", equipmentName: "V326 - 2329890", chassisNo: "YV2XBZ0GXR8986510L26",
     make: "VOLVO", model: "FMX500E", currentLocation: "Jayant OB",
@@ -74,7 +74,7 @@ test("imported vehicle labels populate door and join their recorded driver histo
     driverName: "Ravi Kumar", start: "2026-09-20 09:00", status: "Closed",
   }], equipment);
   const [vehicle] = vehicleFleetRows(equipment, history);
-  assert.equal(vehicle.reportDoor, "V326 - 2329890");
+  assert.equal(vehicle.reportDoor, "");
   assert.equal(vehicle.driverName, "Ravi Kumar");
   assert.equal(vehicle.breakdownCount, 1);
 });
@@ -82,7 +82,7 @@ test("imported vehicle labels populate door and join their recorded driver histo
 test("a transfer driver remains available when a vehicle has no breakdown history", () => {
   const equipment = [{door: "", equipmentName: "D61-07220", chassisNo: "7220", currentLocation: "Gauri Pauni OB (2nd)"}];
   const [vehicle] = vehicleFleetRows(equipment, [], [{equipment: "D61-07220", driver: "Suresh", transferDate: "2026-09-18"}]);
-  assert.equal(vehicle.reportDoor, "D61-07220");
+  assert.equal(vehicle.reportDoor, "");
   assert.equal(vehicle.driverName, "Suresh");
 });
 

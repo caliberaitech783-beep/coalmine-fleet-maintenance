@@ -134,12 +134,12 @@ export default function InfoPulseContent({breakdowns = [], firstTripPending = []
             <span className="pulse-rank" aria-hidden="true">{index + 1}</span>
             <div className="pulse-row-equipment">
               <span className="pulse-row-site"><MapPin size={13} aria-hidden="true" />{row.site}</span>
-              <b className="pulse-row-vehicle"><Truck size={18} aria-hidden="true" />{request.door || request.reg || 'Not recorded'}</b>
+              <b className="pulse-row-vehicle"><Truck size={18} aria-hidden="true" />{request.door || 'Not recorded'}</b>
               <small>{request.equipmentGroup || request.equipment || 'Equipment group not recorded'}{request.ref && <> · {renderRequestReference ? renderRequestReference(request.ref) : request.ref}</>}</small>
               <span className="pulse-row-status"><i className="pulse-status-tag">{requestStatusLabel(request)}</i><i className={`pulse-tier-tag ${row.tier}`}>{firstTripSelected ? 'First trip pending' : row.tier === 'critical' ? 'Critical · 24h+' : row.tier === 'warning' ? 'Warning · 12h+' : 'Under 12h'}</i></span>
-              <button type="button" className="pulse-updates-button" aria-label={`Daily updates for ${request.door || request.reg || request.ref || row.key}`} aria-expanded={updatesOpen} aria-controls={updatesId} onClick={() => setExpandedUpdates(current => ({...current, [row.key]: !current[row.key]}))}>Daily updates <b>{updates.length}</b><span aria-hidden="true">{updatesOpen ? '−' : '+'}</span></button>
+              <button type="button" className="pulse-updates-button" aria-label={`Daily updates for ${request.door || request.ref || row.key}`} aria-expanded={updatesOpen} aria-controls={updatesId} onClick={() => setExpandedUpdates(current => ({...current, [row.key]: !current[row.key]}))}>Daily updates <b>{updates.length}</b><span aria-hidden="true">{updatesOpen ? '−' : '+'}</span></button>
             </div>
-            <div className="pulse-row-reason"><span>{firstTripSelected ? 'Production action needed' : 'Breakdown reason'}</span><p>{firstTripSelected ? `Record the first trip/work start entry for ${request.door || request.reg || request.ref || 'this asset'}.` : String(request.complaint || '').trim() || 'Not recorded'}</p>
+            <div className="pulse-row-reason"><span>{firstTripSelected ? 'Production action needed' : 'Breakdown reason'}</span><p>{firstTripSelected ? `Record the first trip/work start entry for ${request.door || request.ref || 'this asset'}.` : String(request.complaint || '').trim() || 'Not recorded'}</p>
               {delay && <div className="pulse-row-delay"><span>{delay.label}</span><p>{delay.value}</p>{delay.at && Number.isFinite(parseIstTimestamp(delay.at)) && <time>{formatDisplayDateTime(delay.at)} IST{delay.author ? ` · ${delay.author}` : ''}</time>}</div>}
             </div>
             <dl className="pulse-row-timing">

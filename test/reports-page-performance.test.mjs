@@ -13,7 +13,7 @@ test("Reports page resolves road status as one indexed fleet snapshot", () => {
 
 test("Reports normalize imported door labels before building vehicle history", () => {
   assert.match(reportsPage, /requestsWithDoorNumbers\(requests, equipmentRecords\)\.map/);
-  assert.match(reportsPage, /reportDoor: request\.door \|\| equipmentDoorNumber\(equipment \|\| \{\}\)/);
+  assert.match(reportsPage, /reportDoor: request\.door,/);
 });
 
 test("Reports page memoizes expensive derived collections", () => {

@@ -28,7 +28,7 @@ const stageDefinitions = [
 
 // Equipment group, door number and location that identify the machine, shown with the request number everywhere in the time breakdown.
 export function requestTimelineIdentity(request = {}) {
-  return [request.equipmentGroup || request.equipment, request.door || request.reg, request.site || request.location].map(value => String(value || "").trim()).filter(Boolean).join(" · ");
+  return [request.equipmentGroup || request.equipment, request.door, request.site || request.location].map(value => String(value || "").trim()).filter(Boolean).join(" · ");
 }
 
 export function RequestTimelineView({data}) {
@@ -41,7 +41,7 @@ export function RequestTimelineView({data}) {
     ["Current status", request.status],
     ["Site / work location", request.site || request.location],
     ["Equipment group", request.equipmentGroup || request.equipment],
-    ["Door / registration", request.door || request.reg],
+    ["Door number", request.door],
     ["Chassis / serial number", request.chassis || request.chassisNo || request.manufacturerSerialNo],
     ["Breakdown type", request.category || request.type],
     ["Reported problem", request.complaint],

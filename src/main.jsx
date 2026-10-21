@@ -2361,7 +2361,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       ...(equipment || {}),
       id: `${request.ref || request.reference || request.id || "request"}-${index}`,
       equipmentName: equipment?.equipmentName || request.equipment || request.door || "Unclassified equipment",
-      door: requestEquipmentDetails(equipment || {}).door || request.door || "",
+      door: requestEquipmentDetails(equipment || {}).door,
       category: equipment?.category || request.equipmentCategory || "Unclassified",
       group: equipmentGroupValue(equipment || {}) || normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Unclassified",
       make: equipment?.make || request.make || "",
@@ -2586,7 +2586,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const listAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded);
   const trendPointAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
   const cardAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, `${label}. Open full list`, equipmentLoaded, "group");
-  if (hourlyBreakdownVisible) return <HourlyBreakdownView ActionsTable={ActionsTable} requests={scopedBreakdowns.map(request => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
+  if (hourlyBreakdownVisible) return <HourlyBreakdownView ActionsTable={ActionsTable} requests={requestsWithDoorNumbers(scopedBreakdowns,scopedEquipment)} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
   // Each section's export table: its Export menu offers it, and the whole dashboard's Excel workbook has a sheet
   // per section (both Tracking Vehicle Throughput tabs) after the KPI sheet. Tables are built only when asked for.
   const fleetSectionTable = () => fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: liveFleetCounts, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel });
@@ -7530,7 +7530,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     return {
       ...request,
       reportEquipment: request.equipment || request.door || equipment?.equipmentName || "",
-      reportDoor: request.door || equipmentDoorNumber(equipment || {}) || "",
+      reportDoor: request.door,
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
@@ -7601,7 +7601,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     return {
       ...record,
       reportId: record.id || `${record.transferNo || "transfer"}-${index}`,
-      reportDoor: record.door || asset?.door || "",
+      reportDoor: equipmentDoorNumber(asset || {}),
       reportEquipment: record.equipment || record.equipmentName || record.door || "",
       reportSite: displaySiteName(record.destination || record.currentLocation || record.location),
     };
@@ -7686,7 +7686,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     ...breakdownMeterColumns({stage: "latest", source: (record) => record.latestBreakdownAt ? record : null}),
   ];
   const maximumBreakdownColumns = [
-    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <b>{row.reportDoor || row.reportEquipment || "—"}</b>},
+    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor, render: (row) => <b>{row.reportDoor || "—"}</b>},
     {key: "count", label: "Number of BD", value: (row) => row.breakdownCount, sortValue: (row) => row.breakdownCount, render: (row) => <button type="button" className="breakdown-count-link" onClick={() => setBreakdownOccurrencesTarget(row)} aria-label={`View ${row.breakdownCount} breakdowns for ${row.reportDoor || row.reportEquipment}`}>{row.breakdownCount}<Eye /></button>},
     {key: "equipment", label: "Vehicle / equipment", value: (row) => row.reportEquipment},
     {key: "site", label: "Latest location", value: (row) => row.reportSite},
@@ -7694,7 +7694,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     ...breakdownMeterColumns({stage: "latest", source: (row) => row.breakdowns.at(-1)}),
   ];
   const vehicleCommonRemarkColumns = [
-    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor || row.reportEquipment, render: (row) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(row)}><History />{row.reportDoor || row.reportEquipment || "View history"}</button>},
+    {key: "door", label: "Vehicle number", value: (row) => row.reportDoor, render: (row) => <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(row)}><History />{row.reportDoor || "View history"}</button>},
     {key: "driver", label: "Driver", value: (row) => row.driverName},
     {key: "notice", label: "Notice", value: (row) => row.notice, render: (row) => <span className={`vehicle-notice${row.notice.includes("open") ? " attention" : ""}`}>{row.notice}</span>},
     {key: "remark", label: "Latest maintenance remark", value: (row) => row.remark},

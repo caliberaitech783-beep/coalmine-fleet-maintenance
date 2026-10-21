@@ -135,12 +135,12 @@ function enrichRequests(requests=[],equipmentRecords=[]){
     else if(byReference.get(key)!==record)byReference.set(key,null);
   };
   for(const record of equipmentRecords)[record.manufacturerSerialNo,record.chassisNo,record.door,record.reg,record.equipmentName].forEach((value)=>add(value,record));
-  return requests.map((request)=>{
+  return requestsWithDoorNumbers(requests,equipmentRecords).map((request)=>{
     const equipment=[request.chassis,request.door,request.reg,request.equipment].map((value)=>byReference.get(clean(value).toLowerCase())).find(Boolean)||{};
     return {
       ...request,
       reportEquipment:request.equipment||request.door||equipment.equipmentName||'',
-      reportDoor:request.door||equipment.door||'',
+      reportDoor:request.door||'',
       reportMake:request.make||equipment.make||'',
       reportModel:request.model||equipment.model||'',
       chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',

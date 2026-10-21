@@ -18,7 +18,7 @@ const updatesOf = row => pulseDailyUpdates(row.request?.dailyRemarks);
 export function pulseExportColumns(now = Date.now()) {
   return [
     {label: 'Site', value: row => text(row.site)},
-    {label: 'Equipment / Vehicle', value: row => text(row.request?.door) || text(row.request?.reg) || 'Not recorded'},
+    {label: 'Equipment / Vehicle', value: row => text(row.request?.door) || 'Not recorded'},
     {label: 'Equipment group', value: row => text(row.request?.equipmentGroup) || text(row.request?.equipment)},
     {label: 'Request ref', value: row => text(row.request?.ref)},
     {label: 'Status', value: row => requestStatusLabel(row.request || {})},

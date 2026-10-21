@@ -1,5 +1,9 @@
 # Caliber Pulse project workflow
 
+## Authoritative equipment door numbers
+
+Door-number displays and request creation use only the Equipment Master `door` field. Registration, equipment name, chassis and serial values remain lookup identifiers, never substitute door labels. Saved requests are resolved against the current master without rewriting history; missing or ambiguous matches display no guessed door. Downtime Matrix follows the same resolver, including exports. A blank master door must be corrected in Equipment Master, not inferred by reports.
+
 ## Read-only request-media storage breakdown
 
 Storage management > Check media breakdown measures logical data-URL bytes by images, videos, audio, PDFs and unknown formats, split by MIS verification before October 2026, during October 2026 (IST), unverified, and after October if present. It covers opening/closing/first-trip cards, complaint photos/videos and complaint/maintenance audio; unrelated ticket, announcement and session media are excluded. The existing Photos and audio counter omits opening/closing cards but includes complaint JSON metadata. The new report reconciles both differences explicitly. A repeatable read-only database snapshot keeps totals consistent while requests change. Only aggregate sizes and counts are returned. No files, requests or retention settings are modified.

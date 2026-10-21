@@ -259,7 +259,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       : ROAD_STATUS_LABELS[["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus) ? record.dashboardRoadStatus : "onroad"] || ROAD_STATUS_LABELS.unknown;
     return {
       ...record,
-      door: equipmentDoorNumber(record) || record.door || '',
+      door: equipmentDoorNumber(record),
       requestReference: current ? String(current.ref || current.reference || "") : "",
       requestStatus,
       requestIdleAt: String(current?.idealRequestedAt || "").trim() || String(current?.idleRequestedAt || "").trim(),

@@ -6,6 +6,7 @@ import {createPortal} from "react-dom";
 import {transformWithOxc} from "vite";
 import * as metrics from "../dashboard-equipment-metrics.mjs";
 import {requestEquipmentDetails} from "../request-equipment.mjs";
+import {requestsWithDoorNumbers} from "../equipment-door.mjs";
 import * as movement from "../dashboard-breakdown-movement.mjs";
 import * as dailyBalance from "../src/daily-bd-balance.mjs";
 import * as actions from "../src/dashboard-card-actions.mjs";
@@ -209,6 +210,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     activeTodayBreakdowns,
     useMasterRecords: () => [repairTypes],
     requestEquipmentDetails,
+    requestsWithDoorNumbers,
     requestsVisibleToDashboard,
     encodeDateRange, parseDateRange,
     FilterableHeader() {},

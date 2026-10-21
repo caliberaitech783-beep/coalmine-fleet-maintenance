@@ -1,9 +1,10 @@
 import {parseRequestTimelineTimestamp} from '../request-timeline.mjs';
 import {equipmentGroupValue} from '../equipment-group.mjs';
+import {equipmentDoorNumber,createRequestDoorResolver} from '../equipment-door.mjs';
 
 export const downtimeToday = (now = Date.now()) => new Date(now + 19800000).toISOString().slice(0,10);
 const epoch = value => parseRequestTimelineTimestamp(value)?.getTime();
-const identity = row => String(row.chassis || row.manufacturerSerialNo || row.chassisNo || row.reportDoor || row.door || row.reg || row.reportEquipment || row.equipmentName || row.equipment || '').trim().toLowerCase();
+const identity = row => String(row.chassis || row.manufacturerSerialNo || row.chassisNo || row.reportDoor || row.door || row.reg || row.doorLookupReference || row.reportEquipment || row.equipmentName || row.equipment || row.ref || '').trim().toLowerCase();
 
 export function downtimeMatrix(requests, equipment, date, now = Date.now()) {
   const start = epoch(`${date}T00:00:00`), end = start + 86400000;
@@ -20,18 +21,22 @@ export function downtimeMatrixRange(requests,equipment,fromValue,toValue,now=Dat
     const id = identity(row);
     if (!id) return null;
     const key = `${site}:${id}`;
-    if (!groups.has(key)) groups.set(key, {key, site, door:row.reportDoor || row.door || row.reg || row.equipmentName || row.equipment || id, equipmentGroup:equipmentGroupValue(row), events:[]});
+    if (!groups.has(key)) groups.set(key, {key, site, door:equipmentDoorNumber(row) || '—', equipmentGroup:equipmentGroupValue(row), events:[]});
     if (!groups.get(key).equipmentGroup) groups.get(key).equipmentGroup = equipmentGroupValue(row);
     return groups.get(key);
   };
   equipment.forEach(add);
+  const resolveDoor = createRequestDoorResolver(equipment);
   requests.forEach(row => {
     const from = epoch(row.start || row.startedAt || row.createdAt);
     const closed = epoch(row.closedAt);
     if (!Number.isFinite(from) || (row.closedAt && !Number.isFinite(closed))) return;
     const to = Math.min(closed ?? now, now, end), clipped = Math.max(from, start);
     if (to <= clipped) return;
-    add(row)?.events.push({ref:row.ref || '—', start:clipped, end:to, hours:(to-clipped)/3600000, reason:row.complaint || row.reason || '—', open:closed == null});
+    // Keep identity keys for grouping, but resolve the displayed door from master.
+    const group = add(row);
+    if (group) group.door = resolveDoor(row).door || '—';
+    group?.events.push({ref:row.ref || '—', start:clipped, end:to, hours:(to-clipped)/3600000, reason:row.complaint || row.reason || '—', open:closed == null});
   });
   return [...groups.values()].filter(row => row.events.length > 0).map(row => {
     row.events.sort((a,b)=>a.start-b.start);
