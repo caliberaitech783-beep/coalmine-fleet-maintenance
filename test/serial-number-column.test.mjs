@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {decodedPdf} from './pdf-streams.mjs';
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, hasSerialColumn, withSerialColumn, recordCountLine } from "../serial-column.mjs";
@@ -6,7 +7,7 @@ import { buildTableExportPdf } from "../table-export-pdf.mjs";
 import { buildXlsxWorkbookBuffer } from "../director-report-bundle.mjs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const pdfText = (pdf) => [...pdf.toString("latin1").matchAll(/<([0-9a-f]+)>/gi)].map((match) => Buffer.from(match[1], "hex").toString("latin1")).join("");
+const pdfText = (pdf) => [...decodedPdf(pdf).matchAll(/<([0-9a-f]+)>/gi)].map((match) => Buffer.from(match[1], "hex").toString("latin1")).join("");
 
 test("the serial column is added exactly once to export data", () => {
   const added = withSerialColumn([{ label: "Door no." }], [["S1"], ["S2"]]);

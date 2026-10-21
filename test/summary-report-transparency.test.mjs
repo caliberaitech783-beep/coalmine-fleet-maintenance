@@ -74,7 +74,8 @@ test('Summary UI values and scheduled Excel/PDF data share the same 24-column de
   assert.ok(workbook.includes(Buffer.from('11m 18s')));
   assert.ok(workbook.includes(Buffer.from('6m 29s')));
   const pdf=await buildTableExportPdf({title:table.title,columns:table.columns,rows:table.rows});
-  const fragments=[...pdf.toString('latin1').matchAll(/<([0-9a-f]+)>/gi)].map(match=>Buffer.from(match[1],'hex').toString('latin1')).join('');
+  const {decodedPdf}=await import('./pdf-streams.mjs');
+  const fragments=[...decodedPdf(pdf).matchAll(/<([0-9a-f]+)>/gi)].map(match=>Buffer.from(match[1],'hex').toString('latin1')).join('');
   assert.match(fragments,/11m 18s/);
   assert.match(fragments,/6m 29s/);
   assert.equal(JSON.stringify(rows),before,'reports must not alter the source requests');
