@@ -67,9 +67,10 @@ export default function StorageManagementPage({ token, onNavigate }) {
         <article className={`storage-card ${overview.disk.status}`}>
           <span className="storage-card-icon" aria-hidden="true"><HardDrive /></span>
           <div>
-            <h2>Backup disk</h2>
+            <h2>Server filesystem</h2>
             <strong>{overview.disk.usedPercent == null ? "—" : `${overview.disk.usedPercent}% used`}</strong>
             <small>{overview.disk.total ? `${overview.disk.free} free of ${overview.disk.total} · ` : ""}{DISK_LABELS[overview.disk.status]}</small>
+            <small>Filesystem containing the backup folder. Includes other server files. This is not the Azure database capacity or your App Service storage quota.</small>
             {overview.disk.usedPercent != null && <span className="storage-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, overview.disk.usedPercent)}%` }} /></span>}
           </div>
         </article>
