@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canViewTelegramUnlinkedReport,telegramUnlinkedRows} from '../src/telegram-unlinked-report.mjs';
 test('unlinked report excludes linked users and keeps exempt users clearly marked',()=>{
-  const rows=telegramUnlinkedRows([{login:'linked',linked:true},{login:'pending',name:'Pending',linked:false},{login:'exempt',name:'Exempt',linked:false,exempt:true}]);
+  const rows=telegramUnlinkedRows([{login:'linked',linked:true},{login:'pending',name:'Pending',linked:false},{login:'exempt',name:'Exempt',linked:false,exempt:true},{login:'never',linked:false}], [{login:'LINKED',lastLogin:'2026-10-01'},{login:' PENDING ',lastLogin:'2026-10-01'},{login:'exempt',lastLogin:'2026-10-01'},{login:'never',lastLogin:null}]);
   assert.deepEqual(rows.map(row=>row.login),['exempt','pending']);
   assert.equal(rows[0].exemption,'Exempt');assert.equal(rows[1].status,'Not linked');
   assert.deepEqual(telegramUnlinkedRows([]),[]);

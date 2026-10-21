@@ -17,19 +17,20 @@ export default function TelegramUnlinkedReport({session,ReportSection,onBack}) {
     if(!allowed)return;
     const controller=new AbortController();
     setLoading(true);setError('');setData(null);
-    fetch('/api/telegram/settings',{headers:{Authorization:`Bearer ${session.token}`},cache:'no-store',signal:controller.signal})
-      .then(async response=>{if(!response.ok)throw new Error(response.status===403?'You do not have access to this report.':'Could not load Telegram link status. Please retry.');return response.json();})
+    Promise.all(['/api/telegram/settings','/api/user-login-history'].map(url=>fetch(url,{headers:{Authorization:`Bearer ${session.token}`},cache:'no-store',signal:controller.signal})
+      .then(async response=>{if(!response.ok)throw new Error(response.status===403?'You do not have access to this report.':'Could not load Telegram link status or login history. Please retry.');return response.json();})))
+      .then(([telegram,history])=>({...telegram,loginUsers:history.users}))
       .then(result=>{if(!controller.signal.aborted)setData(result);})
       .catch(err=>{if(!controller.signal.aborted)setError(err.message);})
       .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[allowed,session?.token,refresh]);
   if(!allowed)return <section className="panel"><h1>Access denied</h1><p>This report is available to Admin and Super Admin.</p></section>;
-  const rows=telegramUnlinkedRows(data?.users||[]);
+  const rows=telegramUnlinkedRows(data?.users||[],data?.loginUsers||[]);
   return <section className="reports-page panel pagepanel">
-    <header><div><h1>Telegram Not Linked Report</h1><p>Users with no linked Telegram account. Exempt users are included and marked separately.</p></div><div className="reports-header-actions"><button onClick={onBack}>Back to reports</button><button disabled={loading} onClick={()=>setRefresh(value=>value+1)}>{loading?'Loading…':'Refresh'}</button></div></header>
+    <header><div><h1>Telegram Not Linked Report</h1><p>Users with a recorded login who have not linked Telegram. Exempt users are included and marked separately.</p></div><div className="reports-header-actions"><button onClick={onBack}>Back to reports</button><button disabled={loading} onClick={()=>setRefresh(value=>value+1)}>{loading?'Loading…':'Refresh'}</button></div></header>
     {error&&<p role="alert">{error}</p>}
     {loading&&<p role="status">Loading Telegram link status…</p>}
-    {data&&<ReportSection title="Telegram Not Linked Report" description={`${rows.length} not linked · ${data.users.length} total user accounts · ${rows.filter(row=>row.exempt).length} exempt`} rows={rows} columns={columns} rowKey={row=>row.login} emptyMessage="All user accounts have linked Telegram." />}
+    {data&&<ReportSection title="Telegram Not Linked Report" description={`${rows.length} logged-in users not linked · ${rows.filter(row=>row.exempt).length} exempt`} rows={rows} columns={columns} rowKey={row=>row.login} emptyMessage="No users with a recorded login are waiting to link Telegram." />}
   </section>;
 }
