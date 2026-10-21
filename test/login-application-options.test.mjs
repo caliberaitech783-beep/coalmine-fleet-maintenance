@@ -22,3 +22,17 @@ test('mobile application tiles wrap in two columns, with a single column on narr
   assert.match(css,/span\{min-width:0;overflow-wrap:anywhere\}/);
   assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
+
+test('MIS opens its separate application in a new tab without adding HR',()=>{
+  const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
+  assert.ok(links);
+  const mis=links.match(/<a className="login-mis-link"[\s\S]*?<\/a>/)?.[0];
+  assert.ok(mis);
+  assert.match(mis,/href="https:\/\/pulseII\.cmll\.in"/);
+  assert.match(mis,/target="_blank"/);
+  assert.match(mis,/rel="noopener noreferrer"/);
+  assert.match(mis,/aria-label="Open MIS application in a new tab"/);
+  assert.match(mis,/<strong>MIS<\/strong>/);
+  assert.equal((links.match(/<a |<button /g)||[]).length,5);
+  assert.doesNotMatch(links,/<strong>HR<\/strong>|login-hr-link/);
+});
