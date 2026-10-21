@@ -57,6 +57,10 @@ export function vehicleHistoryKey(request = {}) {
     ["door", vehicleDoor(request)],
     ["chassis", request.chassis || request.chassisNo || request.manufacturerSerialNo],
     ["registration", request.reg || request.registrationNumber],
+    // A lookup identity must not become a displayed door number. Keep master
+    // assets with missing door/serial fields visible, including their drivers.
+    ["oracle", request.oracleEquipmentTno],
+    ["equipment", /\d/.test(clean(request.equipmentName || request.equipment)) ? request.equipmentName || request.equipment : ""],
   ];
   const match = references.find(([, value]) => normalize(value));
   return match ? `${match[0]}:${normalize(match[1])}` : "";

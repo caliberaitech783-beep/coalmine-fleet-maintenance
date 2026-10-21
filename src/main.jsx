@@ -6014,6 +6014,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       alert("Select an equipment or vehicle from the selected equipment group.");
       return;
     }
+    if (!equipmentDetails.door) {
+      alert("Door No. is missing in Equipment Master. Update that master record before creating a request.");
+      return;
+    }
     if (duplicateConflict) {
       alert(duplicateConflict.message || "This door number already has an active maintenance request.");
       return;
