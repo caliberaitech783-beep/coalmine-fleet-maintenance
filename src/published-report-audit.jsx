@@ -1,0 +1,15 @@
+import React,{useState,useEffect,useRef} from 'react';
+const mb=n=>(Number(n)/1024**2).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+export default function PublishedReportAudit({token}){
+  const [job,setJob]=useState(null),[error,setError]=useState('');const timer=useRef(null),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;clearTimeout(timer.current);};},[]);
+  const load=async()=>{setError('');try{const res=await fetch('/api/published-report-audit',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const body=await res.json();if(!res.ok)throw Error(body.error||'Could not inspect reports');if(!mounted.current)return;setJob(body);if(body.status==='running')timer.current=setTimeout(load,5000);}catch(e){if(mounted.current)setError(e.message);}};
+  const report=job?.report||job?.summary;
+  return <section className="panel" aria-label="Published report duplicate audit"><h2>Published report duplicate audit</h2><p>Read-only SHA-256 comparison of current report files. Same filenames alone do not prove identical content. Savings below are stored value bytes, excluding table/index overhead; existing links must be preserved when consolidating files.</p><button disabled={job?.status==='running'} onClick={load}>{job?.status==='running'?`Checking ${job.checked||0} / ${job.candidates??'…'} candidate files…`:'Check report duplicates'}</button>{error&&<p role="alert">{error}</p>}{job?.status==='failed'&&<p role="alert">{job.error}</p>}
+    {report&&<><p>Total: {report.files} files · {mb(report.storedBytes)} MiB stored values. Expired files: {mb(report.expiredBytes)} MiB. Files older than 7 days: {mb(report.older7Bytes)} MiB.</p>
+    <table><thead><tr><th>Format</th><th>Files</th><th>Logical MiB</th><th>Stored MiB</th></tr></thead><tbody>{report.types.map(r=><tr key={r.type}><th>{r.type}</th><td>{r.files}</td><td>{mb(r.bytes)}</td><td>{mb(r.storedBytes)}</td></tr>)}</tbody></table>
+    {job.status==='complete'&&<><p>Identical content: {report.duplicateGroups} groups · {report.redundantFiles} extra copies · {mb(report.redundantStoredBytes)} MiB redundant stored values.</p><table><thead><tr><th>Identical-content examples</th><th>Copies</th><th>Redundant MiB</th></tr></thead><tbody>{report.duplicates.map((r,i)=><tr key={i}><td>{r.names.join(' · ')}</td><td>{r.copies}</td><td>{mb(r.redundantStoredBytes)}</td></tr>)}</tbody></table></>}
+    <h3>Largest stored reports</h3><table><thead><tr><th>Filename</th><th>Created (IST)</th><th>Stored MiB</th></tr></thead><tbody>{report.largest.map(r=><tr key={r.id}><td>{r.filename}</td><td>{new Date(r.created_at).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</td><td>{mb(r.stored_bytes)}</td></tr>)}</tbody></table>
+    <h3>Repeated filenames (may contain different data)</h3><table><thead><tr><th>Filename</th><th>Copies</th><th>Total stored MiB</th></tr></thead><tbody>{report.repeatedNames.map(r=><tr key={r.name}><td>{r.name}</td><td>{r.files}</td><td>{mb(r.storedBytes)}</td></tr>)}</tbody></table></>}
+  </section>;
+}

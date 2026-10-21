@@ -18,6 +18,7 @@ import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
 import {requestMediaStorage} from './request-media-storage.mjs';
 import {dailyStorageAnalysis} from './daily-storage-analysis.mjs';
+import {auditPublishedReports} from './published-report-audit.mjs';
 import {previewMediaBackup,exportMediaBackup,scanMediaZip,restoreMediaBackup,mediaCutoff} from './selective-media-backup.mjs';
 import {requestHistorySnapshotSql,requestHistoryTimelineSql} from './request-history-payload.mjs';
 import {retryDatabaseRead} from './database-read-retry.mjs';
@@ -1855,6 +1856,15 @@ app.get('/api/request-media-storage',requireSuper,requireAdministrator,async(req
 });
 app.get('/api/daily-storage-analysis',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{res.set('Cache-Control','no-store');res.json(await dailyStorageAnalysis(pool));}catch(error){next(error);}
+});
+let publishedReportAuditJob=null;
+app.get('/api/published-report-audit',requireSuper,requireAdministrator,async(req,res)=>{
+  // Single-flight background read avoids request timeouts and simultaneous scans.
+  if(!publishedReportAuditJob||(publishedReportAuditJob.status!=='running'&&Date.now()-publishedReportAuditJob.startedAt>15*60000)){
+    const job={status:'running',startedAt:Date.now(),checked:0};publishedReportAuditJob=job;
+    auditPublishedReports(pool,progress=>Object.assign(job,progress)).then(report=>Object.assign(job,{status:'complete',report})).catch(error=>Object.assign(job,{status:'failed',error:error.message}));
+  }
+  res.set('Cache-Control','no-store');res.json(publishedReportAuditJob);
 });
 app.get('/api/storage-overview',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
