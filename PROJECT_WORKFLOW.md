@@ -6,6 +6,8 @@ Door-number displays and request creation use Equipment Master labels: an explic
 
 ## Read-only request-media storage breakdown
 
+The daily retained media inventory uses request creation, closure, and first-trip event dates as explicitly labeled proxies, not upload timestamps. It measures only current retained values and published reports created since 17 October 2026. It cannot reconstruct replaced/deleted media or reconcile historical physical Azure growth without earlier table-size snapshots. `/api/daily-storage-analysis` is administrator-only and runs in a read-only transaction with a 90-second query timeout.
+
 Storage management > Check media breakdown measures logical data-URL bytes by images, videos, audio, PDFs and unknown formats, split by MIS verification before October 2026, during October 2026 (IST), unverified, and after October if present. It covers opening/closing/first-trip cards, complaint photos/videos and complaint/maintenance audio; unrelated ticket, announcement and session media are excluded. The existing Photos and audio counter omits opening/closing cards but includes complaint JSON metadata. The new report reconciles both differences explicitly. A repeatable read-only database snapshot keeps totals consistent while requests change. Only aggregate sizes and counts are returned. No files, requests or retention settings are modified.
 
 ## Selective request-media ZIP backup and restore
