@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
-import {readFileSync} from 'node:fs';
-const pulseReportLogo=readFileSync(new URL('./public/pulse-logo.png',import.meta.url));
+import {fileURLToPath} from 'node:url';
+// PDFKit caches filename-based images per document, reusing the logo on every page.
+const pulseReportLogo=fileURLToPath(new URL('./public/pulse-logo.png',import.meta.url));
 import {reportTime12} from './report-time-format.mjs';
 import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
@@ -110,7 +111,7 @@ function createTableDocument(title,generatedAt,pageSize){
   const info={Title:clean(title),Author:'Caliber Pulse'};
   if(generatedAt!==undefined)info.CreationDate=new Date(generatedAt);
   // A3 stays the default; Smart Print exports may ask for A4 and the columns are fitted to that width.
-  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info,...(String(pageSize).toUpperCase()==='A4'?{size:'A4'}:{})});
+  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:true,info,...(String(pageSize).toUpperCase()==='A4'?{size:'A4'}:{})});
   registerReportPdfFonts(doc);
   return doc;
 }

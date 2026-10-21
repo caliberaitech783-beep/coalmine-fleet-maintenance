@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
-import {readFileSync} from 'node:fs';
-const pulseReportLogo=readFileSync(new URL('./public/pulse-logo.png',import.meta.url));
+import {fileURLToPath} from 'node:url';
+// PDFKit caches filename-based images per document, reusing the logo on every page.
+const pulseReportLogo=fileURLToPath(new URL('./public/pulse-logo.png',import.meta.url));
 import {canonicalSiteName} from './site-location.mjs';
 import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
@@ -92,7 +93,7 @@ function footer(doc){
 }
 
 function createDocument(title){
-  const doc=new PDFDocument({size:'A4',margin:36,bufferPages:true,compress:false,info:{Title:title,Author:'Caliber Pulse'}});
+  const doc=new PDFDocument({size:'A4',margin:36,bufferPages:true,compress:true,info:{Title:title,Author:'Caliber Pulse'}});
   registerReportPdfFonts(doc);
   return doc;
 }

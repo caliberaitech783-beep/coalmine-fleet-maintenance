@@ -1,3 +1,4 @@
+import {decodedPdf,assertSharedLogoAndCompression} from './pdf-streams.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -10,7 +11,7 @@ test('fleet consolidated report is generated as a complete PDF document',async()
   const pdf=await buildFleetConsolidatedReportPdf({scopeLabel:'WCL',start,end,openRequests:[{site:'Sasti OB',door:'HP12',reference:'REQ-1',elapsed:'4h 0m',user:'Operator',oem:'Tata',status:'Open'}],closedRequests:[]});
   assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
   assert.ok(pdf.length>1500);
-  assert.match(pdf.toString('latin1'),/Caliber Pulse Fleet Report/);
+  assert.match(decodedPdf(pdf),/Caliber Pulse Fleet Report/);
 });
 
 test('fleet PDF derives request status from acceptance lifecycle events',()=>{
@@ -23,7 +24,7 @@ test('CRM consolidated report is generated as a complete PDF document',async()=>
   const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:'Sasti OB',start,end,openTickets:[],closedTickets:[{site:'Sasti OB',reference:'TIC-1',elapsed:'1h 5m',user:'User',remarks:'Resolved'}]});
   assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
   assert.ok(pdf.length>1500);
-  assert.match(pdf.toString('latin1'),/Caliber Pulse CRM Ticket Report/);
+  assert.match(decodedPdf(pdf),/Caliber Pulse CRM Ticket Report/);
 });
 
 test('consolidated CRM preserves long Hindi remarks across pages without covering the next ticket or footer',async()=>{
@@ -31,7 +32,8 @@ test('consolidated CRM preserves long Hindi remarks across pages without coverin
     {site:'Sasti OB',reference:'TIC-LONG',elapsed:'4h 0m',user:'Operator',remarks:`वाहन नहीं पहुंचा - ${'Checking all remarks during report pagination. '.repeat(450)}FINAL_TICKET_SENTINEL`},
     {site:'Sasti OB',reference:'TIC-NEXT',elapsed:'1h 0m',user:'Operator',remarks:'FOLLOWING_TICKET_SENTINEL'},
   ],closedTickets:[]});
-  const text=pdf.toString('latin1');
+  assertSharedLogoAndCompression(pdf);
+  const text=decodedPdf(pdf);
   assert.ok(Number(text.match(/\/Count (\d+)\b/)?.[1])>1);
   assert.match(text,/\/BaseFont \/[^\s]*NotoSansDevanagari-Regular/);
   assert.match(text,/\/ToUnicode/);

@@ -1,3 +1,4 @@
+import {decodedPdf} from './pdf-streams.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {buildTableBundlePdf,buildTableExportPdf} from '../table-export-pdf.mjs';
@@ -6,8 +7,8 @@ const generatedAt=new Date('2026-09-15T13:30:00Z');
 const title='Sasti OB site report';
 const subtitle='Reporting window: 15-09-26 07:00 AM to 07:00 PM IST';
 const fragments=source=>[...source.matchAll(/<([0-9a-f]+)>/gi)].map((match)=>Buffer.from(match[1],'hex').toString('latin1')).join('');
-const pageStreams=pdf=>[...pdf.toString('latin1').matchAll(/\d+ \d+ obj\r?\n([\s\S]*?)\r?\nendobj/g)].filter((match)=>!match[1].includes('/Subtype /Image')).flatMap((match)=>[...match[1].matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((stream)=>stream[1]));
-const pageCount=pdf=>Number(pdf.toString('latin1').match(/\/Count (\d+)\b/)?.[1]);
+const pageStreams=pdf=>[...decodedPdf(pdf).matchAll(/\d+ \d+ obj\r?\n([\s\S]*?)\r?\nendobj/g)].filter((match)=>!match[1].includes('/Subtype /Image')).flatMap((match)=>[...match[1].matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((stream)=>stream[1]));
+const pageCount=pdf=>Number(decodedPdf(pdf).match(/\/Count (\d+)\b/)?.[1]);
 
 test('site PDF starts each selected report on a clear page with site, window and section headers',async()=>{
   const tables=Object.freeze([
@@ -51,7 +52,7 @@ test('site PDF keeps empty activity, omits empty optional sections and tolerates
   for(const options of [{}, {title,tables:[]}, {title,tables:tables.slice(0,2)}]){
     const empty=await buildTableBundlePdf({...options,generatedAt});
     assert.equal(pageCount(empty),1);
-    assert.match(fragments(empty.toString('latin1')),/No records are available for this report\./);
+    assert.match(fragments(decodedPdf(empty)),/No records are available for this report\./);
   }
 });
 
@@ -77,7 +78,7 @@ test('site PDF retains every row and every long remark token across pages and se
     assert.ok(page.includes(`Page ${index+1} of ${pages.length}`));
     if(page.includes('NOTE_'))assert.match(page,/Maintenance details.*Field 1.*REQ-LONG/);
   });
-  const rectangles=[...pdf.toString('latin1').matchAll(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) re\b/g)].map((match)=>match.slice(1).map(Number));
+  const rectangles=[...decodedPdf(pdf).matchAll(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) re\b/g)].map((match)=>match.slice(1).map(Number));
   for(const [x,y,width,height] of rectangles){
     assert.ok(x>=27.99&&x+width<=1162.56,`column outside A3 content: ${x},${width}`);
     assert.ok(y>=28&&y+height<=791.90,`row outside page/footer boundary: ${y},${height}`);
@@ -87,7 +88,7 @@ test('site PDF retains every row and every long remark token across pages and se
 test('bundle uses the existing Hindi font and directional fallback without changing source data',async()=>{
   const table={title:'रखरखाव रिपोर्ट',columns:[{label:'कारण'}],rows:[['वाहन → रखरखाव']]};
   const pdf=await buildTableBundlePdf({title:'Sasti OB',subtitle:'हिंदी → रिपोर्ट',tables:[table],generatedAt});
-  const source=pdf.toString('latin1');
+  const source=decodedPdf(pdf);
   assert.match(source,/\/BaseFont \/[^\s]*NotoSansDevanagari-Regular/);
   for(const code of ['0935','003e','002d'])assert.ok(source.includes(`<${code}>`));
   assert.equal(table.rows[0][0],'वाहन → रखरखाव');
@@ -96,7 +97,7 @@ test('bundle uses the existing Hindi font and directional fallback without chang
 test('legacy empty table export keeps its original single-report layout',async()=>{
   const pdf=await buildTableExportPdf({title:'Legacy empty report',columns:[{label:'Reference'}],rows:[]});
   assert.equal(pageCount(pdf),1);
-  assert.match(fragments(pdf.toString('latin1')),/Legacy empty report.*0 records exported.*Reference.*No records are available for this report\./);
+  assert.match(fragments(decodedPdf(pdf)),/Legacy empty report.*0 records exported.*Reference.*No records are available for this report\./);
 });
 
 test('bundled report and complete update appendix use the selected paper size',async()=>{
@@ -107,7 +108,7 @@ test('bundled report and complete update appendix use the selected paper size',a
       {title:'Daily Updates',columns:[{label:'Update no.'},{label:'Daily update'}],rows:[[1,'Removed'],[2,'Fitted']]},
     ],
   });
-  const mediaBox=pdf.toString('latin1').match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/).slice(1).map(Number).map(Math.round);
+  const mediaBox=decodedPdf(pdf).match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/).slice(1).map(Number).map(Math.round);
   assert.deepEqual(mediaBox,[842,595]);
   const text=pageStreams(pdf).map(fragments).join(' ');
   assert.match(text,/Report.*2 updates.*Daily Updates.*Removed.*Fitted/);
