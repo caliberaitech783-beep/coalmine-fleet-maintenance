@@ -1,4 +1,5 @@
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
+import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
 import { compressImageDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
@@ -7133,7 +7134,7 @@ function UserSessionsPage({session}) {
   const [historyTarget,setHistoryTarget]=useState(null);
   const [announcing,setAnnouncing]=useState(false);
   const [sessions,setSessions]=useState([]);
-  const [summary,setSummary]=useState({active:0,online:0,users:0,devices:0});
+  const [summary,setSummary]=useState(()=>summarizeUserSessions());
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [query,setQuery]=useState("");
@@ -7169,7 +7170,8 @@ function UserSessionsPage({session}) {
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||'Could not load user sessions.');
       const nextSessions=Array.isArray(result.sessions)?result.sessions:[];
-      const nextSummary=result.summary||{active:0,online:0,users:0,devices:0};
+      // Use one response snapshot, including when an older API is still running.
+      const nextSummary=summarizeUserSessions(nextSessions);
       setSessions(previous=>mobileTablePageSize()>0&&JSON.stringify(previous)===JSON.stringify(nextSessions)?previous:nextSessions);
       setSummary(previous=>mobileTablePageSize()>0&&JSON.stringify(previous)===JSON.stringify(nextSummary)?previous:nextSummary);
       setError("");
@@ -7206,9 +7208,9 @@ function UserSessionsPage({session}) {
   return <section className="panel pagepanel user-sessions-page">
     <header><div><h1>User Sessions</h1></div><div className="user-session-header-actions">{!viewOnly&&<button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button>}<button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button>{!viewOnly&&<button type="button" className="secondary danger" onClick={()=>setActivityPurgeOpen(true)} disabled={loading||activityPurging}><Trash2 /> Delete old activity</button>}</div></header>
     <div className="user-session-summary" aria-label="Session summary">
-      <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
-      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>No inactivity logout</p></div></article>
-      <article><span className="user-session-kpi-icon users"><Users /></span><div><small>Signed-in users</small><b>{Number(summary.users||0).toLocaleString('en-IN')}</b><p>Unique user accounts</p></div></article>
+      <article title="Each login account is counted once across all its sessions and devices."><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online users</small><b>{Number(summary.onlineUsers||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes · unique accounts</p></div></article>
+      <article title="Unexpired sign-ins, including inactive sessions. Closing a tab does not sign it out."><span className="user-session-kpi-icon"><Monitor /></span><div><small>Unexpired login sessions</small><b>{Number(summary.unexpired||0).toLocaleString('en-IN')}</b><p>30-day maximum · includes inactive sessions</p></div></article>
+      <article><span className="user-session-kpi-icon users"><Users /></span><div><small>Users with sessions</small><b>{Number(summary.users||0).toLocaleString('en-IN')}</b><p>Unique accounts · includes inactive users</p></div></article>
       <article><span className="user-session-kpi-icon devices"><Smartphone /></span><div><small>Known devices</small><b>{Number(summary.devices||0).toLocaleString('en-IN')}</b><p>Identified app devices</p></div></article>
     </div>
     <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, location, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Login activity','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div>{status!=='Login activity'&&<span className="user-session-visible"><b>{visible.length}</b> visible</span>}<div className="user-session-actions" ref={setActionsToolbarTarget} /></div>

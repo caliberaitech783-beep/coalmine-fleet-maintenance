@@ -1,4 +1,5 @@
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
+import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
@@ -2998,12 +2999,7 @@ app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res
     res.set('Cache-Control','no-store');
     res.json({
       sessions,
-      summary:{
-        active:sessions.length,
-        online:sessions.filter(session=>session.online).length,
-        users:new Set(sessions.map(session=>String(session.login||session.name).toLowerCase()).filter(Boolean)).size,
-        devices:new Set(sessions.map(session=>session.deviceId).filter(Boolean)).size,
-      },
+      summary:summarizeUserSessions(sessions),
     });
   }catch(error){next(error)}
 });
