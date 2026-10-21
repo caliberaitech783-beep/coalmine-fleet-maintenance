@@ -34,10 +34,12 @@ test('MIS opens its separate application in a new tab with HR beside it',()=>{
   assert.match(mis,/aria-label="Open MIS application in a new tab"/);
   assert.match(mis,/<strong>MIS<\/strong>/);
   assert.equal((links.match(/<a |<button /g)||[]).length,6);
-  const hr=links.match(/<button type="button" className="login-hr-link"[\s\S]*?<\/button>/)?.[0];
+  const hr=links.match(/<a className="login-hr-link"[\s\S]*?<\/a>/)?.[0];
   assert.ok(hr);
   assert.ok(links.indexOf(hr)>links.indexOf(mis));
-  assert.match(hr,/disabled/);
-  assert.match(hr,/<strong>HR<\/strong>Coming soon/);
-  assert.doesNotMatch(hr,/href=|onClick=|type="submit"/);
+  assert.match(hr,/href="https:\/\/hrpulse\.cmll\.in"/);
+  assert.match(hr,/target="_blank"/);
+  assert.match(hr,/rel="noopener noreferrer"/);
+  assert.match(hr,/<strong>HR<\/strong>Open application/);
+  assert.doesNotMatch(hr,/disabled|Coming soon|onClick=|type="submit"/);
 });
