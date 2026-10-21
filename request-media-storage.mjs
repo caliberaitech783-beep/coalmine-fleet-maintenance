@@ -13,7 +13,7 @@ WITH media AS (
 ), classified AS (
   SELECT id,source,in_counter,octet_length(data)::bigint AS bytes,
     CASE WHEN verified_at IS NULL THEN 'unverified' WHEN verified_at<$1::timestamptz THEN 'beforeOctober' WHEN verified_at<$2::timestamptz THEN 'october' ELSE 'afterOctober' END AS period,
-    CASE WHEN data LIKE 'data:image/%' THEN 'images' WHEN data LIKE 'data:video/%' THEN 'videos' WHEN data LIKE 'data:audio/%' THEN 'audio' WHEN data LIKE 'data:application/pdf;%' THEN 'pdfs' ELSE 'other' END AS kind
+    CASE WHEN substring(data FROM 1 FOR 40) LIKE 'data:image/%' THEN 'images' WHEN substring(data FROM 1 FOR 40) LIKE 'data:video/%' THEN 'videos' WHEN substring(data FROM 1 FOR 40) LIKE 'data:audio/%' THEN 'audio' WHEN substring(data FROM 1 FOR 40) LIKE 'data:application/pdf;%' THEN 'pdfs' ELSE 'other' END AS kind
   FROM media
 )
 SELECT period,kind,source,in_counter,COUNT(*)::int AS files,COUNT(DISTINCT id)::int AS requests,SUM(bytes)::bigint AS bytes
@@ -27,6 +27,7 @@ export async function requestMediaStorage(pool){
   const client=await pool.connect();
   try{
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    await client.query("SET LOCAL statement_timeout='90s'");
     const limits=['2026-09-30T18:30:00.000Z','2026-10-31T18:30:00.000Z'];
     const {rows:details}=await client.query(REQUEST_MEDIA_STORAGE_SQL,limits);
     const {rows:counters}=await client.query(COUNTER_RECONCILIATION_SQL,limits);
