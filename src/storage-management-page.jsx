@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import SelectiveMediaBackup from './selective-media-backup.jsx';
 import { Archive, CalendarClock, Database, Eraser, HardDrive, Image, RefreshCw, XCircle } from "lucide-react";
 import "./data-housekeeping-page.css";
 
@@ -72,6 +73,7 @@ export default function StorageManagementPage({ token, onNavigate }) {
           </div>
         </article>
       </div>
+      <SelectiveMediaBackup token={token} />
       <h2 className="storage-heading">Largest tables</h2>
       <div className="housekeeping-table storage-table" role="table" aria-label="Largest tables">
         <div role="row" className="head"><span role="columnheader">Data</span><span role="columnheader">Rows</span><span role="columnheader">Size</span><span role="columnheader">Share</span></div>

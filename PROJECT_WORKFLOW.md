@@ -1,5 +1,11 @@
 # Caliber Pulse project workflow
 
+## Selective request-media ZIP backup and restore
+
+Admin > Database > Storage management includes Selective media backup and restore. Preview uses an exclusive MIS verification cutoff at midnight IST; `2026-10-01` selects only requests verified before October 2026 and excludes unverified requests. Export includes original opening/closing/first-trip evidence (including PDF trip cards) and complaint/maintenance audio, with original filenames, request IDs/references, verification timestamps and SHA-256 hashes in manifest.json. Complaint photos/videos and unrelated tables are outside this export. ZIP64 streams directly to the browser without a retained Azure archive; wait for the browser download to complete. Nothing is deleted by export.
+
+Verify a downloaded ZIP with `node scripts/verify-selective-media-backup.mjs <file.zip>`. For restore, upload the intact ZIP through the same panel (8 MB chunks, 20 GB archive maximum), inspect checksums, then type RESTORE MISSING MEDIA. Admin-only restore revalidates the archive, locks matching requests, fills missing fields only, skips identical data and rejects conflicting media or changed verification. The transaction rolls back on any error. Request details and dates are preserved. Uploaded restore archives expire after 30 minutes and are removed after successful restore. Selective ZIPs must not be imported through the full-database restore page.
+
 ## Image and voice storage limits
 
 New trip-card, ticket, complaint-photo, correction-evidence and announcement images are converted to WebP in the browser, including sources below 20 KB, targeting 10–20 KB and permitting up to 100 KB to retain detail. Browsers without WebP encoding show an actionable error rather than saving a different format. If bounded compression cannot fit the image, users must crop and retry; users should check text readability. PDFs and videos retain their existing separate limits. The API independently enforces decoded image size. Existing stored media is not recompressed.

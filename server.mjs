@@ -15,6 +15,7 @@ import {ibossAccountsEligible,ibossAccountsAllowed,accountSectionAllowed} from '
 import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role-access.mjs';
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
+import {previewMediaBackup,exportMediaBackup,scanMediaZip,restoreMediaBackup,mediaCutoff} from './selective-media-backup.mjs';
 import {requestHistorySnapshotSql,requestHistoryTimelineSql} from './request-history-payload.mjs';
 import {retryDatabaseRead} from './database-read-retry.mjs';
 import {measureRequestHistoryPayload} from './request-history-diagnostics.mjs';
@@ -1781,6 +1782,70 @@ async function backupDiskUsage(){
     catch{if(path.dirname(folder)===folder)return {totalBytes:0,freeBytes:0};}
   }
 }
+const selectiveDownloads=new Map(),selectiveImports=new Map();
+const selectiveRoot=path.join(os.tmpdir(),'bdms-selective-media');
+const selectiveOwner=req=>String(req.session?.login||'').trim().toLowerCase();
+const selectiveError=message=>Object.assign(new Error(message),{status:400});
+async function pruneSelectiveMedia(){
+  for(const [token,item] of selectiveDownloads)if(item.expiresAt<Date.now())selectiveDownloads.delete(token);
+  for(const [token,item] of selectiveImports)if(item.expiresAt<Date.now()&&!item.busy){selectiveImports.delete(token);await fs.rm(item.file,{force:true}).catch(()=>{});}
+}
+const selectivePruner=setInterval(()=>pruneSelectiveMedia().catch(()=>{}),60000);selectivePruner.unref();
+app.get('/api/selective-media/preview',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{res.set('Cache-Control','no-store');res.json(await previewMediaBackup(pool,String(req.query.before||'')));}catch(error){next(error);}
+});
+app.post('/api/selective-media/export',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    await pruneSelectiveMedia();const day=String(req.body?.before||'');mediaCutoff(day);
+    const token=randomUUID();selectiveDownloads.set(token,{day,owner:selectiveOwner(req),expiresAt:Date.now()+120000});
+    req.audit={eventType:'Administration',module:'Backup',action:'Prepare selective media export',targetType:'Request media',targetReference:`MIS verified before ${day} IST`,changedFields:[]};
+    res.set('Cache-Control','no-store');res.json({url:`/api/selective-media/download/${token}`,fileName:`Caliber-Pulse-MIS-media-before-${day}.zip`});
+  }catch(error){next(error);}
+});
+// A single-use, two-minute download capability lets the browser stream large
+// ZIPs directly to Downloads, without loading a multi-GB Blob into memory.
+app.get('/api/selective-media/download/:token',async(req,res,next)=>{
+  const item=selectiveDownloads.get(req.params.token);selectiveDownloads.delete(req.params.token);
+  if(!item||item.expiresAt<Date.now())return res.status(410).json({error:'Download expired. Prepare the export again.'});
+  try{
+    res.set({'Content-Type':'application/zip','Content-Disposition':`attachment; filename="Caliber-Pulse-MIS-media-before-${item.day}.zip"`,'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'});
+    await exportMediaBackup(pool,item.day,res);
+  }catch(error){if(res.headersSent)res.destroy(error);else next(error);}
+});
+app.post('/api/selective-media/import',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    await pruneSelectiveMedia();
+    if([...selectiveImports.values()].some(item=>item.owner===selectiveOwner(req)))throw selectiveError('An import is already pending. Finish it or wait 30 minutes for expiry.');
+    const size=Number(req.body?.size);if(!Number.isSafeInteger(size)||size<=0||size>20*1024**3)throw selectiveError('Choose a ZIP no larger than 20 GB.');
+    await fs.mkdir(selectiveRoot,{recursive:true});const token=randomUUID(),file=path.join(selectiveRoot,token+'.zip');await fs.writeFile(file,'',{flag:'wx',mode:0o600});
+    selectiveImports.set(token,{file,size,received:0,owner:selectiveOwner(req),expiresAt:Date.now()+1800000,busy:false});res.json({token});
+  }catch(error){next(error);}
+});
+function selectiveImport(req){const item=selectiveImports.get(req.params.token);if(!item||item.expiresAt<Date.now()||item.owner!==selectiveOwner(req))throw selectiveError('Import expired. Upload again.');if(item.busy)throw selectiveError('Another import operation is still running.');return item;}
+app.post('/api/selective-media/import/:token/chunk',requireSuper,requireAdministrator,async(req,res,next)=>{
+  let item;
+  try{
+    item=selectiveImport(req);if(item.manifest||Number(req.query.offset)!==item.received)throw selectiveError('Upload offset mismatch.');item.busy=true;
+    let bytes=0;const meter=new Transform({transform(chunk,_encoding,callback){bytes+=chunk.length;callback(bytes>8*1024**2||item.received+bytes>item.size?selectiveError('Upload chunk is too large.'):null,chunk);}});
+    await pipeline(req,meter,createWriteStream(item.file,{flags:'a'}));item.received+=bytes;item.expiresAt=Date.now()+1800000;res.json({received:item.received});
+  }catch(error){if(item){selectiveImports.delete(req.params.token);await fs.rm(item.file,{force:true}).catch(()=>{});}next(error);}finally{if(item)item.busy=false;}
+});
+app.post('/api/selective-media/import/:token/inspect',requireSuper,requireAdministrator,async(req,res,next)=>{
+  let item;try{
+    item=selectiveImport(req);if(item.received!==item.size)throw selectiveError('Upload is incomplete.');item.busy=true;
+    const manifest=await scanMediaZip(item.file);item.manifest=manifest;item.expiresAt=Date.now()+1800000;
+    res.json({files:manifest.entries.length,requests:new Set(manifest.entries.map(entry=>entry.requestId)).size,cutoffDay:manifest.cutoffDay,verified:true});
+  }catch(error){if(item){selectiveImports.delete(req.params.token);await fs.rm(item.file,{force:true}).catch(()=>{});}next(error);}finally{if(item)item.busy=false;}
+});
+app.post('/api/selective-media/import/:token/restore',requireSuper,requireAdministrator,async(req,res,next)=>{
+  let item;try{
+    item=selectiveImport(req);if(!item.manifest||req.body?.confirmation!=='RESTORE MISSING MEDIA')throw selectiveError('Inspect the ZIP and type RESTORE MISSING MEDIA first.');item.busy=true;
+    const result=await restoreMediaBackup(pool,item.file);
+    req.audit={eventType:'Administration',module:'Backup',action:'Restore missing selective request media',targetType:'Request media',targetReference:item.manifest.cutoffDay,reason:JSON.stringify(result),changedFields:['media']};
+    selectiveImports.delete(req.params.token);await fs.rm(item.file,{force:true});res.json(result);
+  }catch(error){next(error);}finally{if(item)item.busy=false;}
+});
+
 app.get('/api/storage-overview',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const [{rows:[database]},{rows:tables},{rows:[media]},{rows:[announcementImages]},{rows:[backups]},{settings:backupSettings},disk]=await Promise.all([
