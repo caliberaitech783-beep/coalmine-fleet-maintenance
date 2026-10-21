@@ -804,7 +804,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
           <a className="login-mis-link" href="https://pulse-ll.cmll.in" target="_blank" rel="noopener noreferrer" aria-label="Open MIS application in a new tab"><FileBarChart /><span><strong>MIS</strong>Open application ↗</span></a>
-          <a className="login-hr-link" href="https://hrpulse.cmll.in" target="_blank" rel="noopener noreferrer" aria-label="Open HR application in a new tab"><Users /><span><strong>HR</strong>Open application ↗</span></a>
+          <a className="login-hr-link" href="https://hrpulse.cmll.in" target="_self" aria-label="Open HR application in this window"><Users /><span><strong>HR</strong>Open application</span></a>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>

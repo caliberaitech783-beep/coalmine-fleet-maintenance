@@ -38,8 +38,8 @@ test('MIS opens its separate application in a new tab with HR beside it',()=>{
   assert.ok(hr);
   assert.ok(links.indexOf(hr)>links.indexOf(mis));
   assert.match(hr,/href="https:\/\/hrpulse\.cmll\.in"/);
-  assert.match(hr,/target="_blank"/);
-  assert.match(hr,/rel="noopener noreferrer"/);
+  assert.match(hr,/target="_self"/);
+  assert.match(hr,/aria-label="Open HR application in this window"/);
   assert.match(hr,/<strong>HR<\/strong>Open application/);
-  assert.doesNotMatch(hr,/disabled|Coming soon|onClick=|type="submit"/);
+  assert.doesNotMatch(hr,/disabled|Coming soon|onClick=|type="submit"|_blank|new tab|↗/);
 });
