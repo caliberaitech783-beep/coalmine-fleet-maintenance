@@ -23,8 +23,8 @@ test('creation payload keeps exact master door and separate chassis identity', a
   }
 });
 
-test('creation uses only the master door, not an imported label or model', () => {
+test('creation accepts verified imported master labels but never generic models', () => {
   assert.equal(requestEquipmentCreationDetails({door:'D-17', reg:'REG-101', chassisNo:'CH-101'}).door, 'D-17');
-  assert.equal(requestEquipmentCreationDetails({equipmentName:'WT22 - REG101',reg:'REG101',chassisNo:'CH-101'}).door, '');
+  assert.equal(requestEquipmentCreationDetails({equipmentName:'WT22 - REG101',reg:'REG101',chassisNo:'CH-101'}).door, 'WT22 - REG101');
   assert.equal(requestEquipmentCreationDetails({equipmentName:'D85ESS-2',model:'D85ESS-2'}).door, '');
 });

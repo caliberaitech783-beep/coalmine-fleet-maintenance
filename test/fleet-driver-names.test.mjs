@@ -8,7 +8,7 @@ test('logbook drivers populate vehicles without breakdown or transfer history', 
   const equipment = [{oracleEquipmentTno:'42', equipmentName:driver.equipmentName}];
   const enriched = withFleetDriverNames(equipment, [driver]);
   assert.equal(vehicleFleetRows(enriched)[0].driverName, 'Ravi Kumar');
-  assert.equal(vehicleFleetRows(enriched)[0].reportDoor, '');
+  assert.equal(vehicleFleetRows(enriched)[0].reportDoor, driver.equipmentName);
   assert.equal(vehicleCommonRemarkRows(enriched)[0].driverName, 'Ravi Kumar');
   assert.equal(equipment[0].logbookDriverName, undefined);
 });

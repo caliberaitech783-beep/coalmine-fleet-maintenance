@@ -2,11 +2,19 @@ import {canonicalSiteName,equipmentSiteName} from './site-location.mjs';
 const text = value => String(value ?? '').trim();
 const key = value => text(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
-// The Equipment Master Door No. is authoritative, even when it is numeric
-// or equals another identifier. Never invent a door from another field.
+// Imported master rows display their fleet label in equipmentName; door may
+// instead contain an Oracle ID/registration, or be blank. Use that verified
+// master label, never a standalone registration/chassis or generic model.
 export function equipmentDoorNumber(record = {}) {
+  const usable = value => key(value) && !['na','notavailable','notapplicable','unknown','none','null'].includes(key(value));
   const door = text(record.door);
-  return key(door) && !['na','notavailable','notapplicable','unknown','none','null'].includes(key(door)) ? door : '';
+  const identifiers = new Set([record.reg,record.registration,record.registrationNumber,record.chassisNo,
+    record.chassis,record.manufacturerSerialNo,record.engineNo].map(key).filter(Boolean));
+  const name = text(record.equipmentName);
+  const masterLabel = usable(name) && /\d/.test(name) && !identifiers.has(key(name)) &&
+    ![record.model,record.modelNo,record.itemName,record.group,record.category].some(value => key(value) && key(value) === key(name)) ? name : '';
+  if (usable(door) && !identifiers.has(key(door))) return door;
+  return masterLabel || (usable(door) ? door : '');
 }
 
 // Build once per feed, rather than scanning the master again for every row.
@@ -20,7 +28,7 @@ export function createRequestDoorResolver(records = []) {
   };
   for (const record of records) {
     for (const value of [record.chassisNo,record.chassis,record.manufacturerSerialNo]) add(serialIndex,key(value),record);
-    for (const value of [record.door,record.reg,record.registration,record.equipmentName]) add(index,key(value),record);
+    for (const value of [record.door,equipmentDoorNumber(record),record.reg,record.registration,record.registrationNumber,record.equipmentName]) add(index,key(value),record);
   }
   return (request = {}) => {
     for (const field of ['chassis','reg','door','doorLookupReference','equipment']) {

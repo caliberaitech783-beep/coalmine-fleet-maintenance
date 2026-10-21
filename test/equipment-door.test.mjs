@@ -61,3 +61,28 @@ test('downtime uses master door and preserves events when door is missing',()=>{
     assert.equal(row.downtime,2);
   }
 });
+
+test('imported master labels survive repeated API/report resolution and matrix export rows',()=>{
+  const start='2026-10-14T10:00',closedAt='2026-10-14T12:00';
+  for (const [equipmentName,reg,chassisNo] of [
+    ['V316 - 2328930','2328930','CH-V316'],
+    ['D23 - 07339','','7339'],
+    ['PL69–MP66ZB8422','MP66ZB8422','CH-PL69'],
+  ]) {
+    for (const door of ['',reg]) {
+      const record={door,equipmentName,reg,chassisNo,currentLocation:'Mine'};
+      const request={door:reg||chassisNo,chassis:chassisNo,site:'Mine',start,closedAt};
+      const [apiRow]=requestsWithDoorNumbers([request],[record]);
+      const [reportRow]=requestsWithDoorNumbers([apiRow],[record]);
+      assert.equal(apiRow.door,equipmentName);
+      assert.equal(reportRow.door,equipmentName);
+      const [matrix]=downtimeMatrixRange([reportRow],[record],'2026-10-14T00:00','2026-10-15T00:00',Date.parse('2026-10-16T00:00Z'));
+      assert.equal(matrix.door,equipmentName);
+      assert.equal(matrix.downtime,2);
+      assert.equal(request.door,reg||chassisNo);
+    }
+  }
+  for (const record of [{reg:'2328930'},{chassisNo:'CH123'},{equipmentName:'2328930',reg:'2328930'},{equipmentName:'PC200',model:'PC200'}]) {
+    assert.equal(equipmentDoorNumber(record),'');
+  }
+});

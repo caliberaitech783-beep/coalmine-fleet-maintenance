@@ -2,7 +2,7 @@
 
 ## Authoritative equipment door numbers
 
-Door-number displays and request creation use only the Equipment Master `door` field. Registration, equipment name, chassis and serial values remain lookup identifiers, never substitute door labels. Saved requests are resolved against the current master without rewriting history; missing or ambiguous matches display no guessed door. Downtime Matrix follows the same resolver, including exports. A blank master door must be corrected in Equipment Master, not inferred by reports.
+Door-number displays and request creation use Equipment Master labels: an explicit door, or the imported fleet label displayed under Equipment Name when door is blank or duplicates a registration/serial identifier. A generic model/name or standalone registration/chassis is never substituted for a missing label. Saved requests resolve against the current master without rewriting history; missing or ambiguous matches display no guessed door. Downtime Matrix and exports share this mapping.
 
 ## Read-only request-media storage breakdown
 
