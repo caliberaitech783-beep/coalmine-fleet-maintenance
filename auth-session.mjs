@@ -31,7 +31,7 @@ export function createSessionStore(pool, {
         [token, boundedMaxAgeDays]
       );
       // Tender tracking credentials never authorize a BDMS application request.
-      if(rows[0]?.permissions?.application==='Tender')return null;
+      if(['Tender','MIS'].includes(rows[0]?.permissions?.application))return null;
       return rows[0] || null;
     },
 

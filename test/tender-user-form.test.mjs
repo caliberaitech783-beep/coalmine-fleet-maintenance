@@ -1,3 +1,4 @@
+import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ import {managerRegionSelection,displaySiteSelection,sitesForManagerRegions,displ
 import {userPermissionOptions,retainedHiddenPermissions} from '../src/user-permission-options.mjs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const selectedAccessValues=(record,key,fallback)=>String(Object.hasOwn(record,key)?record[key]:record[fallback]||'').split(/\s*\|\s*/).filter(Boolean);
-const bindings={React,useState,useRef,useEffect,TENDER_ALL_PERMISSIONS,TENDER_PERMISSION_OPTIONS,normalizedTenderSelection,assignedUserRoles,accountPrivileges,ADMIN_TAB_OPTIONS,ADMIN_SUBMENU_OPTIONS,managerRoleSelection,managerRegionSelection,displaySiteSelection,sitesForManagerRegions,displaySiteName,MANAGER_REGION_OPTIONS,userPermissionOptions,retainedHiddenPermissions,selectedAccessValues,privilegeSelectionValue:value=>value,isCheckedValue:value=>value===true||value==='true',mobileAccessKey:key=>'mobile'+key[0].toUpperCase()+key.slice(1),mobileUserRoleOptions:['Production User','Maintenance User','MIS User','General User','Account User','Tender User'],mobileRoleAuthority:{'Tender User':'Tender access'},userAuthorityOptions:['Admin','Manager'],managerRoleOptions:[],operationalDefaultMenuOptions:['Requests','Tickets','CD'],operationalMenuOptions:['Requests','Tickets','CD'],GENERAL_USER_ROLE:'General User',GENERAL_USER_MENU_OPTIONS:['Requests','Tickets','CD'],operationalRequestOptions:{},userMenuOptionLabel:value=>value,navigationLabel:value=>value,ShieldCheck:()=>null,UserSiteFields:()=>null,UserPrivilegeFields:()=>null};
+const bindings={MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled,React,useState,useRef,useEffect,TENDER_ALL_PERMISSIONS,TENDER_PERMISSION_OPTIONS,normalizedTenderSelection,assignedUserRoles,accountPrivileges,ADMIN_TAB_OPTIONS,ADMIN_SUBMENU_OPTIONS,managerRoleSelection,managerRegionSelection,displaySiteSelection,sitesForManagerRegions,displaySiteName,MANAGER_REGION_OPTIONS,userPermissionOptions,retainedHiddenPermissions,selectedAccessValues,privilegeSelectionValue:value=>value,isCheckedValue:value=>value===true||value==='true',mobileAccessKey:key=>'mobile'+key[0].toUpperCase()+key.slice(1),mobileUserRoleOptions:['Production User','Maintenance User','MIS User','General User','Account User','Tender User'],mobileRoleAuthority:{'Tender User':'Tender access'},userAuthorityOptions:['Admin','Manager'],managerRoleOptions:[],operationalDefaultMenuOptions:['Requests','Tickets','CD'],operationalMenuOptions:['Requests','Tickets','CD'],GENERAL_USER_ROLE:'General User',GENERAL_USER_MENU_OPTIONS:['Requests','Tickets','CD'],operationalRequestOptions:{},userMenuOptionLabel:value=>value,navigationLabel:value=>value,ShieldCheck:()=>null,UserSiteFields:()=>null,UserPrivilegeFields:()=>null};
 const functions=source.slice(source.indexOf('function AccessSelectAll('),source.indexOf('function applyUserRoleDefaults('));
 const {code:compiled}=await transformWithOxc(functions,'tender-user-fields.jsx',{jsx:{runtime:'classic'}});
 const Component=new Function(...Object.keys(bindings),compiled+';return UserTypeAccessFields;')(...Object.values(bindings));
@@ -33,3 +34,15 @@ test('Saved custom menus and explicitly empty mobile selections survive form ren
  assert.ok(html.includes('type="hidden" name="tenderMobileAccess" value=""'));
 });
 
+
+test('MIS-only login renders separate credentials and persisted desktop/mobile grants',()=>{
+ const html=render({userType:'MIS Application User',userGroup:'MIS Application User',misAccess:true,misLogin:'mis.one',misDesktopAccess:'Employee master | Vehicle Log Book',misMobileAccess:''});
+ assert.match(html,/role="tab"[^>]*aria-selected="true"[^>]*>MIS</);
+ assert.match(html,/name="userType" value="MIS Application User"/);
+ assert.match(html,/name="misLogin"[^>]*value="mis.one"/);
+ assert.match(html,/type="password"[^>]*name="misPassword"|name="misPassword"[^>]*type="password"/);
+ assert.ok(checked(html,'misDesktopAccess','Employee master'));
+ assert.ok(checked(html,'misDesktopAccess','Vehicle Log Book'));
+ assert.ok(!checked(html,'misMobileAccess','Employee master'));
+ assert.match(html,/Select all MIS masters and working menus/);
+});

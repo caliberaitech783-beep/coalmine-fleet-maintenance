@@ -4,6 +4,7 @@ const clean = (value) => String(value ?? "").trim();
 // Display the saved role without modifying account authority or permissions.
 export function userMasterRole(record = {}) {
   const accountType = clean(record.userType);
+  if(accountType==='MIS Application User')return 'MIS Application User';
   const authority = clean(record.adminLevel);
   const isDesktop = /super/i.test(accountType);
   if(Object.hasOwn(record,'userRoles')){

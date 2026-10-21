@@ -31,6 +31,6 @@ export function initializeUserCredentials(record) {
 }
 
 export function publicUserRecord(record) {
-  const { passwordHash, mustChangePassword, ...publicRecord } = record || {};
+  const { passwordHash, mustChangePassword, misPasswordHash, misPassword, ...publicRecord } = record || {};
   return publicRecord;
 }
