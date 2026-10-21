@@ -8,7 +8,7 @@ export async function createTenderSession(pool,profile,details={}){
 }
 export async function currentTenderSession(pool,profile,id){
  if(!/^[0-9a-f-]{36}$/i.test(String(id||'')))return false;
- const {rows}=await pool.query(`SELECT session_public_id FROM auth_sessions WHERE session_public_id=$1 AND permissions->>'application'='Tender' AND permissions->>'bdmsId'=$2 AND permissions->>'credentialVersion'=$3 AND created_at>NOW()-INTERVAL '30 days'`,[id,profile.id,profile.credentialVersion]);
+ const {rows}=await pool.query(`SELECT session_public_id FROM auth_sessions WHERE session_public_id=$1 AND permissions->>'application'='Tender' AND permissions->>'bdmsId'=$2 AND permissions->>'credentialVersion'=$3 AND created_at>NOW()-INTERVAL '7 days'`,[id,profile.id,profile.credentialVersion]);
  return rows.length>0;
 }
 export async function touchTenderSession(pool,profile,id,details={}){

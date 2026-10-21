@@ -166,7 +166,7 @@ test("the Audit Trail is cleaned up automatically once a day, keeping five days 
   assert.match(server, /if\(retention\.lastRunDate===todayKey\)return \{skipped:true,reason:'already ran today'\};/, "one run per India calendar day");
   assert.match(server, /if\(!LOG_RETENTION_KEYS\.some\(\(key\)=>retention\[key\]\)\)return \{skipped:true,reason:'automatic clean-up is off'\};/);
   assert.match(server, /retention\.auditDays\*86400000\)\.toISOString\(\);\r?\n\s+const \{rowCount\}=await pool\.query\('DELETE FROM audit_events WHERE occurred_at<\$1',\[cutoff\]\);/);
-  assert.match(server, /DELETE FROM user_login_history WHERE last_seen_at<\$1',\[cutoff\]\);\r?\n\s+const activity=await pool\.query\('DELETE FROM user_session_activity WHERE last_seen_at<\$1',\[cutoff\]\);/);
+  assert.match(server, /cleanup:\(\)=>runSessionRetention/, "session retention uses backup-gated cleanup");
   assert.match(server, /VALUES \('log_retention_last_run',\$1,NOW\(\)\)/);
   assert.match(server, /const logRetentionTimer=setStaggeredInterval\(\(\)=>\{\r?\n\s+if\(!databaseReady\)return;\r?\n\s+void runAuditedBackendProcess\(\{module:'Audit Trail',action:'Automatic log clean-up'\},\(\)=>runLogRetention\(\)\)/, "every staggered run is itself an audit entry");
   assert.match(server, /\},5\*60\*1000,47_000\);\r?\n\s+logRetentionTimer\.unref\?\.\(\);/);

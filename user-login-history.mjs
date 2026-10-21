@@ -126,7 +126,7 @@ export function registerLoginHistoryRoutes(app,{pool,requireSuper,requireAdminis
         const {rows}=await pool.query(`SELECT h.session_id AS "sessionId",h.login,h.name,h.started_at AS "createdAt",
           h.last_seen_at AS "lastSeenAt",h.device_id AS "deviceId",h.ip_address AS "ipAddress",h.user_agent AS "userAgent",
           EXISTS(SELECT 1 FROM auth_sessions s WHERE s.session_public_id=h.session_id
-            AND s.last_seen_at>NOW()-INTERVAL '15 minutes' AND s.created_at>NOW()-INTERVAL '30 days') AS active
+            AND s.last_seen_at>NOW()-INTERVAL '15 minutes' AND s.created_at>NOW()-INTERVAL '7 days') AS active
           FROM user_login_history h WHERE h.login=$3 AND h.started_at<$2 AND h.last_seen_at>=$1
           ORDER BY h.started_at DESC`,[...params,String(req.query.login).trim().toLowerCase()]);
         return res.json({sessions:rows,...range,trackingSince:metadata[0]?.value});

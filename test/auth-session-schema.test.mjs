@@ -34,9 +34,10 @@ test('real PostgreSQL: all roles remain signed in after inactivity while absolut
     await store.touch('mobile');
     const {rows}=await client.query("SELECT last_seen_at=NOW() AS touched FROM auth_sessions WHERE token='mobile'");
     assert.equal(rows[0].touched,true);
-    await client.query("UPDATE auth_sessions SET created_at=NOW()-INTERVAL '31 days' WHERE token='desktop'");
+    await client.query("UPDATE auth_sessions SET created_at=NOW()-INTERVAL '8 days' WHERE token='desktop'");
     assert.equal(await store.get('desktop'),null);
-    assert.equal(await store.pruneExpired(),1);
+    assert.equal(await store.pruneExpired(),0); // No deletion before a backup-gated job is supplied.
+    assert.equal((await client.query("SELECT COUNT(*)::int AS count FROM auth_sessions WHERE token='desktop'")).rows[0].count,1);
     await client.query("DELETE FROM auth_sessions WHERE token='mobile'");
     assert.equal(await store.get('mobile'),null);
   } finally {await client.query('ROLLBACK');client.release();await pool.end();}

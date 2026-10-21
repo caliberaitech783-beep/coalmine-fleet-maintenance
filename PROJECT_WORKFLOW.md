@@ -636,3 +636,16 @@ BDMS report menus default to the current IST date and display its weekday. Today
 IBoss masters, transactions, dashboard details (including trade ageing), Report Merge and chatbot result tables use the shared Actions menu and Print/Export. Actions supports columns/order, filters, sorting, saved reports and Reset table. Bank-wise reconciliation and dashboard party lists use these controls too. The account ledger preserves its ERP layout and provides a Report table tab for these controls, narration and creator audit columns. Table filtering, sorting and exports cover loaded records only; use the Oracle search/date/company controls and pagination for the full source. Exports follow the visible filtered/sorted table. Controls open within the active native dialog so they remain accessible in dashboard and ledger pop-ups.
 
 Smart Print automatically fits all columns to page width in landscape for printing and PDF/Excel export. Long reports continue vertically across pages. Browser print scaling has no lower floor, so very wide ageing tables fit without clipping. Excel workbooks define each sheet's complete print area, repeat the title/count/column headings, and use one page wide with automatic page height. Native browser/printer settings can still be overridden by the user.
+
+### Seven-day session retention
+
+Authentication sessions (BDMS and Tender) expire seven days after creation,
+regardless of recent activity. User Sessions and its account/device totals show
+only this period. Production runs `session-retention.mjs` initially and every
+five elapsed days: save older session/history/activity metadata under protected
+backup storage, email its gzip archive to anoop.p@cmll.in, then delete only the
+exported identifiers in a transaction. SMTP acceptance and a saved file are
+required before automatic deletion. Physical expired records can remain until
+the next successful five-day cycle. The two-day audit export and generic log
+retention no longer independently delete/reset these session records. See
+BACKUP.md for configuration and recovery limitations.

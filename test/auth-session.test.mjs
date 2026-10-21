@@ -16,10 +16,9 @@ test("stores login sessions in PostgreSQL", async () => {
     userType: "Mobile User", assignedRole: "Production User", permissions: {createRequests: true},
   });
 
-  assert.match(calls[0].sql, /DELETE FROM auth_sessions/);
-  assert.deepEqual(calls[0].params, [30]);
-  assert.match(calls[1].sql, /INSERT INTO auth_sessions/);
-  assert.deepEqual(calls[1].params, ["token-1", "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}']);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /INSERT INTO auth_sessions/);
+  assert.deepEqual(calls[0].params, ["token-1", "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}']);
 });
 
 test("loads an existing session from PostgreSQL", async () => {
@@ -28,7 +27,7 @@ test("loads an existing session from PostgreSQL", async () => {
       assert.match(sql, /FROM auth_sessions/);
       assert.match(sql, /created_at > NOW\(\) - make_interval\(days => \$2::int\)/);
       assert.doesNotMatch(sql, /last_seen_at/);
-      assert.deepEqual(params, ["token-1", 30]);
+      assert.deepEqual(params, ["token-1", 7]);
       return {rows: [{role: "normal", name: "Anoop Paul", login: "anoop", userType: "Mobile User", assignedRole: "MIS User", permissions: {verifyRequests: true}}]};
     }
   });
@@ -80,16 +79,8 @@ test("records session activity without changing the session token", async () => 
   assert.deepEqual(calls[0].params, ["token-3", "10.0.0.8", "Caliber Pulse-DEVICE01", "Test Browser"]);
 });
 
-test("prunes only sessions that exceed the absolute lifetime", async () => {
-  const calls = [];
-  const store = createSessionStore({
-    async query(sql, params) {
-      calls.push({sql, params});
-      return {rowCount: 3, rows: []};
-    }
-  });
-
-  assert.equal(await store.pruneExpired(), 3);
-  assert.doesNotMatch(calls[0].sql, /make_interval\(mins/);
-  assert.deepEqual(calls[0].params, [30]);
+test("physical pruning delegates to the backup-gated job", async () => {
+ const store=createSessionStore({query(){assert.fail('No unbacked DELETE');}}, {cleanup:async()=>({removed:{auth_sessions:3}})});
+ assert.equal(await store.pruneExpired(),3);
+ assert.equal(await createSessionStore({}).pruneExpired(),0);
 });

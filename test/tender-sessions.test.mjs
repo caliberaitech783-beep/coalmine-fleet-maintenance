@@ -7,7 +7,7 @@ test('Tender central sessions bind the account and password version and keep BDM
  const profile={id:'42',name:'Test',login:'TEST',credentialVersion:'version'};
  const id=await createTenderSession(pool,profile,{deviceId:'browser',ipAddress:'127.0.0.1',userAgent:'test'});
  assert.notEqual(calls[0].v[0],id);assert.equal(JSON.parse(calls[0].v[3]).application,'Tender');
- assert.equal(await currentTenderSession(pool,profile,id),true);assert.deepEqual(calls[1].v,[id,'42','version']);assert.match(calls[1].q,/30 days/);
+ assert.equal(await currentTenderSession(pool,profile,id),true);assert.deepEqual(calls[1].v,[id,'42','version']);assert.match(calls[1].q,/7 days/);
  assert.equal(await currentTenderSession(pool,profile,''),false);
  await touchTenderSession(pool,profile,id,{deviceId:'browser'});assert.ok(calls.some(c=>c.q.includes('INSERT INTO user_session_activity')));
  await endTenderSession(pool,profile,id);assert.equal(await currentTenderSession(pool,profile,id),false);

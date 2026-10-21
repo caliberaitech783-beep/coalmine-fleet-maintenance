@@ -48,7 +48,7 @@ test('session endpoint preserves per-session controls and exposes a separate uni
     app:{get(path,...handlers){assert.equal(path,'/api/user-sessions');handler=handlers.at(-1);}},
     requireSession(){},requireUserSessionView(){},
     sessionStore:{async pruneExpired(){}},async expireRemoteAssistanceSessions(){},
-    pool:{async query(sql){assert.match(sql,/created_at>NOW\(\)-INTERVAL '30 days'/);return {rows};}},
+    pool:{async query(sql){assert.match(sql,/created_at>NOW\(\)-INTERVAL '7 days'/);return {rows};}},
     userSessionLocationName:()=>'',REMOTE_ASSISTANCE_LIVE_STATUSES:[],summarizeUserSessions,
   });
   await handler({headers:{authorization:'Bearer current-token'},session:{login:'admin'}},
@@ -67,7 +67,7 @@ test('UI separates unexpired sessions from unique online users, including with a
   assert.match(page,/>Online users<\/small><b>\{Number\(summary.onlineUsers\|\|0\)/);
   assert.match(page,/>Unexpired login sessions<\/small><b>\{Number\(summary.unexpired\|\|0\)/);
   assert.match(page,/Active in the last 2 minutes · unique accounts/);
-  assert.match(page,/30-day maximum · includes inactive sessions/);
+  assert.match(page,/7-day maximum · includes inactive sessions/);
   assert.match(page,/const nextSummary=summarizeUserSessions\(nextSessions\)/);
   assert.doesNotMatch(page,/>Active sessions<|>Online now</);
 });

@@ -1,17 +1,13 @@
-const DEFAULT_SESSION_MAX_AGE_DAYS = 30;
+const DEFAULT_SESSION_MAX_AGE_DAYS = 7;
 
 export function createSessionStore(pool, {
   maxAgeDays = DEFAULT_SESSION_MAX_AGE_DAYS,
+  cleanup = null,
 } = {}) {
   const boundedMaxAgeDays = Math.max(1, Math.floor(Number(maxAgeDays) || DEFAULT_SESSION_MAX_AGE_DAYS));
-  const pruneExpired = () => pool.query(
-    `DELETE FROM auth_sessions
-     WHERE created_at <= NOW() - make_interval(days => $1::int)`,
-    [boundedMaxAgeDays]
-  );
   return {
     async create({token, role, name, login = "", userType = "", assignedRole = "", permissions = {}}) {
-      await pruneExpired().catch(() => {});
+      // Physical cleanup requires the backup-gated retention job.
       await pool.query(
         `INSERT INTO auth_sessions (token, role, employee_name, login_name, user_type, assigned_role, permissions)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
@@ -54,8 +50,9 @@ export function createSessionStore(pool, {
     },
 
     async pruneExpired() {
-      const result = await pruneExpired();
-      return Number(result.rowCount || 0);
+      if (!cleanup) return 0;
+      const result = await cleanup();
+      return Number(result?.removed?.auth_sessions || 0);
     },
   };
 }

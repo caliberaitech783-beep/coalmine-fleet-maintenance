@@ -1,3 +1,4 @@
+import {runSessionRetention} from './session-retention.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
@@ -278,7 +279,7 @@ async function currentDataRevisions(keys,client=pool){
 // which is what turned a momentary database hiccup into a site-wide outage.
 pool.on('error',error=>console.error('PostgreSQL pool connection error (will reconnect on next query).',error));
 process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
-const sessionStore=createSessionStore(pool);
+const sessionStore=createSessionStore(pool,{cleanup:()=>runSessionRetention({pool,storageRoot:backupStorageRoot})});
 let databaseReady=false;
 let cdirRosterRevision=null;
 let databaseError='Database initialization is pending.';
@@ -1645,12 +1646,7 @@ async function runLogRetention(now=new Date()){
       const {rowCount}=await pool.query('DELETE FROM audit_events WHERE occurred_at<$1',[cutoff]);
       result.auditDeleted=Number(rowCount||0);
     }
-    if(retention.activityDays){
-      const cutoff=new Date(now.getTime()-retention.activityDays*86400000).toISOString();
-      const history=await pool.query('DELETE FROM user_login_history WHERE last_seen_at<$1',[cutoff]);
-      const activity=await pool.query('DELETE FROM user_session_activity WHERE last_seen_at<$1',[cutoff]);
-      result.loginHistoryDeleted=Number(history.rowCount||0);result.sessionActivityDeleted=Number(activity.rowCount||0);
-    }
+    // Session/history retention is managed by the backup-gated policy.
     // One row per recipient per message; the delivery outcome is only needed for
     // recent troubleshooting.
     if(retention.whatsappDays){
@@ -2959,7 +2955,6 @@ registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdminist
 registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData:loadOemEmailData,scheduledJobsEnabled});
 app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
   try{
-    await sessionStore.pruneExpired();
     await expireRemoteAssistanceSessions();
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
     const {rows}=await pool.query(`SELECT sessions.token,sessions.session_public_id AS "sessionId",sessions.employee_name AS "name",sessions.login_name AS "login",
@@ -2987,7 +2982,7 @@ app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res
           AND remote.expires_at>NOW()
         ORDER BY remote.requested_at DESC LIMIT 1
       ) AS assistance ON TRUE
-      WHERE sessions.created_at>NOW()-INTERVAL '30 days'
+      WHERE sessions.created_at>NOW()-INTERVAL '7 days'
       ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`,[String(req.session.login||''),REMOTE_ASSISTANCE_LIVE_STATUSES]);
     const now=Date.now();
     const sessions=rows.map(({token,userRecord,...row})=>({
@@ -3013,7 +3008,7 @@ app.post('/api/user-sessions/:sessionId/messages',requireSuper,requireAdministra
     if(validationError)return res.status(400).json({error:validationError});
     const {rows:targets}=await pool.query(`SELECT session_public_id AS "sessionId",employee_name AS "name",login_name AS "login",
       last_seen_at>NOW()-INTERVAL '2 minutes' AS online
-      FROM auth_sessions WHERE session_public_id=$1 AND created_at>NOW()-INTERVAL '30 days'`,[sessionId]);
+      FROM auth_sessions WHERE session_public_id=$1 AND created_at>NOW()-INTERVAL '7 days'`,[sessionId]);
     const target=targets[0];
     if(!target)return res.status(404).json({error:'This session is no longer active.'});
     if(!target.online)return res.status(409).json({error:'Messages can only be sent to a user who is online.'});
@@ -8478,8 +8473,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
       await client.query('BEGIN');
       const purged=await client.query(`DELETE FROM audit_events WHERE occurred_at<=$1`,[exportCutoff]);
       purgedEventCount=Number(purged.rowCount||0);
-      await client.query(`DELETE FROM user_session_activity WHERE last_seen_at<=$1::timestamptz-INTERVAL '30 minutes'`,[exportCutoff]);
-      await client.query(`UPDATE user_session_activity SET started_at=$1,last_seen_at=$1,active_seconds=0 WHERE last_seen_at<=$1`,[exportCutoff]);
+      // Preserve session metadata for the dedicated backup-gated retention job.
       status=`Sent - ${confirmedEmails} administrator email(s) confirmed${deliveryFailures?`; ${deliveryFailures} WhatsApp warning(s)`:''}`;
       await client.query(`UPDATE audit_log_export_runs SET status=$1,mail_confirmed_at=NOW(),purged_at=NOW(),purged_event_count=$2,updated_at=NOW() WHERE slot_key=$3`,[status,purgedEventCount,slotKey]);
       await client.query('COMMIT');
@@ -8601,7 +8595,7 @@ async function initializeDatabase(){
     if(telegramConfiguration().configured)ensureTelegramWebhook(publicBaseUrl())
       .then(result=>result.registered&&console.log(`Telegram webhook ready at ${result.url}.`))
       .catch(error=>console.error('Telegram webhook registration failed.',error.message));
-    const expiredSessions=await sessionStore.pruneExpired();
+    const expiredSessions=scheduledJobsEnabled?await sessionStore.pruneExpired().catch(error=>{console.error('Session retention postponed.',error.message);return 0;}):0;
     if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} past their maximum lifetime.`);
     await applyOwnerLogRetention().then(async(result)=>{
       if(result.skipped)return;
@@ -8717,7 +8711,7 @@ const backupImportCleanupTimer=setStaggeredInterval(()=>{
 },10*60*1000,23_000);
 backupImportCleanupTimer.unref?.();
 const expiredSessionCleanupTimer=setStaggeredInterval(()=>{
-  if(databaseReady){
+  if(databaseReady&&scheduledJobsEnabled){
     void sessionStore.pruneExpired().catch(error=>console.error('Session cleanup failed.',error));
     void expireRemoteAssistanceSessions().catch(error=>console.error('Remote assistance cleanup failed.',error));
   }

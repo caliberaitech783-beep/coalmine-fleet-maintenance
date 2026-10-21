@@ -79,3 +79,28 @@ Then recreate or repair the Azure resources from the maintained infrastructure i
 4. Keep at least one off-site encrypted copy and one offline copy.
 5. Test a restore into a separate database every quarter and compare its table counts with the manifest.
 6. Never email or publicly share an unencrypted database archive. It contains operational data, password hashes, and integration credentials stored by the application.
+
+## Session and device retention
+
+BDMS and Tender logins have an absolute seven-day lifetime from creation, even
+if recently active. The User Sessions list and its user/device counts include
+only sessions created within the last seven days.
+
+On startup and subsequent production scheduler checks, `session-retention.mjs`
+runs initially and then every five elapsed days (persisted in `app_metadata`).
+It saves metadata for sessions/history/activity started more than seven days ago
+to `BACKUP_STORAGE_ROOT/session-retention/session-retention-<timestamp>.json.gz`,
+emails that archive to `anoop.p@cmll.in`, and only then transactionally deletes
+the exported records. The archive excludes bearer tokens and passwords and is
+not a full database recovery backup. Existing full database backups are unchanged.
+The five-day deletion cadence means expired rows can remain physically stored
+until the next successful cycle; they cannot authenticate or appear in the
+current session/device summary. SMTP rejection, attachment size limits, or disk
+failure stop deletion and are logged for administrators to resolve.
+
+Uses the existing SMTP/Gmail environment settings (`GMAIL_USER`,
+`GMAIL_APP_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`). A recipient accepted
+by SMTP is not a guarantee of final inbox delivery. Scheduled jobs must be enabled
+only in the production slot. Backup files contain personal metadata; protect and
+manage retention of that folder. The old two-day audit export no longer deletes
+or resets session activity ahead of this job.
