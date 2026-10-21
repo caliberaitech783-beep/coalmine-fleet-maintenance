@@ -234,6 +234,7 @@ test('manager decisions require assigned sites and block a site change between e
 
 test('operational users cannot make manager decisions and only Maintenance Manager can cancel',async()=>{
   for(const kind of ['approve','cancel'])for(const assignedRole of ['Production User','Maintenance User','MIS User']){
+    if(kind==='approve'&&assignedRole==='Maintenance User')continue;
     const app=harness(kind);
     assert.equal((await app.call({session:{role:'normal',assignedRole,permissions:{}}})).status,403);
     assert.equal(app.queries.length,0);
@@ -242,6 +243,15 @@ test('operational users cannot make manager decisions and only Maintenance Manag
     const app=harness('cancel');
     assert.equal((await app.call({session:{...maintenanceManager,permissions:{adminLevel:'Manager',managerRoles:[managerRole]}}})).status,403);
   }
+});
+
+test('Maintenance User can release assigned-site idle vehicles but cannot release other sites',async()=>{
+  const session={role:'normal',assignedRole:'Maintenance User',name:'Maintenance operator',permissions:{}};
+  const app=harness('approve');
+  assert.equal((await app.call({session})).status,200);
+  const outside=harness('approve',{user:{site:'Jayant OC'}});
+  assert.equal((await outside.call({session})).status,409);
+  assert.equal(outside.queries.filter(q=>q.sql.startsWith('UPDATE')).length,0);
 });
 
 test('manager-approved Idle continues to MIS verification, preserves flags/history and is idempotent',async()=>{

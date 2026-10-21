@@ -10,9 +10,9 @@ test("Idle requests require a reason and assigned-site manager approval before M
   assert.match(server,/status='Closed',idle_reason=\$3/);
   assert.match(server,/\['No driver','No work'\]\.includes\(idleReason\)/);
   assert.match(server,/designation\?\.key==='projectManager'/);
-  assert.match(server,/Only an assigned manager can approve/);
-  assert.match(server,/const canApproveIdle=req.session.role==='super'&&\(designation\?\.key==='projectManager'\|\|req.session.permissions\?\.adminLevel==='Manager'\)/);
-  assert.match(server,/!userManagesSite\(manager,eligible.rows\[0\].site\)/);
+  assert.match(server,/Only an assigned manager or Maintenance User can approve/);
+  assert.match(server,/const canApproveIdle=maintenanceUser\|\|/);
+  assert.match(server,/maintenanceUser\?reportScopeIncludesSite\(userSiteScope\(manager\),eligible.rows\[0\].site\)/);
   assert.match(client,/const canApproveIdle=true/);
   assert.match(server,/userManagesSite\(manager,eligible\.rows\[0\]\.site\)/);
   assert.match(server,/status='Closed',closed_at=CASE WHEN status='Closed' THEN closed_at ELSE COALESCE\(ideal_requested_at,NOW\(\)\) END/);
@@ -23,7 +23,11 @@ test("Idle requests require a reason and assigned-site manager approval before M
   assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\)/);
   assert.match(client,/Idle approvals \(\{managerDataReady\?idealRows\.length:"—"\}\)/);
   assert.match(client,/Make on road/);
-  assert.match(client,/an assigned manager approves Make on road/);
+  assert.match(client,/showActions=\{isMaintenance\} onApproveIdle=\{isMaintenance \? setIdleApproval : null\}/);
+  assert.match(client,/onApproveIdle && isIdleVehicleRequest\(row\)/);
+  assert.match(client,/isMaintenance && idleApproval && <ManagerIdleConfirmation/);
+  assert.match(client,/onUpdateRequest\(row.ref, \{\}, "ideal-onroad"\)/);
+  assert.match(client,/an assigned manager or Maintenance User approves Make on road/);
   assert.match(client,/name="idealChoice"/);
   assert.match(client,/status, ideal, idleReason:/);
   assert.match(client,/Idle reason \*/);

@@ -9925,7 +9925,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showStatusFilter = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showProductionFirstTrip = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showUserRole = true, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onProductionFirstTrip, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showStatusFilter = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showProductionFirstTrip = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showUserRole = true, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onApproveIdle, onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onProductionFirstTrip, onMisFlag, onRemark }) {
   if (onDelete || onDeleteSelected || onProductionFirstTrip) showActions = true;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
@@ -10065,6 +10065,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     {onRemark && String(row.status).toLowerCase() !== "closed" && !lockedIdeal && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
     {onProductionFirstTrip && !row.productionFirstTripAt && <button type="button" className="primary" onClick={() => onProductionFirstTrip(row)}><CheckCircle2 /> First trip</button>}
     {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
+                {onApproveIdle && isIdleVehicleRequest(row) && <button type="button" className="primary" onClick={() => onApproveIdle(row)}><CheckCircle2 /> Make on road</button>}
     {onMisFlag && (row.misFlaggedAt || (String(row.status).toLowerCase() === "closed" && !row.verifiedAt)) && <button type="button" className="mis-red-flag" onClick={() => onMisFlag(row)} title={row.misFlaggedAt ? "View the saved MIS red flag and remark" : "Report an issue found during MIS verification"}><Flag /> {row.misFlaggedAt ? "View red flag" : "Red flag"}</button>}
   </td>;
   useEffect(() => {
@@ -10371,7 +10372,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
             </label>
             <div id="maintenance-idle-summary" className="idle-summary" role="status">
               {idleReason && <strong>Selected idle reason: {idleReason}</strong>}
-              <span>Maintenance is complete. The vehicle will remain Idle until an assigned manager approves Make on road. Idle waiting will not extend maintenance TAT.</span>
+              <span>Maintenance is complete. The vehicle will remain Idle until an assigned manager or Maintenance User approves Make on road. Idle waiting will not extend maintenance TAT.</span>
             </div>
           </>}
         </fieldset>
@@ -11281,6 +11282,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const [directoryView, setDirectoryView] = useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.directoryView`, "directory");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
+  const [idleApproval, setIdleApproval] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useNavigationState(`workspace.${session?.assignedRole || session?.role}.${embedded ? "embedded" : "portal"}.userReportCategory`, "general");
   const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
@@ -11506,7 +11508,8 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMisPeople showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} showUserRole {...adminDeleteProps} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMisPeople showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
       {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable {...adminDeleteProps} rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays showClosedAt />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} showStatusFilter={false} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} closedTimeAfterStarted {...adminDeleteProps} />}</section></>}
-      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime showMeterData onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} {...adminDeleteProps} /></section></>}
+      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showActions={isMaintenance} onApproveIdle={isMaintenance ? setIdleApproval : null} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime showMeterData onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} {...adminDeleteProps} /></section></>}
+      {isMaintenance && idleApproval && <ManagerIdleConfirmation request={idleApproval} action="approve" close={() => setIdleApproval(null)} onConfirm={(row) => onUpdateRequest(row.ref, {}, "ideal-onroad")} />}
       </>}
       </div>}
     </main>

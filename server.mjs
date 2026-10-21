@@ -7396,11 +7396,12 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
   try{
     const manager=await currentUserRecord(req.session);
     const designation=flowDesignationForUser(manager,{permissions:req.session.permissions,assignedRole:req.session.assignedRole});
-    const canApproveIdle=req.session.role==='super'&&(designation?.key==='projectManager'||req.session.permissions?.adminLevel==='Manager');
-    if(!canApproveIdle)return res.status(403).json({error:'Only an assigned manager can approve an Idle request.'});
+    const maintenanceUser=req.session.role==='normal'&&req.session.assignedRole==='Maintenance User';
+    const canApproveIdle=maintenanceUser||(req.session.role==='super'&&(designation?.key==='projectManager'||req.session.permissions?.adminLevel==='Manager'));
+    if(!canApproveIdle)return res.status(403).json({error:'Only an assigned manager or Maintenance User can approve an Idle request.'});
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND (status IN ('Idle','Ideal') OR (status='Closed' AND vehicle_idle=TRUE))`,[reference]);
-    if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
+    if(!eligible.rows.length||!(maintenanceUser?reportScopeIncludesSite(userSiteScope(manager),eligible.rows[0].site):userManagesSite(manager,eligible.rows[0].site)))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
     if(!isIdleVehicleRequest(before)||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
     validateRequestTimelineChange(before,{closedAt:before.closedAt||before.timelineRecordedAt},{now:before.timelineRecordedAt});
