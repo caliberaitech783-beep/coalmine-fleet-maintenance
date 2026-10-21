@@ -23,7 +23,7 @@ test('mobile application tiles wrap in two columns, with a single column on narr
   assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
 
-test('MIS opens its separate application in a new tab without adding HR',()=>{
+test('MIS opens its separate application in a new tab with HR beside it',()=>{
   const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
   assert.ok(links);
   const mis=links.match(/<a className="login-mis-link"[\s\S]*?<\/a>/)?.[0];
@@ -33,6 +33,11 @@ test('MIS opens its separate application in a new tab without adding HR',()=>{
   assert.match(mis,/rel="noopener noreferrer"/);
   assert.match(mis,/aria-label="Open MIS application in a new tab"/);
   assert.match(mis,/<strong>MIS<\/strong>/);
-  assert.equal((links.match(/<a |<button /g)||[]).length,5);
-  assert.doesNotMatch(links,/<strong>HR<\/strong>|login-hr-link/);
+  assert.equal((links.match(/<a |<button /g)||[]).length,6);
+  const hr=links.match(/<button type="button" className="login-hr-link"[\s\S]*?<\/button>/)?.[0];
+  assert.ok(hr);
+  assert.ok(links.indexOf(hr)>links.indexOf(mis));
+  assert.match(hr,/disabled/);
+  assert.match(hr,/<strong>HR<\/strong>Coming soon/);
+  assert.doesNotMatch(hr,/href=|onClick=|type="submit"/);
 });
