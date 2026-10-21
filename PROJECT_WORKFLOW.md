@@ -1,5 +1,9 @@
 # Caliber Pulse project workflow
 
+## Read-only request-media storage breakdown
+
+Storage management > Check media breakdown measures logical data-URL bytes by images, videos, audio, PDFs and unknown formats, split by MIS verification before October 2026, during October 2026 (IST), unverified, and after October if present. It covers opening/closing/first-trip cards, complaint photos/videos and complaint/maintenance audio; unrelated ticket, announcement and session media are excluded. The existing Photos and audio counter omits opening/closing cards but includes complaint JSON metadata. The new report reconciles both differences explicitly. A repeatable read-only database snapshot keeps totals consistent while requests change. Only aggregate sizes and counts are returned. No files, requests or retention settings are modified.
+
 ## Selective request-media ZIP backup and restore
 
 Admin > Database > Storage management includes Selective media backup and restore. Preview uses an exclusive MIS verification cutoff at midnight IST; `2026-10-01` selects only requests verified before October 2026 and excludes unverified requests. Export includes original opening/closing/first-trip evidence (including PDF trip cards) and complaint/maintenance audio, with original filenames, request IDs/references, verification timestamps and SHA-256 hashes in manifest.json. Complaint photos/videos and unrelated tables are outside this export. ZIP64 streams directly to the browser without a retained Azure archive; wait for the browser download to complete. Nothing is deleted by export.
