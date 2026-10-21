@@ -13,7 +13,9 @@ WITH media AS (
 ), classified AS (
   SELECT id,source,in_counter,octet_length(data)::bigint AS bytes,
     CASE WHEN verified_at IS NULL THEN 'unverified' WHEN verified_at<$1::timestamptz THEN 'beforeOctober' WHEN verified_at<$2::timestamptz THEN 'october' ELSE 'afterOctober' END AS period,
-    CASE WHEN substring(data FROM 1 FOR 40) LIKE 'data:image/%' THEN 'images' WHEN substring(data FROM 1 FOR 40) LIKE 'data:video/%' THEN 'videos' WHEN substring(data FROM 1 FOR 40) LIKE 'data:audio/%' THEN 'audio' WHEN substring(data FROM 1 FOR 40) LIKE 'data:application/pdf;%' THEN 'pdfs' ELSE 'other' END AS kind
+    CASE WHEN source IN ('complaint_audio','maintenance_audio') THEN 'audio'
+      WHEN source='first_trip_card_image' THEN 'images'
+      WHEN substring(data FROM 1 FOR 40) LIKE 'data:image/%' THEN 'images' WHEN substring(data FROM 1 FOR 40) LIKE 'data:video/%' THEN 'videos' WHEN substring(data FROM 1 FOR 40) LIKE 'data:audio/%' THEN 'audio' WHEN substring(data FROM 1 FOR 40) LIKE 'data:application/pdf;%' THEN 'pdfs' ELSE 'other' END AS kind
   FROM media
 )
 SELECT period,kind,source,in_counter,COUNT(*)::int AS files,COUNT(DISTINCT id)::int AS requests,SUM(bytes)::bigint AS bytes
