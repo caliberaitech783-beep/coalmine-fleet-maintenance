@@ -28,7 +28,7 @@ test('MIS opens its separate application in a new tab with HR beside it',()=>{
   assert.ok(links);
   const mis=links.match(/<a className="login-mis-link"[\s\S]*?<\/a>/)?.[0];
   assert.ok(mis);
-  assert.match(mis,/href="https:\/\/pulseII\.cmll\.in"/);
+  assert.match(mis,/href="https:\/\/pulse-ll\.cmll\.in"/);
   assert.match(mis,/target="_blank"/);
   assert.match(mis,/rel="noopener noreferrer"/);
   assert.match(mis,/aria-label="Open MIS application in a new tab"/);
