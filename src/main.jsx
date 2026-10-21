@@ -32,6 +32,8 @@ import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import {canViewUserSessions,isSessionViewOnlyUser} from "../user-session-access.mjs";
 import {canViewBdAgeingReport} from "../bd-ageing-report.mjs";
 import BdAgeingReport from "./bd-ageing-report.jsx";
+import TelegramUnlinkedReport from './telegram-unlinked-report.jsx';
+import {canViewTelegramUnlinkedReport} from './telegram-unlinked-report.mjs';
 import DowntimeMatrixReport from './downtime-matrix-report.jsx';
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
@@ -1148,7 +1150,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Downtime Matrix Report',icon:FileBarChart}, ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
+  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Downtime Matrix Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
   const canViewReports = visibleReportNav.length > 0;
   const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
@@ -7458,6 +7460,7 @@ function withTimelineLinks(columns, token) {
   });
 }
 function ReportsPage(props) {
+  if (props.activeReportCategory === 'telegram-unlinked') return <TelegramUnlinkedReport key={props.session?.token} session={props.session} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.('general')} />;
   if (props.activeReportCategory === 'bd-ageing') return <BdAgeingReport key={props.session?.token} session={props.session} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.('general')} />;
   return <StandardReportsPage {...props} />;
 }
@@ -7945,6 +7948,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
         <div className="reports-header-actions">
           {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
           <button type="button" className="secondary" onClick={()=>setActiveReportCategory('downtime-matrix')}>Downtime Matrix Report</button>
+          {canViewTelegramUnlinkedReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('telegram-unlinked')}>Telegram Not Linked Report</button>}
           {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
           <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!accessibleReportGroups.length}><Download /> Download reports ZIP</button>
