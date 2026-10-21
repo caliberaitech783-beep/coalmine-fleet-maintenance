@@ -801,7 +801,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
-          <a className="login-mis-link" href="https://pulseII.cmll.in" target="_blank" rel="noopener noreferrer" aria-label="Open MIS application in a new tab"><FileBarChart /><span><strong>MIS</strong>Open application ↗</span></a>
+          <a className="login-mis-link" href="https://pulse-ll.cmll.in" target="_blank" rel="noopener noreferrer" aria-label="Open MIS application in a new tab"><FileBarChart /><span><strong>MIS</strong>Open application ↗</span></a>
           <button type="button" className="login-hr-link" disabled title="HR application link will be added later" aria-label="HR application — coming soon"><Users /><span><strong>HR</strong>Coming soon</span></button>
         </div>
         <div className="login-message">
