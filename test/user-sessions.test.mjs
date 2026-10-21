@@ -89,7 +89,8 @@ test("administrators can delete user activity older than N days from the User Se
   const page = client.slice(client.indexOf("function UserSessionsPage("), client.indexOf("function reportCategoryIdsForUser("));
   assert.match(page, /useState\("2"\),\[activityPurging,setActivityPurging\]/, "the dialog defaults to two days");
   assert.match(page, /> Delete old activity</);
-  assert.match(page, /window\.confirm\(`Permanently delete every user activity record \$\{activitySelection\.label\}/);
+  assert.match(page, /window\.confirm\(`Permanently delete detailed user activity records \$\{activitySelection\.label\}/);
+  assert.match(page, /Latest login\/activity timestamps are kept/);
   assert.match(page, /fetch\(`\/api\/user-login-history\?\$\{activitySelection\.query\}`,\{method:"DELETE"/);
   assert.match(page, /<PurgeWindowFields mode=\{activityPurgeMode\}[^>]*verb="last active"/, "the shared older-than / up-to-date fields are used");
   assert.match(page, /<Modal title="Delete old user activity"/);

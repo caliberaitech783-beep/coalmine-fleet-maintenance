@@ -404,6 +404,12 @@ Expected health output contains `"status":"ok"` and `"database":"connected"`.
 
 ## 14. Troubleshooting
 
+### User activity says an established account has never logged in
+
+**User Sessions → Login activity** shows separate last-login and last-activity timestamps for every account. The `user_login_summary` table retains only normalized login names and the latest two timestamps, independently of detailed-history cleanup, audit exports, logout and the 30-day session expiry. Startup recovers retained authentication sessions, login history and exact-login saved actions (request creation, maintenance remarks, first-trip recording and authenticated/successful workflow audit events). Display-name matches never merge separate accounts.
+
+Saved actions establish activity, not a successful-login timestamp. Activity-export window resets are neither logins nor activity. An account with actions but no retained login time shows **Used before · Login time unavailable**; an account without matching evidence shows **No recorded activity**, not a claim that it was never used. Missing older timestamps cannot be reconstructed when no evidence survives. Login counts/days refer to retained detailed sessions, not lifetime totals. Latest timestamps and these labels also appear in the existing table exports. Admin/read-only session permissions are unchanged.
+
 ### Valid login fails with a duplicate session public ID
 
 Reverting the System Administration feature left `auth_sessions.session_public_id` and its unique index in databases where that feature had run. Its old empty-string default makes a second session fail with PostgreSQL `23505` on `auth_sessions_public_id_idx`.

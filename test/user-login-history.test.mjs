@@ -34,7 +34,11 @@ test('PostgreSQL: distinct logins survive session deletion and audit export, wit
     await client.query(`SET LOCAL search_path TO ${schema}`);
     await client.query(`CREATE TABLE auth_sessions (session_public_id TEXT PRIMARY KEY,login_name TEXT,employee_name TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),device_id TEXT DEFAULT '',ip_address TEXT DEFAULT '',user_agent TEXT DEFAULT '');
-      CREATE TABLE user_session_activity (session_id TEXT,actor_login TEXT,actor_name TEXT,started_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,device_id TEXT,ip_address TEXT,user_agent TEXT);
+      CREATE TABLE user_session_activity (session_id TEXT,actor_login TEXT,actor_name TEXT,started_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,active_seconds BIGINT DEFAULT 0,device_id TEXT,ip_address TEXT,user_agent TEXT);
+      CREATE TABLE maintenance_requests (requester_login TEXT,created_at TIMESTAMPTZ);
+      CREATE TABLE maintenance_daily_remarks (author_login TEXT,created_at TIMESTAMPTZ);
+      CREATE TABLE production_first_trip_acceptances (production_first_trip_login TEXT,created_at TIMESTAMPTZ);
+      CREATE TABLE audit_events (actor_login TEXT,occurred_at TIMESTAMPTZ,outcome TEXT,session_id TEXT,event_type TEXT);
       CREATE TABLE app_metadata (key TEXT PRIMARY KEY,value TEXT);
       CREATE TABLE master_records (id TEXT,master_name TEXT,record_data JSONB);`);
     await initializeLoginHistory(client);
@@ -56,7 +60,7 @@ test('PostgreSQL: distinct logins survive session deletion and audit export, wit
     assert.equal(result.sessions.find(row=>row.sessionId==='two').deviceId,'mobile');
     await handler({query:{}},res,error=>{throw error;});
     assert.equal(result.users.find(row=>row.login==='Alice').loginCount,2);
-    assert.equal(result.users.find(row=>row.login==='Bob').activity,'No recorded login');
+    assert.equal(result.users.find(row=>row.login==='Bob').activity,'No recorded activity');
     assert.ok(!JSON.stringify(result).includes('secret'));
     assert.ok(!JSON.stringify(result).includes('token'));
   }finally{await client.query('ROLLBACK');client.release();await pool.end();}
