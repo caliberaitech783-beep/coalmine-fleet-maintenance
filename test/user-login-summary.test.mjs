@@ -85,6 +85,8 @@ test('latest login and exact-account activity survive cleanup without inventing 
     await db.exec(`UPDATE user_session_activity SET last_seen_at='2020-02-05T01:00Z',active_seconds=60 WHERE session_id='live'`);
     assert.equal(iso((await summary('alice')).last_activity_at),'2020-02-05T01:00:00.000Z');
     assert.equal((await db.query("SELECT * FROM user_login_history WHERE session_id IN ('used','reset','live')")).rows.length,0);
+    const historical=(await read({period:'custom',from:'2020-01-01',to:'2020-01-01'})).users;
+    assert.equal(historical.find(row=>row.login==='ALICE').activity,'Active in period','later activity must not hide a retained session overlapping the selected period');
 
     const before=JSON.stringify((await db.query('SELECT * FROM user_login_summary ORDER BY login')).rows);
     await db.exec(`DELETE FROM user_login_history; DELETE FROM user_session_activity; DELETE FROM auth_sessions;
