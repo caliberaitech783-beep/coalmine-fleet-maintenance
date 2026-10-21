@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {daysSinceLogin,loginActivityStatus,loginActivityRows,LOGIN_ACTIVITY_FILTERS} from '../src/login-activity.mjs';
 
 const view=readFileSync(new URL('../src/user-login-history.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const now=new Date('2026-09-18T10:16:00+05:30');
 
 test('days since last login are counted on India calendar days',()=>{
@@ -55,4 +56,5 @@ test('the page has no period or date controls any more and shows days since last
   assert.match(panel,/with no recorded activity`:''/);
   assert.doesNotMatch(panel,/Never logged in/);
   assert.match(panel,/LOGIN_ACTIVITY_FILTERS\.map/);
+  assert.ok(main.includes("savedStatus==='Never logged in'?'Login activity':savedStatus"),'existing tabs keep opening the report after the label changes');
 });

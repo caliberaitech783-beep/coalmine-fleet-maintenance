@@ -7137,7 +7137,8 @@ function UserSessionsPage({session}) {
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [query,setQuery]=useState("");
-  const [status,setStatus]=useNavigationState("sessions.tab", "All");
+  const [savedStatus,setStatus]=useNavigationState("sessions.tab", "All");
+  const status=savedStatus==='Never logged in'?'Login activity':savedStatus;
   const [closingId,setClosingId]=useState("");
   const [messageTarget,setMessageTarget]=useState(null);
   const [messageNotice,setMessageNotice]=useState("");
