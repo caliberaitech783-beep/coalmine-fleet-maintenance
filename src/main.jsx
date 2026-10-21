@@ -4243,6 +4243,7 @@ function ActionsTable(props) {
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "", onExportViewChange = null, onResetSearch = null }) {
+  const serialNumberFirst = title === "Downtime Matrix Report";
   const {shifts}=useRequestShiftData();
   columns=useMemo(() => requestShiftColumns(columns,rows,shifts), [columns,rows,shifts]);
   const [appliedColumns, applyColumns] = useColumnPreferences(layoutKey || "report-table", columns, visibleColumnKeys);
@@ -4342,7 +4343,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     <>
       {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : toolbarPortal ? null : reportTableToolbar}
       <table className="report-filter-table">
-        <thead><tr>{displayedColumns[0]?.key!=='requestShift'&&<th className="table-serial-header" scope="col">Sr. No.</th>}{displayedColumns.map((column) => (
+        <thead><tr>{(serialNumberFirst || displayedColumns[0]?.key!=='requestShift')&&<th className="table-serial-header" scope="col">Sr. No.</th>}{displayedColumns.map((column) => (
           <React.Fragment key={column.key}>
           <FilterableHeader
             key={column.key}
@@ -4357,14 +4358,14 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
             values={columnValues[column.key] || []}
             filterValue={columnFilters[column.key] || ""}
             onFilterChange={(value) => updateColumnFilter(column.key, value)}
-          />{column.key==='requestShift'&&<th className="table-serial-header" scope="col">Sr. No.</th>}
+          />{!serialNumberFirst && column.key==='requestShift'&&<th className="table-serial-header" scope="col">Sr. No.</th>}
           </React.Fragment>
         ))}</tr></thead>
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {displayedColumns[0]?.key!=='requestShift'&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}
-              {displayedColumns.map((column) => <React.Fragment key={column.key}><td className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>{column.key==='requestShift'&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}</React.Fragment>)}
+              {(serialNumberFirst || displayedColumns[0]?.key!=='requestShift')&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}
+              {displayedColumns.map((column) => <React.Fragment key={column.key}><td className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>{!serialNumberFirst && column.key==='requestShift'&&<td className="table-serial-cell">{firstVisibleRow + index}</td>}</React.Fragment>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length + 1} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
