@@ -17,6 +17,7 @@ import {assignedUserRoles,hasAccountRole,accountPrivileges} from './account-role
 import {dashboardMetric} from './iboss-dashboard.mjs';
 import express from 'express';
 import {requestMediaStorage} from './request-media-storage.mjs';
+import {dailyStorageAnalysis} from './daily-storage-analysis.mjs';
 import {previewMediaBackup,exportMediaBackup,scanMediaZip,restoreMediaBackup,mediaCutoff} from './selective-media-backup.mjs';
 import {requestHistorySnapshotSql,requestHistoryTimelineSql} from './request-history-payload.mjs';
 import {retryDatabaseRead} from './database-read-retry.mjs';
@@ -1851,6 +1852,9 @@ app.post('/api/selective-media/import/:token/restore',requireSuper,requireAdmini
 
 app.get('/api/request-media-storage',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{res.set('Cache-Control','no-store');res.json(await requestMediaStorage(pool));}catch(error){next(error);}
+});
+app.get('/api/daily-storage-analysis',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{res.set('Cache-Control','no-store');res.json(await dailyStorageAnalysis(pool));}catch(error){next(error);}
 });
 app.get('/api/storage-overview',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{

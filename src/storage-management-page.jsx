@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import SelectiveMediaBackup from './selective-media-backup.jsx';
 import RequestMediaStorage from './request-media-storage.jsx';
+import DailyStorageAnalysis from './daily-storage-analysis.jsx';
 import { Archive, CalendarClock, Database, Eraser, HardDrive, Image, RefreshCw, XCircle } from "lucide-react";
 import "./data-housekeeping-page.css";
 
@@ -76,6 +77,7 @@ export default function StorageManagementPage({ token, onNavigate }) {
         </article>
       </div>
       <RequestMediaStorage token={token} />
+      <DailyStorageAnalysis token={token} />
       <SelectiveMediaBackup token={token} />
       <h2 className="storage-heading">Largest tables</h2>
       <div className="housekeeping-table storage-table" role="table" aria-label="Largest tables">
