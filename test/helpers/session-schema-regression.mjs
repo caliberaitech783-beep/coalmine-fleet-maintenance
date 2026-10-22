@@ -29,15 +29,22 @@ export async function verifySessionSchemaCompatibility(client) {
     // Startup and the operational repair can both run safely.
     await repairLegacySessionDefaults(client);
     await repairLegacySessionDefaults(client);
+    await client.query(`CREATE TEMP TABLE user_current_sessions(login TEXT PRIMARY KEY,session_id TEXT UNIQUE) ON COMMIT DROP;
+      CREATE FUNCTION pg_temp.track_test_login() RETURNS trigger LANGUAGE plpgsql AS $test$
+      BEGIN INSERT INTO pg_temp.user_current_sessions VALUES(lower(trim(NEW.login_name)),NEW.session_public_id)
+        ON CONFLICT(login) DO UPDATE SET session_id=EXCLUDED.session_id;RETURN NEW;END $test$;
+      CREATE TRIGGER track_test_login AFTER INSERT ON auth_sessions FOR EACH ROW EXECUTE FUNCTION pg_temp.track_test_login();
+      INSERT INTO user_current_sessions SELECT lower(trim(login_name)),session_public_id FROM auth_sessions;`);
     const tokens=[randomUUID(),randomUUID()];
-    for(const token of tokens)await store.create({...account,token});
+    for(const [index,token] of tokens.entries())await store.create({...account,login:account.login+'-'+index,token});
     const {rows}=await client.query('SELECT token,session_public_id FROM auth_sessions');
     assert.equal(rows.length,3);
     assert.equal(new Set(rows.map(row=>row.session_public_id)).size,3);
     assert.equal(rows.find(row=>row.token===existingToken).session_public_id,'');
-    for(const token of [existingToken,...tokens])assert.equal((await store.get(token)).login,account.login);
+    assert.equal((await store.get(existingToken)).login,account.login);
+    for(const [index,token] of tokens.entries())assert.equal((await store.get(token)).login,account.login+'-'+index);
     // Authentication token conflicts retain the existing public identifier.
-    await store.create({...account,token:tokens[0],name:'Updated Regression User'});
+    await store.create({...account,login:account.login+'-0',token:tokens[0],name:'Updated Regression User'});
     assert.equal((await store.get(tokens[0])).name,'Updated Regression User');
     assert.equal((await client.query('SELECT count(*)::int AS count FROM auth_sessions')).rows[0].count,3);
     return {freshSchema:true,legacyFailureReproduced:true,repeatedLogins:true,existingSessionsPreserved:true,idempotent:true};
