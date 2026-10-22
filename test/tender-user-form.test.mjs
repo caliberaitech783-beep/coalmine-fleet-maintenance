@@ -53,7 +53,7 @@ test('HR portal-only account renders HR tab, separate credentials and scoped des
  assert.match(html,/role="tab"[^>]*aria-selected="true"[^>]*>HR</);
  assert.match(html,/name="userType" value="HR Application User"/);
  assert.doesNotMatch(html,/name="hrLogin"/);
- assert.match(html,/name="hrPassword"[^>]*type="password"|type="password"[^>]*name="hrPassword"/);
+ assert.doesNotMatch(html,/name="hrPassword"/);
  assert.ok(checked(html,'hrDesktopAccess','Employee Master'));
  assert.ok(checked(html,'hrDesktopAccess','Holiday & Leave'));
  assert.ok(!checked(html,'hrMobileAccess','Employee Master'));
@@ -67,5 +67,5 @@ test('HR access can coexist with an existing team role without changing its acco
  assert.match(html,/name="userType" value="Mobile User"/);
  assert.ok(checked(html,null,'Production User'));
  assert.ok(checked(html,'hrMobileAccess','Holiday & Leave'));
- assert.match(html,/name="hrLogin"[^>]*value="hr.extra"/);
+ assert.doesNotMatch(html,/name="hrLogin"/);
 });
