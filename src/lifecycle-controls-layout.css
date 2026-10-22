@@ -1,0 +1,17 @@
+/* Scoped layout only: Region and the applied time filter share one compact row. */
+.mine-dashboard .mine-request-lifecycle-controls .mine-lifecycle-to-date { grid-area: 2 / 4 / 3 / 7; }
+.mine-dashboard .mine-lifecycle-region-time { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 280px); align-items: stretch; gap: 6px; min-width: 0; }
+.mine-dashboard .mine-lifecycle-region-time label.mine-lifecycle-region { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-width: 0; min-height: 42px; width: 100%; padding: 4px 6px; box-sizing: border-box; }
+.mine-dashboard .mine-lifecycle-region-time label.mine-lifecycle-region > span,
+.mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-time-field > span { font-size: 10px !important; line-height: 1.2; white-space: nowrap; }
+.mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-region select { width: 100%; min-width: 0; height: 25px; min-height: 25px; padding: 1px; border: 0; background: transparent; color: var(--mine-text); font-size: 12px !important; font-weight: 750; }
+.mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-time-fields { align-items: center; gap: 5px; flex-wrap: wrap; }
+.mine-dashboard .mine-lifecycle-region-time label.mine-lifecycle-time-field { flex: 0 0 auto; min-height: 42px; padding: 4px 5px; box-sizing: border-box; }
+.mine-dashboard .mine-lifecycle-region-time input.mine-lifecycle-clock { width: 48px; min-width: 48px; height: 25px; min-height: 25px; padding: 1px; font-size: 12px !important; }
+.mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-time-fields select { width: 43px; min-width: 43px; height: 25px; min-height: 25px; font-size: 11px !important; }
+.mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-time-apply { min-height: 32px; padding: 4px 8px; font-size: 11px !important; }
+@media (max-width: 560px) {
+ .mine-dashboard .mine-lifecycle-region-time { grid-template-columns: minmax(0, 1fr); }
+ .mine-dashboard .mine-lifecycle-region-time .mine-lifecycle-time-fields { flex-wrap: wrap; }
+ .mine-dashboard .mine-request-lifecycle-controls .mine-lifecycle-to-date { grid-area: auto; }
+}

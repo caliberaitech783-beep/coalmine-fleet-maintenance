@@ -359,6 +359,7 @@ import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
 import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
+import "./lifecycle-controls-layout.css";
 import "./dashboard-night.css";
 import "./no-motion.css";
 import { APP_VERSION } from "./app-version.js";
@@ -2807,13 +2808,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <label className="mine-lifecycle-custom"><span>Custom</span><input type="number" aria-label="Request lifecycle custom days" min="1" max="365" placeholder="Days" defaultValue="" onChange={(event) => { const days = Number(event.target.value); if (Number.isInteger(days) && days >= 1 && days <= 365) { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); } }} /></label>
               <label><span>From</span><DateInput aria-label="Request lifecycle from date" value={requestTrendFrom || safeTrendStartKey} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
               <div className="mine-request-lifecycle-end-controls">
-                <label><span>To</span><DateInput aria-label="Request lifecycle to date" value={requestTrendTo || requestTrendEndKey} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
-                <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
+                <label className="mine-lifecycle-to-date"><span>To</span><DateInput aria-label="Request lifecycle to date" value={requestTrendTo || requestTrendEndKey} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
                 {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Request lifecycle shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}
+              </div>
+              <div className="mine-lifecycle-region-time">
+                <label className="mine-lifecycle-region"><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
+                <LifecycleTimeControls from={requestTrendFromTime} to={requestTrendToTime} onApply={(from,to)=>{setRequestTrendFromTime(from);setRequestTrendToTime(to);}} />
               </div>
               <div className="mine-lifecycle-time-export">
                 {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
-                <LifecycleTimeControls from={requestTrendFromTime} to={requestTrendToTime} onApply={(from,to)=>{setRequestTrendFromTime(from);setRequestTrendToTime(to);}} />
               </div>
             </div>
           </header>

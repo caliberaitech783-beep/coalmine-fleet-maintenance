@@ -27,8 +27,15 @@ test('lifecycle cards, MIS queue, charts and exports share the selected times wi
  assert.match(source,/requestMatchesLifecycleTime\(record,requestEventDate\(record,"closed"\)\?"closed":"opened"\)/);
  assert.match(source,/rangeLabel: requestLifecycleRangeLabel/);
  assert.match(source,/IST daily/);
- const controls=source.slice(source.indexOf('<div className="mine-lifecycle-time-export">'),source.indexOf('</header>',source.indexOf('<div className="mine-lifecycle-time-export">')));
+ const controls=source.slice(source.indexOf('<div className="mine-lifecycle-region-time">'),source.indexOf('</header>',source.indexOf('<div className="mine-lifecycle-region-time">')));
  for(const label of ['LifecycleTimeControls','onApply=','lifecycleSectionTable()'])assert.ok(controls.includes(label));
+ const regionRow=controls.slice(0,controls.indexOf('<div className="mine-lifecycle-time-export">'));
+ assert.ok(regionRow.includes('Request lifecycle region'));
+ assert.ok(regionRow.includes('LifecycleTimeControls'));
+ const layout=readFileSync(new URL('../src/lifecycle-controls-layout.css',import.meta.url),'utf8');
+ assert.ok(layout.includes('minmax(130px, 1fr) minmax(0, 280px)'));
+ assert.ok(layout.includes('font-size: 12px !important'));
+ assert.ok(source.indexOf('import "./lifecycle-controls-layout.css"')>source.indexOf('import "./mobile-phone-optimization.css"'));
 });
 
 test('real lifecycle aggregation counts and drilldown rows use each event time rather than the opening time',()=>{

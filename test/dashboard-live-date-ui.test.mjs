@@ -609,7 +609,7 @@ test("lifecycle region filters its cards and linked rows independently of the da
   tree = setLifecycleFrom(view, "2026-09-01", rows);
   const controls = byClass(tree, "mine-request-lifecycle-end-controls");
   assert.ok(byLabel(controls, "Request lifecycle to date"));
-  assert.ok(byLabel(controls, "Request lifecycle region"));
+  assert.ok(byLabel(byClass(tree, "mine-lifecycle-region-time"), "Request lifecycle region"));
   for (const region of ["NCL", "WCL", "site:Jayant OB", "site:Sasti OB", "all"]) {
     byLabel(tree, "Request lifecycle region").props.onChange({target: {value: region}});
     tree = view.render(rows);
