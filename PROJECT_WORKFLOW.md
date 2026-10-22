@@ -404,6 +404,15 @@ Expected health output contains `"status":"ok"` and `"database":"connected"`.
 
 ## 14. Troubleshooting
 
+### Intermittent compressed-PDF test failures
+
+`test/pdf-streams.mjs` decodes PDFKit streams by their declared `/Length` in bytes.
+Do not extract binary stream data with an optional-CR newline delimiter: a valid
+compressed checksum can end in `0x0d`, which that delimiter would remove before
+inflation. `test/pdf-streams.test.mjs` covers these terminal bytes, LF/CRLF markers
+and rejection of truncated streams. Keep the compression and layout assertions;
+do not suppress inflate failures or disable PDF tests to pass deployment.
+
 ### User activity says an established account has never logged in
 
 The Login activity report's **User Group** column uses the same saved-role resolver as Users & Employees: Production/Maintenance/MIS/HR roles, department managers, multiple assigned team groups and administrator levels, rather than the generic Mobile User/Super User account type. It describes the current master assignment, not the historical role at sign-in. Search, table filters, sorting and shared print/PDF/Excel exports use that displayed group. This is a reporting-only projection; credentials, permissions, activity timestamps and locations are unchanged.
