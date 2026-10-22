@@ -48,16 +48,13 @@ test('MIS-only login renders separate credentials and persisted desktop/mobile g
  assert.match(html,/Select all MIS masters and working menus/);
 });
 
-test('HR portal-only account renders HR tab, separate credentials and scoped desktop/mobile grants',()=>{
+test('HR tab exposes one access checkbox and no separate credentials or menus',()=>{
  const html=render({userType:'HR Application User',userGroup:'HR Application User',hrAccess:true,hrLogin:'hr.one',hrDesktopAccess:'Employee Master | Holiday & Leave',hrMobileAccess:''});
  assert.match(html,/role="tab"[^>]*aria-selected="true"[^>]*>HR</);
  assert.match(html,/name="userType" value="HR Application User"/);
- assert.match(html,/name="hrLogin"[^>]*value="hr.one"/);
- assert.match(html,/name="hrPassword"[^>]*type="password"|type="password"[^>]*name="hrPassword"/);
- assert.ok(checked(html,'hrDesktopAccess','Employee Master'));
- assert.ok(checked(html,'hrDesktopAccess','Holiday & Leave'));
- assert.ok(!checked(html,'hrMobileAccess','Employee Master'));
- assert.ok(html.includes('Select all HR menus and masters'));
+ assert.match(html,/name="hrAccess"[^>]*checked/);
+ for(const key of ['hrLogin','hrPassword','hrDesktopAccess','hrMobileAccess'])assert.ok(!html.includes(`name="${key}"`));
+ assert.ok(html.includes('same user name and password'));
  assert.ok(html.includes('href="https://hrpulse.cmll.in"'));
  assert.ok(!html.includes('class="user-privilege-heading'));
 });
@@ -66,6 +63,6 @@ test('HR access can coexist with an existing team role without changing its acco
  const html=render({userType:'Mobile User',userGroup:'Production User',userRoles:'Production User',hrAccess:true,hrLogin:'hr.extra',hrDesktopAccess:'Dashboard',hrMobileAccess:'Holiday & Leave'});
  assert.match(html,/name="userType" value="Mobile User"/);
  assert.ok(checked(html,null,'Production User'));
- assert.ok(checked(html,'hrMobileAccess','Holiday & Leave'));
- assert.match(html,/name="hrLogin"[^>]*value="hr.extra"/);
+ assert.match(html,/name="hrAccess"[^>]*checked/);
+ assert.ok(!html.includes('name="hrLogin"'));
 });

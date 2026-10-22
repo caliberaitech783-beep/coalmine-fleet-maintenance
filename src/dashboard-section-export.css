@@ -25,6 +25,11 @@
 /* Daily BD balance: level with its 44px Site, date and period controls. */
 .mine-dashboard .bd-balance-controls .mine-section-export.export-menu-trigger { min-height: 44px; }
 
+/* Request Lifecycle: time limits stay beside its own Print/Export only. */
+.mine-dashboard .mine-lifecycle-time-export { grid-column: 1 / -1; display: flex; align-items: stretch; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.mine-dashboard .mine-lifecycle-time-export > label { flex: 1 1 130px; min-width: 0; width: auto; }
+.mine-dashboard .mine-lifecycle-time-export > .mine-section-export { align-self: stretch; }
+
 /* Narrow screens: the throughput header wraps so its tabs, Export and filter eye stay visible. */
 @media (max-width: 700px) {
   .mine-dashboard .mine-maintenance-availability-head { flex-wrap: wrap; }

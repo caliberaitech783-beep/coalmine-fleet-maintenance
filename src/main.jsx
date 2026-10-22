@@ -111,6 +111,7 @@ import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
 import { createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
+import { lifecycleTimeMatches } from "./dashboard-lifecycle-time.mjs";
 import { activeTodayBreakdowns } from "./dashboard-today-breakdowns.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import UserSiteFields from "./user-site-fields.jsx";
@@ -1894,6 +1895,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendFrom, setRequestTrendFrom] = useState(() => localDateKey(new Date()));
   const [requestTrendRegion, setRequestTrendRegion] = useState("all");
   const [requestTrendTo, setRequestTrendTo] = useState(() => localDateKey(new Date()));
+  const [requestTrendFromTime, setRequestTrendFromTime] = useState("");
+  const [requestTrendToTime, setRequestTrendToTime] = useState("");
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useNavigationState("main.maintenanceAvailabilityTab", "breakdown");
   const [throughputFiltersHidden, setThroughputFiltersHidden] = useState(false);
   // Site-wise BD movement defaults to today to show the opening balance.
@@ -1955,6 +1958,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return record.start || record.startedAt || record.createdAt;
   };
   const requestMatchesLifecycleShift = (record = {}, event = "") => dashboardShift === "all" || requestMatchesDashboardShift(record, dashboardLifecycleShiftTimestamp(record, event));
+  const requestMatchesLifecycleTime = (record, event) => lifecycleTimeMatches(record,event,requestTrendFromTime,requestTrendToTime);
   const availableRegions=useMemo(()=>subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -2243,7 +2247,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const closedDate = requestEventDate(record, "closed");
       const verifiedDate = requestEventDate(record, "verified");
       const idleDate = requestEventDate(record, "idle");
-      const shiftMatches = (event) => typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, event);
+      const shiftMatches = (event) => (typeof requestMatchesLifecycleShift !== "function" || requestMatchesLifecycleShift(record, event)) && requestMatchesLifecycleTime(record,event);
       if (["production user", "maintenance user"].includes(requesterRole) && inRange(openedDate) && shiftMatches("opened")) add("production", record, openedDate);
       if (!["closed", "idle", "ideal"].includes(status) && inRange(openedDate) && shiftMatches("opened")) add("opened", record, openedDate);
       if (status === "closed" && inRange(closedDate) && shiftMatches("closed")) add("closed", record, closedDate);
@@ -2262,6 +2266,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       && (!(selectedRegion || dashboardSite !== "all") || activeSites.some(site => recordBelongsToSite(record, site)))
       && requestHasSelectedDashboardShift(record)
       && requestMatchesLifecycleShift(record, "closed")
+      && requestMatchesLifecycleTime(record,requestEventDate(record,"closed")?"closed":"opened")
       && (!(requestLifecycleRegion || requestLifecycleSite) || (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some(site => recordBelongsToSite(record, site))),
   });
   const requestLifecycleAvailability = {
@@ -2293,7 +2298,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   ];
   const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.production, day.closed, day.verified, day.idle, day.opened, day.mis]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
-  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
+  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ") + (requestTrendFromTime || requestTrendToTime ? ` · ${requestTrendFromTime || "00:00"}–${requestTrendToTime || "23:59"} IST daily` : "");
   const stagePipelineStages = [
     { key: "offroad", label: "Off road / request", shortLabel: "Request", className: "request" },
     { key: "acceptance", label: "Acceptance", shortLabel: "Acceptance", className: "acceptance" },
@@ -2790,7 +2795,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
                 {dashboardShiftOptions.length > 0 && <label><span>Shift Master</span><select aria-label="Request lifecycle shift" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((shift) => <option key={shift.key} value={shift.key}>{shift.label}</option>)}</select></label>}
               </div>
-              {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
+              <div className="mine-lifecycle-time-export">
+                {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
+                <label><span>From time (IST)</span><input type="time" aria-label="Request lifecycle from time" value={requestTrendFromTime} onChange={event=>setRequestTrendFromTime(event.target.value)} /></label>
+                <label><span>To time (IST)</span><input type="time" aria-label="Request lifecycle to time" value={requestTrendToTime} onChange={event=>setRequestTrendToTime(event.target.value)} /></label>
+              </div>
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
@@ -4513,13 +4522,8 @@ function MisApplicationAccessFields({record={},onEnabled}){
 
 function HrApplicationAccessFields({record={},onEnabled}){
  const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record));
- const [desktop,setDesktop]=useState(()=>normalizedHrSelection(record.hrDesktopAccess));
- const [mobile,setMobile]=useState(()=>normalizedHrSelection(record.hrMobileAccess));
- return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Separate HR credentials for hrpulse.cmll.in. This does not grant Fleet HR User or HR Manager permissions.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
+ return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Use the same user name and password as your existing Pulse account.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
  <label><input type="checkbox" name="hrAccess" checked={enabled} onChange={event=>{setEnabled(event.target.checked);onEnabled?.(event.target.checked);}}/> Enable HR portal login</label>
- <label>HR username<input name="hrLogin" defaultValue={record.hrLogin||''} autoComplete="off" required={enabled} maxLength={120}/></label>
- <label>{record.hrLogin?'New HR password (leave blank to keep existing)':'HR password'}<input name="hrPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256}/><small>At least 12 characters. Stored securely and never displayed after saving.</small></label>
- {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>HR · {view==='desktop'?'Desktop':'Mobile'} menus and masters</legend><input type="hidden" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value=""/><div><AccessSelectAll label="Select all HR menus and masters" options={HR_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{HR_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}
  </section>;
 }
 
@@ -4571,7 +4575,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       </label>)}</div>}
     </fieldset>
     <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} onEnabled={enabled=>{if(enabled&&!accountRole)setAccountRole("MIS Application User");}}/></div>
-    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record} onEnabled={enabled=>{if(enabled&&!accountRole)setAccountRole("HR Application User");}}/></div>
+    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record}/></div>
     {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">

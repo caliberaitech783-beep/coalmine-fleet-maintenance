@@ -1,11 +1,12 @@
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
+import {loginRecordCandidates,userLoginCandidates} from './mobile-access.mjs';
 import {HR_APPLICATION_URL,hrAccessEnabled,hrProfilePermissions} from './hr-permissions.mjs';
 const digest=value=>createHash('sha256').update(String(value)).digest('hex');
-const version=user=>digest(`${user.hrPasswordHash}:${user.hrLogin}`);
+const version=user=>digest(`${user.passwordHash||user.phone||''}:${String(user.login||'').trim().toLowerCase()}`);
 export function hrCredentialProfile(row){
  const user=row?.record_data||{},permissions=hrProfilePermissions(user);
- if(!row||!hrAccessEnabled(user)||!user.hrPasswordHash||!user.hrLogin||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase())||!permissions.hrDesktopAccess.length&&!permissions.hrMobileAccess.length)return null;
+ if(!row||!hrAccessEnabled(user)||!user.login||!(user.passwordHash||String(user.phone||'').trim())||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
  return {role:'normal',userType:'HR Application User',assignedRole:'HR Application User',login:String(user.login||user.hrLogin),name:user.employee||user.name||user.login,permissions};
 }
 export function installHrCredentialIdentity(app,{pool,sessionStore,allowedOrigins=[new URL(HR_APPLICATION_URL).origin]}){
@@ -29,9 +30,16 @@ export function installHrCredentialIdentity(app,{pool,sessionStore,allowedOrigin
   const {rows:rate}=await pool.query(`INSERT INTO hr_credential_attempts(key,attempts,created_at) VALUES($1,1,NOW()) ON CONFLICT(key) DO UPDATE SET attempts=hr_credential_attempts.attempts+1 RETURNING attempts`,[key]);
   if(Number(rate[0].attempts)>10)return res.status(429).json({error:'Too many HR sign-in attempts. Try again in ten minutes.'});
   await pool.query("DELETE FROM hr_credential_attempts WHERE created_at<NOW()-INTERVAL '20 minutes'");
-  const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' AND lower(trim(record_data->>'hrLogin'))=$1",[username]);
-  const row=rows.length===1?rows[0]:null,profile=hrCredentialProfile(row);
-  if(!profile||!verifyPassword(password,row.record_data.hrPasswordHash))return res.status(401).json({error:'HR username or password is incorrect.'});
+  const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
+  const candidates=loginRecordCandidates(rows,username).filter(row=>{
+   const user=row.record_data;
+   return hrCredentialProfile(row)&&userLoginCandidates(user).includes(username)&&(user.passwordHash?verifyPassword(password,user.passwordHash):String(user.phone||'').trim()===password);
+  });
+  const exact=candidates.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);
+  const matches=exact.length?exact:candidates;
+  const row=matches.length===1?matches[0]:null,profile=hrCredentialProfile(row);
+  if(!profile)return res.status(401).json({error:'User name or password is incorrect, or HR access is not enabled.'});
+  if(row.record_data.mustChangePassword===true)return res.status(403).json({error:'Sign in to Pulse and change your initial password before using HR.'});
   const token=randomUUID(),grant=randomBytes(32).toString('base64url');
   await sessionStore.create({token,...profile});
   await pool.query("INSERT INTO hr_credential_grants(grant_hash,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '7 days')",[digest(grant),row.id,version(row.record_data),token]);
@@ -43,7 +51,7 @@ export function installHrCredentialIdentity(app,{pool,sessionStore,allowedOrigin
   if(!/^[A-Za-z0-9_-]{43}$/.test(String(req.body?.grant||'')))return res.status(401).json({error:'HR session expired.'});
   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version FROM hr_credential_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.expires_at>NOW() AND s.created_at>NOW()-INTERVAL '7 days'`,[digest(req.body.grant)]);
   const row=rows[0],profile=hrCredentialProfile(row);
-  if(!profile||row.credential_version!==version(row.record_data))return res.status(401).json({error:'HR session expired or access changed. Sign in again.'});
+  if(!profile||row.record_data.mustChangePassword===true||row.credential_version!==version(row.record_data))return res.status(401).json({error:'HR session expired or access changed. Sign in again.'});
   res.json({profile});
  }));
  app.post('/api/integrations/hr/logout',safe(async(req,res)=>{
