@@ -1,3 +1,4 @@
+import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
@@ -2959,6 +2960,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
   }catch(error){next(error)}
 });
 
+registerInactiveUsers(app,{pool,requireSession,requireView:requireUserSessionView,locationName:userSessionLocationName});
 registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView,locationName:userSessionLocationName});
 registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData:loadOemEmailData,scheduledJobsEnabled});
 app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
@@ -2990,7 +2992,7 @@ app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res
           AND remote.expires_at>NOW()
         ORDER BY remote.requested_at DESC LIMIT 1
       ) AS assistance ON TRUE
-      WHERE sessions.created_at>NOW()-INTERVAL '7 days'
+      WHERE EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=sessions.session_public_id) AND sessions.created_at>NOW()-INTERVAL '7 days'
       ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`,[String(req.session.login||''),REMOTE_ASSISTANCE_LIVE_STATUSES]);
     const now=Date.now();
     const sessions=rows.map(({token,userRecord,...row})=>({

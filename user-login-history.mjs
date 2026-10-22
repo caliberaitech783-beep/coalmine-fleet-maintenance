@@ -1,6 +1,10 @@
+import {initializeLoginDays} from './inactive-users.mjs';
+import {initializeSingleLogin} from './single-login.mjs';
 // Detailed sessions may be purged. The small per-login summary must survive
 // that cleanup, logout and credential expiry; it stores no credentials/devices.
 export async function initializeLoginHistory(pool) {
+  // Single-login authorization registry v1, included in the schema fingerprint.
+  await initializeSingleLogin(pool);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_login_history (
       session_id TEXT PRIMARY KEY, login TEXT NOT NULL, name TEXT NOT NULL DEFAULT '',
@@ -126,7 +130,7 @@ export function registerLoginHistoryRoutes(app,{pool,requireSuper,requireAdminis
         const {rows}=await pool.query(`SELECT h.session_id AS "sessionId",h.login,h.name,h.started_at AS "createdAt",
           h.last_seen_at AS "lastSeenAt",h.device_id AS "deviceId",h.ip_address AS "ipAddress",h.user_agent AS "userAgent",
           EXISTS(SELECT 1 FROM auth_sessions s WHERE s.session_public_id=h.session_id
-            AND s.last_seen_at>NOW()-INTERVAL '15 minutes' AND s.created_at>NOW()-INTERVAL '7 days') AS active
+            AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.last_seen_at>NOW()-INTERVAL '15 minutes' AND s.created_at>NOW()-INTERVAL '7 days') AS active
           FROM user_login_history h WHERE h.login=$3 AND h.started_at<$2 AND h.last_seen_at>=$1
           ORDER BY h.started_at DESC`,[...params,String(req.query.login).trim().toLowerCase()]);
         return res.json({sessions:rows,...range,trackingSince:metadata[0]?.value});

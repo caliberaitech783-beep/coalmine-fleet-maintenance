@@ -1,3 +1,4 @@
+import {initializeSingleLogin} from '../single-login.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
@@ -13,8 +14,9 @@ test('MIS entitlement uses Pulse credentials and strips obsolete separate secret
 });
 test('shared Pulse password, per-application authorization, revocation, rate limits and one-time handoff',async()=>{
  const db=new PGlite();try{
- await db.exec(`CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT DEFAULT gen_random_uuid()::text);`);
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text);`);
  const pool={query:(sql,params)=>sql.split(';').filter(x=>x.trim()).length>1?db.exec(sql):db.query(sql,params)};
+ await initializeSingleLogin(pool);
  const routes=new Map(),app={post:(url,fn)=>routes.set(url,fn),options(){}};
  const identity=installPulseApplicationIdentity(app,{pool,sessionStore:createSessionStore(pool)});await identity.initialize();
  const handoff=installMisLoginHandoff(app,{pool,identity});await handoff.initialize();
@@ -24,7 +26,7 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  const credentials={username:'anoop',password:'pulse-test-password'};
  assert.equal((await call('/api/integrations/mis/authenticate',{...credentials,password:'wrong'})).status,401);
  const mis=await call('/api/integrations/mis/authenticate',credentials),hr=await call('/api/integrations/hr/authenticate',credentials,{origin:'https://hrpulse.cmll.in'});
- assert.equal(mis.status,200);assert.equal(hr.status,200);assert.equal(hr.value.profile.login,'anoop');
+ assert.equal(mis.status,200);assert.equal(hr.status,200);assert.equal((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).status,401,'HR login replaces prior MIS login');assert.equal(hr.value.profile.login,'anoop');
  assert.equal((await call('/api/integrations/hr/authenticate',credentials,{origin:'https://untrusted.example'})).status,403);
  assert.equal((await call('/api/integrations/hr/validate',{grant:mis.value.grant})).status,401);
  for(const row of (await db.query('SELECT token FROM auth_sessions')).rows)assert.equal(await createSessionStore(pool).get(row.token),null);
@@ -32,9 +34,9 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  const authorized=await call('/api/mis-login/authorize',{...credentials,state,challenge});assert.equal(authorized.status,200);assert.equal(authorized.value.grant,undefined);
  const target=new URL(authorized.value.redirectUrl);assert.equal(target.origin,'https://pulse-ll.cmll.in');const code=target.searchParams.get('code');
  assert.equal((await call('/api/integrations/mis/exchange',{code,state,verifier:state})).status,401);
- assert.equal((await call('/api/integrations/mis/exchange',{code,state,verifier})).status,200);
+ const completed=await call('/api/integrations/mis/exchange',{code,state,verifier});assert.equal(completed.status,200);const currentGrant=completed.value.grant;
  assert.equal((await call('/api/integrations/mis/exchange',{code,state,verifier})).status,401);
- user.misDesktopAccess=[];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);assert.deepEqual((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).value.profile.permissions.misDesktopAccess,[]);
+ user.misDesktopAccess=[];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);assert.deepEqual((await call('/api/integrations/mis/validate',{grant:currentGrant})).value.profile.permissions.misDesktopAccess,[]);
  user.passwordHash=hashPassword('changed-pulse-password');await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
  for(const [application,grant] of [['mis',mis.value.grant],['hr',hr.value.grant]])assert.equal((await call(`/api/integrations/${application}/validate`,{grant})).status,401);
  const again=await call('/api/integrations/hr/authenticate',{...credentials,password:'changed-pulse-password'});await call('/api/integrations/hr/logout',{grant:again.value.grant});assert.equal((await call('/api/integrations/hr/validate',{grant:again.value.grant})).status,401);

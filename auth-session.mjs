@@ -27,6 +27,7 @@ export function createSessionStore(pool, {
                 session_public_id AS "sessionId"
          FROM auth_sessions
          WHERE token = $1
+           AND (COALESCE(trim(login_name),'')='' OR EXISTS(SELECT 1 FROM user_current_sessions current_login WHERE current_login.session_id=auth_sessions.session_public_id))
            AND created_at > NOW() - make_interval(days => $2::int)`,
         [token, boundedMaxAgeDays]
       );

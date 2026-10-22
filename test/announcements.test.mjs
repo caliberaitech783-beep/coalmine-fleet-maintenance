@@ -92,7 +92,7 @@ test('administrators compose announcements from the User Sessions page and can r
   assert.match(composer, /Send to all users/);
   assert.match(composer, /window\.confirm\('Withdraw this announcement\?/);
   assert.match(composer, /closed by \{Number\(row\.acknowledgedCount\|\|0\)\.toLocaleString\('en-IN'\)\}/);
-  const page = source.slice(source.indexOf('function UserSessionsPage('), source.indexOf('function UserSessionsPage(') + 12000);
+  const page = source.slice(source.indexOf('function UserSessionsPage('), source.indexOf('function reportCategoryIdsForUser('));
   assert.match(page, /<button type="button" className="primary" onClick=\{\(\)=>setAnnouncing\(true\)\}><MessageCircle \/> Announce to all users<\/button>/);
   assert.match(page, /\{announcing&&<AnnouncementComposer session=\{session\}/);
   assert.match(page, /Announcement sent to all users\. Each user will see it until they close it\./);

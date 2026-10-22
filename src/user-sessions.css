@@ -150,3 +150,5 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 /* The responsive login banner already carries the full Pulse logo. */
 .login > main .login-mobile-brand { display: none; }
 @media (max-width: 560px) { .login > main .loginbox { padding-top: 48px; } }
+
+.session-count-drilldown{border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:3px}.inactive-user-counts{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:16px 0}.inactive-users-panel input[type=date]{padding:10px;border:1px solid #d6dcec;border-radius:8px;background:white;color:#302244}
