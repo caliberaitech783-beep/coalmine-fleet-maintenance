@@ -62,6 +62,13 @@ test('same approved revision is not applied again',async()=>{
   assert.ok(!calls.some(sql=>sql.startsWith('DELETE')));
 });
 
+test('deployment replacement cannot bypass approvals on an existing employee roster',async()=>{
+  const calls=[];
+  const client={query:async(sql)=>{calls.push(sql);return sql.startsWith('SELECT id,master_name')?{rows:[{id:1,master_name:M.employee,record_data:{name:'KEEP',empId:'KEEP',site:'Office'}}],rowCount:1}:{rows:[],rowCount:0};},release(){}};
+  await assert.rejects(replaceCdirRoster({connect:async()=>client},encode(payload())),/cannot be replaced through deployment configuration/);
+  assert.ok(calls.includes('ROLLBACK'));assert.ok(!calls.some(sql=>sql.startsWith('DELETE')||sql.startsWith('INSERT')));
+});
+
 test('database replacement backs up seven masters, preserves unrelated data, and runs once',{
   skip:!process.env.AUTH_SESSION_TEST_DATABASE_URL,
 },async()=>{

@@ -10,6 +10,7 @@ import {officeApprovalKey,cdirApprovalRecipients} from '../cdir-approval-routing
 import {resolveMobileAccess,normalizeMobileUserRole} from '../mobile-access.mjs';
 import {cdirViewerContext} from '../cdir-access.mjs';
 import {canEditCdirEmployee} from '../cdir-employee-edit.mjs';
+import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 
 const profiles={
  hr:{login:'hr',userRoles:'HR User',site:'Nagpur'},
@@ -44,7 +45,7 @@ test('HR Manager grants directory privileges and office aliases without fleet ac
 
 test('real HTTP office/site approvals and employee/contact deletion retain history, enforce scope and roll back failed notifications',async t=>{
  const db=new PGlite();t.after(()=>db.close());
- await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE notices(recipient TEXT,reference TEXT);${EMPLOYEE_TRANSFER_SCHEMA}${CDIR_DELETION_SCHEMA}`);
+ await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE notices(recipient TEXT,reference TEXT);${EMPLOYEE_TRANSFER_SCHEMA}${CDIR_DELETION_SCHEMA}${CDIR_CHANGE_SCHEMA}`);
  const client={query:(...args)=>db.query(...args),release(){}};const pool={...client,connect:async()=>client};
  const insert=async(master,record)=>(await db.query('INSERT INTO master_records(master_name,record_data) VALUES($1,$2) RETURNING id',[master,JSON.stringify(record)])).rows[0].id;
  const employee=async(empId,site='Corporate Office, Nagpur')=>insert(CDIR_MASTERS.employee,{name:`EMPLOYEE ${empId}`,empId,site,category:'A1',status:'ACTIVE'});
@@ -99,7 +100,7 @@ test('all nonadmin single and bulk master deletions are intercepted before direc
  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  const route=source.slice(source.indexOf("app.delete('/api/masters/:master/:id'"));
  assert.ok(route.indexOf('return requestCdirDeletion(req,res,next)')<route.indexOf('DELETE FROM master_records'));
- assert.ok(source.includes("if(deletionProtectedMaster(master)&&!cdirDirectAdministrator(req.session))return res.status(403)"));
+ assert.ok(source.includes("if(deletionProtectedMaster(master))return res.status(403)"));
  const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.ok(ui.includes('response.status===202'));assert.ok(ui.includes('deletionApprovalRequired ? "Request deletion"'));
 });

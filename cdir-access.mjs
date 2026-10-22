@@ -1,11 +1,10 @@
-import {officeApprovalKey} from './cdir-approval-routing.mjs';
+import {cdirLocationKey} from './cdir-approval-routing.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
 import {managerRoleSelection,normalizeAdminLevel} from './admin-access.mjs';
 import {displaySiteSelection,managerReportScope,userSiteSelection} from './region-scope.mjs';
-import {canonicalSiteName} from './site-location.mjs';
 
 function directorySiteIds(sites,assignedSites){
-  const siteKey=value=>officeApprovalKey(value)||canonicalSiteName(value);
+  const siteKey=cdirLocationKey;
   const assigned=new Set(assignedSites.map(siteKey).filter(Boolean));
   return sites.filter((site)=>[site.label,site.dataKey].some((value)=>assigned.has(siteKey(value)))).map((site)=>site.id);
 }

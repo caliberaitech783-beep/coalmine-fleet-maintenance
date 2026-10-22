@@ -1,6 +1,7 @@
 import {assignedUserRoles} from './account-role-access.mjs';
 import {createHash} from 'node:crypto';
 import {CDIR_MASTERS,CDIR_MASTER_FIELDS,cdirNormalizeRecord,cdirEmployeeError} from './cdir-masters.mjs';
+import {cdirSubmissionAllowed,cdirSiteKey,cdirSameRecord} from './cdir-change-policy.mjs';
 
 export function canEditCdirEmployee(session={},user={}) {
   return ['HR User','HR Manager'].includes(session?.assignedRole)||assignedUserRoles(user).some(role=>['HR User','HR Manager'].includes(role))
@@ -27,17 +28,18 @@ async function loadRecord(client,id,lock=false){
   return {employee,contact:contacts[0]||null};
 }
 
-export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,auditChangedFields,loadViewer=async()=>({})}){
+export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,submitChange,loadViewer=async()=>({})}){
   const guard=async(req,res,next)=>{try{const user=await loadViewer(req.session);return canEditCdirEmployee(req.session,user)?next():res.status(403).json({error:'Only HR users, directors and administrators can edit employee details.'});}catch(error){next(error);}};
   app.get('/api/cdir/employees/:id/edit',requireSession,guard,async(req,res,next)=>{
     try{
       res.set('Cache-Control','no-store');
       if(!/^\d+$/.test(req.params.id))fail(400,'Invalid employee ID.');
       const {employee,contact}=await loadRecord(pool,req.params.id);
+      if(!cdirSubmissionAllowed(req.session,await loadViewer(req.session),employee.site))fail(403,'You may submit changes only for your assigned locations. Nagpur HR may submit across sites.');
       const masters=await loadMasters(Object.values(CDIR_MASTERS).filter(name=>![CDIR_MASTERS.employee,CDIR_MASTERS.contact].includes(name)));
       const fields=CDIR_EDIT_FIELDS.map(([key,label,type='text'])=>({key,label,type,
         options:type.startsWith('ref:')?(masters[type.split(':')[1]]||[]).map(row=>row[type.split(':')[2]]).filter(Boolean):type.startsWith('options:')?type.slice(8).split('|'):undefined}));
-      res.json({empId:employee.empId||'',revision:revision(employee,contact),fields,record:Object.fromEntries([...keys].map(key=>[key,contactKeys.includes(key)?contact?.record_data?.[key]||'':employee[key]||'']))});
+      res.json({empId:employee.empId||'',revision:revision(employee,contact),fields:fields.filter(field=>field.key!=='site'),record:Object.fromEntries([...keys].map(key=>[key,contactKeys.includes(key)?contact?.record_data?.[key]||'':employee[key]||'']))});
     }catch(error){next(error);}
   });
   app.patch('/api/cdir/employees/:id',requireSession,guard,async(req,res,next)=>{
@@ -55,6 +57,7 @@ export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,au
       const {employee,contact}=await loadRecord(client,req.params.id,true);
       if(req.body.revision!==revision(employee,contact))fail(409,'This employee was changed by another user. Close and reopen Edit before saving.');
       const updated=cdirNormalizeRecord(CDIR_MASTERS.employee,{...employee,...Object.fromEntries(Object.entries(req.body.record).filter(([key])=>!contactKeys.includes(key)))});
+      if(cdirSiteKey(updated.site)!==cdirSiteKey(employee.site))fail(409,'Use Employee Transfer for a location change.');
       const masters=await loadMasters([CDIR_MASTERS.site,CDIR_MASTERS.category],client);
       const error=cdirEmployeeError(updated,masters);if(error)fail(400,error);
       // A name-only contact can be shared by several placements. Do not silently
@@ -64,12 +67,11 @@ export function registerCdirEmployeeEdit(app,{pool,requireSession,loadMasters,au
         if(others.rows.length)fail(409,'This name is shared by multiple employee records without an employee ID. Reconcile their IDs in Masters before renaming.');
       }
       const savedContact=cdirNormalizeRecord(CDIR_MASTERS.contact,{...(contact?.record_data||{}),name:updated.name,empId:updated.empId||'',...Object.fromEntries(contactKeys.map(key=>[key,String(req.body.record[key]??contact?.record_data?.[key]??'').trim()]))});
-      await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3',[JSON.stringify(updated),req.params.id,CDIR_MASTERS.employee]);
-      if(contact)await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3',[JSON.stringify(savedContact),contact.id,CDIR_MASTERS.contact]);
-      else if(contactKeys.some(key=>savedContact[key]))await client.query('INSERT INTO master_records(master_name,record_data) VALUES($1,$2::jsonb)',[CDIR_MASTERS.contact,JSON.stringify(savedContact)]);
+      const changes=[{master:CDIR_MASTERS.employee,recordId:req.params.id,before:employee,after:updated}];
+      if(contact&&!cdirSameRecord(contact.record_data,savedContact)||!contact&&contactKeys.some(key=>savedContact[key]))changes.push({master:CDIR_MASTERS.contact,recordId:contact?.id||null,before:contact?.record_data||null,after:savedContact});
+      const result=await submitChange(client,req,changes,req.body.reason);
       await client.query('COMMIT');
-      req.audit={eventType:'Master data',module:'C-Dir',action:'Edit employee',targetType:CDIR_MASTERS.employee,targetReference:String(req.params.id),changedFields:auditChangedFields({...employee,...Object.fromEntries(contactKeys.map(key=>[key,contact?.record_data?.[key]||'']))},{...updated,...Object.fromEntries(contactKeys.map(key=>[key,savedContact[key]]))})};
-      res.json({ok:true});
+      res.status(202).json(result);
     }catch(error){if(client)await client.query('ROLLBACK');next(error);}finally{client?.release();}
   });
 }
