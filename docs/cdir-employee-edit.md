@@ -12,6 +12,11 @@ Manager. Nagpur/Chandrapur office records require the office's assigned HR Manag
 An HR Manager cannot substitute for a site PM. Requesters cannot decide their own
 updates, transfers or deletions. Missing independent approvers block submission.
 
+Legacy directory site labels are matched to their operational assignment names for
+approval and HR scope only (Gauri Pauni, Hindustan Lalpeth and Dudhichua spelling
+variants). East and West Dudhichua remain separate. This does not rename roster
+records or change fleet dashboard grouping.
+
 **C-Dir → Directory Update Approvals** is available on desktop and mobile to HR,
 HR Managers, administrators, directors and PMs. It shows pending/history registers,
 old versus proposed values, requester, reason and location decision history.

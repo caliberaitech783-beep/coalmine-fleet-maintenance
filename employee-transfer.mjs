@@ -2,10 +2,10 @@ import {randomUUID,createHash} from 'node:crypto';
 import {canEditCdirEmployee,CDIR_EDIT_FIELDS} from './cdir-employee-edit.mjs';
 import {CDIR_MASTERS,cdirNormalizeRecord,cdirEmployeeError} from './cdir-masters.mjs';
 import {managerRoleSelection} from './admin-access.mjs';
-import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {managerReportScope} from './region-scope.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
-import {approvalRoleForSite,officeApprovalKey,hrManagerAssignedToOffice} from './cdir-approval-routing.mjs';
+import {approvalRoleForSite,officeApprovalKey,hrManagerAssignedToOffice,cdirScopeIncludesSite} from './cdir-approval-routing.mjs';
 import {assertNoCdirPendingChange,cdirSubmissionAllowed,cdirLogin} from './cdir-change-policy.mjs';
 
 export const EMPLOYEE_TRANSFER_SCHEMA=`CREATE TABLE IF NOT EXISTS employee_transfers(id BIGSERIAL PRIMARY KEY,record_data JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE INDEX IF NOT EXISTS employee_transfers_employee_idx ON employee_transfers ((record_data->>'employeeRecordId')); CREATE UNIQUE INDEX IF NOT EXISTS employee_transfers_reference_idx ON employee_transfers ((record_data->>'transferNo')); CREATE UNIQUE INDEX IF NOT EXISTS employee_transfers_pending_idx ON employee_transfers ((record_data->>'employeeRecordId')) WHERE record_data->>'status' IN ('Awaiting source approval','Awaiting destination acceptance');`;
@@ -23,7 +23,7 @@ export function employeeTransferAccess(session={},user={}){
   const hrManager=assignedUserRoles(user).includes('HR Manager')||session.assignedRole==='HR Manager';
   return {privileged,pm,hrManager,user,canSubmit:privileged||pm||hrManager,scope:managerReportScope(user)};
 }
-export const employeeTransferSiteAllowed=(context,site)=>officeApprovalKey(site)?context.hrManager&&hrManagerAssignedToOffice(context.user,site):context.pm&&reportScopeIncludesSite(context.scope,site);
+export const employeeTransferSiteAllowed=(context,site)=>officeApprovalKey(site)?context.hrManager&&hrManagerAssignedToOffice(context.user,site):context.pm&&cdirScopeIncludesSite(context.scope,site);
 export const employeeTransferVisible=(record,context)=>context.privileged||[record.source,record.destination].some(site=>employeeTransferSiteAllowed(context,site));
 async function employeeRecord(db,id){
   const {rows}=await db.query('SELECT id,record_data FROM master_records WHERE master_name=$1 AND id=$2 FOR UPDATE',[CDIR_MASTERS.employee,id]);
