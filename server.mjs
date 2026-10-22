@@ -1,3 +1,5 @@
+import {prepareHrCredentials} from './hr-credentials.mjs';
+import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
@@ -2314,7 +2316,7 @@ app.post('/api/login',async(req,res,next)=>{
     const loginRows=loginRecordCandidates(userRows,username);
     const candidates=loginRows.filter(row=>{
       const record=row.record_data;
-      if(record.userType==='MIS Application User')return false;
+      if(['MIS Application User','HR Application User'].includes(record.userType))return false;
       const passwordMatches=record.passwordHash
         ? verifyPassword(password,record.passwordHash)
         : String(record.phone||'').trim()===password;
@@ -7890,6 +7892,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(cdirError)return res.status(403).json({error:cdirError});
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(master==='Users & employees'&&records.some(r=>r?.misAccess||r?.misPassword)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign MIS credentials and access.'});
+    if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR access.'});
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
@@ -7903,7 +7906,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
-          return prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))));
+          return prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)))));
         }
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
@@ -8146,6 +8149,8 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(master==='Users & employees'){
       if((record.misAccess||record.misPassword||previousRecord.misAccess)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage MIS access.'});
       storedRecord=prepareMisCredentials(storedRecord,previousRecord);
+      if(hrAccessManagementRequested(record,previousRecord)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage HR access.'});
+      storedRecord=prepareHrCredentials(storedRecord,previousRecord);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');

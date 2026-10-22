@@ -1,3 +1,4 @@
+import {hrAccessEnabled,hrProfilePermissions,HR_ALL_PERMISSIONS} from './hr-permissions.mjs';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
 import {assignedUserRoles} from './account-role-access.mjs';
@@ -18,8 +19,9 @@ export function pulseApplicationProfile(row,application){
   return {role:'super',userType:'MIS Application User',assignedRole:'MIS Application User',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...misProfilePermissions(access),sharedPulseCredentials:true}};
  }
  const hrRole=roles.includes('HR Manager')?'HR Manager':roles.includes('HR User')?'HR User':null;
- if(application!=='HR'||!admin&&!hrRole)return null;
- return {role:admin?'super':'normal',userType:admin?'Super Admin':'Mobile User',assignedRole:hrRole||'Admin',login:String(user.login),name:user.employee||user.name||user.login,permissions:{application:'HR',sharedPulseCredentials:true,adminLevel:admin?user.adminLevel||'Admin':null,site:user.site||user.location||''}};
+ if(application!=='HR'||!admin&&!hrRole&&!hrAccessEnabled(user))return null;
+ const hrPermissions=hrProfilePermissions(hrAccessEnabled(user)?user:{hrDesktopAccess:HR_ALL_PERMISSIONS,hrMobileAccess:HR_ALL_PERMISSIONS});
+ return {role:admin?'super':'normal',userType:admin?'Super Admin':'Mobile User',assignedRole:hrRole||'Admin',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...hrPermissions,sharedPulseCredentials:true,adminLevel:admin?user.adminLevel||'Admin':null,site:user.site||user.location||''}};
 }
 export function installPulseApplicationIdentity(app,{pool,sessionStore}){
  const handlers={};
