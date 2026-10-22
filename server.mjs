@@ -2626,11 +2626,6 @@ async function requireSuper(req,res,next){
   }catch(error){next(error)}
 }
 
-// Authorization probe deliberately does not record activity or refresh online status.
-app.get('/api/session-status',async(req,res,next)=>{
- req.audit=false;res.set('Cache-Control','no-store');
- try{if(!await readSession(req))return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});res.status(204).end();}catch(error){next(error)}
-});
 app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
   try{
     const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
@@ -2639,6 +2634,11 @@ app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+// Authorization probe deliberately does not record activity or refresh online status.
+app.get('/api/session-status',async(req,res,next)=>{
+ req.audit=false;res.set('Cache-Control','no-store');
+ try{if(!await readSession(req))return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});res.status(204).end();}catch(error){next(error)}
+});
 app.get('/api/session-messages',requireSession,async(req,res,next)=>{
   try{
     const {rows}=await pool.query(`SELECT id,message,audio_data AS "audioData",sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt"

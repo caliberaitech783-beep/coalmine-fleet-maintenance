@@ -26,3 +26,18 @@ test('inactive user dates use durable login days, count each account once, and r
  assert.equal((await call({from:'2026-09-01',to:'2026-10-22'})).status,400,'incomplete older history cannot falsely mark users inactive');assert.equal((await call({from:'invalid',to:'2026-10-22'})).status,400);
  }finally{await db.close()}
 });
+import pg from 'pg';
+const connectionString=process.env.AUTH_SESSION_TEST_DATABASE_URL;
+test('PostgreSQL concurrent logins select exactly one winner', {skip:!connectionString},async()=>{
+ const schema='single_login_'+randomUUID().replaceAll('-','');
+ const admin=new pg.Pool({connectionString,ssl:process.env.AUTH_SESSION_TEST_DATABASE_SSL==='false'?false:undefined});
+ let pool;
+ try{
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  pool=new pg.Pool({connectionString,ssl:process.env.AUTH_SESSION_TEST_DATABASE_SSL==='false'?false:undefined,options:`-c search_path=${schema}`,max:5});
+  await pool.query(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW());`);
+  await initializeSingleLogin(pool);const store=createSessionStore(pool);const tokens=Array.from({length:15},()=>randomUUID());
+  await Promise.all(tokens.map(token=>store.create({token,login:'same-user',name:'Person',role:'normal'})));
+  const authorized=await Promise.all(tokens.map(token=>store.get(token)));assert.equal(authorized.filter(Boolean).length,1);
+ }finally{if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end()}
+});

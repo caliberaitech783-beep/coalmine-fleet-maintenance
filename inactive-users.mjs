@@ -1,3 +1,4 @@
+import {userMasterRole} from './src/user-master-role.mjs';
 import {loginHistoryRange} from './user-login-history.mjs';
 export async function initializeLoginDays(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS user_login_days(login TEXT NOT NULL,day DATE NOT NULL,PRIMARY KEY(login,day));
@@ -30,7 +31,7 @@ export function registerInactiveUsers(app,{pool,requireSession,requireView,locat
     FROM accounts u LEFT JOIN user_login_summary s ON s.login=lower(trim(u.record_data->>'login'))
     ORDER BY lower(u.record_data->>'employee'),u.id`,[req.query.from,req.query.to]);
    const users=rows.map(({record,...row})=>({...row,login:record.login,name:record.employee||record.name||record.login,
-    roleLabel:record.assignedRole||record.userGroup||record.userType||'User',location:locationName(record,record.assignedRole||record.userType),
+    roleLabel:userMasterRole(record),location:locationName(record,userMasterRole(record)),
     accountStatus:record.active===false||['false','inactive','disabled','terminated'].includes(String(record.status||record.active||'').toLowerCase())?'Disabled':'Enabled'}));
    const inactive=users.filter(row=>!row.loggedIn);
    res.json({users:inactive,totalUsers:users.length,inactiveUsers:inactive.length,loggedInUsers:users.length-inactive.length,completeFrom,from:req.query.from,to:req.query.to});

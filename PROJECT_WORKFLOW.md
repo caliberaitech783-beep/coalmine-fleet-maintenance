@@ -684,3 +684,9 @@ Failed attempts remain limited per application, source and username.
 
 Deploy Pulse first, then MIS and the HR static build. MIS data remains in its
 own database; HR hosting does not receive Pulse database credentials.
+
+## One current login and inactive-user date drilldowns
+
+user_current_sessions selects one current session per normalized Pulse login across Pulse, MIS, HR and Tender. An INSERT trigger atomically replaces the pointer; earlier bearer tokens fail validation immediately. Installation chooses the newest existing login once. Logout/restart cannot revive old tokens. Prior session rows remain backup-gated history and are excluded from the live session list. Pulse polls a read-only authorization probe every 15 seconds and on focus without recording activity.
+
+User Sessions shows valid-user counts with clickable detail filters. Offline describes retained current sessions without recent activity. Inactive users is a separate date-range view of configured login accounts with no fresh successful login in the selected inclusive India dates. Counts open user lists and individual details. Durable per-account login-day evidence supports future date ranges despite detailed-session cleanup. Complete tracking starts on the installation's India date; older incomplete ranges are rejected rather than presented as proof of inactivity. Daily evidence stores no passwords, tokens, IPs or devices.
