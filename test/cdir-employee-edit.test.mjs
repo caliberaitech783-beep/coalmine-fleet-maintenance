@@ -12,7 +12,7 @@ test('only HR users, directors and administrators can edit',()=>{
  assert.equal(canEditCdirEmployee({login:'MAHAKDUDANI'}),false);
  assert.equal(canEditCdirEmployee({role:'super',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}}),false);
 });
-test('profile employee edit uses exact master id and persists atomically with stale-write protection',async()=>{
+test('profile employee edit stages exact master IDs without writing live data and rejects stale submissions',async()=>{
  const db=new PGlite();await db.exec('CREATE TABLE master_records(id SERIAL PRIMARY KEY, master_name TEXT, record_data JSONB)');
  const insert=async(master,record)=>(await db.query('INSERT INTO master_records(master_name,record_data) VALUES($1,$2) RETURNING id',[master,JSON.stringify(record)])).rows[0].id;
  await insert(CDIR_MASTERS.site,{name:'Majri OC'});await insert(CDIR_MASTERS.category,{code:'A'});
@@ -22,24 +22,26 @@ test('profile employee edit uses exact master id and persists atomically with st
  const pool={...client,connect:async()=>client};
  const loadMasters=async(names,connection=client)=>{const {rows}=await connection.query('SELECT master_name,record_data FROM master_records WHERE master_name=ANY($1::text[])',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(r=>r.master_name===name).map(r=>r.record_data)]));};
  const routes={};const sessionMiddleware=()=>{};
- registerCdirEmployeeEdit({get:(path,...handlers)=>routes.get=handlers,patch:(path,...handlers)=>routes.patch=handlers},{pool,requireSession:sessionMiddleware,loadMasters,auditChangedFields:()=>['name','contact']});
+ let staged;registerCdirEmployeeEdit({get:(path,...handlers)=>routes.get=handlers,patch:(path,...handlers)=>routes.patch=handlers},{pool,requireSession:sessionMiddleware,loadMasters,submitChange:async(client,req,items)=>{staged=items;return {approvalRequired:true,requestNo:'TEST-PENDING'};}});
  assert.equal(routes.patch[0],sessionMiddleware);
  let forbidden;await routes.patch[1]({session:{login:'other'}},{status:code=>({json:()=>forbidden=code})},()=>assert.fail('Unauthorized access'));
  assert.equal(forbidden,403);
- const response=()=>({set(){},json(value){this.body=value;}});
- const get=response();await routes.get[2]({params:{id:String(id)}},get,error=>{throw error;});
+ const session={role:'super',permissions:{adminLevel:'Admin'}};
+ const response=()=>({set(){},status(value){this.statusCode=value;return this;},json(value){this.body=value;}});
+ const get=response();await routes.get[2]({session,params:{id:String(id)}},get,error=>{throw error;});
  assert.equal(get.body.record.contact,'111');
  assert.equal(get.body.record.empId,undefined);
- const req={params:{id:String(id)},body:{revision:get.body.revision,record:{...get.body.record,name:'two',contact:'222'}}};
+ const req={session,params:{id:String(id)},body:{revision:get.body.revision,record:{...get.body.record,name:'two',contact:'222'},reason:'Correction'}};
  await routes.patch[2](req,response(),error=>{throw error;});
  let records=await loadMasters([CDIR_MASTERS.employee,CDIR_MASTERS.contact]);
- assert.equal(records[CDIR_MASTERS.employee][0].name,'TWO');assert.equal(records[CDIR_MASTERS.employee][0].order,'20');
- assert.equal(records[CDIR_MASTERS.contact].length,1);assert.equal(records[CDIR_MASTERS.contact][0].contact,'222');assert.equal(records[CDIR_MASTERS.contact][0].email,'old@example.com');assert.equal(req.audit.action,'Edit employee');
+ assert.equal(records[CDIR_MASTERS.employee][0].name,'ONE');assert.equal(records[CDIR_MASTERS.employee][0].order,'20');
+ assert.equal(records[CDIR_MASTERS.contact].length,1);assert.equal(records[CDIR_MASTERS.contact][0].contact,'111');assert.equal(records[CDIR_MASTERS.contact][0].email,'old@example.com');assert.equal(staged[0].after.name,'TWO');assert.equal(staged[1].after.contact,'222');
+ await db.query('UPDATE master_records SET record_data=record_data||$1::jsonb WHERE id=$2',[JSON.stringify({name:'NEWER'}),id]);
  let conflict;await routes.patch[2](req,response(),err=>conflict=err);assert.equal(conflict.status,409);
  let forbiddenField;await routes.patch[2]({...req,body:{...req.body,record:{adminLevel:'Admin'}}},response(),err=>forbiddenField=err);assert.equal(forbiddenField.status,400);
- const fresh=response();await routes.get[2]({params:{id:String(id)}},fresh,error=>{throw error;});
- let invalid;await routes.patch[2]({...req,body:{revision:fresh.body.revision,record:{name:'CHANGED',site:'missing'}}},response(),err=>invalid=err);assert.equal(invalid.status,400);
- records=await loadMasters([CDIR_MASTERS.employee]);assert.equal(records[CDIR_MASTERS.employee][0].name,'TWO');
+ const fresh=response();await routes.get[2]({session,params:{id:String(id)}},fresh,error=>{throw error;});
+ let invalid;await routes.patch[2]({...req,body:{revision:fresh.body.revision,record:{name:'CHANGED',site:'missing'}}},response(),err=>invalid=err);assert.equal(invalid.status,409);
+ records=await loadMasters([CDIR_MASTERS.employee]);assert.equal(records[CDIR_MASTERS.employee][0].name,'NEWER');
  await db.close();
 });
 test('directory projection carries the stable master id for duplicate employee placements',()=>{

@@ -1,4 +1,5 @@
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
+import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -44,7 +45,7 @@ async function runStartup({users=[],initialized=true}={}){
   const context={
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],BREAKDOWN_SUB_CATEGORY_DEFAULTS:['Tyre puncture'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
-    SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,CDIR_DELETION_SCHEMA,
+    SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,CDIR_DELETION_SCHEMA,CDIR_CHANGE_SCHEMA,
     hashPassword:()=>assert.fail('startup must not construct default account credentials'),
   };
   await runInNewContext(`${migration}\nmigrate();`,context);

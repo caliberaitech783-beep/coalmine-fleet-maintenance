@@ -1,4 +1,5 @@
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
+import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -18,14 +19,14 @@ test('employee transfer authorization excludes general users and non-Project Man
 
 test('HTTP employee transfer flow enforces site scope, preserves history, sends both inbox notifications and saves only after both PM approvals',async t=>{
  const db=new PGlite();t.after(()=>db.close());
- await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE notices(recipient TEXT,reference TEXT,message TEXT);${EMPLOYEE_TRANSFER_SCHEMA}${CDIR_DELETION_SCHEMA}`);
+ await db.exec(`CREATE TABLE master_records(id SERIAL PRIMARY KEY,master_name TEXT,record_data JSONB,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE notices(recipient TEXT,reference TEXT,message TEXT);${EMPLOYEE_TRANSFER_SCHEMA}${CDIR_DELETION_SCHEMA}${CDIR_CHANGE_SCHEMA}`);
  const client={query:(...args)=>db.query(...args),release(){}};const pool={...client,connect:async()=>client};
  const insert=async(master,record)=>(await db.query('INSERT INTO master_records(master_name,record_data) VALUES($1,$2) RETURNING id',[master,JSON.stringify(record)])).rows[0].id;
  for(const name of ['Majri OC','Jayant OC','Sasti OC'])await insert(CDIR_MASTERS.site,{name});await insert(CDIR_MASTERS.category,{code:'A'});
  const id=await insert(CDIR_MASTERS.employee,{name:'EMPLOYEE ONE',empId:'E001',site:'Majri OC',category:'A',department:'MANAGEMENT',designation:'DIRECTOR',status:'ACTIVE'});
  await insert(CDIR_MASTERS.contact,{name:'EMPLOYEE ONE',empId:'E001',contact:'9876543210'});
  const session={hr:{role:'normal',assignedRole:'HR User',login:'hr',name:'HR'},source:{role:'super',login:'source',name:'Source PM',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}},destination:{role:'super',login:'destination',name:'Destination PM',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}},other:{role:'super',login:'other',permissions:{adminLevel:'Manager',managerRoles:['Project Manager']}},general:{role:'normal',assignedRole:'General User',login:'general'},admin:{role:'super',login:'admin',permissions:{adminLevel:'Admin'}}};
- const users={source:{managerSites:'Majri OC'},destination:{managerSites:'Jayant OC'},other:{managerSites:'Sasti OC'}};
+ const users={hr:{site:'Nagpur'},source:{managerSites:'Majri OC'},destination:{managerSites:'Jayant OC'},other:{managerSites:'Sasti OC'}};
  const masters=async(names,connection=client)=>{const {rows}=await connection.query('SELECT master_name,record_data FROM master_records WHERE master_name=ANY($1::text[])',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(r=>r.master_name===name).map(r=>r.record_data)]));};
  let notificationFailure=false;
  const app=express();app.use(express.json());registerEmployeeTransfers(app,{pool,requireSession:(req,res,next)=>{req.session=session[req.headers['x-user']];if(!req.session)return res.status(401).json({error:'Sign in'});next();},loadViewer:async s=>users[s.login]||{},loadMasters:masters,pmLogins:async(db,site)=>site==='Majri OC'?['source']:site==='Jayant OC'?['destination']:[],notify:async(db,recipients,reference,message)=>{if(notificationFailure)throw Error('Notifications unavailable');for(const recipient of recipients)await db.query('INSERT INTO notices VALUES($1,$2,$3)',[recipient,reference,message]);}});
@@ -58,7 +59,8 @@ test('HTTP employee transfer flow enforces site scope, preserves history, sends 
  const finished=(await call('hr')).body.records[0];assert.equal(finished.status,ET_STATUS.DONE);assert.deepEqual(finished.history.map(row=>row.action),['Requested','Source approved','Accepted']);assert.equal(finished.approvedBy,'Source PM');assert.equal(finished.acceptedBy,'Destination PM');assert.equal(finished.before.site,'Majri OC');
  assert.equal((await call('destination',`/${transferId}/accept`,'PATCH',{})).status,409);
  const fresh=(await call('destination','/lookup?empId=E001')).body;request={...fresh,destination:'Majri OC',effectiveDate:'2026-10-10',remarks:'Return'};
- const returnTransfer=(await call('destination','','POST',request)).body.id;
+ assert.equal((await call('destination','','POST',request)).status,400,'Sole source approver cannot submit a self-approved transfer');
+ const returnTransfer=(await call('hr','','POST',request)).body.id;
  assert.equal((await call('destination',`/${returnTransfer}/reject`,'PATCH',{})).status,400);
  assert.equal((await call('destination',`/${returnTransfer}/reject`,'PATCH',{note:'No replacement available'})).status,200);assert.equal((await employee()).site,'Jayant OC');
  const stale=(await call('hr','','POST',request)).body.id;await call('destination',`/${stale}/approve`,'PATCH',{});

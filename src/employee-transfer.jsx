@@ -6,6 +6,7 @@ import DateInput from './date-input.mjs';
 import './employee-transfer.css';
 import CaliberDirectoryPage from './caliber-directory-page.jsx';
 import CdirDeletion from './cdir-deletion.jsx';
+import CdirChangeRequests from './cdir-change-requests.jsx';
 import EmployeeTenureReport from './employee-tenure-report.jsx';
 import {CDIR_MASTER_FIELDS,CDIR_MASTERS} from '../cdir-masters.mjs';
 const detailLabels=Object.fromEntries([...CDIR_MASTER_FIELDS[CDIR_MASTERS.employee],...CDIR_MASTER_FIELDS[CDIR_MASTERS.contact]].map(([key,label])=>[key,label]));
@@ -13,7 +14,7 @@ const detailLabels=Object.fromEntries([...CDIR_MASTER_FIELDS[CDIR_MASTERS.employ
 export function CdirModule({token,ReportSection,initialView='directory',onViewChange}){
   const [view,setView]=useState(initialView);const allowed=useEmployeeTransferAccess(token);
   useEffect(()=>setView(initialView),[initialView]);
-  return <><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages">{[['directory','Directory'],['tenure','Employee Tenure Report'],...(allowed?[['transfer','Employee Transfer'],['deletions','Record Deletion Approvals']]:[])].map(([key,label])=><button key={key} type="button" role="tab" aria-selected={view===key} className={view===key?'active':''} onClick={()=>{setView(key);onViewChange?.(key);}}>{key==='directory'?<BookUser/>:key==='tenure'?<Users/>:<ArrowRightLeft/>}{label}</button>)}</div>{view==='deletions'&&allowed?<CdirDeletion token={token} ReportSection={ReportSection}/>:view==='transfer'&&allowed?<EmployeeTransfer token={token} ReportSection={ReportSection}/>:view==='tenure'?<EmployeeTenureReport token={token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={token}/>}</>;
+  return <><div className="cdir-module-tabs" role="tablist" aria-label="C-Directory pages">{[['directory','Directory'],['tenure','Employee Tenure Report'],...(allowed?[['updates','Directory Update Approvals'],['transfer','Employee Transfer'],['deletions','Record Deletion Approvals']]:[])].map(([key,label])=><button key={key} type="button" role="tab" aria-selected={view===key} className={view===key?'active':''} onClick={()=>{setView(key);onViewChange?.(key);}}>{key==='directory'?<BookUser/>:key==='tenure'?<Users/>:<ArrowRightLeft/>}{label}</button>)}</div>{view==='updates'&&allowed?<CdirChangeRequests token={token} ReportSection={ReportSection}/>:view==='deletions'&&allowed?<CdirDeletion token={token} ReportSection={ReportSection}/>:view==='transfer'&&allowed?<EmployeeTransfer token={token} ReportSection={ReportSection}/>:view==='tenure'?<EmployeeTenureReport token={token} ReportSection={ReportSection}/>:<CaliberDirectoryPage token={token}/>}</>;
 }
 
 export function useEmployeeTransferAccess(token){
