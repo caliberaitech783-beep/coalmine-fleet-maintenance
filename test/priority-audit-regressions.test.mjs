@@ -42,7 +42,7 @@ test('report keys are unique even for assets sharing location or duplicate ident
 
 test('Closed summary and daily chart use identical scoped rows, including verified closures', () => {
   const code = main.slice(main.indexOf('  const requestLifecycleRows ='),main.indexOf('  // Keep all six compact series'));
-  const calculate = new Function('locationBreakdowns','requestEventDate','safeTrendStartKey','requestTrendEndKey','requestTrendDateKeys','requestLifecycleRegion','requestLifecycleSite','isIdleVehicleRequest','dashboardMisQueue','sourceRequests','equipmentLoaded','misQueueDate',`${code}; return {requestLifecycleRows,requestLifecycleTrend};`);
+  const calculate = new Function('locationBreakdowns','requestEventDate','safeTrendStartKey','requestTrendEndKey','requestTrendDateKeys','requestLifecycleRegion','requestLifecycleSite','isIdleVehicleRequest','dashboardMisQueue','sourceRequests','equipmentLoaded','misQueueDate',`const requestMatchesLifecycleTime=()=>true; ${code}; return {requestLifecycleRows,requestLifecycleTrend};`);
   const rows = [
     {ref:'closed',status:'Closed',closedAt:'2026-09-24 10:00:00'},
     {ref:'verified',status:'Closed',closedAt:'2026-09-24 11:00:00',verifiedAt:'2026-09-25 12:00:00'},

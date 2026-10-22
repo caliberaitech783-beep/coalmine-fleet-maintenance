@@ -12,6 +12,7 @@ import * as dailyBalance from "../src/daily-bd-balance.mjs";
 import * as actions from "../src/dashboard-card-actions.mjs";
 import * as dates from "../src/dashboard-request-data.mjs";
 import { dashboardMisQueue, misQueueDate } from "../src/dashboard-mis-queue.mjs";
+import {lifecycleTimeMatches} from "../src/dashboard-lifecycle-time.mjs";
 import {activeTodayBreakdowns} from "../src/dashboard-today-breakdowns.mjs";
 import { encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
@@ -206,7 +207,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
-    dashboardMisQueue, misQueueDate,
+    dashboardMisQueue, misQueueDate, lifecycleTimeMatches,
     activeTodayBreakdowns,
     useMasterRecords: () => [repairTypes],
     requestEquipmentDetails,
@@ -608,7 +609,7 @@ test("lifecycle region filters its cards and linked rows independently of the da
   tree = setLifecycleFrom(view, "2026-09-01", rows);
   const controls = byClass(tree, "mine-request-lifecycle-end-controls");
   assert.ok(byLabel(controls, "Request lifecycle to date"));
-  assert.ok(byLabel(controls, "Request lifecycle region"));
+  assert.ok(byLabel(byClass(tree, "mine-lifecycle-region-time"), "Request lifecycle region"));
   for (const region of ["NCL", "WCL", "site:Jayant OB", "site:Sasti OB", "all"]) {
     byLabel(tree, "Request lifecycle region").props.onChange({target: {value: region}});
     tree = view.render(rows);

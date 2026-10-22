@@ -25,6 +25,18 @@
 /* Daily BD balance: level with its 44px Site, date and period controls. */
 .mine-dashboard .bd-balance-controls .mine-section-export.export-menu-trigger { min-height: 44px; }
 
+/* Request Lifecycle: time limits stay beside its own Print/Export only. */
+.mine-dashboard .mine-lifecycle-time-export { grid-column: 1 / -1; display: flex; align-items: stretch; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.mine-dashboard .mine-lifecycle-time-export > .mine-section-export { align-self: stretch; }
+.mine-dashboard .mine-lifecycle-time-fields { display: flex; align-items: flex-end; gap: 5px; flex-wrap: wrap; min-width: 0; }
+.mine-dashboard .mine-lifecycle-time-fields label.mine-lifecycle-time-field { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 0; min-width: 0; width: auto; padding: 3px 5px; }
+.mine-dashboard .mine-lifecycle-time-fields label.mine-lifecycle-time-field > span { font-size: 9px; line-height: 1.2; white-space: nowrap; }
+.mine-dashboard .mine-lifecycle-time-fields .mine-lifecycle-clock-pair { display: inline-flex; align-items: center; gap: 3px; }
+.mine-dashboard .mine-lifecycle-time-fields input.mine-lifecycle-clock { width: 52px; min-width: 52px; height: 24px; padding: 2px; font-size: 12px; }
+.mine-dashboard .mine-lifecycle-time-fields select { width: 48px; min-width: 48px; height: 24px; padding: 1px; border: 0; border-radius: 4px; background: transparent; color: var(--mine-text); font-size: 11px; font-weight: 750; }
+.mine-dashboard .mine-lifecycle-time-fields .mine-lifecycle-time-apply { min-height: 32px; padding: 4px 9px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--brand-purple, #522e90); color: #fff; font-size: 11px; font-weight: 800; }
+.mine-dashboard .mine-lifecycle-time-error { flex-basis: 100%; color: #b91c1c; font-size: 11px; }
+
 /* Narrow screens: the throughput header wraps so its tabs, Export and filter eye stay visible. */
 @media (max-width: 700px) {
   .mine-dashboard .mine-maintenance-availability-head { flex-wrap: wrap; }

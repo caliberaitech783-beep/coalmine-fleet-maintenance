@@ -71,6 +71,7 @@ export async function replaceCdirRoster(pool,encoded){
   try{
     await client.query('BEGIN');
     await client.query("SELECT pg_advisory_xact_lock(hashtext('cdir-roster-replacement'))");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('cdir-employee-edit'))");
     await client.query(`CREATE TABLE IF NOT EXISTS cdir_roster_imports (
       revision TEXT PRIMARY KEY,applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       summary JSONB NOT NULL,previous_records JSONB NOT NULL)`);
@@ -79,6 +80,7 @@ export async function replaceCdirRoster(pool,encoded){
     // Exclude concurrent master edits while the backup and replacement commit.
     await client.query('LOCK TABLE master_records IN SHARE ROW EXCLUSIVE MODE');
     const previous=await client.query('SELECT id,master_name,record_data,created_at FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[CDIR_MASTER_NAMES]);
+    if(previous.rows.some(row=>[CDIR_MASTERS.employee,CDIR_MASTERS.contact].includes(row.master_name)))throw new Error('Existing directory records cannot be replaced through deployment configuration. Submit employee/contact updates for location approval.');
     // Keep live site IDs and roster links used by existing directory bookmarks.
     for(const site of masters[CDIR_MASTERS.site]){
       const existing=previous.rows.find(row=>row.master_name===CDIR_MASTERS.site&&cdirCaps(row.record_data.name)===cdirCaps(site.name))?.record_data;

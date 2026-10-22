@@ -1,5 +1,7 @@
 import {initializeLoginDays} from './inactive-users.mjs';
 import {initializeSingleLogin} from './single-login.mjs';
+import {userMasterRole} from './src/user-master-role.mjs';
+
 // Detailed sessions may be purged. The small per-login summary must survive
 // that cleanup, logout and credential expiry; it stores no credentials/devices.
 export async function initializeLoginHistory(pool) {
@@ -145,7 +147,7 @@ export function registerLoginHistoryRoutes(app,{pool,requireSuper,requireAdminis
         WHERE u.master_name='Users & employees' AND COALESCE(trim(u.record_data->>'login'),'')<>''
         ORDER BY lower(u.record_data->>'employee'),u.id`,params);
       res.json({users:rows.map(({record,...row})=>({...row,login:record.login,name:record.employee,
-        roleLabel:record.assignedRole||record.userType||'User',location:locationName(record,record.assignedRole||record.userType),
+        roleLabel:userMasterRole(record),location:locationName(record,record.assignedRole||record.userType),
         activity:row.sessionCount||(row.lastActivity&&new Date(row.lastActivity)>=range.from&&new Date(row.lastActivity)<range.to)?'Active in period':row.lastActivity||row.lastLogin?'No activity in period':'No recorded activity'})),...range,trackingSince:metadata[0]?.value});
     }catch(error){next(error);}
   });

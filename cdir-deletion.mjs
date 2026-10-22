@@ -2,6 +2,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {CDIR_MASTERS} from './cdir-masters.mjs';
 import {employeeTransferAccess,employeeTransferSiteAllowed} from './employee-transfer.mjs';
 import {approvalRoleForSite} from './cdir-approval-routing.mjs';
+import {assertNoCdirPendingChange,cdirSubmissionAllowed,cdirLogin} from './cdir-change-policy.mjs';
 export const CDIR_DELETION_SCHEMA=`CREATE TABLE IF NOT EXISTS cdir_deletion_requests(id BIGSERIAL PRIMARY KEY,record_data JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE UNIQUE INDEX IF NOT EXISTS cdir_deletion_pending_idx ON cdir_deletion_requests ((record_data->>'master'),(record_data->>'recordId')) WHERE record_data->>'status'='Pending'; CREATE UNIQUE INDEX IF NOT EXISTS cdir_deletion_reference_idx ON cdir_deletion_requests ((record_data->>'requestNo')); CREATE INDEX IF NOT EXISTS cdir_deletion_employee_idx ON cdir_deletion_requests ((record_data->>'employeeRecordId'));`;
 export const deletionProtectedMaster=name=>[CDIR_MASTERS.employee,CDIR_MASTERS.contact].includes(name);
 export const cdirDirectAdministrator=session=>session?.role==='super'&&['admin','super admin'].includes(String(session.permissions?.adminLevel||'').trim().toLowerCase());
@@ -29,14 +30,15 @@ export function registerCdirDeletions(app,{pool,requireSession,loadViewer,approv
    if(row.master_name===CDIR_MASTERS.contact){const candidates=masterRows.filter(e=>e.master_name===CDIR_MASTERS.employee&&(row.record_data.empId?String(e.record_data.empId||'').trim().toLowerCase()===String(row.record_data.empId).trim().toLowerCase():String(e.record_data.name||'').trim().toLowerCase()===String(row.record_data.name||'').trim().toLowerCase()));if(candidates.length!==1)continue;employee=candidates[0];}
    const site=employee.record_data.site;if(site&&visible({site},ctx))targets.push({id:row.id,master:row.master_name,name:row.record_data.name,empId:row.record_data.empId||employee.record_data.empId,site});
   }
-  res.set('Cache-Control','no-store');res.json({targets,records:rows.map(row=>({id:row.id,...row.record_data})).filter(record=>visible(record,ctx)).map(record=>({...record,canApprove:record.status==='Pending'&&employeeTransferSiteAllowed(ctx,record.site)}))});
+  res.set('Cache-Control','no-store');res.json({targets,records:rows.map(row=>({id:row.id,...row.record_data})).filter(record=>visible(record,ctx)).map(record=>({...record,canApprove:record.status==='Pending'&&cdirLogin(record.requestedLogin)!==cdirLogin(req.session.login)&&employeeTransferSiteAllowed(ctx,record.site)}))});
  }catch(error){next(error);}});
  const create=wrap(async(req,ctx,client)=>{
   const input=req.body||{},reason=String(input.reason||'').trim();if(!reason||reason.length>2000)fail(400,'Enter a deletion reason of at most 2,000 characters.');
-  const current=await target(client,input.master,input.recordId);if(!visible(current,ctx))fail(403,'This record is outside your assigned locations.');
+  const current=await target(client,input.master,input.recordId);if(!cdirSubmissionAllowed(req.session,ctx.user,current.site))fail(403,'This record is outside your assigned locations.');
+  await assertNoCdirPendingChange(client,[current.employeeRecordId]);
   const pending=await client.query(`SELECT id FROM cdir_deletion_requests WHERE record_data->>'employeeRecordId'=$1 AND record_data->>'status'='Pending'`,[current.employeeRecordId]);if(pending.rows.length)fail(409,'This employee already has a pending deletion request.');
   const transfer=await client.query(`SELECT id FROM employee_transfers WHERE record_data->>'employeeRecordId'=$1 AND record_data->>'status'=ANY($2::text[])`,[current.employeeRecordId,['Awaiting source approval','Awaiting destination acceptance']]);if(transfer.rows.length)fail(409,'Complete or reject this employee’s pending transfer first.');
-  const recipients=await approverLogins(client,current.site);if(!recipients.length)fail(400,`Assign an ${approvalRoleForSite(current.site)} to ${current.site} before requesting deletion.`);
+  const recipients=(await approverLogins(client,current.site)).filter(login=>cdirLogin(login)!==cdirLogin(req.session.login));if(!recipients.length)fail(400,`Assign another ${approvalRoleForSite(current.site)} to ${current.site} before requesting deletion. Self-approval is not allowed.`);
   const at=new Date().toISOString(),by=req.session.name||req.session.login;
   const record={...current,requestNo:`CD-DEL-${Date.now()}-${randomUUID().slice(0,4).toUpperCase()}`,status:'Pending',reason,approverRole:approvalRoleForSite(current.site),recipients,requestedBy:by,requestedLogin:req.session.login,requestedAt:at,history:[{action:'Requested',by,at,note:reason}]};
   const {rows}=await client.query('INSERT INTO cdir_deletion_requests(record_data) VALUES($1::jsonb) RETURNING id',[JSON.stringify(record)]);
@@ -49,9 +51,11 @@ export function registerCdirDeletions(app,{pool,requireSession,loadViewer,approv
   if(!/^\d+$/.test(req.params.id)||!['approve','reject'].includes(req.params.action))fail(400,'Invalid deletion action.');
   const {rows}=await client.query('SELECT record_data FROM cdir_deletion_requests WHERE id=$1 FOR UPDATE',[req.params.id]);const record=rows[0]?.record_data;if(!record)fail(404,'Deletion request not found.');
   if(record.status!=='Pending')fail(409,'This deletion request is already finalized.');
+  if(cdirLogin(record.requestedLogin)===cdirLogin(req.session.login))fail(403,'You cannot decide your own deletion request.');
   if(!employeeTransferSiteAllowed(ctx,record.site))fail(403,'Only the assigned location approver can decide this request.');
   const note=String(req.body?.note||'').trim().slice(0,2000),at=new Date().toISOString(),by=req.session.name||req.session.login;if(req.params.action==='reject'&&!note)fail(400,'Enter a rejection reason.');
   if(req.params.action==='approve'){
+   await assertNoCdirPendingChange(client,[record.employeeRecordId]);
    const current=await target(client,record.master,record.recordId);if(current.revision!==record.revision||current.site!==record.site||current.employeeRecordId!==record.employeeRecordId)fail(409,'The record or its location changed. Reject and recreate this request.');
    const pendingTransfer=await client.query(`SELECT id FROM employee_transfers WHERE record_data->>'employeeRecordId'=$1 AND record_data->>'status'=ANY($2::text[])`,[record.employeeRecordId,['Awaiting source approval','Awaiting destination acceptance']]);if(pendingTransfer.rows.length)fail(409,'A transfer is pending for this employee.');
    await client.query('DELETE FROM master_records WHERE master_name=$1 AND id=$2',[record.master,record.recordId]);record.status='Approved';
