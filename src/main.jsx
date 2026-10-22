@@ -1977,7 +1977,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return record.start || record.startedAt || record.createdAt;
   };
   const requestMatchesLifecycleShift = (record = {}, event = "") => dashboardShift === "all" || requestMatchesDashboardShift(record, dashboardLifecycleShiftTimestamp(record, event));
-  const requestMatchesLifecycleTime = (record, event) => lifecycleTimeMatches(record,event,requestTrendFromTime,requestTrendToTime);
+  const requestMatchesLifecycleTime = (record, event) => lifecycleTimeMatches(record,event,requestTrendFromTime,requestTrendToTime,safeTrendStartKey,requestTrendEndKey);
   const availableRegions=useMemo(()=>subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -2317,7 +2317,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   ];
   const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.production, day.closed, day.verified, day.idle, day.opened, day.mis]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
-  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ") + (requestTrendFromTime || requestTrendToTime ? ` · ${formatTimeInputValue(requestTrendFromTime || "00:00")}–${formatTimeInputValue(requestTrendToTime || "23:59")} IST daily` : "");
+  const requestLifecycleRangeLabel = requestTrendFromTime || requestTrendToTime ? `${formatDisplayDate(safeTrendStartKey)} ${formatTimeInputValue(requestTrendFromTime || "00:00")} – ${formatDisplayDate(requestTrendEndKey)} ${formatTimeInputValue(requestTrendToTime || "23:59")} IST` : formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
   const stagePipelineStages = [
     { key: "offroad", label: "Off road / request", shortLabel: "Request", className: "request" },
     { key: "acceptance", label: "Acceptance", shortLabel: "Acceptance", className: "acceptance" },
