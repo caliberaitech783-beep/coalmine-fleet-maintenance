@@ -73,7 +73,7 @@ test("authentication responses hide non-JSON proxy bodies behind useful errors",
     { token: "safe-token" },
   );
   const login = source.slice(source.indexOf("function Login("), source.indexOf("function Side("));
-  assert.equal(login.match(/readApiJson\(response,/g)?.length, 4);
+  assert.equal(login.match(/readApiJson\(response,/g)?.length, 5);
 });
 
 test("notification failures retain existing items and never acknowledge unread items", () => {

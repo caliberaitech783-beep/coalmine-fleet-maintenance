@@ -35,12 +35,12 @@ test('Saved custom menus and explicitly empty mobile selections survive form ren
 });
 
 
-test('MIS-only login renders separate credentials and persisted desktop/mobile grants',()=>{
+test('MIS login uses shared Pulse credentials and persisted desktop/mobile grants',()=>{
  const html=render({userType:'MIS Application User',userGroup:'MIS Application User',misAccess:true,misLogin:'mis.one',misDesktopAccess:'Employee master | Vehicle Log Book',misMobileAccess:''});
  assert.match(html,/role="tab"[^>]*aria-selected="true"[^>]*>MIS</);
  assert.match(html,/name="userType" value="MIS Application User"/);
- assert.match(html,/name="misLogin"[^>]*value="mis.one"/);
- assert.match(html,/type="password"[^>]*name="misPassword"|name="misPassword"[^>]*type="password"/);
+ assert.doesNotMatch(html,/name="misLogin"/);
+ assert.doesNotMatch(html,/name="misPassword"/);assert.match(html,/existing Pulse username and password/);
  assert.ok(checked(html,'misDesktopAccess','Employee master'));
  assert.ok(checked(html,'misDesktopAccess','Vehicle Log Book'));
  assert.ok(!checked(html,'misMobileAccess','Employee master'));

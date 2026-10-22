@@ -650,26 +650,22 @@ the next successful five-day cycle. The two-day audit export and generic log
 retention no longer independently delete/reset these session records. See
 BACKUP.md for configuration and recovery limitations.
 
-## Separate MIS credentials and permissions
+## Shared Pulse credentials for MIS and HR
 
-Users & employees > MIS manages independent MIS application access for
-https://pulse-ll.cmll.in. Enable MIS, assign a unique MIS username and a password
-of 12–256 characters, and choose desktop/mobile masters and working menus. Each
-view has Select all. Blank password edits preserve the stored scrypt hash; neither
-passwords nor hashes are returned by master APIs. New MIS-only records use the
-MIS Application User type and cannot sign in to the fleet application. Existing
-fleet/Accounts/Tender roles remain separate from this additional access.
+MIS and HR authenticate the existing Pulse username and password through
+pulse-application-identity.mjs. Users & employees > MIS enables access and selects
+desktop/mobile menus; no second username/password is collected. HR requires
+HR User or HR Manager access. Existing central administrators retain access.
+Changing the Pulse password invalidates both applications' grants. Disabled
+accounts, revoked central sessions and seven-day expiry also deny validation.
+Legacy MIS credential fields are ignored and removed on employee save.
 
-`mis-credential-identity.mjs` authenticates the independent credentials, issues an
-opaque seven-day grant bound to a central MIS session, and rechecks the employee,
-credential version and current permissions on validation. Disabling access,
-changing its password/username, force-closing the session or reaching seven days
-revokes access. MIS has its own application database and local sessions; it never
-receives the Pulse database password or the employee's password hash. Login
-attempts are limited per source/username in ten-minute windows. MIS password
-recovery is an administrator reset through this form.
+MIS starts at /api/mis-credentials/start, returns to Pulse's MIS sign-in form,
+and exchanges a 60-second single-use code with browser-bound state and PKCE.
+Passwords stay in the HTTPS login request; no password or long-lived grant goes
+in redirect URLs. HR uses exact-origin CORS with the central HR identity API.
+Each application uses an isolated grant; neither grant authorizes Pulse APIs.
+Failed attempts remain limited per application, source and username.
 
-The MIS repository requires the matching `mis-credential-client.mjs` and API
-permission middleware. Deploy Pulse first, verify health, then deploy MIS. No
-shared integration secret or database connection change is needed. Existing
-legacy shared sign-in is separate from this new credential flow.
+Deploy Pulse first, then MIS and the HR static build. MIS data remains in its
+own database; HR hosting does not receive Pulse database credentials.

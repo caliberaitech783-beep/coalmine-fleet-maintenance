@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('Fleet Operation is the default and portals have explicit selectors',()=>{
   assert.match(source,/\[accountsPortal,setAccountsPortal\]=useState\(false\)/);
-  assert.match(source,/aria-pressed=\{!accountsPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
+  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
   assert.match(source,/aria-pressed=\{accountsPortal\} onClick=\{\(\)=>selectLoginPortal\(true\)\}/);
   assert.match(source,/<strong>Fleet Operation<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
@@ -23,23 +23,7 @@ test('mobile application tiles wrap in two columns, with a single column on narr
   assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
 
-test('MIS opens its separate application in a new tab with HR beside it',()=>{
-  const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
-  assert.ok(links);
-  const mis=links.match(/<a className="login-mis-link"[\s\S]*?<\/a>/)?.[0];
-  assert.ok(mis);
-  assert.match(mis,/href="https:\/\/pulse-ll\.cmll\.in"/);
-  assert.match(mis,/target="_blank"/);
-  assert.match(mis,/rel="noopener noreferrer"/);
-  assert.match(mis,/aria-label="Open MIS application in a new tab"/);
-  assert.match(mis,/<strong>MIS<\/strong>/);
-  assert.equal((links.match(/<a |<button /g)||[]).length,6);
-  const hr=links.match(/<a className="login-hr-link"[\s\S]*?<\/a>/)?.[0];
-  assert.ok(hr);
-  assert.ok(links.indexOf(hr)>links.indexOf(mis));
-  assert.match(hr,/href="https:\/\/hrpulse\.cmll\.in"/);
-  assert.match(hr,/target="_self"/);
-  assert.match(hr,/aria-label="Open HR application in this window"/);
-  assert.match(hr,/<strong>HR<\/strong>Open application/);
-  assert.doesNotMatch(hr,/disabled|Coming soon|onClick=|type="submit"|_blank|new tab|↗/);
+test('MIS uses the Pulse sign-in handoff and HR remains available',()=>{
+ const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
+ assert.ok(links);assert.match(links,/className="login-mis-link"/);assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));assert.match(links,/<strong>MIS<\/strong>/);assert.ok(links.includes('https://hrpulse.cmll.in'));
 });

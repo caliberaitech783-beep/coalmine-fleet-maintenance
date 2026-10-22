@@ -638,7 +638,11 @@ function AuthModeTabs({ mode, onModeChange }) {
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 function Login({ onLogin, theme, toggleTheme }) {
   const [accountsPortal,setAccountsPortal]=useState(false);
+  const [misPortal,setMisPortal]=useState(()=>new URLSearchParams(window.location.search).get('login')==='mis');
+  const [misHandoff]=useState(()=>{const query=new URLSearchParams(window.location.search);return {state:query.get('misState')||'',challenge:query.get('misChallenge')||''};});
   const selectLoginPortal = (accounts) => {
+    setMisPortal(false);
+    const url=new URL(window.location.href);for(const key of ['login','misState','misChallenge'])url.searchParams.delete(key);window.history.replaceState(null,'',url.pathname+url.search+url.hash);
     setAccountsPortal(accounts);
     setLoginRoles([]);
     setSelectedLoginRole('');
@@ -713,9 +717,20 @@ function Login({ onLogin, theme, toggleTheme }) {
     onLogin(JSON.parse(session));
   };
   const signIn = async () => {
+    if(working)return;
     setWorking(true);
     setError("");
     try {
+      if(misPortal){
+        if(!/^[A-Za-z0-9_-]{43}$/.test(misHandoff.state)||!/^[A-Za-z0-9_-]{43}$/.test(misHandoff.challenge)){
+          window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start');return;
+        }
+        const response=await fetch('/api/mis-login/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,...misHandoff})});
+        const data=await readApiJson(response,'Could not sign in to MIS.');
+        const target=new URL(data.redirectUrl);
+        if(target.origin!=='https://pulse-ll.cmll.in'||target.pathname!=='/api/mis-credentials/callback')throw new Error('Invalid MIS sign-in destination.');
+        setPassword('');window.location.assign(target.toString());return;
+      }
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -801,11 +816,11 @@ function Login({ onLogin, theme, toggleTheme }) {
         </div>
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
-          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet Operation</strong>Open Fleet sign in</span></button>
+          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet Operation</strong>Open Fleet sign in</span></button>
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
-          <a className="login-mis-link" href="https://pulse-ll.cmll.in" target="_blank" rel="noopener noreferrer" aria-label="Open MIS application in a new tab"><FileBarChart /><span><strong>MIS</strong>Open application ↗</span></a>
+          <button type="button" className="login-mis-link" aria-pressed={misPortal} onClick={()=>window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start')}><FileBarChart /><span><strong>MIS</strong>Open MIS sign in</span></button>
           <a className="login-hr-link" href="https://hrpulse.cmll.in" target="_self" aria-label="Open HR application in this window"><Users /><span><strong>HR</strong>Open application</span></a>
         </div>
         <div className="login-message">
@@ -878,13 +893,13 @@ function Login({ onLogin, theme, toggleTheme }) {
           }}
         >
           <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
-          <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(""); setNotice(""); }} />
-          <small className="login-kicker"><LockKeyhole /> {accountsPortal?'SECURE ACCOUNTS PORTAL':'SECURE OPERATIONS PORTAL'}</small>
-          <h2>{accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
-          <p>{accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
+          <AuthModeTabs mode="signin" onModeChange={(mode) => { if(misPortal&&mode==='reset'){setError('Reset your shared Pulse password using Fleet sign in, or ask your administrator.');return;}setLoginMode(mode); setError(""); setNotice(""); }} />
+          <small className="login-kicker"><LockKeyhole /> {misPortal?'SECURE MIS PORTAL':accountsPortal?'SECURE ACCOUNTS PORTAL':'SECURE OPERATIONS PORTAL'}</small>
+          <h2>{misPortal?'MIS sign in':accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
+          <p>{misPortal?'Enter your existing Pulse username and password. You will continue automatically to Pulse-II.':accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
-          {!accountsPortal&&loginRoles.length>0&&<label>Choose your assigned workspace<select required value={selectedLoginRole} onChange={event=>setSelectedLoginRole(event.target.value)}><option value="">Select workspace</option>{loginRoles.map(role=><option key={role}>{role}</option>)}</select></label>}
-          <label className="login-label" htmlFor="login-username">User name</label>
+          {!misPortal&&!accountsPortal&&loginRoles.length>0&&<label>Choose your assigned workspace<select required value={selectedLoginRole} onChange={event=>setSelectedLoginRole(event.target.value)}><option value="">Select workspace</option>{loginRoles.map(role=><option key={role}>{role}</option>)}</select></label>}
+          <label className="login-label" htmlFor="login-username">{misPortal?'Pulse username':'User name'}</label>
           <div className="login-input">
             <User aria-hidden="true" />
             <input id="login-username"
@@ -905,7 +920,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               autoFocus={!coarsePointerDevice()}
             />
           </div>
-          <label className="login-label" htmlFor="login-password">Password</label>
+          <label className="login-label" htmlFor="login-password">{misPortal?'Pulse password':'Password'}</label>
           <div className="login-input">
             <LockKeyhole aria-hidden="true" />
             <input id="login-password"
@@ -3220,7 +3235,7 @@ const userAuthorityOptions = ["Admin", "Manager"];
 const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
-  ["misAccess","MIS application access","checkbox"],["misLogin","MIS username","text"],["misPassword","MIS password","password"],["misDesktopAccess","MIS desktop menus","multi-checkbox"],["misMobileAccess","MIS mobile menus","multi-checkbox"],
+  ["misAccess","MIS application access","checkbox"],["misDesktopAccess","MIS desktop menus","multi-checkbox"],["misMobileAccess","MIS mobile menus","multi-checkbox"],
   ["tenderAccess","Tender application access","checkbox"],
   ["tenderDesktopAccess","Tender desktop menus","multi-checkbox"],
   ["tenderMobileAccess","Tender mobile menus","multi-checkbox"],
@@ -4499,10 +4514,8 @@ function MisApplicationAccessFields({record={},onEnabled}){
  const [enabled,setEnabled]=useState(()=>misAccessEnabled(record));
  const [desktop,setDesktop]=useState(()=>normalizedMisSelection(record.misDesktopAccess));
  const [mobile,setMobile]=useState(()=>normalizedMisSelection(record.misMobileAccess));
- return <section className="view-menu-access full"><header><div><b>MIS application access</b><small>Separate credentials for pulse-ll.cmll.in</small></div><a href={MIS_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open MIS</a></header>
+ return <section className="view-menu-access full"><header><div><b>MIS application access</b><small>Uses this employee’s existing Pulse username and password</small></div><a href={MIS_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open MIS</a></header>
  <label><input type="checkbox" name="misAccess" checked={enabled} onChange={e=>{setEnabled(e.target.checked);onEnabled?.(e.target.checked);}}/> Enable MIS application login</label>
- <label>MIS username<input name="misLogin" defaultValue={record.misLogin||''} autoComplete="off" required={enabled} maxLength={120}/></label>
- <label>{record.misLogin?'New MIS password (leave blank to keep existing)':'MIS password'}<input name="misPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256}/><small>At least 12 characters. Stored securely; never displayed after saving.</small></label>
  {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>MIS · {view==='desktop'?'Desktop':'Mobile'} masters and working menus</legend><input type="hidden" name={view==='desktop'?'misDesktopAccess':'misMobileAccess'} value=""/><div><AccessSelectAll label="Select all MIS masters and working menus" options={MIS_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{MIS_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'misDesktopAccess':'misMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={e=>setSelected(current=>e.target.checked?[...current,option.key]:current.filter(x=>x!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}
  </section>;
 }
@@ -4553,7 +4566,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         <span><b>{option}</b><small>{mobileRoleAuthority[option]}</small></span>
       </label>)}</div>}
     </fieldset>
-    <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} onEnabled={enabled=>{if(enabled&&!accountRole)setAccountRole("MIS Application User");}}/></div>
+    <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} /></div>
     {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
@@ -12084,7 +12097,7 @@ function App() {
     profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, responsiveMobile,
     session, theme,
   ]);
-  if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
+  if (!session || new URLSearchParams(window.location.search).get('login')==='mis') return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
     <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection} initialView={accountDirectoryView} onViewChange={setAccountDirectoryView}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
