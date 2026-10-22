@@ -19,7 +19,8 @@ export function pulseApplicationProfile(row,application){
   return {role:'super',userType:'MIS Application User',assignedRole:'MIS Application User',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...misProfilePermissions(access),sharedPulseCredentials:true}};
  }
  const hrRole=roles.includes('HR Manager')?'HR Manager':roles.includes('HR User')?'HR User':null;
- if(application!=='HR'||!admin&&!hrRole&&!hrAccessEnabled(user))return null;
+ const legacyHrRole=hrRole&&!Object.hasOwn(user,'hrAccess');
+ if(application!=='HR'||!admin&&!legacyHrRole&&!hrAccessEnabled(user))return null;
  const hrPermissions=hrProfilePermissions(hrAccessEnabled(user)?user:{hrDesktopAccess:HR_ALL_PERMISSIONS,hrMobileAccess:HR_ALL_PERMISSIONS});
  return {role:admin?'super':'normal',userType:admin?'Super Admin':'Mobile User',assignedRole:hrRole||'Admin',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...hrPermissions,sharedPulseCredentials:true,adminLevel:admin?user.adminLevel||'Admin':null,site:user.site||user.location||''}};
 }

@@ -4525,9 +4525,10 @@ function MisApplicationAccessFields({record={},onEnabled}){
 }
 
 function HrApplicationAccessFields({record={},onEnabled}){
- const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record));
- const [desktop,setDesktop]=useState(()=>normalizedHrSelection(record.hrDesktopAccess));
- const [mobile,setMobile]=useState(()=>normalizedHrSelection(record.hrMobileAccess));
+ const legacyHrRole=!Object.hasOwn(record,'hrAccess')&&assignedUserRoles(record).some(role=>['HR User','HR Manager'].includes(role));
+ const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record)||legacyHrRole);
+ const [desktop,setDesktop]=useState(()=>legacyHrRole&&!Object.hasOwn(record,'hrDesktopAccess')?[...HR_ALL_PERMISSIONS]:normalizedHrSelection(record.hrDesktopAccess));
+ const [mobile,setMobile]=useState(()=>legacyHrRole&&!Object.hasOwn(record,'hrMobileAccess')?[...HR_ALL_PERMISSIONS]:normalizedHrSelection(record.hrMobileAccess));
  return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Uses this employee’s existing Pulse username and password. Select the HR menus below.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
  <label><input type="checkbox" name="hrAccess" checked={enabled} onChange={event=>{setEnabled(event.target.checked);onEnabled?.(event.target.checked);}}/> Enable HR portal login</label>
  {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>HR · {view==='desktop'?'Desktop':'Mobile'} menus and masters</legend><input type="hidden" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value=""/><div><AccessSelectAll label="Select all HR menus and masters" options={HR_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{HR_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}

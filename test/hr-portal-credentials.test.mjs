@@ -5,4 +5,5 @@ test('HR access uses the primary Pulse credential and selected menus',()=>{
  assert.equal(user.passwordHash,'primary-hash');assert.equal(user.hrLogin,undefined);assert.equal(user.hrPasswordHash,undefined);assert.equal(user.hrPassword,undefined);
  assert.deepEqual(pulseApplicationProfile({record_data:user},'HR').permissions.hrDesktopAccess,['Dashboard']);
  assert.equal(pulseApplicationProfile({record_data:{...user,active:false}},'HR'),null);
+ assert.equal(pulseApplicationProfile({record_data:{...user,userRoles:'HR User',hrAccess:false}},'HR'),null);
 });
