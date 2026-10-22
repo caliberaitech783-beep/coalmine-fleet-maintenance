@@ -25,5 +25,5 @@ test("the notification bell never uses a bare `sound` object; the chime module o
 
 test("sign out clears the stored session and shows the sign-in screen in place", () => {
   assert.match(app, /logout = \(\) => \{\s*const token=session\?\.token\|\|authToken;\s*if\(token\)void fetch\('\/api\/logout'[^\n]*\n\s*clearStoredSession\(\);\s*setSession\(null\);\s*\}/);
-  assert.match(app, /if \(!session\) return <Login onLogin=\{completeLogin\} theme=\{theme\} toggleTheme=\{toggleTheme\} \/>;/);
+  assert.match(app, /if \(!session \|\| new URLSearchParams\(window.location.search\).get\('login'\)==='mis'\) return <Login onLogin=\{completeLogin\} theme=\{theme\} toggleTheme=\{toggleTheme\} \/>;/);
 });

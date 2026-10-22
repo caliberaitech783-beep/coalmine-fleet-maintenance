@@ -1,7 +1,7 @@
-import {installMisCredentialIdentity} from './mis-credential-identity.mjs';
-import {installHrCredentialIdentity} from './hr-credential-identity.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
+import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
+import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {runSessionRetention} from './session-retention.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
@@ -1444,8 +1444,8 @@ app.use((req,res,next)=>{
 // Audit interception is registered first so malformed and oversized request
 // bodies are also logged.
 app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
-const misCredentialIdentity=installMisCredentialIdentity(app,{pool,sessionStore});
-const hrCredentialIdentity=installHrCredentialIdentity(app,{pool,sessionStore});
+const misCredentialIdentity=installPulseApplicationIdentity(app,{pool,sessionStore});
+const misLoginHandoff=installMisLoginHandoff(app,{pool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 
 app.get('/api/app-version',(_req,res)=>{
@@ -7892,7 +7892,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(cdirError)return res.status(403).json({error:cdirError});
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(master==='Users & employees'&&records.some(r=>r?.misAccess||r?.misPassword)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign MIS credentials and access.'});
-    if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR credentials and access.'});
+    if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR access.'});
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
@@ -8585,7 +8585,7 @@ async function initializeDatabase(){
     await migrate();
     await misSharedSignIn.initialize();
     await misCredentialIdentity.initialize();
-    await hrCredentialIdentity.initialize();
+    await misLoginHandoff.initialize();
     databaseReady=true;
     databaseError='';
     await seedCdirMasters()
