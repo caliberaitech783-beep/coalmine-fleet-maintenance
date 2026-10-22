@@ -112,13 +112,14 @@ import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
 import { createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
 import { lifecycleTimeMatches } from "./dashboard-lifecycle-time.mjs";
+import LifecycleTimeControls from "./lifecycle-time-controls.jsx";
 import { activeTodayBreakdowns } from "./dashboard-today-breakdowns.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import UserSiteFields from "./user-site-fields.jsx";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
+import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime, formatTimeInputValue } from "../date-time-format.mjs";
 import { calculateBreakdownDaysUntilClose, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
 import { delayedReasonsForRepairType } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
@@ -2313,7 +2314,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   ];
   const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.production, day.closed, day.verified, day.idle, day.opened, day.mis]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
-  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ") + (requestTrendFromTime || requestTrendToTime ? ` · ${requestTrendFromTime || "00:00"}–${requestTrendToTime || "23:59"} IST daily` : "");
+  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ") + (requestTrendFromTime || requestTrendToTime ? ` · ${formatTimeInputValue(requestTrendFromTime || "00:00")}–${formatTimeInputValue(requestTrendToTime || "23:59")} IST daily` : "");
   const stagePipelineStages = [
     { key: "offroad", label: "Off road / request", shortLabel: "Request", className: "request" },
     { key: "acceptance", label: "Acceptance", shortLabel: "Acceptance", className: "acceptance" },
@@ -2812,8 +2813,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               </div>
               <div className="mine-lifecycle-time-export">
                 {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
-                <label><span>From time (IST)</span><TwelveHourTimeInput aria-label="Request lifecycle from time" value={requestTrendFromTime} onChange={setRequestTrendFromTime} onInput={event=>{if(!event.currentTarget.value.trim())setRequestTrendFromTime("");}} /></label>
-                <label><span>To time (IST)</span><TwelveHourTimeInput aria-label="Request lifecycle to time" value={requestTrendToTime} onChange={setRequestTrendToTime} onInput={event=>{if(!event.currentTarget.value.trim())setRequestTrendToTime("");}} /></label>
+                <LifecycleTimeControls from={requestTrendFromTime} to={requestTrendToTime} onApply={(from,to)=>{setRequestTrendFromTime(from);setRequestTrendToTime(to);}} />
               </div>
             </div>
           </header>

@@ -28,7 +28,7 @@ test('lifecycle cards, MIS queue, charts and exports share the selected times wi
  assert.match(source,/rangeLabel: requestLifecycleRangeLabel/);
  assert.match(source,/IST daily/);
  const controls=source.slice(source.indexOf('<div className="mine-lifecycle-time-export">'),source.indexOf('</header>',source.indexOf('<div className="mine-lifecycle-time-export">')));
- for(const label of ['Request lifecycle from time','Request lifecycle to time','lifecycleSectionTable()'])assert.ok(controls.includes(label));
+ for(const label of ['LifecycleTimeControls','onApply=','lifecycleSectionTable()'])assert.ok(controls.includes(label));
 });
 
 test('real lifecycle aggregation counts and drilldown rows use each event time rather than the opening time',()=>{
