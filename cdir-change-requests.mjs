@@ -90,9 +90,10 @@ export function registerCdirChanges(app,{pool,requireSession,loadViewer,loadMast
     client=await pool.connect();await client.query('BEGIN');await client.query("SELECT pg_advisory_xact_lock(hashtext('cdir-employee-edit'))");
     const master=decodeURIComponent(req.params.master);
     if(!create&&(!req.body?.before||!req.body?.record))fail(409,'Reload this master before submitting. An original record snapshot is required.');
-    const records=create?(Array.isArray(req.body)?req.body:[req.body]):[req.body.record];
+    const incoming=create&&Array.isArray(req.body?.records)?req.body.records:req.body;
+    const records=create?(Array.isArray(incoming)?incoming:[incoming]):[req.body.record];
     const items=records.map(record=>({master,recordId:create?null:req.params.id,...(!create?{before:Object.fromEntries(Object.entries(req.body.before).filter(([key])=>key!=='id'))}:{}),after:Object.fromEntries(Object.entries(record||{}).filter(([key])=>key!=='id'))}));
-    const result=await stage(client,req,items,req.get('X-Audit-Reason'));await client.query('COMMIT');res.status(202).json(result);
+    const result=await stage(client,req,items,req.body?.reason??req.get('X-Audit-Reason'));await client.query('COMMIT');res.status(202).json(result);
   }catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});next(error);}finally{client?.release();}};
   app.get('/api/cdir/change-requests',requireSession,async(req,res,next)=>{try{
     const user=await loadViewer(req.session),context=employeeTransferAccess(req.session,user);if(!context.canSubmit)fail(403,'Directory approvals are not available to this role.');

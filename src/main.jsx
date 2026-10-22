@@ -8722,9 +8722,8 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authToken}`,
-            ...(directoryApproval?{"X-Audit-Reason":changeReason.trim()}:{}),
           },
-          body: JSON.stringify(batches[index]),
+          body: JSON.stringify(directoryApproval?{records:batches[index],reason:changeReason.trim()}:batches[index]),
         });
       } catch {
         throw new Error("Could not reach the server. Check your connection and try again.");
@@ -8775,8 +8774,8 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
     if(directoryApproval&&!changeReason?.trim())throw new Error('A change reason is required. Nothing was submitted.');
     const update = () => fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
       method: "PUT", cache:"no-store",
-      headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`,...(directoryApproval?{"X-Audit-Reason":changeReason.trim()}: {})},
-      body: JSON.stringify(directoryApproval?{record,before:records.find(row=>String(row.id)===String(id))}:record),
+      headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`},
+      body: JSON.stringify(directoryApproval?{record,before:records.find(row=>String(row.id)===String(id)),reason:changeReason.trim()}:record),
     });
     let response;
     let lastError;
