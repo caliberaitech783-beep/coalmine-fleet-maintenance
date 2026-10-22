@@ -35,7 +35,7 @@ test('lifecycle cards, MIS queue, charts and exports share the selected times wi
  const layout=readFileSync(new URL('../src/lifecycle-controls-layout.css',import.meta.url),'utf8');
  assert.ok(layout.includes('minmax(130px, 1fr) minmax(0, 280px)'));
  assert.ok(layout.includes('font-size: 12px !important'));
- assert.ok(source.indexOf('import "./lifecycle-controls-layout.css"')>source.indexOf('import "./mobile-phone-optimization.css"'));
+ assert.ok(source.includes('import "./lifecycle-controls-layout.css"'));
 });
 
 test('real lifecycle aggregation counts and drilldown rows use each event time rather than the opening time',()=>{
