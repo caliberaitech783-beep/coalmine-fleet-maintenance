@@ -2812,8 +2812,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               </div>
               <div className="mine-lifecycle-time-export">
                 {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
-                <label><span>From time (IST)</span><input type="time" aria-label="Request lifecycle from time" value={requestTrendFromTime} onChange={event=>setRequestTrendFromTime(event.target.value)} /></label>
-                <label><span>To time (IST)</span><input type="time" aria-label="Request lifecycle to time" value={requestTrendToTime} onChange={event=>setRequestTrendToTime(event.target.value)} /></label>
+                <label><span>From time (IST)</span><TwelveHourTimeInput aria-label="Request lifecycle from time" value={requestTrendFromTime} onChange={setRequestTrendFromTime} onInput={event=>{if(!event.currentTarget.value.trim())setRequestTrendFromTime("");}} /></label>
+                <label><span>To time (IST)</span><TwelveHourTimeInput aria-label="Request lifecycle to time" value={requestTrendToTime} onChange={setRequestTrendToTime} onInput={event=>{if(!event.currentTarget.value.trim())setRequestTrendToTime("");}} /></label>
               </div>
             </div>
           </header>
