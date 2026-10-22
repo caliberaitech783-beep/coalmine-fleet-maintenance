@@ -66,7 +66,7 @@ import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels
 import {resolveRequestIssues,hasOutstandingRequestIssues,REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validateClosingMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
-import {createFeedCache} from './request-feed-cache.mjs';
+import {createFeedCache,requestFeedWriteInvalidates} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
@@ -188,7 +188,7 @@ app.use((req,res,next)=>{
 // always reads the database.
 const requestFeedCache=createFeedCache({ttlMs:30_000});
 app.use((req,res,next)=>{
-  if(req.method!=='GET'&&req.method!=='HEAD'){
+  if(requestFeedWriteInvalidates(req)){
     requestFeedCache.clear();
     res.on('finish',()=>requestFeedCache.clear());
   }
@@ -6222,12 +6222,15 @@ async function syncTemporaryRequestDrivers(){
 
 async function attachDailyRemarks(rows,client=pool){
   if(!rows.length)return rows;
-  const {rows:equipmentRows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`);
-  rows=requestsWithDoorNumbers(rows,equipmentRows.map(row=>row.record_data));
   const refs=rows.map((row)=>row.ref);
-  const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
+  // These independent reads can overlap; neither changes the request reference.
+  const [{rows:equipmentRows},{rows:remarks}]=await Promise.all([
+    client.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
+    client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
     author_login AS "authorLogin",author_name AS "authorName",to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
-    FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]);
+    FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]),
+  ]);
+  rows=requestsWithDoorNumbers(rows,equipmentRows.map(row=>row.record_data));
   const grouped=new Map();
   for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
   // Tables show only approved delayed reasons; legacy free-text values are not displayed.
