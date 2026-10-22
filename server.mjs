@@ -1,4 +1,7 @@
 import {installMisCredentialIdentity} from './mis-credential-identity.mjs';
+import {installHrCredentialIdentity} from './hr-credential-identity.mjs';
+import {prepareHrCredentials} from './hr-credentials.mjs';
+import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {runSessionRetention} from './session-retention.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
@@ -1442,6 +1445,7 @@ app.use((req,res,next)=>{
 // bodies are also logged.
 app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
 const misCredentialIdentity=installMisCredentialIdentity(app,{pool,sessionStore});
+const hrCredentialIdentity=installHrCredentialIdentity(app,{pool,sessionStore});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 
 app.get('/api/app-version',(_req,res)=>{
@@ -2312,7 +2316,7 @@ app.post('/api/login',async(req,res,next)=>{
     const loginRows=loginRecordCandidates(userRows,username);
     const candidates=loginRows.filter(row=>{
       const record=row.record_data;
-      if(record.userType==='MIS Application User')return false;
+      if(['MIS Application User','HR Application User'].includes(record.userType))return false;
       const passwordMatches=record.passwordHash
         ? verifyPassword(password,record.passwordHash)
         : String(record.phone||'').trim()===password;
@@ -7888,6 +7892,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(cdirError)return res.status(403).json({error:cdirError});
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(master==='Users & employees'&&records.some(r=>r?.misAccess||r?.misPassword)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign MIS credentials and access.'});
+    if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR credentials and access.'});
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
@@ -7901,7 +7906,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
-          return prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))));
+          return prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)))));
         }
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
@@ -8144,6 +8149,8 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(master==='Users & employees'){
       if((record.misAccess||record.misPassword||previousRecord.misAccess)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage MIS access.'});
       storedRecord=prepareMisCredentials(storedRecord,previousRecord);
+      if(hrAccessManagementRequested(record,previousRecord)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage HR access.'});
+      storedRecord=prepareHrCredentials(storedRecord,previousRecord);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
@@ -8578,6 +8585,7 @@ async function initializeDatabase(){
     await migrate();
     await misSharedSignIn.initialize();
     await misCredentialIdentity.initialize();
+    await hrCredentialIdentity.initialize();
     databaseReady=true;
     databaseError='';
     await seedCdirMasters()

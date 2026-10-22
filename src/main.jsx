@@ -1,4 +1,5 @@
 import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
+import {HR_APPLICATION_URL,HR_PERMISSION_OPTIONS,HR_ALL_PERMISSIONS,normalizedHrSelection,hrAccessEnabled} from '../hr-permissions.mjs';
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
@@ -3220,6 +3221,7 @@ const userAuthorityOptions = ["Admin", "Manager"];
 const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
+  ["hrAccess","HR portal access","checkbox"],["hrLogin","HR username","text"],["hrPassword","HR password","password"],["hrDesktopAccess","HR desktop menus","multi-checkbox"],["hrMobileAccess","HR mobile menus","multi-checkbox"],
   ["misAccess","MIS application access","checkbox"],["misLogin","MIS username","text"],["misPassword","MIS password","password"],["misDesktopAccess","MIS desktop menus","multi-checkbox"],["misMobileAccess","MIS mobile menus","multi-checkbox"],
   ["tenderAccess","Tender application access","checkbox"],
   ["tenderDesktopAccess","Tender desktop menus","multi-checkbox"],
@@ -3259,6 +3261,8 @@ const operationalRequestOptions={
   "General User":["View requests","Closed history"],
 };
 const userAccessOptions = {
+  hrDesktopAccess:HR_ALL_PERMISSIONS,
+  hrMobileAccess:HR_ALL_PERMISSIONS,
   misDesktopAccess:MIS_ALL_PERMISSIONS,
   misMobileAccess:MIS_ALL_PERMISSIONS,
   tenderDesktopAccess:TENDER_ALL_PERMISSIONS,
@@ -4433,7 +4437,7 @@ function parseCsv(text, fields) {
 function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   return <>
     <div className="user-privilege-heading full"><h3>Additional privileges</h3><p>Fine-tune the operational authorities for this user. Core access is assigned automatically from the selected role.</p></div>
-    {userPrivilegeFields.filter(([key, , type]) => type === "checkbox" && key !== "tenderAccess" && key !== "misAccess").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
+    {userPrivilegeFields.filter(([key, , type]) => type === "checkbox" && key !== "tenderAccess" && key !== "misAccess" && key !== "hrAccess").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
   </>;
 }
 
@@ -4507,10 +4511,22 @@ function MisApplicationAccessFields({record={},onEnabled}){
  </section>;
 }
 
+function HrApplicationAccessFields({record={},onEnabled}){
+ const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record));
+ const [desktop,setDesktop]=useState(()=>normalizedHrSelection(record.hrDesktopAccess));
+ const [mobile,setMobile]=useState(()=>normalizedHrSelection(record.hrMobileAccess));
+ return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Separate HR credentials for hrpulse.cmll.in. This does not grant Fleet HR User or HR Manager permissions.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
+ <label><input type="checkbox" name="hrAccess" checked={enabled} onChange={event=>{setEnabled(event.target.checked);onEnabled?.(event.target.checked);}}/> Enable HR portal login</label>
+ <label>HR username<input name="hrLogin" defaultValue={record.hrLogin||''} autoComplete="off" required={enabled} maxLength={120}/></label>
+ <label>{record.hrLogin?'New HR password (leave blank to keep existing)':'HR password'}<input name="hrPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256}/><small>At least 12 characters. Stored securely and never displayed after saving.</small></label>
+ {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>HR · {view==='desktop'?'Desktop':'Mobile'} menus and masters</legend><input type="hidden" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value=""/><div><AccessSelectAll label="Select all HR menus and masters" options={HR_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{HR_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}
+ </section>;
+}
+
 function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
-    : record.userType === "MIS Application User" ? "MIS Application User" : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
+    : record.userType === "HR Application User" ? "HR Application User" : record.userType === "MIS Application User" ? "MIS Application User" : record.userType === "Account User" ? "Account User" : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
   const [selectedRoles,setSelectedRoles]=useState(()=>[...new Set([...assignedUserRoles(record),...(isCheckedValue(record.tenderAccess)?['Tender User']:[])])]);
   const [selectedAccounts,setSelectedAccounts]=useState(()=>accountPrivileges(record));
@@ -4519,7 +4535,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
     setSelectedRoles(next);
     if(roleSection==='team')setAccountRole(next.find(value=>!['Account User','Tender User'].includes(value))||next[0]||'');
   };
-  const [roleSection, setRoleSection] = useState(initialRole === "MIS Application User" ? "mis" : initialRole && initialRole !== "User" ? "team" : "manager");
+  const [roleSection, setRoleSection] = useState(initialRole === "HR Application User" ? "hr" : initialRole === "MIS Application User" ? "mis" : initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
   const [managerRoles, setManagerRoles] = useState(managerRoleSelection(record.managerRole));
   const [managerRegions, setManagerRegions] = useState(managerRegionSelection(record.managerRegion));
@@ -4537,12 +4553,13 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
     <input type="hidden" name="userRoles" value={(isDesktopUser?selectedRoles.filter(role=>['Account User','Tender User'].includes(role)):selectedRoles).join(' | ')} />
     <input type="checkbox" name="tenderAccess" checked={selectedRoles.includes('Tender User')} readOnly hidden />
     {!selectedRoles.includes('Account User')&&<input type="hidden" name="accountAccess" value={accountPrivileges(record).join(' | ')} />}
-    <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole === "MIS Application User" ? "MIS Application User" : accountRole === "Account User" ? "Account User" : accountRole ? "Mobile User" : ""} />
+    <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole === "HR Application User" ? "HR Application User" : accountRole === "MIS Application User" ? "MIS Application User" : accountRole === "Account User" ? "Account User" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
       <legend>User role *</legend>
       <p>Select one or more team roles, or configure an Admin / Non Admin account with optional Accounts and Tender access.</p>
       <div className="role-category-tabs" role="tablist" aria-label="User category">
         <button type="button" role="tab" aria-selected={roleSection === "mis"} className={roleSection === "mis" ? "active" : ""} onClick={() => setRoleSection("mis")}>MIS</button>
+        <button type="button" role="tab" aria-selected={roleSection === "hr"} className={roleSection === "hr" ? "active" : ""} onClick={() => setRoleSection("hr")}>HR</button>
         <button type="button" role="tab" aria-selected={roleSection === "manager"} className={roleSection === "manager" ? "active" : ""} onClick={() => { setRoleSection("manager"); setAccountRole("User"); }}>Manager User</button>
         <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); setAccountRole(selectedRoles.find(role=>!['Account User','Tender User'].includes(role))||selectedRoles[0]||''); }}>Team User</button>
       </div>
@@ -4554,6 +4571,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       </label>)}</div>}
     </fieldset>
     <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} onEnabled={enabled=>{if(enabled&&!accountRole)setAccountRole("MIS Application User");}}/></div>
+    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record} onEnabled={enabled=>{if(enabled&&!accountRole)setAccountRole("HR Application User");}}/></div>
     {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
@@ -4594,6 +4612,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         </label>)}</div>
       </div>}
     </fieldset>}
+    {accountRole!=="HR Application User"&&<>
     {accountRole && !isDesktopUser && accountRole!=="Tender User" && accountRole!=="MIS Application User" && <UserSiteFields record={record} siteOptions={siteOptions} />}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
@@ -4607,10 +4626,12 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole} hasTender={selectedRoles.includes('Tender User')} onTenderToggle={checked=>toggleRole('Tender User',checked)}/>
     </>}
     {accountRole && !isDesktopUser && accountRole !== "Account User" && accountRole !== "Tender User" && accountRole !== "MIS Application User" && accountRole !== GENERAL_USER_ROLE && !["HR User","HR Manager"].includes(accountRole) && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    </>}
   </>;
 }
 
 function applyUserRoleDefaults(record) {
+  if(record.userType==="HR Application User"){record.userGroup="HR Application User";record.userRoles="";return;}
   if(record.userType==="MIS Application User"){record.userGroup="MIS Application User";record.userRoles="";return;}
   if(Object.hasOwn(record,'userRoles')){
     const selected=assignedUserRoles(record);
