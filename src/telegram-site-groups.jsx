@@ -43,7 +43,7 @@ export default function TelegramSiteGroups({token}){
         setNotice(`${site}: ${result.invited} invited; ${result.pending} remaining.`);
         result=await request('/invite',{site});
       }
-      setNotice(kind==='test'?`Test sent to ${site}.`:`${site}: ${result.invited} invited, ${result.alreadyMember} already joined, ${result.failed} failed, ${result.uncertain} uncertain.`);
+      setNotice(kind==='test'?`${result.count||1} test messages sent to ${site}.`:`${site}: ${result.invited} invited, ${result.alreadyMember} already joined, ${result.failed} failed, ${result.uncertain} uncertain.`);
       await refresh();
     }catch(error){setError(error.message)}finally{setBusy('')}
   }

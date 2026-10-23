@@ -60,3 +60,23 @@ test('template test route sends both formats only to the signed-in private accou
 test('template tests reject missing links and group addresses before sending',async()=>{
  for(const chatId of ['','-12345']){const r=await previewRoute(chatId);assert.equal(r.status,400);assert.equal(r.sent.length,0);}
 });
+
+async function sitePreviewRoute(site){
+ const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+ const start=source.indexOf("app.post('/api/telegram/site-groups/test'");
+ const body=source.slice(source.indexOf('  try{',start),source.indexOf('\n});',start));
+ const sent=[],req={body:{site},session:{login:'anoop',name:'ANOOP PAUL'}};
+ let status=200,result;
+ const res={status(value){status=value;return this},json(value){result=value;return this}};
+ const run=new Function('req','res','next','telegramSiteGroups','telegramSiteName','telegramAlertShifts','pool','telegramNotificationText','sendTelegramText',`return (async()=>{${body}})()`);
+ await run(req,res,e=>{throw e},async()=>[{site:shifts[0].site,chatId:'-12345'}],s=>s,async()=>shifts,{},telegramNotificationText,async options=>{sent.push(options);return {sent:true}});
+ return {sent,status,result};
+}
+test('site test sends both leading-dot templates only to the selected registered group',async()=>{
+ const r=await sitePreviewRoute(shifts[0].site);assert.equal(r.status,200);assert.equal(r.result.count,2);assert.equal(r.sent.length,2);
+ assert.ok(r.sent.every(s=>s.chatId==='-12345'&&s.message.startsWith('TEST ONLY\n')&&s.message.includes(`SITE: ${shifts[0].site}`)&&s.message.includes('Shift timing:')));
+ assert.match(r.sent[0].message,/🔴 P to M/);assert.match(r.sent[1].message,/🟢 M to P/);
+});
+test('site test never falls back to a default or another group for an unknown site',async()=>{
+ const r=await sitePreviewRoute('Unknown');assert.equal(r.status,409);assert.equal(r.sent.length,0);
+});

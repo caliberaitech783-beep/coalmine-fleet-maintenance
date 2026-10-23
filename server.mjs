@@ -3720,9 +3720,16 @@ app.post('/api/telegram/site-groups/test',requireSuper,requireWhatsAppAdministra
   try{
     const group=(await telegramSiteGroups()).find(value=>value.site===telegramSiteName(req.body?.site));
     if(!group)return res.status(409).json({error:'Register this site group in Telegram first.'});
-    await sendTelegramText({chatId:group.chatId,message:`Caliber Pulse • ${group.site}\nProduction, Maintenance, MIS and the site head can share updates and reply here.`});
+    const shifts=await telegramAlertShifts(pool);
+    const closedAt=new Date(),start=new Date(closedAt.getTime()-27*3600000);
+    const request={ref:'REQ-TEST-NOT-A-LIVE-REQUEST',site:group.site,start,closedAt,door:'TEST VEHICLE',category:'PREVENTIVE',owner:req.session.name||req.session.login,closedBy:req.session.name||req.session.login,maintenanceWork:'Test message only. No request was created or changed.'};
+    let sent=0;
+    for(const purpose of ['requestOpened','requestClosed']){
+      await sendTelegramText({chatId:group.chatId,message:`TEST ONLY\n${telegramNotificationText({purpose,reference:request.ref,request,shifts})}`});
+      sent++;
+    }
     req.audit={eventType:'Integration',module:'Telegram',action:'Send site group test',targetReference:group.site};
-    res.json({sent:true});
+    res.json({sent:true,count:sent,site:group.site});
   }catch(error){next(error)}
 });
 
