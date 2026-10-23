@@ -70,6 +70,21 @@ test("Telegram follows per-event report settings but not the global WhatsApp swi
   assert.equal(telegramPlainText("*a* and *b*"), "a and b");
 });
 
+test("Scheduled fleet reports are paused for every Telegram target even without saved settings", async () => {
+  const { calls, fetchImpl } = recordingFetch();
+  for (const settings of [undefined, normalizeWhatsAppReportSettings()]) {
+    assert.equal(telegramPurposeEnabled(settings, "consolidatedRequestReport"), false);
+    for (const chatId of ["42", "-100123", "-100456"]) {
+      await assert.rejects(sendTelegramText({ chatId, message: "Fleet report", purpose: "consolidatedRequestReport", settings }, { env, fetchImpl }), { code: "TELEGRAM_POLICY_PAUSED" });
+    }
+    await assert.rejects(sendTelegramDocument({ buffer: Buffer.from("%PDF"), purpose: "consolidatedRequestReport", settings }, { env, fetchImpl }), { code: "TELEGRAM_POLICY_PAUSED" });
+    assert.equal(telegramPurposeEnabled(settings, "consolidatedTicketReport"), true);
+    assert.equal(telegramPurposeEnabled(settings, "requestClosed"), true);
+    assert.equal(telegramPurposeEnabled(settings, "manualReports"), true);
+  }
+  assert.equal(calls.length, 0);
+});
+
 test("Telegram status reports the bot and group names", async () => {
   const fetchImpl = async (url) => ({ ok: true, status: 200, json: async () => ({ ok: true, result: url.endsWith("/getMe") ? { username: "CALIBERBDMSBOT" } : { title: "CMLL Fleet Alerts" } }) });
   assert.deepEqual(await telegramStatus({ env, fetchImpl }), { configured: true, connected: true, paused: false, botUsername: "CALIBERBDMSBOT", chatTitle: "CMLL Fleet Alerts", chatId: "-5550689740" });

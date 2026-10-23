@@ -17,6 +17,9 @@ export function telegramConfiguration(env=process.env){
 // Telegram follows the per-event choices in Report settings, but not the global
 // WhatsApp switch, so WhatsApp can be turned off while Telegram keeps running.
 export function telegramPurposeEnabled(settings,purpose='',now=new Date()){
+  // Owner-requested pause for every site's scheduled fleet bundle. Keep this
+  // independent of saved settings and WhatsApp until the replacement is agreed.
+  if(purpose==='consolidatedRequestReport')return false;
   if(PRIVATE_PURPOSES.has(purpose))return false;
   if(!settings)return true;
   return whatsappPurposeEnabled({...normalizeWhatsAppReportSettings(settings),enabled:true},purpose,now);
