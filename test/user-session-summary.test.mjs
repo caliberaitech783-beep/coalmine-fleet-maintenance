@@ -61,13 +61,13 @@ test('session endpoint preserves per-session controls and exposes a separate uni
   assert.ok(body.sessions.every(row=>!('token' in row)&&!('userRecord' in row)));
 });
 
-test('UI separates unexpired sessions from unique online users, including with an older API', () => {
+test('UI separates date-based inactive users from unique online users', () => {
   const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const page=client.slice(client.indexOf('function UserSessionsPage('),client.indexOf('function reportCategoryIdsForUser('));
   assert.match(page,/>Online users<\/small><button[\s\S]*?>\{Number\(summary.onlineUsers\|\|0\)/);
-  assert.match(page,/>Valid user logins<\/small><button[\s\S]*?>\{Number\(summary.unexpired\|\|0\)/);
+  assert.match(page,/>Inactive users<\/small><button[\s\S]*?inactiveSummary.data.inactiveUsers/);
   assert.match(page,/Active in the last 2 minutes · unique accounts/);
-  assert.match(page,/One count per user · 7-day maximum/);
+  assert.match(page,/No login in selected dates/);
   assert.match(page,/const nextSummary=summarizeUserSessions\(nextSessions\)/);
   assert.doesNotMatch(page,/>Active sessions<|>Online now</);
 });

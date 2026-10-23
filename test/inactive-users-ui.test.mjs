@@ -8,3 +8,22 @@ test('inactive count opens user details and date apply uses selected dates',()=>
  const form=all.find(node=>node.type==='form');form.props.onSubmit({preventDefault(){}});assert.deepEqual(updates.find(item=>item.index===2).value,{from:'2026-10-22',to:'2026-10-22'});
  const html=renderToStaticMarkup(view(true).element);assert.ok(html.includes('Person &lt;One&gt;'));assert.ok(html.includes('Production User'));assert.ok(html.includes('Site A'));assert.ok(html.includes('Last login'));assert.ok(html.includes('type="date"'));
 });
+
+ test('session summary uses the date-based inactive report and preserves it between tabs',()=>{
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.ok(!main.includes('<small>Valid user logins</small>'));
+ assert.ok(main.includes('<small>Inactive users</small>'));
+ assert.ok(main.includes('Number(inactiveSummary.data.inactiveUsers)'));
+ assert.ok(main.includes('onSummaryChange={setInactiveSummary}'));
+ assert.ok(main.includes("hidden={status!=='Inactive users'}"));
+ });
+ test('inactive report publishes loaded, loading and error states to its summary',()=>{
+ for(const state of [{loading:true,data:null,error:''},{loading:false,data:{inactiveUsers:3},error:''},{loading:false,data:null,error:'Unavailable'}]){
+ let index=0,published;const effects=[];
+ const values=['2026-10-22','2026-10-22',{from:'2026-10-22',to:'2026-10-22'},0,state,true,null];
+ const Component=new Function('React','useState','useEffect',code+';return InactiveUsers;')(React,()=>[values[index++],()=>{}],effect=>effects.push(effect));
+ const tree=Component({onSummaryChange:value=>{published=value},Table:()=>null,Modal:()=>null,formatDate:String});
+ effects[1]();assert.equal(published,state);
+ assert.ok(tree);
+ }
+ });

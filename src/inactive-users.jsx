@@ -1,16 +1,17 @@
 import React,{useEffect,useState} from 'react';
 const day=offset=>new Date(Date.now()+330*60000+offset*86400000).toISOString().slice(0,10);
-export default function InactiveUsers({token,Table,Modal,formatDate,query=''}){
+export default function InactiveUsers({token,Table,Modal,formatDate,query='',onSummaryChange,refreshKey=0}){
  const[from,setFrom]=useState(()=>day(0)),[to,setTo]=useState(()=>day(0));
  const[range,setRange]=useState(()=>({from:day(0),to:day(0)})),[refresh,setRefresh]=useState(0);
- const[state,setState]=useState({loading:true,data:null,error:''}),[open,setOpen]=useState(false),[selected,setSelected]=useState(null);
- useEffect(()=>{const controller=new AbortController();setState({loading:true,data:null,error:''});setOpen(false);setSelected(null);
+ const[state,setState]=useState({loading:true,data:null,error:''}),[open,setOpen]=useState(true),[selected,setSelected]=useState(null);
+ useEffect(()=>{const controller=new AbortController();setState({loading:true,data:null,error:''});setOpen(true);setSelected(null);
   fetch('/api/inactive-users?'+new URLSearchParams(range),{signal:controller.signal,cache:'no-store',headers:{Authorization:`Bearer ${token}`}})
    .then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.error||'Could not load inactive users.');return data})
    .then(data=>{if(!controller.signal.aborted)setState({loading:false,data,error:''})})
    .catch(error=>{if(!controller.signal.aborted)setState({loading:false,data:null,error:error.message})});
   return()=>controller.abort();
- },[token,range.from,range.to,refresh]);
+ },[token,range.from,range.to,refresh,refreshKey]);
+ useEffect(()=>{onSummaryChange?.(state)},[state,onSummaryChange]);
  const rows=(state.data?.users||[]).filter(row=>[row.name,row.login,row.roleLabel,row.location,row.accountStatus].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
  return <section className="login-activity-panel inactive-users-panel">
   <h2>Inactive users · No login in selected dates</h2>
