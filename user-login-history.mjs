@@ -5,7 +5,7 @@ import {userMasterRole} from './src/user-master-role.mjs';
 // Detailed sessions may be purged. The small per-login summary must survive
 // that cleanup, logout and credential expiry; it stores no credentials/devices.
 export async function initializeLoginHistory(pool) {
-  // Single-login authorization registry v1, included in the schema fingerprint.
+  // Single-login authorization registry v2 per application, included in the schema fingerprint.
   await initializeSingleLogin(pool);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_login_history (

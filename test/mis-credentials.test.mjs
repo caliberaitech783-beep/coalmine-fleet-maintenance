@@ -26,7 +26,7 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  const credentials={username:'anoop',password:'pulse-test-password'};
  assert.equal((await call('/api/integrations/mis/authenticate',{...credentials,password:'wrong'})).status,401);
  const mis=await call('/api/integrations/mis/authenticate',credentials),hr=await call('/api/integrations/hr/authenticate',credentials,{origin:'https://hrpulse.cmll.in'});
- assert.equal(mis.status,200);assert.equal(hr.status,200);assert.equal((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).status,401,'HR login replaces prior MIS login');assert.equal(hr.value.profile.login,'anoop');
+ assert.equal(mis.status,200);assert.equal(hr.status,200);assert.equal((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).status,200,'HR login must not replace an authorized MIS login');assert.equal(hr.value.profile.login,'anoop');
  assert.equal((await call('/api/integrations/hr/authenticate',credentials,{origin:'https://untrusted.example'})).status,403);
  assert.equal((await call('/api/integrations/hr/validate',{grant:mis.value.grant})).status,401);
  for(const row of (await db.query('SELECT token FROM auth_sessions')).rows)assert.equal(await createSessionStore(pool).get(row.token),null);

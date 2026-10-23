@@ -15,7 +15,7 @@ test('latest login and exact-account activity survive cleanup without inventing 
   const read=async(query={period:'all'})=>{let response;await handler({query},{set(){},json(body){response=body;}},error=>{throw error;});return response;};
   try{
     await db.exec(`
-      CREATE TABLE auth_sessions(session_public_id TEXT PRIMARY KEY,login_name TEXT,employee_name TEXT,
+      CREATE TABLE auth_sessions(session_public_id TEXT PRIMARY KEY,login_name TEXT,employee_name TEXT,permissions JSONB DEFAULT '{}',
         created_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,device_id TEXT DEFAULT '',ip_address TEXT DEFAULT '',user_agent TEXT DEFAULT '');
       CREATE TABLE user_session_activity(session_id TEXT PRIMARY KEY,actor_login TEXT,actor_name TEXT,
         started_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,active_seconds BIGINT DEFAULT 0);

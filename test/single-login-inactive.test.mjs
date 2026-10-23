@@ -41,3 +41,20 @@ test('PostgreSQL concurrent logins select exactly one winner', {skip:!connection
   const authorized=await Promise.all(tokens.map(token=>store.get(token)));assert.equal(authorized.filter(Boolean).length,1);
  }finally{if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end()}
 });
+import {groupCurrentUserSessions} from '../single-login.mjs';
+test('switching portals preserves Pulse; repeat Pulse login alone replaces its previous token',async()=>{
+ const db=new PGlite();try{
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW());`);
+ const pool={query:(sql,args)=>!args&&sql.includes(';')?db.exec(sql):db.query(sql,args)};
+ // Exercise upgrade from the already-deployed account-wide registry.
+ await db.exec(`CREATE TABLE user_current_sessions(login TEXT PRIMARY KEY,session_id TEXT UNIQUE REFERENCES auth_sessions(session_public_id) ON DELETE CASCADE);`);
+ await initializeSingleLogin(pool);const store=createSessionStore(pool),pulse=randomUUID(),mis=randomUUID(),hr=randomUUID(),replacement=randomUUID();
+ await store.create({token:pulse,login:'anoop',name:'Person',role:'normal'});
+ for(const [token,application] of [[mis,'MIS'],[hr,'HR']])await store.create({token,login:'anoop',name:'Person',role:'normal',permissions:{application}});
+ assert.ok(await store.get(pulse),'other portals must not end Pulse');assert.equal((await db.query('SELECT * FROM user_current_sessions')).rows.length,3);
+ await store.create({token:replacement,login:'ANOOP',name:'Person',role:'normal'});assert.equal(await store.get(pulse),null);assert.ok(await store.get(replacement));
+ const rows=(await db.query(`SELECT s.token,s.session_public_id AS "sessionId",s.login_name AS login,s.created_at AS "createdAt",s.last_seen_at AS "lastSeenAt" FROM auth_sessions s JOIN user_current_sessions c ON c.session_id=s.session_public_id`)).rows;
+ const grouped=groupCurrentUserSessions(rows,replacement);assert.equal(grouped.length,1);assert.equal(grouped[0].token,replacement);
+ await initializeSingleLogin(pool);assert.ok(await store.get(replacement),'schema reinitialization must retain the valid Pulse login');
+ }finally{await db.close()}
+});

@@ -1,3 +1,4 @@
+import {groupCurrentUserSessions} from './single-login.mjs';
 import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';

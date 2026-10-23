@@ -67,7 +67,7 @@ test('UI separates unexpired sessions from unique online users, including with a
   assert.match(page,/>Online users<\/small><button[\s\S]*?>\{Number\(summary.onlineUsers\|\|0\)/);
   assert.match(page,/>Valid user logins<\/small><button[\s\S]*?>\{Number\(summary.unexpired\|\|0\)/);
   assert.match(page,/Active in the last 2 minutes · unique accounts/);
-  assert.match(page,/One valid session per user · 7-day maximum/);
+  assert.match(page,/One count per user · 7-day maximum/);
   assert.match(page,/const nextSummary=summarizeUserSessions\(nextSessions\)/);
   assert.doesNotMatch(page,/>Active sessions<|>Online now</);
 });
