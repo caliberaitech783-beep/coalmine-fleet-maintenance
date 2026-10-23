@@ -1,6 +1,7 @@
 import {canonicalReportTitle,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {formatDisplayTime,parseTwelveHourTime} from './date-time-format.mjs';
 import {whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
+import {normalizeHourlyBreakdownSchedule} from './hourly-breakdown-schedule.mjs';
 import {scheduledReportTimes as scheduleTimes,scheduledReportWindow,scheduledReportWindowsDue} from './report-delivery-window.mjs';
 export {scheduledReportWindow} from './report-delivery-window.mjs';
 
@@ -239,6 +240,7 @@ export function normalizeUserReportSchedule(value,{designationKey='',allowedRepo
     designationKey:key,
     enabled:value.enabled!==false,
     schedules,
+    ...(value.hourlyBreakdown?{hourlyBreakdown:normalizeHourlyBreakdownSchedule(value.hourlyBreakdown)}:{}),
     updatedAt:clean(value.updatedAt)||null,
   };
 }

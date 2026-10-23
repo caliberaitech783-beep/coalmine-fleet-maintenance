@@ -178,6 +178,7 @@ import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-
 import {authenticatedApiRequest,createSessionExpiryGuard,removeMatchingStoredSession} from "./session-expiry-guard.mjs";
 import {siteUpdateSafety} from "./site-update-safety.mjs";
 import HourlyBreakdownPreview from './hourly-breakdown-preview.jsx';
+import HourlyBreakdownSchedule from './hourly-breakdown-schedule.jsx';
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace, requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
@@ -7564,6 +7565,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
   const [reportScheduleSaving, setReportScheduleSaving] = useState(false);
   // Everyone can edit a personal schedule; administrators can also select the shared role defaults.
   const [userReportSchedule, setUserReportSchedule] = useState({ enabled: true, schedules: [] });
+  const [hourlyBreakdownSites, setHourlyBreakdownSites] = useState([]);
   const [userScheduleCustomised, setUserScheduleCustomised] = useState(false);
   const [reportScheduleOwner, setReportScheduleOwner] = useState({ name: "", login: "" });
   const reportAdministrator = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
@@ -7865,6 +7867,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
     const settings = details.settings || defaultHierarchyReportScheduleSettings();
     setReportScheduleSettings(settings);
     setReportScheduleRecipients(details.recipients || {});
+    setHourlyBreakdownSites(details.hourlyBreakdownSites || []);
     const access = {
       canManageAll: details.canManageAll === true,
       allowedDesignationKeys: Array.isArray(details.allowedDesignationKeys) ? details.allowedDesignationKeys : [],
@@ -7878,6 +7881,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
       const personal = details.userSchedule || roleDefault;
       setUserReportSchedule({
         enabled: personal.enabled !== false,
+        hourlyBreakdown: personal.hourlyBreakdown,
         schedules: (personal.schedules || []).map((schedule) => ({ ...schedule, reports: (schedule.reports || []).filter((title) => access.allowedReports.includes(title)) })),
       });
       setUserScheduleCustomised(Boolean(details.userSchedule));
@@ -8060,6 +8064,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
                 <label className="report-recipient-all"><input type="checkbox" checked={selectedScheduleConfig.allRecipients} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, allRecipients: event.target.checked }))} /> Send to every matching user</label>
                 {!selectedScheduleConfig.allRecipients && <div>{selectedScheduleRecipients.length ? selectedScheduleRecipients.map((recipient) => <label key={recipient.login}><input type="checkbox" checked={selectedScheduleConfig.recipientLogins.includes(recipient.login)} onChange={() => updateScheduleDesignation((designation) => ({ ...designation, recipientLogins: designation.recipientLogins.includes(recipient.login) ? designation.recipientLogins.filter((login) => login !== recipient.login) : [...designation.recipientLogins, recipient.login] }))} /><span><b>{recipient.name}</b><small>{recipient.hasPhone ? recipient.login : `${recipient.login} · phone missing`}</small></span></label>) : <p>No matching users are configured.</p>}</div>}
               </details>}
+              {!reportAccess.canManageAll && <HourlyBreakdownSchedule value={userReportSchedule.hourlyBreakdown} sites={hourlyBreakdownSites} onChange={hourlyBreakdown=>setUserReportSchedule(current=>({...current,hourlyBreakdown}))}/>}
               <div className="report-schedule-editor-list">
                 {selectedScheduleConfig.schedules.map((schedule) => <article key={schedule.key}>
                   <header>

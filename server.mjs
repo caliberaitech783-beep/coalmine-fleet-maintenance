@@ -1,6 +1,7 @@
 import {telegramNotificationText,telegramReportText} from './telegram-message-format.mjs';
 import {groupCurrentUserSessions} from './single-login.mjs';
 import {registerHourlyBreakdownPreview} from './hourly-breakdown-preview.mjs';
+import {hourlyBreakdownSiteSchedules} from './hourly-breakdown-schedule.mjs';
 import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
@@ -3446,6 +3447,18 @@ function scopedReportScheduleSettings(settings,scope){
 async function reportScheduleResponse(scope,settings,extra={}){
   const designationKey=scope.allowedDesignationKeys[0];
   const userSchedule=scope.canManageAll?null:normalizeUserReportSchedule(await storedUserReportSchedule(scope.login),{designationKey,allowedReports:scope.allowedReports,roleSchedules:(scope.roleSettings||settings).designations[designationKey]?.schedules});
+  let hourlyBreakdownSites=[];
+  if(!scope.canManageAll){
+    const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name IN ('Shift Master','Hierarchy master') ORDER BY created_at ASC`);
+    const profile=resolveMobileAccess({user:scope.user});
+    const designation=flowDesignationForUser(scope.user,profile);
+    const rule=hierarchyRuleForDesignation(rows,designation||{});
+    const recipientScope=hierarchyRecipientReportScope(scope.user,profile,rule?.siteAccess);
+    const sites=REGION_DATA.flatMap(region=>region.sites).filter(site=>reportScopeIncludesSite(recipientScope,site));
+    hourlyBreakdownSites=hourlyBreakdownSiteSchedules(sites,rows.map(row=>row.record_data),{
+      date:new Date(Date.now()+330*60000).toISOString().slice(0,10),cutoffTime:'23:00',
+    });
+  }
   return {
     settings:scopedReportScheduleSettings(settings,scope),
     canManageAll:scope.canManageAll,
@@ -3453,6 +3466,7 @@ async function reportScheduleResponse(scope,settings,extra={}){
     allowedReports:scope.allowedReports,
     userName:scope.name||'',
     userLogin:scope.login||'',
+    hourlyBreakdownSites,
     userSchedule,
     ...extra,
   };

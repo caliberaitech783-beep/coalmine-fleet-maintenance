@@ -5,6 +5,9 @@ import express from 'express';
 import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,HIERARCHY_REPORT_DESIGNATIONS,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,reportsDueForDesignation,userReportScheduleValidationError} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
+import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
+import {hourlyBreakdownSiteSchedules} from '../hourly-breakdown-schedule.mjs';
+import {REGION_DATA,reportScopeIncludesSite} from '../region-scope.mjs';
 
 const serverSource=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const GLOBAL_KEY='hierarchy_report_schedules';
@@ -51,6 +54,7 @@ async function harness(t,{settings=defaultHierarchyReportScheduleSettings(),over
   const saved=key=>clone(rows.get(key)?.setting_value);
   const pool={query:async(sql,args=[])=>{
     queries.push({sql,args:clone(args)});
+    if(sql.includes("master_name IN ('Shift Master','Hierarchy master')"))return {rows:hierarchy.map(record_data=>({record_data:clone(record_data)}))};
     if(sql.includes("master_name='Hierarchy master'"))return {rows:hierarchy.map(record_data=>({record_data:clone(record_data)}))};
     if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data:clone(record_data)}))};
     if(sql.startsWith('SELECT setting_value')&&sql.includes('FROM app_settings'))return {rows:rows.has(args[0])?[clone(rows.get(args[0]))]:[]};
@@ -77,6 +81,7 @@ async function harness(t,{settings=defaultHierarchyReportScheduleSettings(),over
     applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,
     HIERARCHY_REPORT_DESIGNATIONS,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,
     userReportScheduleValidationError,DIRECTOR_REPORT_TITLES,resolveMobileAccess,
+    hierarchyRecipientReportScope,hourlyBreakdownSiteSchedules,REGION_DATA,reportScopeIncludesSite,
   };
   // Register the real GET/PUT routes and use their actual scope, hierarchy lookup
   // and app_settings helpers. Authentication and database I/O are local fixtures.
@@ -301,5 +306,16 @@ test('personal PUT rejects active schedules without valid times or permitted rep
     assert.equal(response.status,400,JSON.stringify(response.body));
   }
   assert.deepEqual(api.writes,[]);
+  assert.deepEqual(api.saved(GLOBAL_KEY),before);
+});
+
+test('hourly preferences save for this account only and cannot turn on delivery or overnight slots',async t=>{
+  const api=await harness(t),before=api.saved(GLOBAL_KEY);
+  const response=await api.put('admin-a',{userSchedule:personal(['09:37'],{hourlyBreakdown:{selected:true,deliveryEnabled:true,cutoffTime:'23:59',weekdays:[1,3]}})},'personal');
+  assert.equal(response.userSchedule.hourlyBreakdown.selected,true);
+  assert.equal(response.userSchedule.hourlyBreakdown.deliveryEnabled,false);
+  assert.equal(response.userSchedule.hourlyBreakdown.cutoffTime,'23:00');
+  assert.ok(response.hourlyBreakdownSites.every(site=>site.site!=='Lalpeth OC'));
+  assert.equal((await api.get('admin-b','personal')).userSchedule,null);
   assert.deepEqual(api.saved(GLOBAL_KEY),before);
 });

@@ -225,7 +225,7 @@ test('effective organisation timings returned by GET are preserved for every rol
   const applySource=main.slice(main.indexOf('  const applyReportScheduleDetails ='),main.indexOf('  const loadReportScheduleDetails ='));
   const saveSource=main.slice(main.indexOf('  const saveReportSchedules ='),main.indexOf('  const resetUserReportSchedule ='));
   let loaded;
-  const applyBindings={session:{name:'Fixture'},setReportScheduleSettings:value=>{loaded=value;},setReportScheduleRecipients(){},setReportAccess(){},setReportScheduleOwner(){},setSelectedScheduleDesignation(){},setReportAccessLoaded(){}};
+  const applyBindings={session:{name:'Fixture'},setReportScheduleSettings:value=>{loaded=value;},setReportScheduleRecipients(){},setHourlyBreakdownSites(){},setReportAccess(){},setReportScheduleOwner(){},setSelectedScheduleDesignation(){},setReportAccessLoaded(){}};
   const apply=new Function(...Object.keys(applyBindings),`${applySource};return applyReportScheduleDetails;`)(...Object.values(applyBindings));
   apply({settings,canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations),allowedReports:['Opening Report','Closing Report']});
   assert.deepEqual(loaded,original);
