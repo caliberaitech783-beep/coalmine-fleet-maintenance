@@ -2372,8 +2372,7 @@ app.post('/api/login',async(req,res,next)=>{
         ]);
       return res.json({requiresPasswordChange:true,changeToken,name:employee.employee});
     }
-    const token=randomUUID();
-    await sessionStore.create({token,role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+    const token=await sessionStore.createForVerifiedDevice({token:randomUUID(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions},sessionActivityDetails(req));
     req.auditSessionToken=token;
     res.json(loginPayload({token,profile,employee,login}));
   }catch(error){next(error)}

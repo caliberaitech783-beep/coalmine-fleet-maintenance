@@ -6,6 +6,38 @@ export function createSessionStore(pool, {
 } = {}) {
   const boundedMaxAgeDays = Math.max(1, Math.floor(Number(maxAgeDays) || DEFAULT_SESSION_MAX_AGE_DAYS));
   return {
+    // Call only after password verification. Re-entering the same account in
+    // another tab of this browser must not invalidate its already-open tabs.
+    async createForVerifiedDevice(session, details = {}) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const login = String(session.login || '').trim().toLowerCase();
+        const application = session.permissions?.application || 'BDMS';
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`login:${application}:${login}`]);
+        let token = session.token;
+        if (login && details.deviceId) {
+          const {rows} = await client.query(`SELECT s.token FROM auth_sessions s
+            JOIN user_current_sessions c ON c.session_id=s.session_public_id
+            WHERE c.login=$1 AND c.application=$2 AND s.device_id=$3
+              AND s.created_at>NOW()-make_interval(days=>$4::int)
+              AND s.role=$5 AND s.user_type=$6 AND s.assigned_role=$7 AND s.permissions=$8::jsonb`,
+            [login, application, details.deviceId, boundedMaxAgeDays, session.role,
+              session.userType || '', session.assignedRole || '', JSON.stringify(session.permissions || {})]);
+          if (rows[0]) token = rows[0].token;
+        }
+        const transactionStore = createSessionStore(client, {maxAgeDays: boundedMaxAgeDays});
+        await transactionStore.create({...session, token});
+        await transactionStore.touch(token, details);
+        await client.query('COMMIT');
+        return token;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async create({token, role, name, login = "", userType = "", assignedRole = "", permissions = {}}) {
       // Physical cleanup requires the backup-gated retention job.
       await pool.query(
