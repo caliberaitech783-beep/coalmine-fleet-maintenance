@@ -177,6 +177,7 @@ import {readApiJson} from "./api-response.mjs";
 import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
 import {authenticatedApiRequest,createSessionExpiryGuard,removeMatchingStoredSession} from "./session-expiry-guard.mjs";
 import {siteUpdateSafety} from "./site-update-safety.mjs";
+import HourlyBreakdownPreview from './hourly-breakdown-preview.jsx';
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace, requestsVisibleToDashboard} from "../mis-request-visibility.mjs";
 import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
@@ -12138,7 +12139,7 @@ function App() {
   ) : renderedActive === "WhatsApp alert history" ? (
     <WhatsAppAlertHistory />
   ) : renderedActive === "Reports" ? (
-    <ReportsPage requests={requests} activeReportCategory={renderedReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
+    <><HourlyBreakdownPreview session={session} /><ReportsPage requests={requests} activeReportCategory={renderedReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} /></>
   ) : renderedActive === "Print helper" ? (
     <PrintHelperSetupPage session={session} />
   ) : renderedActive === "Audit Trail" ? (

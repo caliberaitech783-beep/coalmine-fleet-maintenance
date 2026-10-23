@@ -1,5 +1,6 @@
 import {telegramNotificationText,telegramReportText} from './telegram-message-format.mjs';
 import {groupCurrentUserSessions} from './single-login.mjs';
+import {registerHourlyBreakdownPreview} from './hourly-breakdown-preview.mjs';
 import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
@@ -2104,6 +2105,8 @@ function requireAdministrator(req,res,next){
   if(req.session?.role==='super'&&['admin','super admin'].includes(adminLevel))return next();
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
 }
+
+registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator});
 
 const REMOTE_ASSISTANCE_LIVE_STATUSES=['Pending','Approved','Active'];
 const REMOTE_ASSISTANCE_DURATIONS=new Set([5,10,15]);
