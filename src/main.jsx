@@ -4540,10 +4540,14 @@ function MisApplicationAccessFields({record={},onEnabled}){
 }
 
 function HrApplicationAccessFields({record={},onEnabled}){
- const legacyHrRole=!Object.hasOwn(record,'hrAccess')&&assignedUserRoles(record).some(role=>['HR User','HR Manager'].includes(role));
- const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record)||legacyHrRole);
- return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Use the same user name and password as your existing Pulse account.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
+ const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record));
+ const [desktop,setDesktop]=useState(()=>normalizedHrSelection(record.hrDesktopAccess));
+ const [mobile,setMobile]=useState(()=>normalizedHrSelection(record.hrMobileAccess));
+ return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Separate HR credentials for hrpulse.cmll.in. This does not grant Fleet HR User or HR Manager permissions.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
  <label><input type="checkbox" name="hrAccess" checked={enabled} onChange={event=>{setEnabled(event.target.checked);onEnabled?.(event.target.checked);}}/> Enable HR portal login</label>
+ <label>HR username<input name="hrLogin" defaultValue={record.hrLogin||''} autoComplete="off" required={enabled} maxLength={120}/></label>
+ <label>{record.hrLogin?'New HR password (leave blank to keep existing)':'HR password'}<input name="hrPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256}/><small>At least 12 characters. Stored securely and never displayed after saving.</small></label>
+ {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>HR · {view==='desktop'?'Desktop':'Mobile'} menus and masters</legend><input type="hidden" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value=""/><div><AccessSelectAll label="Select all HR menus and masters" options={HR_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{HR_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}
  </section>;
 }
 

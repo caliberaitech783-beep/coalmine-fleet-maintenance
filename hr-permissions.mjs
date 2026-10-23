@@ -6,7 +6,7 @@ export const HR_PERMISSION_OPTIONS=[
 export const HR_ALL_PERMISSIONS=HR_PERMISSION_OPTIONS.map(option=>option.key);
 export function normalizedHrSelection(raw){return [...new Set((Array.isArray(raw)?raw:String(raw||'').split(/\s*\|\s*/)).filter(value=>HR_ALL_PERMISSIONS.includes(value)))];}
 export const hrAccessEnabled=user=>user?.hrAccess===true||['true','yes','1'].includes(String(user?.hrAccess||'').toLowerCase());
-export function hrProfilePermissions(user){const access=hrAccessEnabled(user)?[...HR_ALL_PERMISSIONS]:[];return {application:'HR',hrDesktopAccess:[...access],hrMobileAccess:[...access]};}
+export function hrProfilePermissions(user){return {application:'HR',hrDesktopAccess:normalizedHrSelection(user.hrDesktopAccess),hrMobileAccess:normalizedHrSelection(user.hrMobileAccess)};}
 export function hrAccessManagementRequested(record={},previous={}){
  return hrAccessEnabled(record)||hrAccessEnabled(previous)||Boolean(record.hrPassword)||Boolean(String(record.hrLogin||'').trim())||normalizedHrSelection(record.hrDesktopAccess).length>0||normalizedHrSelection(record.hrMobileAccess).length>0;
 }

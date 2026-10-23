@@ -665,12 +665,15 @@ the next successful five-day cycle. The two-day audit export and generic log
 retention no longer independently delete/reset these session records. See
 BACKUP.md for configuration and recovery limitations.
 
-## Shared Pulse credentials for MIS and HR
+## MIS shared credentials and separate HR credentials
 
-MIS and HR authenticate the existing Pulse username and password through
+MIS authenticates the existing Pulse username and password through
 pulse-application-identity.mjs. Users & employees > MIS enables access and selects
-desktop/mobile menus; no second username/password is collected. HR requires
-HR User or HR Manager access. Existing central administrators retain access.
+desktop/mobile menus; no second MIS username/password is collected. The HR tab
+again configures a separate HR username, password and desktop/mobile menu choices.
+HR passwords are hashed; blank password edits preserve the saved hash. Existing
+checkbox-only HR accounts need separate credentials configured by an administrator.
+Central administrators without separate HR configuration retain their existing access.
 Changing the Pulse password invalidates both applications' grants. Disabled
 accounts, revoked central sessions and seven-day expiry also deny validation.
 Legacy MIS credential fields are ignored and removed on employee save.
