@@ -6,24 +6,22 @@ import {misAccessEnabled,misProfilePermissions,MIS_ALL_PERMISSIONS} from './mis-
 const digest=value=>createHash('sha256').update(String(value)).digest('hex');
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const hrOrigin='https://hrpulse.cmll.in';
-const separateHr=user=>hrAccessEnabled(user);
-const version=(user,application)=>digest(application==='HR'&&separateHr(user)?`${user.login}:${user.passwordHash}:${user.hrLogin}:${user.hrPasswordHash}:${JSON.stringify(hrProfilePermissions(user))}`:`${user.login}:${user.passwordHash}`);
+const version=(user,application)=>digest(application==='HR'?`${user.login}:${user.passwordHash}:${JSON.stringify(hrProfilePermissions(user))}`:`${user.login}:${user.passwordHash}`);
 export function pulseApplicationProfile(row,application){
  const user=row?.record_data||{};
- if(!row||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
- if(application==='HR'&&(separateHr(user)||user.hrLogin)){
+ if(!row||!user.passwordHash||user.mustChangePassword===true||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
+ if(application==='HR'&&hrAccessEnabled(user)){
   const permissions=hrProfilePermissions(user);
-  if(!separateHr(user)||!user.hrLogin||!user.hrPasswordHash||!permissions.hrDesktopAccess.length&&!permissions.hrMobileAccess.length)return null;
-  return {role:'normal',userType:'HR Application User',assignedRole:'HR Application User',login:String(user.login||user.hrLogin),name:user.employee||user.name||user.login,permissions};
+  if(!permissions.hrDesktopAccess.length&&!permissions.hrMobileAccess.length)return null;
+  return {role:'normal',userType:'HR Application User',assignedRole:'HR Application User',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...permissions,sharedPulseCredentials:true}};
  }
- if(!user.passwordHash||user.mustChangePassword===true)return null;
  const admin=/super/i.test(user.userType||'')&&['admin','super admin'].includes(String(user.adminLevel||'Admin').toLowerCase());
  if(application==='MIS'){
   if(!admin&&!misAccessEnabled(user))return null;
   const access=admin&&!misAccessEnabled(user)?{...user,misDesktopAccess:MIS_ALL_PERMISSIONS,misMobileAccess:MIS_ALL_PERMISSIONS}:user;
   return {role:'super',userType:'MIS Application User',assignedRole:'MIS Application User',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...misProfilePermissions(access),sharedPulseCredentials:true}};
  }
- if(application!=='HR'||!admin)return null;
+ if(application!=='HR'||!admin||Object.hasOwn(user,'hrAccess')||user.hrLogin)return null;
  const hrPermissions=hrProfilePermissions({hrDesktopAccess:HR_ALL_PERMISSIONS,hrMobileAccess:HR_ALL_PERMISSIONS});
  return {role:'super',userType:'Super Admin',assignedRole:'Admin',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...hrPermissions,sharedPulseCredentials:true,adminLevel:user.adminLevel||'Admin',site:user.site||user.location||''}};
 }
@@ -44,19 +42,17 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   };
   route('authenticate',async(req,res)=>{
    const username=String(req.body?.username||'').trim().toLowerCase(),password=req.body?.password;
-   if(!username||username.length>200||typeof password!=='string'||!password||password.length>1024)return res.status(401).json({error:`Enter your ${application==='HR'?'HR':'Pulse'} username and password.`});
+   if(!username||username.length>200||typeof password!=='string'||!password||password.length>1024)return res.status(401).json({error:'Enter your Pulse username and password.'});
    const bucket=Math.floor(Date.now()/600000),key=digest(`pulse-app:${application}:${req.ip}:${username}:${bucket}`);
    const {rows:attempts}=await pool.query('SELECT attempts FROM application_login_attempts WHERE key=$1',[key]);
    if(Number(attempts[0]?.attempts||0)>=10)return res.status(429).json({error:'Too many unsuccessful attempts. Try again in ten minutes.'});
    const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
-   let matches=application==='HR'?rows.filter(row=>String(row.record_data.hrLogin||'').trim().toLowerCase()===username):loginRecordCandidates(rows,username);
-   // Existing central administrators retain their own sign-in. Ordinary HR users use only HR credentials.
-   if(application==='HR'&&!matches.length)matches=loginRecordCandidates(rows,username).filter(row=>!separateHr(row.record_data)&&pulseApplicationProfile(row,'HR')?.permissions.sharedPulseCredentials);
-   if(application!=='HR'){const exact=matches.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);if(exact.length)matches=exact;}
+   let matches=loginRecordCandidates(rows,username);
+   const exact=matches.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);if(exact.length)matches=exact;
    const row=matches.length===1?matches[0]:null;
-   if(!row||!verifyPassword(password,application==='HR'&&row.record_data.hrLogin?row.record_data.hrPasswordHash:row.record_data.passwordHash)){
+   if(!row||!verifyPassword(password,row.record_data.passwordHash)){
     await pool.query(`INSERT INTO application_login_attempts(key,attempts,created_at) VALUES($1,1,NOW()) ON CONFLICT(key) DO UPDATE SET attempts=application_login_attempts.attempts+1`,[key]);
-    return res.status(401).json({error:`${application==='HR'?'HR':'Pulse'} username or password is incorrect.`});
+    return res.status(401).json({error:'Pulse username or password is incorrect.'});
    }
    const profile=pulseApplicationProfile(row,application);
    if(!profile)return res.status(403).json({error:`Your Pulse account is not enabled for ${application}, is inactive, or requires its first password change. Contact your administrator.`});

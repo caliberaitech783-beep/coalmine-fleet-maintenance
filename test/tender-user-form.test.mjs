@@ -48,13 +48,14 @@ test('MIS login uses shared Pulse credentials and persisted desktop/mobile grant
  assert.match(html,/Select all MIS masters and working menus/);
 });
 
-test('HR tab restores separate credentials and desktop/mobile menu choices',()=>{
+test('HR tab uses Pulse credentials and retains desktop/mobile menu choices',()=>{
  const html=render({userType:'HR Application User',userGroup:'HR Application User',hrAccess:true,hrLogin:'hr.one',hrDesktopAccess:'Employee Master | Holiday & Leave',hrMobileAccess:''});
  assert.match(html,/role="tab"[^>]*aria-selected="true"[^>]*>HR</);
  assert.match(html,/name="userType" value="HR Application User"/);
  assert.match(html,/name="hrAccess"[^>]*checked/);
- for(const key of ['hrLogin','hrPassword','hrDesktopAccess','hrMobileAccess'])assert.ok(html.includes(`name="${key}"`));
- assert.ok(html.includes('Separate HR credentials'));
+ for(const key of ['hrLogin','hrPassword'])assert.ok(!html.includes(`name="${key}"`));
+ for(const key of ['hrDesktopAccess','hrMobileAccess'])assert.ok(html.includes(`name="${key}"`));
+ assert.ok(html.includes('existing Pulse username and password'));
  assert.ok(checked(html,'hrDesktopAccess','Employee Master'));
  assert.ok(checked(html,'hrDesktopAccess','Holiday & Leave'));
  assert.ok(!checked(html,'hrMobileAccess','Employee Master'));
@@ -67,5 +68,5 @@ test('HR access can coexist with an existing team role without changing its acco
  assert.match(html,/name="userType" value="Mobile User"/);
  assert.ok(checked(html,null,'Production User'));
  assert.match(html,/name="hrAccess"[^>]*checked/);
- assert.ok(html.includes('name="hrLogin"'));
+ assert.ok(!html.includes('name="hrLogin"'));
 });

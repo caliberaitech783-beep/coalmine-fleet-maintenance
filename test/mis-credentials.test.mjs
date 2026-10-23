@@ -25,7 +25,7 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  const call=async(path,body,headers={})=>{let value;const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(data){value=data;return this}};await routes.get(path)({body,headers,ip:'127.0.0.1'},res,e=>{throw e});return {status:res.statusCode,value}};
  const credentials={username:'anoop',password:'pulse-test-password'};
  assert.equal((await call('/api/integrations/mis/authenticate',{...credentials,password:'wrong'})).status,401);
- const hrCredentials={username:'hr.anoop',password:'independent-hr-password'};
+ const hrCredentials={...credentials};
  const mis=await call('/api/integrations/mis/authenticate',credentials),hr=await call('/api/integrations/hr/authenticate',hrCredentials,{origin:'https://hrpulse.cmll.in'});
  assert.equal(mis.status,200);assert.equal(hr.status,200);assert.equal((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).status,200,'HR login must not replace an authorized MIS login');assert.equal(hr.value.profile.login,'anoop');
  assert.equal((await call('/api/integrations/hr/authenticate',credentials,{origin:'https://untrusted.example'})).status,403);
@@ -40,6 +40,7 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  user.misDesktopAccess=[];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);assert.deepEqual((await call('/api/integrations/mis/validate',{grant:currentGrant})).value.profile.permissions.misDesktopAccess,[]);
  user.passwordHash=hashPassword('changed-pulse-password');await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
  for(const [application,grant] of [['mis',mis.value.grant],['hr',hr.value.grant]])assert.equal((await call(`/api/integrations/${application}/validate`,{grant})).status,401);
+ hrCredentials.password='changed-pulse-password';
  const again=await call('/api/integrations/hr/authenticate',hrCredentials);assert.equal(again.status,200);await call('/api/integrations/hr/logout',{grant:again.value.grant});assert.equal((await call('/api/integrations/hr/validate',{grant:again.value.grant})).status,401);
  user.hrAccess=false;await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);assert.equal((await call('/api/integrations/hr/authenticate',hrCredentials)).status,403);
  for(let i=0;i<10;i++)await call('/api/integrations/mis/authenticate',{username:'missing',password:'wrong'});assert.equal((await call('/api/integrations/mis/authenticate',{username:'missing',password:'wrong'})).status,429);
