@@ -404,6 +404,15 @@ Expected health output contains `"status":"ok"` and `"database":"connected"`.
 
 ## 14. Troubleshooting
 
+### Intermittent compressed-PDF test failures
+
+`test/pdf-streams.mjs` decodes PDFKit streams by their declared `/Length` in bytes.
+Do not extract binary stream data with an optional-CR newline delimiter: a valid
+compressed checksum can end in `0x0d`, which that delimiter would remove before
+inflation. `test/pdf-streams.test.mjs` covers these terminal bytes, LF/CRLF markers
+and rejection of truncated streams. Keep the compression and layout assertions;
+do not suppress inflate failures or disable PDF tests to pass deployment.
+
 ### User activity says an established account has never logged in
 
 The Login activity report's **User Group** column uses the same saved-role resolver as Users & Employees: Production/Maintenance/MIS/HR roles, department managers, multiple assigned team groups and administrator levels, rather than the generic Mobile User/Super User account type. It describes the current master assignment, not the historical role at sign-in. Search, table filters, sorting and shared print/PDF/Excel exports use that displayed group. This is a reporting-only projection; credentials, permissions, activity timestamps and locations are unchanged.
@@ -675,3 +684,13 @@ Failed attempts remain limited per application, source and username.
 
 Deploy Pulse first, then MIS and the HR static build. MIS data remains in its
 own database; HR hosting does not receive Pulse database credentials.
+
+## One current login and inactive-user date drilldowns
+
+user_current_sessions selects one current session per normalized Pulse login across Pulse, MIS, HR and Tender. An INSERT trigger atomically replaces the pointer; earlier bearer tokens fail validation immediately. Installation chooses the newest existing login once. Logout/restart cannot revive old tokens. Prior session rows remain backup-gated history and are excluded from the live session list. Pulse polls a read-only authorization probe every 15 seconds and on focus without recording activity.
+
+User Sessions shows valid-user counts with clickable detail filters. Offline describes retained current sessions without recent activity. Inactive users is a separate date-range view of configured login accounts with no fresh successful login in the selected inclusive India dates. Counts open user lists and individual details. Durable per-account login-day evidence supports future date ranges despite detailed-session cleanup. Complete tracking starts on the installation's India date; older incomplete ranges are rejected rather than presented as proof of inactivity. Daily evidence stores no passwords, tokens, IPs or devices.
+
+### Stable logins across applications
+
+The current-session registry is keyed by canonical login and application. A fresh Pulse login invalidates older Pulse logins, while MIS/HR sign-in cannot replace Pulse authorization. Existing registry entries migrate without reviving old tokens. User Sessions groups current application sessions by canonical account so counts and rows remain one per user. The current browser session remains its row's protected action target. Absolute seven-day expiry, permission/password revocation and forced logout remain enforced.

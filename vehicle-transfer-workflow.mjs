@@ -1,4 +1,18 @@
 import {canonicalSiteName} from './site-location.mjs';
+import {createRequestDoorResolver,equipmentDoorNumber} from './equipment-door.mjs';
+
+export function transfersWithDoorNumbers(transfers = [], equipment = []) {
+  const byId = new Map(equipment.map(record => [String(record.id), record]));
+  const resolve = createRequestDoorResolver(equipment);
+  return transfers.map(transfer => {
+    const master = byId.get(String(transfer.equipmentMasterId || ''));
+    const resolved = master ? equipmentDoorNumber(master) : resolve({
+      chassis: transfer.chassisNo || transfer.manufacturerSerialNo,
+      reg: transfer.reg, door: transfer.door, equipment: transfer.equipment,
+    }).door;
+    return {...transfer, door: resolved || String(transfer.door || '').trim()};
+  });
+}
 
 export const VEHICLE_TRANSFER_STATUS = Object.freeze({
   SOURCE_APPROVAL: 'Awaiting source approval',

@@ -15,6 +15,17 @@ export function assertSharedLogoAndCompression(pdf){
 export function decodedPdf(pdf){
   return pdf.toString('latin1').replace(/(\d+ \d+ obj\r?\n)([\s\S]*?)(\r?\nendobj)/g,(whole,start,body,end)=>{
     if(body.includes('/Subtype /Image')||!body.includes('/FlateDecode'))return whole;
-    return start+body.replace(/stream\r?\n([\s\S]*?)\r?\nendstream/g,(_,data)=>'stream\n'+inflateSync(Buffer.from(data,'latin1')).toString('latin1')+'\nendstream')+end;
+    const marker=/\bstream\r?\n/.exec(body);
+    assert.ok(marker,'compressed PDF object must contain a stream');
+    const header=body.slice(0,marker.index),length=header.match(/\/Length\s+(\d+)\s*(?=\/|>>)/);
+    assert.ok(length,'PDFKit stream must declare a direct byte length');
+    const offset=marker.index+marker[0].length,byteLength=Number(length[1]);
+    // A compressed checksum may end in 0x0d. A CRLF delimiter regex would
+    // swallow that data byte when PDFKit appends its LF-only endstream marker.
+    const data=Buffer.from(body.slice(offset,offset+byteLength),'latin1');
+    assert.equal(data.length,byteLength,'PDF stream bytes must match /Length');
+    const suffix=body.slice(offset+byteLength);
+    assert.match(suffix,/^\r?\nendstream\b/,'PDF stream terminator must follow its declared bytes');
+    return start+header+'stream\n'+inflateSync(data).toString('latin1')+suffix+end;
   });
 }

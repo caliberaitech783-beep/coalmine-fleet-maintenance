@@ -1,3 +1,5 @@
+import {groupCurrentUserSessions} from './single-login.mjs';
+import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
@@ -56,7 +58,7 @@ import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
-import {requestsWithDoorNumbers} from './equipment-door.mjs';
+import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -65,7 +67,7 @@ import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels
 import {resolveRequestIssues,hasOutstandingRequestIssues,REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validateClosingMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
-import {createFeedCache} from './request-feed-cache.mjs';
+import {createFeedCache,requestFeedWriteInvalidates} from './request-feed-cache.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
@@ -143,7 +145,7 @@ import {BREAKDOWN_SUB_CATEGORY_DEFAULTS} from './breakdown-sub-category.mjs';
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {archiveSchemaSql,previewRequestArchive,archiveRequests,restoreRequestArchive} from './request-archive.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
-import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
+import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transfersWithDoorNumbers,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
 import {requestShiftLabel} from './request-shift.mjs';
@@ -187,7 +189,7 @@ app.use((req,res,next)=>{
 // always reads the database.
 const requestFeedCache=createFeedCache({ttlMs:30_000});
 app.use((req,res,next)=>{
-  if(req.method!=='GET'&&req.method!=='HEAD'){
+  if(requestFeedWriteInvalidates(req)){
     requestFeedCache.clear();
     res.on('finish',()=>requestFeedCache.clear());
   }
@@ -2633,6 +2635,11 @@ app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+// Authorization probe deliberately does not record activity or refresh online status.
+app.get('/api/session-status',async(req,res,next)=>{
+ req.audit=false;res.set('Cache-Control','no-store');
+ try{if(!await readSession(req))return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});res.status(204).end();}catch(error){next(error)}
+});
 app.get('/api/session-messages',requireSession,async(req,res,next)=>{
   try{
     const {rows}=await pool.query(`SELECT id,message,audio_data AS "audioData",sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt"
@@ -2962,6 +2969,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
   }catch(error){next(error)}
 });
 
+registerInactiveUsers(app,{pool,requireSession,requireView:requireUserSessionView,locationName:userSessionLocationName});
 registerLoginHistoryRoutes(app,{pool,requireSuper:requireSession,requireAdministrator:requireUserSessionView,locationName:userSessionLocationName});
 registerOemEmailAdmin(app,{pool,requireSuper,requireAdministrator,loadData:loadOemEmailData,scheduledJobsEnabled});
 app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res,next)=>{
@@ -2993,7 +3001,7 @@ app.get('/api/user-sessions',requireSession,requireUserSessionView,async(req,res
           AND remote.expires_at>NOW()
         ORDER BY remote.requested_at DESC LIMIT 1
       ) AS assistance ON TRUE
-      WHERE sessions.created_at>NOW()-INTERVAL '7 days'
+      WHERE EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=sessions.session_public_id) AND sessions.created_at>NOW()-INTERVAL '7 days'
       ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`,[String(req.session.login||''),REMOTE_ASSISTANCE_LIVE_STATUSES]);
     const now=Date.now();
     const sessions=rows.map(({token,userRecord,...row})=>({
@@ -5078,7 +5086,7 @@ app.get('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
       return reportScopeIncludesSite(context.scope,site);
     });
     res.set('Cache-Control','private, no-store');
-    res.json({records,equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
+    res.json({records:transfersWithDoorNumbers(records,equipmentRows.map(row=>({...row.record_data,id:row.id}))),equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
       canVerifyDestination:context.misUser||context.misManager,canAcceptDestination:context.pmManager}});
   }catch(error){next(error)}
 });
@@ -5102,7 +5110,7 @@ app.post('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
     const record=normalizeOperationalSiteFields({
       transferNo,transferDate:String(req.body?.transferDate||'').trim(),source,
       destination:String(req.body?.destination||'').trim(),equipmentMasterId:equipmentRow.id,
-      equipment:equipment.door||equipment.reg||equipment.equipmentName||equipment.itemName||'',door:equipment.door||'',reg:equipment.reg||'',
+      equipment:equipment.door||equipment.reg||equipment.equipmentName||equipment.itemName||'',door:equipmentDoorNumber(equipment),reg:equipment.reg||'',
       modelNo:equipment.modelNo||equipment.model||'',manufacturerSerialNo:equipment.manufacturerSerialNo||'',lastMaintenanceDate:equipment.lastMaintenanceDate||'',
       chassisNo:equipment.chassisNo||'',driver:String(req.body?.driver||'').trim().slice(0,160),
       dieselQty:String(req.body?.dieselQty||'').trim().slice(0,80),kmr:String(req.body?.kmr||'').trim().slice(0,80),hmr:String(req.body?.hmr||'').trim().slice(0,80),
@@ -6215,12 +6223,15 @@ async function syncTemporaryRequestDrivers(){
 
 async function attachDailyRemarks(rows,client=pool){
   if(!rows.length)return rows;
-  const {rows:equipmentRows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`);
-  rows=requestsWithDoorNumbers(rows,equipmentRows.map(row=>row.record_data));
   const refs=rows.map((row)=>row.ref);
-  const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
+  // These independent reads can overlap; neither changes the request reference.
+  const [{rows:equipmentRows},{rows:remarks}]=await Promise.all([
+    client.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
+    client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
     author_login AS "authorLogin",author_name AS "authorName",to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
-    FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]);
+    FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]),
+  ]);
+  rows=requestsWithDoorNumbers(rows,equipmentRows.map(row=>row.record_data));
   const grouped=new Map();
   for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
   // Tables show only approved delayed reasons; legacy free-text values are not displayed.

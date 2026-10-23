@@ -92,6 +92,22 @@ test('multi-site imports and shared contacts require every affected location, re
  const pending=await f.edit('hr',shared1,{department:'WAITING'});delete f.profiles.pm;assert.equal((await f.decide('pm',pending.body.id)).status,403);
 });
 
+test('JSON master approval reasons preserve Hindi and multiline text without changing records before approval',async t=>{
+ const f=await fixture(t),reason='नाम और विभाग की जानकारी ठीक करनी है।\nHR द्वारा जाँचा गया।';
+ const record={name:'UNICODE TEST',empId:'UNICODE1',site:'Majri OC',category:'A',status:'ACTIVE'};
+ const addition=await f.call('hr',`masters/${encodeURIComponent(M.employee)}`,'POST',{records:[record],reason},'');
+ assert.equal(addition.status,202);assert.equal((await f.db.query('SELECT * FROM master_records WHERE master_name=$1',[M.employee])).rows.length,0);
+ assert.equal((await f.call('hr','cdir/change-requests')).body.records[0].reason,reason);
+ assert.equal((await f.decide('pm',addition.body.id)).body.status,'Approved');
+ const id=(await f.db.query('SELECT id FROM master_records WHERE master_name=$1',[M.employee])).rows[0].id,before=await f.record(id);
+ const update=await f.call('hr',`masters/${encodeURIComponent(M.employee)}/${id}`,'PUT',{before,record:{...before,department:'HUMAN RESOURCES'},reason},'');
+ assert.equal(update.status,202);assert.equal((await f.record(id)).department,before.department);
+ assert.equal((await f.call('hr','cdir/change-requests')).body.records[0].reason,reason);
+ assert.equal((await f.decide('pm',update.body.id)).body.status,'Approved');assert.equal((await f.record(id)).department,'HUMAN RESOURCES');
+ assert.equal((await f.call('hr',`masters/${encodeURIComponent(M.employee)}`,'POST',{records:[{...record,empId:'EMPTY'}],reason:''})).status,400,'an empty JSON reason cannot fall back to an unrelated audit header');
+ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');assert.ok(ui.includes('records:batches[index],reason:changeReason.trim()'));assert.ok(!ui.includes('"X-Audit-Reason":changeReason.trim()'));
+});
+
 test('approval policy covers server bypasses, normal and mobile UI, deployment roster replacement and independent site scope',()=>{
  assert.equal(cdirSubmissionAllowed({assignedRole:'HR User'},{site:'Nagpur'},'Jayant OC'),true);
  assert.equal(cdirSubmissionAllowed({assignedRole:'HR User'},{site:'Majri OC'},'Jayant OC'),false);

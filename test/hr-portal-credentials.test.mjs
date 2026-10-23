@@ -1,3 +1,4 @@
+import {initializeSingleLogin} from '../single-login.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -36,8 +37,9 @@ test('HR access assignments remain administrator-only',()=>{
 test('embedded PostgreSQL: existing password, opt-in, revocation, initial password policy, logout, expiry and throttling',async()=>{
  const db=new PGlite();
  try{
-  await db.exec("CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT DEFAULT gen_random_uuid()::text);");
+  await db.exec("CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text);");
   const pool={query:(sql,params)=>sql.split(';').filter(x=>x.trim()).length>1?db.exec(sql):db.query(sql,params)};
+  await initializeSingleLogin(pool);
   const routes=new Map(),preflights=new Map();
   const identity=installPulseApplicationIdentity({post:(url,handler)=>routes.set(url,handler),options:(url,handler)=>preflights.set(url,handler)},{pool,sessionStore:createSessionStore(pool)});await identity.initialize();
   let user={...base,hrLogin:'legacy.alias',hrPasswordHash:hashPassword('legacy-hr-password')};

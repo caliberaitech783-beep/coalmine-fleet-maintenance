@@ -21,12 +21,14 @@ test('real PostgreSQL: all roles remain signed in after inactivity while absolut
     await client.query('BEGIN');
     await client.query(`CREATE TEMP TABLE auth_sessions (
       token TEXT PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,
-      created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT DEFAULT gen_random_uuid()::text,
       ip_address TEXT,device_id TEXT,user_agent TEXT
     ) ON COMMIT DROP`);
+    await client.query('CREATE TEMP TABLE user_current_sessions(login TEXT PRIMARY KEY,session_id TEXT UNIQUE) ON COMMIT DROP');
     const store=createSessionStore(client);
     for(const [token,role] of [['mobile','normal'],['desktop','super']]){
-      await store.create({token,role,name:token});
+      await store.create({token,role,name:token,login:token});
+      await client.query('INSERT INTO user_current_sessions SELECT lower(trim(login_name)),session_public_id FROM auth_sessions WHERE token=$1',[token]);
       await client.query("UPDATE auth_sessions SET last_seen_at=NOW()-INTERVAL '2 days' WHERE token=$1",[token]);
       assert.equal((await store.get(token)).role,role);
     }
