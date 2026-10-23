@@ -10,7 +10,7 @@ import {encryptStream} from '../backup-crypto.mjs';
 const group=process.env.AZURE_RESOURCE_GROUP||'coalmine-fleet-maintenance-rg',app=process.env.AZURE_WEBAPP_NAME||'coalmine-fleet-azure-783';
 const output=process.env.RUNNER_TEMP||'.',base='https://pulse.cmll.in';
 const errors=[];
-function az(args,optional=false){try{const value=execFileSync('az',[...args,'--only-show-errors','-o','json'],{encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','pipe']});return value.trim()?JSON.parse(value):null;}catch{if(!optional)throw Error('Azure recovery collection failed at '+args.slice(0,3).join(' '));errors.push(args.slice(0,3).join(' '));return null;}}
+function az(args,optional=false){try{const value=execFileSync('az',[...args,'--only-show-errors','-o','json'],{encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','pipe']});return value.trim()?JSON.parse(value):null;}catch(error){const code=/\(([A-Za-z][A-Za-z0-9]+)\)/.exec(String(error.stderr||''))?.[1]||error.code||error.name;const failure=args.slice(0,3).join(' ')+': '+code;if(!optional)throw Error('Azure recovery collection failed at '+failure);errors.push(failure);return null;}}
 const settings=az(['webapp','config','appsettings','list','-g',group,'-n',app]);
 let serviceKey=settings.find(item=>item.name==='FULL_BACKUP_SERVICE_KEY')?.value;
 if(!serviceKey){
@@ -18,9 +18,29 @@ if(!serviceKey){
   try{await writeFile(file,JSON.stringify({FULL_BACKUP_SERVICE_KEY:serviceKey}),{mode:0o600});az(['webapp','config','appsettings','set','-g',group,'-n',app,'--slot-settings','@'+file]);}
   finally{await rm(file,{force:true});}
 }
-const resources=az(['resource','list','-g',group]);
-const snapshot={format:'Caliber Pulse Azure recovery inventory',version:1,capturedAt:new Date().toISOString(),group:az(['group','show','-n',group]),template:az(['group','export','-n',group,'--include-parameter-default-value'],true),resources:[],webapps:[],postgres:[],limitations:['External DNS/provider accounts and Key Vault secret values are not exported.','Private certificate keys, external object storage data, pre-existing media/session archives and database roles require separately tested protection.','ARM export may require template repair and re-entering secure parameters.'],errors};
+let resources=az(['resource','list','-g',group],true);
+if(!resources){
+  const account=az(['account','show']);
+  resources=az(['rest','--method','get','--url',`https://management.azure.com/subscriptions/${account.id}/resourceGroups/${group}/resources?api-version=2021-04-01`],true)?.value;
+}
+if(!resources){
+  const apps=az(['webapp','list','-g',group],true)||[];
+  if(!apps.some(item=>item.name===app)){const known=az(['webapp','show','-g',group,'-n',app],true);if(known)apps.push(known);}
+  const servers=az(['postgres','flexible-server','list','-g',group],true)||[];
+  const profiles=az(['afd','profile','list','-g',group],true)||[];
+  resources=[...apps,...servers,...profiles];
+}
+const snapshot={format:'Caliber Pulse Azure recovery inventory',version:1,capturedAt:new Date().toISOString(),group:az(['group','show','-n',group],true),template:az(['group','export','-n',group,'--include-parameter-default-value'],true),resources:[],webapps:[],postgres:[],limitations:['External DNS/provider accounts and Key Vault secret values are not exported.','Private certificate keys, external object storage data, pre-existing media/session archives and database roles require separately tested protection.','ARM export may require template repair and re-entering secure parameters.'],errors};
 for(const resource of resources)snapshot.resources.push(az(['resource','show','--ids',resource.id],true)||{id:resource.id,type:resource.type,unavailable:true});
+snapshot.frontDoor=[];snapshot.dns=[];
+for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.cdn/profiles')){
+  const profile=resource.name,scope=['-g',group,'--profile-name',profile];
+  const endpoints=az(['afd','endpoint','list',...scope],true)||[];
+  const originGroups=az(['afd','origin-group','list',...scope],true)||[];
+  const ruleSets=az(['afd','rule-set','list',...scope],true)||[];
+  snapshot.frontDoor.push({profile,endpoints:endpoints.map(endpoint=>({...endpoint,routes:az(['afd','route','list',...scope,'--endpoint-name',endpoint.name],true)})),originGroups:originGroups.map(originGroup=>({...originGroup,origins:az(['afd','origin','list',...scope,'--origin-group-name',originGroup.name],true)})),ruleSets:ruleSets.map(ruleSet=>({...ruleSet,rules:az(['afd','rule','list',...scope,'--rule-set-name',ruleSet.name],true)})),customDomains:az(['afd','custom-domain','list',...scope],true),securityPolicies:az(['afd','security-policy','list',...scope],true)});
+}
+for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.network/dnszones'))snapshot.dns.push({zone:resource.name,records:az(['network','dns','record-set','list','-g',group,'-z',resource.name],true)});
 for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.web/sites')){
   const name=resource.name;const slots=az(['webapp','deployment','slot','list','-g',group,'-n',name],true)||[];
   for(const slot of [null,...slots.map(s=>s.name.split('/').pop())]){
@@ -29,11 +49,11 @@ for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.web/
   }
 }
 for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.dbforpostgresql/flexibleservers')){
-  snapshot.postgres.push({server:az(['postgres','flexible-server','show','--ids',resource.id]),parameters:az(['postgres','flexible-server','parameter','list','-g',group,'-s',resource.name],true),firewall:az(['postgres','flexible-server','firewall-rule','list','-g',group,'-n',resource.name],true),databases:az(['postgres','flexible-server','db','list','-g',group,'-s',resource.name],true)});
+  snapshot.postgres.push({server:az(['postgres','flexible-server','show','--ids',resource.id],true)||resource,parameters:az(['postgres','flexible-server','parameter','list','-g',group,'-s',resource.name],true),firewall:az(['postgres','flexible-server','firewall-rule','list','-g',group,'-n',resource.name],true),databases:az(['postgres','flexible-server','db','list','-g',group,'-s',resource.name],true)});
 }
 const pitr=snapshot.postgres.map(({server})=>({name:server.name,retentionDays:server.backup?.backupRetentionDays,earliestRestoreDate:server.backup?.earliestRestoreDate,geoRedundantBackup:server.backup?.geoRedundantBackup,state:server.state}));
 const pitrVerified=pitr.length>0&&pitr.every(p=>p.retentionDays>=7&&p.earliestRestoreDate);
-const summary={capturedAt:snapshot.capturedAt,complete:false,pitrVerified,resources:resources.length,pitr,summary:`${resources.length} Azure resources; ${snapshot.webapps.length} application/slot configurations; ${pitr.length} PostgreSQL servers. ${errors.length} collection gaps. External dependencies require review.`};
+const summary={capturedAt:snapshot.capturedAt,complete:false,pitrVerified,resources:resources.length,pitr,errors,summary:`${resources.length} Azure resources; ${snapshot.webapps.length} application/slot configurations; ${pitr.length} PostgreSQL servers. ${errors.length} collection gaps. External dependencies require review.`};
 await mkdir(path.join(output,'full-recovery'),{recursive:true});
 const encrypted=path.join(output,'full-recovery','azure-hosting.enc');
 await encryptStream(Readable.from([JSON.stringify(snapshot)]),encrypted,await readFile('recovery-public.pem','utf8'));
