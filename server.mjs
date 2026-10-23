@@ -58,7 +58,7 @@ import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
-import {requestsWithDoorNumbers} from './equipment-door.mjs';
+import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -145,7 +145,7 @@ import {BREAKDOWN_SUB_CATEGORY_DEFAULTS} from './breakdown-sub-category.mjs';
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {archiveSchemaSql,previewRequestArchive,archiveRequests,restoreRequestArchive} from './request-archive.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
-import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
+import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transfersWithDoorNumbers,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
 import {requestShiftLabel} from './request-shift.mjs';
@@ -5086,7 +5086,7 @@ app.get('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
       return reportScopeIncludesSite(context.scope,site);
     });
     res.set('Cache-Control','private, no-store');
-    res.json({records,equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
+    res.json({records:transfersWithDoorNumbers(records,equipmentRows.map(row=>({...row.record_data,id:row.id}))),equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
       canVerifyDestination:context.misUser||context.misManager,canAcceptDestination:context.pmManager}});
   }catch(error){next(error)}
 });
@@ -5110,7 +5110,7 @@ app.post('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
     const record=normalizeOperationalSiteFields({
       transferNo,transferDate:String(req.body?.transferDate||'').trim(),source,
       destination:String(req.body?.destination||'').trim(),equipmentMasterId:equipmentRow.id,
-      equipment:equipment.door||equipment.reg||equipment.equipmentName||equipment.itemName||'',door:equipment.door||'',reg:equipment.reg||'',
+      equipment:equipment.door||equipment.reg||equipment.equipmentName||equipment.itemName||'',door:equipmentDoorNumber(equipment),reg:equipment.reg||'',
       modelNo:equipment.modelNo||equipment.model||'',manufacturerSerialNo:equipment.manufacturerSerialNo||'',lastMaintenanceDate:equipment.lastMaintenanceDate||'',
       chassisNo:equipment.chassisNo||'',driver:String(req.body?.driver||'').trim().slice(0,160),
       dieselQty:String(req.body?.dieselQty||'').trim().slice(0,80),kmr:String(req.body?.kmr||'').trim().slice(0,80),hmr:String(req.body?.hmr||'').trim().slice(0,80),
