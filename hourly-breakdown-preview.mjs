@@ -3,6 +3,7 @@ import {formatDisplayDateTime} from './date-time-format.mjs';
 import {requestMeterReadings} from './request-equipment.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {requestsWithDoorNumbers} from './equipment-door.mjs';
+import {requestsVisibleGlobally} from './mis-request-visibility.mjs';
 
 export const HOURLY_PREVIEW_COLUMNS = ['Section','Door no. with Registered no.','Total BD Time','Type of BD','BD Details','Diff KMR','Diff. HMR','Start Time','End Time','Equipment Category','Daily Update','Idle Since / Duration / Reason'];
 const at = value => parseReportTimestamp(value)?.getTime();
@@ -21,7 +22,7 @@ const difference = (row, type) => {
 export function buildHourlyBreakdownPreview(requests, cutoff) {
   const end = new Date(cutoff).getTime(), start = end-2*3600000, previous = start-2*3600000;
   if (!Number.isFinite(end)) throw new Error('A valid report cutoff is required.');
-  const source = requests.filter(row => canonicalSiteName(row.site) === canonicalSiteName('Sasti OC') && !row.archivedAt && at(row.start) <= end);
+  const source = requestsVisibleGlobally(requests).filter(row => canonicalSiteName(row.site) === canonicalSiteName('Sasti OC') && at(row.start) <= end);
   const inWindow = (value, from=start, to=end) => value >= from && value < to;
   const openAt = (row, time) => at(row.start) < time && (!endOfBd(row) || endOfBd(row) >= time);
   const idleAt = (row, time) => {
@@ -61,7 +62,7 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
       const cutoff=new Date(clock.cutoff), previous=new Date(cutoff.getTime()-4*3600000);
       // Read only the requested site's pending cases and recent transitions.
       // Omit media and full-history joins used by the global request feed.
-      const {rows}=await client.query(`SELECT reference AS ref,site,status,equipment_group AS "equipmentGroup",equipment_name AS equipment,
+      const {rows}=await client.query(`SELECT reference AS ref,site,status,owner_name AS owner,created_at AS "createdAt",equipment_group AS "equipmentGroup",equipment_name AS equipment,
         door_number AS door,registration_number AS reg,chassis_number AS chassis,category,complaint,started_at AS start,
         closed_at AS "closedAt",vehicle_idle AS "vehicleIdle",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",idle_reason AS "idleReason",
         first_trip_at AS "firstTripAt",opening_meter_readings AS "openingMeterReadings",closing_meter_readings AS "closingMeterReadings",

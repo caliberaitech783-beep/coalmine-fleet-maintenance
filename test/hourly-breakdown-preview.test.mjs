@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildHourlyBreakdownPreview,registerHourlyBreakdownPreview,HOURLY_PREVIEW_COLUMNS} from '../hourly-breakdown-preview.mjs';
 
+test('preview follows existing global retirement and owner visibility rules',()=>{
+ const base={site:'Sasti OC',start:'2026-09-01 10:00:00'};
+ const result=buildHourlyBreakdownPreview([
+  {...base,ref:'REQ-1788930790041'},
+  {...base,ref:'hidden',owner:'Stupal Moon',createdAt:'2026-09-09 10:00:00'},
+  {...base,ref:'current',owner:'Stupal Moon',createdAt:'2026-09-10 10:00:00'},
+ ],'2026-10-23T12:00:00+05:30');
+ assert.equal(result.counts['Opening BD'],1);
+ assert.equal(result.rows.length,1);
+});
+
 test('site preview separates period activity, continuing BD, first trip and idle without OEM columns',()=>{
  const cutoff='2026-10-23T12:00:00+05:30';
  const base={site:'Sasti OC',equipmentGroup:'Tipper',category:'Electrical'};
