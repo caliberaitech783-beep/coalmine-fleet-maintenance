@@ -29,6 +29,8 @@ export async function decryptFile(input,output,privateKey){
   if(metadata.format!=='Caliber Pulse encrypted recovery'||metadata.version!==1)throw Error('Unsupported recovery archive');
   const key=privateDecrypt({key:privateKey,oaepHash:'sha256',padding:constants.RSA_PKCS1_OAEP_PADDING},Buffer.from(metadata.wrappedKey,'base64'));
   const cipher=createDecipheriv('aes-256-gcm',key,Buffer.from(metadata.iv,'base64'));cipher.setAAD(header);cipher.setAuthTag(tag);
-  try{await pipeline(createReadStream(input,{start:header.length,end:size-17}),cipher,createWriteStream(output,{flags:'wx',mode:0o600}));}
+  // Reserve output before the cleanup scope, so EEXIST never deletes a user's file.
+  await writeFile(output,Buffer.alloc(0),{flag:'wx',mode:0o600});
+  try{await pipeline(createReadStream(input,{start:header.length,end:size-17}),cipher,createWriteStream(output,{flags:'r+',mode:0o600}));}
   catch(error){await import('node:fs/promises').then(fs=>fs.rm(output,{force:true}));throw error;}
 }

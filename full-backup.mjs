@@ -17,7 +17,7 @@ export function hostingCoverage(snapshot,now=Date.now()){
   return {status:snapshot.complete?'Included':'Partial',detail:snapshot.summary||'Review Azure inventory coverage.'};
 }
 
-export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requireAdministrator,isReady,scheduledJobsEnabled,commit,env=process.env}){
+export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requireAdministrator,isReady,scheduledJobsEnabled,commit,env=process.env,record=async()=>{}}){
   const folder=path.join(storageRoot,'full-recovery'),snapshotFile=path.join(folder,'azure-hosting.enc'),snapshotInfo=path.join(folder,'azure-status.json');
   let initializing;
   async function init(){
@@ -90,11 +90,13 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
       manifest.status=status;addJson('manifest.json',manifest);zip.end();await encrypted;
       await fs.rename(target+'.partial',target);const size=(await fs.stat(target)).size,checksum=await fileHash(target);
       await pool.query("UPDATE full_backup_runs SET status=$1,file_name=$2,size_bytes=$3,checksum=$4,coverage=$5::jsonb,completed_at=NOW() WHERE id=$6",[status,name,size,checksum,JSON.stringify(coverage),id]);
+      await record({module:'Full Backup',action:'Finish encrypted full backup',targetType:'Recovery archive',targetReference:name,outcome:'Success',reason:`${status}; ${size} bytes; SHA-256 ${checksum}`});
       await prune();
     }catch(error){
       zip.outputStream.destroy();if(encrypted)await encrypted.catch(()=>{});
       await fs.rm(target+'.partial',{force:true}).catch(()=>{});await fs.rm(target,{force:true}).catch(()=>{});
       await pool.query("UPDATE full_backup_runs SET status='Failed',error_message='Full backup failed. Check protected server diagnostics and retry.',completed_at=NOW() WHERE id=$1",[id]);
+      await record({module:'Full Backup',action:'Finish encrypted full backup',targetType:'Recovery archive',targetReference:id,outcome:'Failed',reason:'Recovery archive creation failed',errorCode:error.code||error.name});
       console.error('Full backup failed',id,error.code||error.name);
     }finally{await fs.rm(temporary,{recursive:true,force:true});}
   }

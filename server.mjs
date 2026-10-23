@@ -3063,7 +3063,7 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
   }catch(error){next(error)}
 });
 
-registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha});
+registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha,record:appendScheduledBackupAudit});
 
 app.get('/api/backups',requireSuper,requireAdministrator,async(_req,res,next)=>{
   try{

@@ -18,7 +18,8 @@ test('encrypted recovery round trip, wrong key and tampering reject without part
     const data=Buffer.from('confidential settings\n'.repeat(100000));
     await encryptStream(Readable.from([data]),archive,keys.publicKey);
     const bytes=await readFile(archive);assert.equal(bytes.includes(Buffer.from('confidential settings')),false);
-    await decryptFile(archive,out,keys.privateKey);assert.deepEqual(await readFile(out),data);await rm(out);
+    await decryptFile(archive,out,keys.privateKey);assert.deepEqual(await readFile(out),data);
+    await assert.rejects(decryptFile(archive,out,keys.privateKey));assert.deepEqual(await readFile(out),data);await rm(out);
     await assert.rejects(decryptFile(archive,out,other.privateKey));await assert.rejects(access(out));
     bytes[bytes.length-20]^=1;await writeFile(archive,bytes);
     await assert.rejects(decryptFile(archive,out,keys.privateKey));await assert.rejects(access(out));
