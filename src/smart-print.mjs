@@ -1,5 +1,6 @@
 import {withSerialColumn} from '../serial-column.mjs';
 import {DAILY_UPDATES_DETAIL_COLUMNS,prepareDailyUpdatesLayout} from './xlsx-daily-updates.mjs';
+import {isBdBalanceReport,bdBalancePdfColumns} from './bd-balance-pdf-updates.mjs';
 
 export function printColumnOptions(columns=[]) {
   const seen=new Map();
@@ -178,8 +179,9 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
     return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?normalizePrintColumnIds(options,layout.columns):selected)};
   };
-  const printableReport=()=>{
+  const printableReport=(latestBdBalance=false)=>{
     const {reportTitle,chosen}=currentReport();
+    if(latestBdBalance&&isBdBalanceReport(title))return {reportTitle,chosen:bdBalancePdfColumns(chosen),appendices:[]};
     const layout=prepareDailyUpdatesLayout({title:reportTitle,sheet:{name:'Report',title:reportTitle,columns:chosen,rows},formatCell});
     const appendices=layout.detailRows.length?[{
       title:`${reportTitle} · Daily Updates`,
@@ -254,7 +256,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   };
   let exporting=false;
   const runExport=format=>{
-    const report=format==='xlsx'?{...currentReport(),appendices:[]} : printableReport();
+    const report=format==='xlsx'?{...currentReport(),appendices:[]} : printableReport(format==='pdf');
     const {reportTitle,chosen,appendices}=report;if(!chosen.length||exporting)return;
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
@@ -291,7 +293,8 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       preview.replaceChildren(make('h3','Print preview'),make('p','The finished pages are shown after you choose the paper and printer. Nothing prints until you click Print there.'));
       return;
     }
-    const {chosen,appendices}=printableReport();if(printButton)printButton.disabled=!chosen.length;
+    const latestBdPdf=exportOnly&&exportFormat==='pdf'&&isBdBalanceReport(title);
+    const {chosen,appendices}=printableReport(latestBdPdf);if(printButton)printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
     if(printSavedButton)printSavedButton.disabled=!savedSelected;
     deleteSavedButton.disabled=!savedSelected||Boolean(storageError);
@@ -308,10 +311,10 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       ...options.filter(jobReferenceOption),
       ...options.filter(option=>!jobReferenceOption(option)),
     ];
-    const previewColumns=compactSmartPrintColumns(previewOptions.map(option=>option.column));
+    const previewColumns=(latestBdPdf?bdBalancePdfColumns:compactSmartPrintColumns)(previewOptions.map(option=>option.column));
     const serial=withSerialColumn(previewColumns.map(column=>({key:column.key,label:String(column.label||'')})),previewRows.map(row=>previewColumns.map(column=>formatCell(column.value?.(row)))));
     const sheet=make('div',undefined,'smart-print-sheet');
-    sheet.append(make('h4',currentReport().reportTitle),make('p',`${rows.length.toLocaleString('en-IN')} record${rows.length===1?'':'s'} · complete update history prints in the Daily Updates section and exports to its Excel sheet`));
+    sheet.append(make('h4',currentReport().reportTitle),make('p',`${rows.length.toLocaleString('en-IN')} record${rows.length===1?'':'s'} · ${latestBdPdf?'only the latest daily update and delayed reason appear in each record; no separate update-history section':'complete update history prints in the Daily Updates section and exports to its Excel sheet'}`));
     const table=make('table'),thead=make('thead'),tr=make('tr');
     const serialAlreadyPresent=serial.columns.length===previewOptions.length;
     if(!serialAlreadyPresent)tr.append(make('th',serial.columns[0]?.label||'Sr. No.'));
