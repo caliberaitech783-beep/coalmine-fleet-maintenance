@@ -58,3 +58,32 @@ test('switching portals preserves Pulse; repeat Pulse login alone replaces its p
  await initializeSingleLogin(pool);assert.ok(await store.get(replacement),'schema reinitialization must retain the valid Pulse login');
  }finally{await db.close()}
 });
+
+import {initializeLoginHistory} from '../user-login-history.mjs';
+test('normal history initialization installs inactive report tracking and backfills retained logins',async()=>{
+ const db=new PGlite();try{
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);
+ CREATE TABLE auth_sessions(session_public_id TEXT PRIMARY KEY,login_name TEXT,employee_name TEXT,permissions JSONB DEFAULT '{}',created_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,device_id TEXT,ip_address TEXT,user_agent TEXT);
+ CREATE TABLE user_session_activity(session_id TEXT,actor_login TEXT,started_at TIMESTAMPTZ,last_seen_at TIMESTAMPTZ,active_seconds BIGINT);
+ CREATE TABLE maintenance_requests(requester_login TEXT,created_at TIMESTAMPTZ);
+ CREATE TABLE maintenance_daily_remarks(author_login TEXT,created_at TIMESTAMPTZ);
+ CREATE TABLE production_first_trip_acceptances(production_first_trip_login TEXT,created_at TIMESTAMPTZ);
+ CREATE TABLE audit_events(actor_login TEXT,occurred_at TIMESTAMPTZ,outcome TEXT,session_id TEXT,event_type TEXT);
+ INSERT INTO auth_sessions VALUES('old',' Alice ','Alice','{}','2026-10-23T06:00Z','2026-10-23T06:00Z','','','');`);
+ const pool={query:(sql,args)=>!args&&sql.includes(';')?db.exec(sql):db.query(sql,args)};
+ await initializeLoginHistory(pool);
+ assert.equal((await db.query('SELECT login FROM user_login_days')).rows[0].login,'alice');
+ assert.ok((await db.query("SELECT value FROM app_metadata WHERE key='login_days_complete_from'")).rows[0].value);
+ await db.query("INSERT INTO auth_sessions VALUES('new','Bob','Bob','{}','2026-10-23T07:00Z','2026-10-23T07:00Z','','','')");
+ assert.equal((await db.query('SELECT count(*)::int AS n FROM user_login_days')).rows[0].n,2);
+ await initializeLoginHistory(pool);
+ assert.equal((await db.query('SELECT count(*)::int AS n FROM user_login_days')).rows[0].n,2);
+ await db.exec(`CREATE TABLE master_records(id BIGSERIAL,master_name TEXT,record_data JSONB);
+ INSERT INTO master_records(master_name,record_data) SELECT 'Users & employees',jsonb_build_object('login','user'||n,'passwordHash','synthetic') FROM generate_series(1,100) n;
+ INSERT INTO user_login_days SELECT 'user'||n,'2026-10-23'::date FROM generate_series(1,30) n;
+ UPDATE app_metadata SET value='2026-10-23' WHERE key='login_days_complete_from';`);
+ let handler,result;registerInactiveUsers({get:(path,...handlers)=>{handler=handlers.at(-1)}},{pool,requireSession(){},requireView(){},locationName:()=>''});
+ await handler({query:{from:'2026-10-23',to:'2026-10-23'}},{set(){},json(data){result=data}},error=>{throw error});
+ assert.equal(result.totalUsers,100);assert.equal(result.loggedInUsers,30);assert.equal(result.inactiveUsers,70);assert.equal(result.users.length,70);
+ }finally{await db.close()}
+});
