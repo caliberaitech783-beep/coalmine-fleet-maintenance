@@ -24,7 +24,7 @@ export function telegramNotificationText({purpose='',reference='',message='',sit
   const firstTrip=/^First trip entry pending/.test(message),running=/marked Running BD/.test(message),approved=/was approved on road/.test(message);
   let type=firstTrip?'firstTrip':running?'running':approved?'approved':purpose;
   const eventTime=type==='requestOpened'?r.start||r.startedAtRaw:type==='requestVerified'?r.verifiedAt||r.verifiedAtRaw:type==='dailyUpdate'?context.updatedAt:type==='requestIdle'||type==='idleReminder'?r.idealRequestedAt||r.idleAtRaw:type==='offRoadEscalation'?r.start||r.startedAtRaw:type==='running'?r.runningBdAt||r.runningBdAtRaw:type==='approved'?r.idealApprovedAt:type==='ticketCreated'?ticket.createdAt:type==='ticketResolved'?ticket.resolvedAt:r.closedAt||r.closedAtRaw;
-  const heading=[`SITE: ${siteName}`,...telegramShiftLines(siteName,eventTime,shifts)];
+  const heading=[`SITE: ${siteName}`];
   const door=`Door: ${clean(r.door)}`,requestLine=`Request ${ref}`;
   let body;
   switch(type){
@@ -41,7 +41,7 @@ export function telegramNotificationText({purpose='',reference='',message='',sit
     default:return [`SITE: ${siteName}`,message].join('\n');
   }
   const url=context.url||(['running','offRoadEscalation','idleReminder'].includes(type)?`https://pulse.cmll.in/?request=${encodeURIComponent(r.ref||reference)}`:'');
-  return [...heading,...body,...(url?[`Open request: ${url}`]:[])].join('\n');
+  return [...heading,body[0],...telegramShiftLines(siteName,eventTime,shifts),...body.slice(1),...(url?[`Open request: ${url}`]:[])].join('\n');
 }
 
 export function telegramReportText({kind='Fleet',window,reports=[],shifts=[]}){

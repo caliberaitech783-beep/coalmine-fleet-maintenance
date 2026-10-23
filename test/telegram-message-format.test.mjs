@@ -6,11 +6,11 @@ const shifts=[{site:'Gauri Pauni OC (2nd)',shiftName:'Site custom day',startTime
 const request={ref:'REQ-TEST',site:shifts[0].site,start:'2026-10-21 15:10:14',closedAt:'2026-10-22 18:10:14',door:'LDM7 - 1157',category:'PREVENTIVE',maintenanceWork:'New cylinder fitted',closedBy:'Maintenance user',owner:'Production user'};
 test('opening uses a leading red dot and saved site shift, with no duplicated notification title',()=>{
  const text=telegramNotificationText({purpose:'requestOpened',request,shifts});
- assert.match(text,/\n🔴 P to M\n/);assert.match(text,/Shift: Site custom day/);assert.match(text,/01:00:00 PM to 09:00:00 PM IST/);assert.match(text,/Opened by: Production user/);assert.doesNotMatch(text,/Caliber Pulse notification|Chassis:/);
+ assert.deepEqual(text.split('\n').slice(0,3),[`SITE: ${request.site}`,'🔴 P to M','Shift: Site custom day']);assert.match(text,/01:00:00 PM to 09:00:00 PM IST/);assert.match(text,/Opened by: Production user/);assert.doesNotMatch(text,/Caliber Pulse notification|Chassis:/);
 });
 test('closure uses leading green dot, its own event shift and elapsed opening-to-closing duration',()=>{
  const text=telegramNotificationText({purpose:'requestClosed',request,shifts});
- assert.match(text,/\n🟢 M to P\n/);assert.match(text,/22-10-26 \(06:10:14 PM\)/);assert.match(text,/BD duration: 1 day 3 hrs/);assert.match(text,/Door: LDM7 - 1157/);assert.match(text,/Maintenance work: New cylinder fitted/);assert.ok(text.endsWith('Request REQ-TEST'));
+ assert.deepEqual(text.split('\n').slice(0,3),[`SITE: ${request.site}`,'🟢 M to P','Shift: Site custom day']);assert.match(text,/22-10-26 \(06:10:14 PM\)/);assert.match(text,/BD duration: 1 day 3 hrs/);assert.match(text,/Door: LDM7 - 1157/);assert.match(text,/Maintenance work: New cylinder fitted/);assert.ok(text.endsWith('Request REQ-TEST'));
  const night=telegramNotificationText({purpose:'requestClosed',request:{...request,closedAt:'2026-10-22 23:00:00'},shifts});assert.match(night,/Shift: Night/);
 });
 test('shift boundaries, effective dates, inactive records and missing configuration are respected',()=>{
