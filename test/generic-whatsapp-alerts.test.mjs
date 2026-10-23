@@ -1,5 +1,6 @@
 import * as siteAccess from '../region-scope.mjs';
 import {telegramSiteName} from '../telegram-site-groups.mjs';
+import {telegramNotificationText} from '../telegram-message-format.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -50,6 +51,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
   const templates=[],texts=[],templateAttempts=[],history=[],inApp=[],queries=[],errors=[],telegram=[],telegramUsers=[];
   const client={query:async(sql,args=[])=>{
     queries.push({sql,args:structuredClone(args)});
+    if(sql.includes("master_name='Shift Master'")||sql.includes('FROM maintenance_requests'))return {rows:[]};
     if(sql.includes("master_name='Users & employees'")){
       const selected=sql.includes('ANY($1::text[])')?new Set(args[0]):null;
       if(selected)beforeRecipientLookup?.(users);
@@ -60,7 +62,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
     else assert.fail(`Unexpected SQL: ${sql}`);
     return {rows:[],rowCount:1};
   }};
-  const bindings={pool:client,storedWhatsAppReportSettings:async()=>settings,telegramSiteName,
+  const bindings={pool:client,storedWhatsAppReportSettings:async()=>settings,telegramSiteName,telegramNotificationText,
     setImmediate,deliverToTelegramSite:async()=>{},
     whatsappPurposeEnabled:(value,purpose)=>whatsappPurposeEnabled(value,purpose,now),
     ...siteAccess,resolveMobileAccess,assignedUserSiteName,canonicalSiteName,isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,
@@ -73,7 +75,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
   };
   // Execute the real server selection, delivery and best-effort functions
   // together; only I/O and the clock are replaced.
-  const snippet=sourceBetween('async function sendWhatsAppNotifications(','let consolidatedReportRunning=false;');
+  const snippet=sourceBetween('async function telegramAlertShifts(','let consolidatedReportRunning=false;');
   const api=new Function(...Object.keys(bindings),`${snippet};return {sendWhatsAppNotifications,genericWhatsAppAlertLogins,addTicketNotifications,sendGenericWhatsAppAlertBestEffort,whatsappDeliveries};`)(...Object.values(bindings));
   // WhatsApp delivery is handed to the event loop so a click never waits for
   // Meta; tests that assert on delivery settle it first.
@@ -227,7 +229,7 @@ for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
       if(pause==='quietHours')api.settings.quietHours.enabled=true;
       const result=await api.sendWhatsAppNotifications(api.client,['creator','super'],'REF/1','Message',{templateKey:purpose,parameters:[]});
       assert.deepEqual(result,[{login:'creator',status:'Skipped - paused by Report settings'},{login:'super',status:'Skipped - paused by Report settings'}]);
-      assert.ok(api.queries.every(({sql})=>sql.includes("master_name='Users & employees'")),'a pause only reads recipients; nothing is sent or logged');
+      assert.ok(api.queries.every(({sql})=>sql.includes("master_name='Users & employees'")||sql.includes("master_name='Shift Master'")),'a pause only reads recipients and Telegram shift labels; no WhatsApp write occurs');
       assert.equal(api.templates.length+api.texts.length+api.history.length,0);
       assert.deepEqual(api.telegramUsers.flatMap(options=>options.logins),['creator'],'while WhatsApp is paused Telegram still follows the site and role rules, so leadership is not added');
       if(purpose==='dailyUpdate'){
@@ -285,7 +287,7 @@ test('workflow routing bypasses generic expansion and rechecks the saved event r
   await api.settleWhatsApp();
   assert.deepEqual(api.sentLogins(),['maintenance']);
   assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager']);
-  const lookups=api.queries.filter(({sql})=>sql.includes('FROM master_records'));
+  const lookups=api.queries.filter(({sql})=>sql.includes("master_name='Users & employees'"));
   assert.equal(lookups.length,1);
   assert.ok(lookups[0].sql.includes('ANY($1::text[])'));
 });

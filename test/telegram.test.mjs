@@ -102,7 +102,7 @@ test("Server blocks request alerts in the admin group and deduplicates personal 
 
 test("WhatsApp setup page offers a Telegram test button", () => {
   assert.ok(source.includes("Telegram group alerts"));
-  assert.ok(source.includes('fetch("/api/telegram/test", {method:"POST"'));
+  assert.ok(source.includes('fetch(templates ? "/api/telegram/test-templates" : "/api/telegram/test", {method:"POST"'));
   assert.ok(source.includes("Send Telegram test"));
 });
 
@@ -157,8 +157,8 @@ test("Server links accounts through one-time tokens and a secret-checked webhook
 
 test("Personal Telegram copies follow WhatsApp recipients and hierarchy reports", () => {
   assert.ok(server.includes("mirrorToTelegramUsers({logins:eligibleLogins,message:telegramText"));
-  assert.ok(server.includes("const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedRequestReport'):false;"));
-  assert.ok(server.includes("const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedTicketReport'):false;"));
+  assert.ok(server.includes("sendReportToTelegram(telegramChat,telegramReportText({window,reports:siteReports,shifts:sourceData.shiftRecords}),'consolidatedRequestReport')"));
+  assert.ok(server.includes("sendReportToTelegram(telegramChat,telegramReportText({kind:'CRM',window,reports:siteReports,shifts:await telegramAlertShifts(pool)}),'consolidatedTicketReport')"));
   assert.ok(server.includes("const telegramChat=await telegramChatForPhone(recipientPhone).catch(()=>'');"));
   assert.ok(server.includes("ignoreSwitches:!whatsappReminder"));
   assert.ok(server.includes("Number(error.status)===403)await disconnectTelegramChat(chatId)"));

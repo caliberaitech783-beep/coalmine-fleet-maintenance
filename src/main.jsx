@@ -8918,14 +8918,14 @@ function MetaWhatsAppSetup() {
       setTelegramWorking(false);
     }
   };
-  const sendTelegramTest = async () => {
+  const sendTelegramTest = async (templates = false) => {
     setTelegramWorking(true);
     setTelegramNotice("");
     try {
-      const response = await fetch("/api/telegram/test", {method:"POST",headers:{Authorization:`Bearer ${authToken}`}});
+      const response = await fetch(templates ? "/api/telegram/test-templates" : "/api/telegram/test", {method:"POST",headers:{Authorization:`Bearer ${authToken}`}});
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Telegram test message failed.");
-      setTelegramNotice({ok:true,text:"Test message sent. Check the Telegram group."});
+      setTelegramNotice({ok:true,text:templates ? "Both template tests sent. Check your private Telegram chat." : "Test message sent. Check the Telegram group."});
     } catch (testError) {
       setTelegramNotice({ok:false,text:testError.message || "Telegram test message failed."});
     } finally {
@@ -9008,7 +9008,7 @@ function MetaWhatsAppSetup() {
         {telegram?.connected ? "Connected" : telegram?.configured === false ? "Not configured" : "Not connected"}
       </span>
       {(telegramNotice || telegram?.error) && <div className={`meta-whatsapp-feedback ${telegramNotice?.ok ? "success" : "error"}`} role={telegramNotice?.ok ? "status" : "alert"}>{telegramNotice?.text || telegram.error}</div>}
-      <footer className="telegram-actions"><button type="button" onClick={inviteTelegramAdmins} disabled={telegramWorking || !telegram?.connected}><Users />Invite all admins to the group</button><button type="button" className="primary" onClick={sendTelegramTest} disabled={telegramWorking || !telegram?.connected}>{telegramWorking ? <RefreshCw className="spin" /> : <Send />}{telegramWorking ? "Sending..." : "Send Telegram test"}</button></footer>
+      <footer className="telegram-actions"><button type="button" onClick={inviteTelegramAdmins} disabled={telegramWorking || !telegram?.connected}><Users />Invite all admins to the group</button><button type="button" onClick={()=>sendTelegramTest(true)} disabled={telegramWorking || !telegram?.connected}>Test templates to my Telegram</button><button type="button" className="primary" onClick={()=>sendTelegramTest()} disabled={telegramWorking || !telegram?.connected}>{telegramWorking ? <RefreshCw className="spin" /> : <Send />}{telegramWorking ? "Sending..." : "Send Telegram test"}</button></footer>
       {telegram?.webhook?.lastError && <div className="meta-whatsapp-feedback error" role="alert">Telegram cannot reach the app: {telegram.webhook.lastError}</div>}
       <TelegramSiteGroups token={authToken}/>
       <div className="telegram-links">

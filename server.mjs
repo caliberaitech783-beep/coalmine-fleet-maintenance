@@ -1,3 +1,4 @@
+import {telegramNotificationText,telegramReportText} from './telegram-message-format.mjs';
 import {groupCurrentUserSessions} from './single-login.mjs';
 import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
@@ -2432,7 +2433,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
     // (never a group), so a reset still works when WhatsApp is paused.
     const telegramChat=await linkedTelegramChat(user.record_data.login);
     const telegramOtp=telegramChat?await sendTelegramText({chatId:telegramChat,purpose:'passwordResetOtp',privateChat:true,
-      message:`Caliber Pulse password reset OTP: ${otp}\nIt expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})
+      message:`Caliber Pulse password reset\nOTP: ${otp}\nExpires in: ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes\nDo not share this code.`})
       .then(()=>true,error=>{console.error('Password reset OTP Telegram delivery failed:',error.message);return false}):false;
     try{
       if(!phone)throw Object.assign(new Error('Phone number missing'),{code:'NO_PHONE'});
@@ -3636,7 +3637,7 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
     return res.status(400).json({error:'Report type, target, recipient phone, and message are required.'});
   // The same report also goes to the recipient's Telegram, found by their phone number.
   const telegramChat=await telegramChatForPhone(recipientPhone).catch(()=>'');
-  const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,`${reportType}\n${targetName}\n\n${message}`,'manualReports'):false;
+  const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,`Report: ${reportType}\nTarget: ${targetName}\n\n${message}`,'manualReports'):false;
   try{
     const result=await sendMetaWhatsAppTemplate({
       to:recipientPhone,
@@ -3780,6 +3781,22 @@ app.post('/api/telegram/test',requireSuper,requireWhatsAppAdministrator,async(re
     const result=await sendTelegramText({chatId:(await telegramGroupSettings()).chatId,message:`Caliber Pulse test message\nTelegram alerts are connected.\nSent by ${req.session?.login||'administrator'} at ${reportDateTime(new Date())} IST`});
     res.status(201).json(result);
   }catch(error){res.status(502).json({error:error instanceof Error?error.message:'Telegram delivery failed.'})}
+});
+
+app.post('/api/telegram/test-templates',requireSuper,requireWhatsAppAdministrator,async(req,res)=>{
+  req.audit={eventType:'Integration',module:'Telegram',action:'Send Telegram template tests to myself',targetType:'Current user Telegram',changedFields:[]};
+  try{
+    const chatId=await linkedTelegramChat(req.session.login);
+    if(!/^\d+$/.test(chatId))return res.status(400).json({error:'Connect Telegram from your Pulse profile first. Tests are sent only to your own private chat.'});
+    const shifts=await telegramAlertShifts(pool);
+    const site=shifts.find(s=>s.site==='Gauri Pauni OC (2nd)')?.site||shifts[0]?.site;
+    if(!site)return res.status(400).json({error:'Add site timings in Shift Master before sending a template test.'});
+    const closedAt=new Date(),start=new Date(closedAt.getTime()-27*3600000);
+    const request={ref:'REQ-TEST-NOT-A-LIVE-REQUEST',site,start,closedAt,door:'TEST VEHICLE',category:'PREVENTIVE',owner:req.session.name||req.session.login,closedBy:req.session.name||req.session.login,maintenanceWork:'Test message only. No request was created or changed.'};
+    const results=[];
+    for(const purpose of ['requestOpened','requestClosed'])results.push(await sendTelegramText({chatId,message:`TEST ONLY\n${telegramNotificationText({purpose,reference:request.ref,request,shifts})}`}));
+    res.status(201).json({sent:true,count:results.length,message:'Both template tests sent to your private Telegram chat.'});
+  }catch(error){res.status(502).json({error:error instanceof Error?error.message:'Telegram template test failed.'})}
 });
 
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
@@ -4854,11 +4871,33 @@ function mirrorToTelegramUsers(options){
   setImmediate(()=>{deliverToTelegramUsers(options).catch((error)=>console.error('Telegram personal follow-up failed.',error?.message||error))});
 }
 
+async function telegramAlertShifts(client){
+  const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
+  return rows.map(row=>row.record_data);
+}
+async function telegramAlertMessage(client,{reference,message,purpose,site,context={}}){
+  try{
+    let request=context.request||{};
+    if(String(reference).startsWith('REQ-')){
+      const {rows}=await client.query(`SELECT reference AS ref,site,door_number AS door,category,owner_name AS owner,
+        started_at AS start,closed_at AS "closedAt",closed_by AS "closedBy",maintenance_work AS "maintenanceWork",
+        running_bd_at AS "runningBdAt",verified_at AS "verifiedAt",verified_by AS "verifiedBy",first_trip_done AS "firstTripDone",
+        idle_reason AS "idleReason",ideal_requested_at AS "idealRequestedAt",ideal_requested_by AS "idealRequestedBy",
+        ideal_approved_at AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy"
+        FROM maintenance_requests WHERE reference=$1 AND archived_at IS NULL`,[reference]);
+      request={...request,...rows[0]};
+    }
+    return telegramNotificationText({reference,message,purpose,site,context,request,ticket:context.ticket,shifts:await telegramAlertShifts(client)});
+  }catch(error){
+    console.error('Telegram template lookup failed:',error.message);
+    return `SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\n${message}`;
+  }
+}
 async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose='',telegramGroup=true,telegramMessage=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   const reportSettings=await storedWhatsAppReportSettings();
   const messagePurpose=purpose||workflowTemplate?.templateKey||'';
-  const telegramText=telegramMessage||`SITE: ${String(site||'Not recorded').replace(/[\r\n]/g,' ')}\nCaliber Pulse notification\n${message}`;
+  const telegramText=await telegramAlertMessage(client,{reference,message:telegramMessage||message,purpose:messagePurpose,site,context:workflowTemplate?.context||{}});
   if(telegramGroup)mirrorToTelegramGroup({reportType:'System notification',target:reference,purpose:messagePurpose,reportSettings,message:telegramText});
   if(telegramGroup&&telegramSiteName(site))setImmediate(()=>{
     deliverToTelegramSite({site,message:telegramText,purpose:messagePurpose}).catch(error=>console.error('Telegram site delivery failed.',error.message));
@@ -5423,7 +5462,7 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
             siteReports.push(siteReportMessageContext({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl,summary:`${selected.length} tickets with activity | ${scopedOpen.length} open | ${scopedClosed.length} resolved`}));
           }
           const delivery=recipientReportMessage({kind:'CRM',window,reports:siteReports});
-          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedTicketReport'):false;
+          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,telegramReportText({kind:'CRM',window,reports:siteReports,shifts:await telegramAlertShifts(pool)}),'consolidatedTicketReport'):false;
           if(!whatsappOn||!phone){
             if(!telegramSent)throw new Error(phone?'WhatsApp paused and Telegram delivery failed':'Phone number missing');
             status=reportDeliveryStatus(false,true);
@@ -5681,7 +5720,7 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
             siteReports.push(bundle.reportContext);
           }
           const delivery=recipientReportMessage({window,reports:siteReports});
-          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,delivery.message,'consolidatedRequestReport'):false;
+          const telegramSent=telegramChat?await sendReportToTelegram(telegramChat,telegramReportText({window,reports:siteReports,shifts:sourceData.shiftRecords}),'consolidatedRequestReport'):false;
           if(whatsappOn&&phone){
             try{
               const env=await metaWhatsAppRuntimeEnv();
