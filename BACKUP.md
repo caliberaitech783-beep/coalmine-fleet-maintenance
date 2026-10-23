@@ -1,5 +1,11 @@
 # Caliber Pulse backup and restore guide
 
+## Full Backup
+
+Admin > Full Backup adds an independent manual/IST scheduled encrypted recovery bundle containing the portable PostgreSQL export (including current database media), deployed application source and Git history, runtime environment, latest encrypted Azure inventory, file hashes and recovery instructions. GitHub's OIDC collector refreshes actual Azure settings, resource inventory/export and PostgreSQL PITR status daily at approximately 04:00 IST, and retains an encrypted off-site artifact for 30 days. The application full schedule defaults to 03:00 IST daily, 30-day retention, maximum 14 stored bundles; administrators can change it. Azure collection timing is maintained by the default-branch dispatcher workflow, independently of the application's schedule. Manual Azure refresh opens the collector workflow from the Full Backup page.
+
+Keep the matching private recovery key offline. Only recovery-public.pem is deployed. Archives with missing/stale components or external dependencies requiring review are Partial, not complete recovery certification. PITR remains Azure-managed and is not a downloadable backup file. See FULL_BACKUP_RECOVERY.md for the clean-environment recovery procedure and limitations. Existing Database > Import Backup accepts the inner portable database file after decryption, not the encrypted Full Backup archive.
+
 Caliber Pulse disaster recovery requires four independent backup layers. A database file alone cannot rebuild the complete service.
 
 | Recovery layer | What must be protected | Current method |

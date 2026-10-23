@@ -8,7 +8,7 @@ const topbar=readFileSync(new URL('../src/topbar.css',import.meta.url),'utf8').r
 
 test('Recovery guide is an Administration page before Audit Trail, for Admin and Super Admin only',()=>{
   // The guide sits with the backup pages it links to, and Audit Trail stays last.
-  assert.match(main,/\["Recovery guide", LifeBuoy\],\n  \["Backup", HardDrive\],/);
+  assert.match(main,/\["Recovery guide", LifeBuoy\],\n  \["Full Backup", ShieldCheck\],\n  \["Backup", HardDrive\],/);
   assert.match(main,/\["Backup Schedule", CalendarDays\],\n  \["Audit Trail", History\],\n\];/);
   assert.match(main,/"Recovery guide": "recovery"/);
   assert.match(main,/if\(name==="Recovery guide"\)return isAdministrator;/);

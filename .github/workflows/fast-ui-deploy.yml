@@ -113,6 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run build
+          node scripts/prepare-recovery-assets.mjs
           printf '%s' "$GITHUB_SHA" > DEPLOYMENT_SHA
           zip -q -r "$RUNNER_TEMP/current-package.zip" . \
             -x '.git/*' 'node_modules/.cache/*'

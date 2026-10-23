@@ -189,6 +189,7 @@ import RequestTimelineButton from "./request-timeline.jsx";
 // Keep specialist administration and remote-support code out of the startup
 // bundle. Vite emits these as separate chunks and downloads them only when a
 // signed-in user opens the corresponding feature.
+const FullBackup=createLazyFeature(()=>import("./full-backup.jsx"),undefined,{loadingLabel:"Loading full backup…"});
 const BackupAdministration=createLazyFeature(()=>import("./backup-administration.jsx"),undefined,{loadingLabel:"Loading backup administration…"});
 const VehicleTransferWorkflow=createLazyFeature(()=>import("./vehicle-transfer-workflow.jsx"),undefined,{loadingLabel:"Loading vehicle transfers…"});
 const RequestCorrections=createLazyFeature(()=>import("./request-corrections.jsx"),undefined,{loadingLabel:"Loading request corrections…"});
@@ -208,6 +209,7 @@ const DashboardRecordBrowser=createLazyFeature(()=>import("./dashboard-record-br
 const InfoPulseContent=createLazyFeature(()=>import("./info-pulse-content.jsx"),undefined,{loadingLabel:"Loading Info Pulse…"});
 
 const navigationFeaturePreloads = new Map([
+  ["Full Backup", FullBackup],
   ["Backup", BackupAdministration],
   ["Export Backup", BackupAdministration],
   ["Import Backup", BackupAdministration],
@@ -483,6 +485,7 @@ const adminNav = [
   ["Print helper", Printer],
   ["Request corrections", Pencil],
   ["Recovery guide", LifeBuoy],
+  ["Full Backup", ShieldCheck],
   ["Backup", HardDrive],
   ["Export Backup", Download],
   ["Import Backup", Upload],
@@ -500,7 +503,7 @@ const adminDatabaseNav = [...adminNav.filter(([name]) => backupAdminPages.has(na
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
   "Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery",
-  "Backup": "backup", "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule",
+  "Full Backup": "backup", "Backup": "backup", "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule",
   "Audit Trail": "history", "Admin locks": "locks",
   "Diagnostics": "diagnostics", "Storage management": "storage", "Retention rules": "retention", "Purge data": "purge",
 };
@@ -12119,6 +12122,8 @@ function App() {
     <OemEmailDeliveryStatus session={session} />
   ) : renderedActive === "Recovery guide" ? (
     <RecoveryGuide onNavigate={selectMenu} />
+  ) : renderedActive === "Full Backup" ? (
+    <FullBackup session={session} />
   ) : renderedActive === "Diagnostics" ? (
     <DiagnosticsPage token={authToken} />
   ) : renderedActive === "Storage management" ? (

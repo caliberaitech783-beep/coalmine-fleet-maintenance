@@ -3,6 +3,9 @@
 !.env.example
 .oracle-wallet/
 backups/
+recovery-assets/
+*.private.pem
+recovery-private.pem
 dist/
 node_modules/
 

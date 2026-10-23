@@ -1,0 +1,46 @@
+name: Encrypted Azure and full recovery backup
+on:
+  workflow_dispatch:
+    inputs:
+      create_full_backup:
+        description: Create and retain a full encrypted application/database archive as well
+        type: boolean
+        default: true
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: caliber-full-recovery
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
+      AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
+      CREATE_FULL_BACKUP: ${{ github.event_name == 'workflow_dispatch' && inputs.create_full_backup && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: azure-hosting-1.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+      - name: Collect actual Azure configuration and encrypted recovery copy
+        run: node scripts/collect-azure-recovery.mjs
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: encrypted-full-recovery-${{ github.run_id }}
+          path: ${{ runner.temp }}/full-recovery/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

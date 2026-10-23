@@ -1,3 +1,4 @@
+import {registerFullBackup} from './full-backup.mjs';
 import {telegramNotificationText,telegramReportText} from './telegram-message-format.mjs';
 import {groupCurrentUserSessions} from './single-login.mjs';
 import {registerHourlyBreakdownPreview} from './hourly-breakdown-preview.mjs';
@@ -3061,6 +3062,8 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
     res.status(204).end();
   }catch(error){next(error)}
 });
+
+registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha});
 
 app.get('/api/backups',requireSuper,requireAdministrator,async(_req,res,next)=>{
   try{

@@ -97,6 +97,7 @@ jobs:
           npm ci
           npm test
           npm run build
+          node scripts/prepare-recovery-assets.mjs
           printf '%s' "$DEPLOY_SHA" > DEPLOYMENT_SHA
       - name: Build deployment package
         shell: bash
