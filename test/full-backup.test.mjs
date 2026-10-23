@@ -59,5 +59,12 @@ test('full backup packages actual PostgreSQL data, media and secrets encrypted, 
     const environment=JSON.parse(entries['environment.json']);assert.equal(environment.DATABASE_URL,'fixture-secret');assert.equal(environment.IDENTITY_HEADER,undefined);
     const {gunzipSync}=await import('node:zlib');assert.match(gunzipSync(entries['database.ndjson.gz']).toString(),/data:image\/webp;base64,fixture/);
     const manifest=JSON.parse(entries['manifest.json']);assert.equal(manifest.commit,'fixture');assert.ok(entries['RECOVERY.md']);assert.equal(manifest.coverage.gitHistory.status,'Missing');
+    for(let attempt=0;attempt<100&&await service.progress();attempt++)await new Promise(resolve=>setTimeout(resolve,10));
+    const interrupted='11111111-1111-4111-8111-111111111111';await db.query("INSERT INTO full_backup_runs(id,status,trigger_type) VALUES($1,'Running','Interrupted fixture')",[interrupted]);
+    let status;
+    const response={set(){return this;},json(value){status=value;}};
+    const handler=routes.get('get /api/full-backup-system/status').at(-1);
+    await handler({},response,error=>{throw error;});
+    assert.equal((await db.query('SELECT status FROM full_backup_runs WHERE id=$1',[interrupted])).rows[0].status,'Failed');
   }finally{await db.close();await rm(directory,{recursive:true,force:true});}
 });

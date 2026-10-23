@@ -41,7 +41,9 @@ for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.cdn/
   snapshot.frontDoor.push({profile,endpoints:endpoints.map(endpoint=>({...endpoint,routes:az(['afd','route','list',...scope,'--endpoint-name',endpoint.name],true)})),originGroups:originGroups.map(originGroup=>({...originGroup,origins:az(['afd','origin','list',...scope,'--origin-group-name',originGroup.name],true)})),ruleSets:ruleSets.map(ruleSet=>({...ruleSet,rules:az(['afd','rule','list',...scope,'--rule-set-name',ruleSet.name],true)})),customDomains:az(['afd','custom-domain','list',...scope],true),securityPolicies:az(['afd','security-policy','list',...scope],true)});
 }
 for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.network/dnszones'))snapshot.dns.push({zone:resource.name,records:az(['network','dns','record-set','list','-g',group,'-z',resource.name],true)});
-for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.web/sites')){
+// Other applications can share this resource group; their secret settings are
+// outside this Caliber Pulse recovery set.
+for(const resource of resources.filter(r=>r.type.toLowerCase()==='microsoft.web/sites'&&r.name===app)){
   const name=resource.name;const slots=az(['webapp','deployment','slot','list','-g',group,'-n',name],true)||[];
   for(const slot of [null,...slots.map(s=>s.name.split('/').pop())]){
     const scope=['-g',group,'-n',name,...(slot?['--slot',slot]:[])];
@@ -60,7 +62,16 @@ await encryptStream(Readable.from([JSON.stringify(snapshot)]),encrypted,await re
 await writeFile(path.join(output,'full-recovery','azure-status.json'),JSON.stringify(summary,null,2));
 // Matches the application's established large-body transport through Front Door.
 const headers={'Content-Type':'text/plain','x-full-backup-key':serviceKey};
-async function call(route,options={}){const response=await fetch(base+route,{...options,headers:{...headers,...options.headers},signal:AbortSignal.timeout(route.endsWith('/download')?1800000:60000)});if(!response.ok)throw Error('Backup service HTTP '+response.status);return response;}
+async function call(route,options={}){
+  for(let attempt=0;attempt<4;attempt++){
+    try{
+      const response=await fetch(base+route,{...options,headers:{...headers,...options.headers},signal:AbortSignal.timeout(route.endsWith('/download')?1800000:60000)});
+      if(response.ok)return response;
+      if(![429,502,503,504].includes(response.status)||route.endsWith('/run')||attempt===3)throw Error('Backup service HTTP '+response.status);
+    }catch(error){if(route.endsWith('/run')||attempt===3||/HTTP (?!429|502|503|504)/.test(error.message))throw error;}
+    await new Promise(resolve=>setTimeout(resolve,5000));
+  }
+}
 let uploaded=false;
 for(let i=0;i<30;i++){
   try{await call('/api/full-backup-system/snapshot',{method:'POST',body:JSON.stringify({archive:(await readFile(encrypted)).toString('base64'),summary})});uploaded=true;break;}

@@ -3,7 +3,7 @@ import {promises as fs,createReadStream} from 'node:fs';
 import {createHash,randomUUID,timingSafeEqual} from 'node:crypto';
 import {Readable} from 'node:stream';
 import yazl from 'yazl';
-import {exportDatabase} from './database-backup.mjs';
+import {exportDatabase,streamQueryRows} from './database-backup.mjs';
 import {encryptStream} from './backup-crypto.mjs';
 import {normalizeBackupSettings,scheduledBackupDue,indiaBackupSlot} from './backup-settings.mjs';
 
@@ -19,7 +19,7 @@ export function hostingCoverage(snapshot,now=Date.now()){
 
 export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requireAdministrator,isReady,scheduledJobsEnabled,commit,env=process.env,record=async()=>{}}){
   const folder=path.join(storageRoot,'full-recovery'),snapshotFile=path.join(folder,'azure-hosting.enc'),snapshotInfo=path.join(folder,'azure-status.json');
-  let initializing;
+  let initializing,activeRun=null;
   async function init(){
     if(!isReady())throw Object.assign(Error('Database is not ready'),{status:503});
     if(!initializing)initializing=(async()=>{
@@ -32,6 +32,19 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
   }
   async function settings(){const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[FULL_BACKUP_KEY]);return rows[0]?normalizeBackupSettings(rows[0].setting_value):fullDefaults();}
   async function snapshot(){return JSON.parse(await fs.readFile(snapshotInfo,'utf8').catch(()=>'null'));}
+  async function reconcileInterrupted(){
+    if(activeRun)return;
+    const client=await pool.connect();let locked=false;
+    try{
+      locked=(await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked")).rows[0]?.locked;
+      if(locked)await client.query("UPDATE full_backup_runs SET status='Failed',error_message='Backup worker interrupted. Retry the backup.',completed_at=NOW() WHERE status='Running'");
+    }finally{if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}
+  }
+  async function progress(){
+    const current=activeRun;if(!current)return null;
+    const bytes=(await fs.stat(current.file||'').catch(()=>null))?.size||0;
+    return {id:current.id,stage:current.stage,bytesWritten:bytes,updatedAt:new Date().toISOString()};
+  }
   async function publicKey(){return fs.readFile(path.join(root,'recovery-public.pem'),'utf8');}
   async function prune(){
     const config=await settings();const {rows}=await pool.query("SELECT id,file_name,completed_at FROM full_backup_runs WHERE status IN ('Completed','Partial') AND file_name<>'' ORDER BY started_at DESC");
@@ -47,11 +60,22 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
     try{
       const {rows}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");locked=rows[0]?.locked;
       if(!locked)throw Object.assign(Error('Another backup or restore is running'),{status:409});
+      await client.query("UPDATE full_backup_runs SET status='Failed',error_message='Backup worker interrupted. Retry the backup.',completed_at=NOW() WHERE status='Running'");
+      // The shared database lock proves no other backup worker owns these files.
+      const realRoot=await fs.realpath(folder);
+      for(const entry of await fs.readdir(folder,{withFileTypes:true})){
+        const candidate=path.join(folder,entry.name);
+        if(entry.isDirectory()&&!entry.isSymbolicLink()&&/^work-[a-z0-9]+$/i.test(entry.name)){
+          const resolved=await fs.realpath(candidate);
+          if(resolved.startsWith(realRoot+path.sep))await fs.rm(candidate,{recursive:true,force:true});
+        }else if(entry.isFile()&&/^full-backup-[a-f0-9-]+\.enc\.partial$/.test(entry.name))await fs.rm(candidate,{force:true});
+      }
       const inserted=await client.query("INSERT INTO full_backup_runs(id,status,trigger_type,slot,created_by) VALUES($1,'Running',$2,$3,$4) ON CONFLICT(slot) DO UPDATE SET id=EXCLUDED.id,status='Running',started_at=NOW(),completed_at=NULL,error_message='' WHERE full_backup_runs.status='Failed' RETURNING id",[id,trigger,slot,actor]);
       if(!inserted.rowCount){await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))");client.release();return {skipped:true};}
       started=true;
+      activeRun={id,stage:'Starting database export',file:''};
       // Keep the advisory lock/client owned by the background task after returning 202.
-      void build(id,key,client).finally(async()=>{await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}).catch(()=>{});
+      void build(id,key,client).finally(async()=>{activeRun=null;await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}).catch(()=>{});
       return {id,status:'Running'};
     }catch(error){if(!started){if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}throw error;}
   }
@@ -59,15 +83,19 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
     const temporary=await fs.mkdtemp(path.join(folder,'work-')),name=`full-backup-${id}.enc`,target=safeFile(name);
     const coverage={},manifest={format:'Caliber Pulse full recovery',version:1,createdAt:new Date().toISOString(),commit,node:process.version,coverage,files:{}};
     const zip=new yazl.ZipFile();let encrypted;
-    const addFile=async(file,name)=>{manifest.files[name]={sha256:await fileHash(file),bytes:(await fs.stat(file)).size};zip.addFile(file,name);};
+    const addFile=async(file,name)=>{manifest.files[name]={sha256:await fileHash(file),bytes:(await fs.stat(file)).size};zip.addFile(file,name,{compress:!(/\.(gz|zip|bundle|enc)$/i.test(name))});};
     const addJson=(name,value)=>{const data=Buffer.from(JSON.stringify(value,null,2));manifest.files[name]={sha256:createHash('sha256').update(data).digest('hex'),bytes:data.length};zip.addBuffer(data,name);};
     try{
       const database=path.join(temporary,'database.ndjson.gz');
-      const result=await exportDatabase({client,output:database});await fs.chmod(database,0o600);
+      activeRun.file=database;activeRun.stage='Exporting PostgreSQL tables';
+      // Media-heavy cursor batches must not retain hundreds of large rows in memory.
+      const result=await exportDatabase({client,output:database,streamRows:(connection,sql)=>streamQueryRows(connection,sql,{batchSize:8}),log:()=>{activeRun.stage='Exporting PostgreSQL tables';}});await fs.chmod(database,0o600);
+      activeRun.stage='Hashing database archive';
       await addFile(database,'database.ndjson.gz');manifest.tables=result.tables;
       coverage.database={status:'Included',detail:'All public tables and sequences; compatible application schema required.'};
       coverage.media={status:'Included',detail:'Current attachments stored in database tables. Previously deleted/exported media and external storage require separate retained copies.'};
       encrypted=encryptStream(zip.outputStream,target+'.partial',key);encrypted.catch(()=>{});
+      activeRun.stage='Packaging and encrypting recovery files';activeRun.file=target+'.partial';
       for(const [file,label] of [['application.bundle','gitHistory'],['application-source.zip','application']]){
         const source=path.join(root,'recovery-assets',file);
         if(await fs.stat(source).catch(()=>null)){await addFile(source,file);coverage[label]={status:'Included',detail:'Deployment recovery asset.'};}
@@ -102,8 +130,9 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
   }
   const wrap=fn=>async(req,res,next)=>{try{await init();await fn(req,res);}catch(error){next(error);}};
   app.get('/api/full-backups',requireSuper,requireAdministrator,wrap(async(_req,res)=>{
+    await reconcileInterrupted();
     const {rows}=await pool.query('SELECT id,status,trigger_type AS "triggerType",file_name AS "fileName",size_bytes AS "sizeBytes",checksum,coverage,created_by AS "createdBy",started_at AS "startedAt",completed_at AS "completedAt",error_message AS "errorMessage" FROM full_backup_runs ORDER BY started_at DESC LIMIT 100');
-    res.set('Cache-Control','no-store').json({settings:await settings(),history:rows,hosting:await snapshot(),keyConfigured:Boolean(await publicKey().catch(()=>'')),keyFingerprint:await publicKey().then(key=>createHash('sha256').update(key).digest('hex')).catch(()=>'')});
+    res.set('Cache-Control','no-store').json({settings:await settings(),history:rows,progress:await progress(),hosting:await snapshot(),keyConfigured:Boolean(await publicKey().catch(()=>'')),keyFingerprint:await publicKey().then(key=>createHash('sha256').update(key).digest('hex')).catch(()=>'')});
   }));
   app.put('/api/full-backups/settings',requireSuper,requireAdministrator,wrap(async(req,res)=>{
     const config=normalizeBackupSettings({...req.body,storageFolder:'full-recovery'});
@@ -129,9 +158,9 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
     await fs.writeFile(snapshotInfo,JSON.stringify({capturedAt:summary.capturedAt,complete:summary.complete===true,pitrVerified:summary.pitrVerified===true,summary:String(summary.summary||'').slice(0,500),resources:Number(summary.resources)||0,pitr:summary.pitr||[]} ),{mode:0o600});res.json({stored:true});
   }));
   app.post('/api/full-backup-system/run',service,wrap(async(_req,res)=>res.status(202).json(await run({trigger:'Azure collector',actor:'GitHub OIDC collector'}))));
-  app.get('/api/full-backup-system/status',service,wrap(async(_req,res)=>{const {rows}=await pool.query('SELECT id,status,file_name AS "fileName",checksum,started_at AS "startedAt" FROM full_backup_runs ORDER BY started_at DESC LIMIT 1');res.set('Cache-Control','no-store').json(rows[0]||{});}));
+  app.get('/api/full-backup-system/status',service,wrap(async(_req,res)=>{await reconcileInterrupted();const {rows}=await pool.query('SELECT id,status,file_name AS "fileName",checksum,started_at AS "startedAt" FROM full_backup_runs ORDER BY started_at DESC LIMIT 1');res.set('Cache-Control','no-store').json({...rows[0],progress:await progress()});}));
   app.get('/api/full-backup-system/:id/download',service,download);
   async function tick(){if(!isReady()||!scheduledJobsEnabled)return;await init();const config=await settings();if(scheduledBackupDue(config))await run({trigger:'Scheduled',actor:'Automatic IST schedule',slot:indiaBackupSlot().slotKey});}
   const timer=setInterval(()=>void tick().catch(error=>console.error('Full backup schedule check failed',error.code||error.name)),60000);timer.unref?.();
-  return {run,tick};
+  return {run,tick,progress};
 }
