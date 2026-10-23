@@ -86,7 +86,8 @@ function loginHarness({paused=true,level='Admin',mustChangePassword=false}={}){
     isLockableAdmin:policy.isLockableAdmin,
     activeAdminLockIncidents:async()=>{incidentReads++;return [structuredClone(existingIncident)];},
     randomUUID:()=>`test-token-${sessions.length+1}`,
-    sessionStore:{async create(session){sessions.push(session);}},
+    sessionActivityDetails:()=>({deviceId:'fixture-browser'}),
+    sessionStore:{async createForVerifiedDevice(session){sessions.push(session);return session.token;}},
     loginPayload:({token,profile,employee:record,login})=>({token,role:profile.sessionRole,name:record.employee,login}),
   };
   runInNewContext(loginSource,context);

@@ -40,7 +40,8 @@ function harness({targetLevel = '', actorLevel = 'Admin', missing = false} = {})
     resolveMobileAccess: () => ({sessionRole: 'super', userType: 'Super User', permissions: {adminLevel: 'Admin'}}),
     ADMIN_LOCK_POLICY_PAUSED: true,
     randomUUID: () => 'isolated-login-token',
-    sessionStore: {async create(session) {sessions.push(session);}},
+    sessionActivityDetails:()=>({deviceId:'fixture-browser'}),
+    sessionStore: {async createForVerifiedDevice(session) {sessions.push(session);return session.token;}},
     loginPayload: ({token}) => ({token}),
   };
   runInNewContext(passwordRoute + '\n' + loginRoute, context);
