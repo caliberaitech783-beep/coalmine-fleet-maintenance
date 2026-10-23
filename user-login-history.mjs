@@ -104,6 +104,7 @@ export async function initializeLoginHistory(pool) {
     ) evidence GROUP BY login;
     INSERT INTO app_metadata (key,value) VALUES ('login_history_since',NOW()::text) ON CONFLICT (key) DO NOTHING;
   `);
+  await initializeLoginDays(pool);
 }
 
 export function loginHistoryRange(query={}, now=new Date()) {

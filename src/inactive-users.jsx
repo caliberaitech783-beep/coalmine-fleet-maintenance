@@ -25,10 +25,11 @@ export default function InactiveUsers({token,Table,Modal,formatDate,query='',onS
   <div className="inactive-user-counts">
    <span>Total login accounts: <b>{state.loading?'…':state.data?.totalUsers??'—'}</b></span>
    <span>Logged in during selected dates: <b>{state.loading?'…':state.data?.loggedInUsers??'—'}</b></span>
-   <button type="button" className="secondary" disabled={state.loading||!state.data} onClick={()=>setOpen(value=>!value)} aria-expanded={open} aria-label="View inactive user details">Inactive users: <strong>{state.loading?'…':state.data?.inactiveUsers??'—'}</strong> · View users</button>
+   <button type="button" className="secondary" disabled={state.loading||!state.data} onClick={()=>setOpen(true)} aria-expanded={open} aria-label="View inactive user details">Inactive users: <strong>{state.loading?'…':state.data?.inactiveUsers??'—'}</strong> · View users</button>
+   {state.data&&<span>Total {state.data.totalUsers} − logged in {state.data.loggedInUsers} = inactive {state.data.inactiveUsers}</span>}
   </div>
   {state.data&&<p>Complete date-range tracking is available from {state.data.completeFrom}. Older detailed history may have been removed. Accounts without a configured Pulse password are excluded.</p>}
-  {open&&<div className="login-history-table"><p>{rows.length} users match the current search.</p><Table preserveColumnOrder exportTitle={`Inactive users ${range.from} to ${range.to}`}><thead><tr><th>User</th><th>Username</th><th>Role</th><th>Location</th><th>Account status</th><th>Last login</th><th>Last activity</th></tr></thead><tbody>
+  {open&&state.data&&<div className="login-history-table"><p>{rows.length} users match the current search.</p><Table preserveColumnOrder exportTitle={`Inactive users ${range.from} to ${range.to}`}><thead><tr><th>User</th><th>Username</th><th>Role</th><th>Location</th><th>Account status</th><th>Last login</th><th>Last activity</th></tr></thead><tbody>
    {rows.map(row=><tr key={row.id}><td><button type="button" className="secondary" onClick={()=>setSelected(row)}>{row.name}</button></td><td>{row.login}</td><td>{row.roleLabel}</td><td>{row.location}</td><td>{row.accountStatus}</td><td>{row.lastLogin?formatDate(row.lastLogin):'No recorded login'}</td><td>{row.lastActivity?formatDate(row.lastActivity):'No recorded activity'}</td></tr>)}
    {!rows.length&&<tr><td colSpan="7">No inactive users match this date range and search.</td></tr>}
   </tbody></Table></div>}
