@@ -161,3 +161,40 @@ test("site selection filters table, print and exports while retaining all site b
   assert.equal(renderDetails(selectionFor(requests)).exports[0].rows.length,5);
   assert.equal(renderDetails(selectionFor([requests[1]]), "WCL · Sasti OB").exports[0].rows.length,1);
 });
+
+test("Days of BD clears site selection and sorts across sites in both directions", () => {
+  const state = [];
+  let cursor = 0;
+  const useState = initial => {
+    const index = cursor++;
+    if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
+    return [state[index], value => { state[index] = typeof value === "function" ? value(state[index]) : value; }];
+  };
+  const values = { ...bindings, useState, useEffect() {}, useMemo: fn => fn(), useRef: () => ({current:null}),
+    RecordDateRange: Empty, useTableLayouts: () => ({layouts:[]}), TableLayoutSelect: Empty,
+    useColumnPreferences: (name, columns) => [columns.map(column => column.key), () => {}] };
+  const View = new Function(...Object.keys(values), compiled['shared-actions-table'].replace('return SharedActionsTable;', 'return TableView;'))(...Object.values(values));
+  const children = [h('thead', {}, h('tr', {}, h('th', {}, 'Door'), h('th', {}, 'Days of BD'))),
+    h('tbody', {}, ...[['a','Sasti', '0d 1h 0m'], ['b','Majri','2d 0h 0m'], ['c','Sasti','0d 3h 0m']].map(([id,site,time]) =>
+      h('tr', {key:id, 'data-report-site':site, 'data-report-asset':id}, h('td',{},id), h('td',{},time))))];
+  const model = tableModel.tableModel(children);
+  const find = (node, predicate) => Array.isArray(node) ? node.flatMap(n => find(n,predicate)) : React.isValidElement(node) ? [...(predicate(node) ? [node] : []), ...find(node.props.children,predicate)] : [];
+  const render = () => { cursor=0; return View({...model, groupBySite:true, Menu:Empty, ColumnsDialog:Empty, SortDialog:Empty, FilterDialog:Empty, ExportMenu:Empty, exportTitle:'Test', tableProps:{}, showRowNumbers:true}); };
+  let tree=render();
+  find(tree,n => n.type==='button' && find(n,c => c.type==='strong' && c.props.children==='Sasti').length)[0].props.onClick();
+  tree=render();
+  const header = () => find(tree,n => n.type==='button' && n.props.title==='Sort by Days of BD')[0];
+  header().props.onClick(); tree=render();
+  let exported = find(tree,n => n.type===Empty && n.props.smartPrintRows)[0].props;
+  assert.deepEqual(exported.rows.map(row => row.props['data-report-asset']), ['a','c','b']);
+  assert.equal(exported.reportGrouping, undefined);
+  assert.equal(find(tree,n => n.props.className==='site-report-heading').length,0);
+  const allSites = find(tree,n => n.type==='button' && find(n,c=>c.type==='strong' && c.props.children==='All sites').length)[0];
+  assert.equal(allSites.props['aria-pressed'],false);
+  header().props.onClick(); tree=render();
+  exported = find(tree,n => n.type===Empty && n.props.smartPrintRows)[0].props;
+  assert.deepEqual(exported.rows.map(row=>row.props['data-report-asset']),['b','c','a']);
+  find(tree,n => n.type==='button' && find(n,c=>c.type==='strong' && c.props.children==='All sites').length)[0].props.onClick();
+  tree=render();
+  assert.equal(find(tree,n=>n.props.className==='site-report-heading').length,2);
+});

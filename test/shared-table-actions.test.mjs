@@ -113,7 +113,7 @@ test("data-sort-value drives sorting so dates and durations order by their raw v
 test("plain column headings in shared Actions tables sort on click", () => {
   const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
   assert.match(shared, /const sortableHeaderRow = \(row\) =>/);
-  assert.match(shared, /cell\.type !== "th" \|\| !column \|\| span > 1 \|\| cell\.props\.onSort/);
+  assert.match(shared, /cell\.type !== "th" \|\| !column \|\| span > 1/);
   assert.match(shared, /className=\{`sort-header\$\{active \? " active" : ""\}`\}/);
   assert.match(shared, /applySort\(column\.key, active && sort\.direction === "asc" \? "desc" : "asc"\)/);
   assert.match(shared, /section\.type === "thead"\) sectionRows = sectionRows\.map/);

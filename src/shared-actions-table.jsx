@@ -83,7 +83,9 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const layoutStore = useTableLayouts("shared-table", columns);
   const [filters, setFilters] = useState({});
   const [{ selectedSite }, setSiteSelection] = useState({ selectedSite: "" });
-  const selectSite = (site) => setSiteSelection({ selectedSite: site });
+  const [overallDurationSort, setOverallDurationSort] = useState(false);
+  const siteGrouping = groupBySite && !overallDurationSort;
+  const selectSite = (site) => { setSiteSelection({ selectedSite: site }); setOverallDurationSort(false); };
   const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
   const defaultSort = defaultDurationSort(columns);
   // Tables with their own header callbacks own their sorting, including a user's manual choice.
@@ -126,6 +128,11 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   };
   const applySort = (key, direction) => {
     const column = columns.find((item) => item.key === key);
+    if (groupBySite) {
+      const overall = /^(days of (?:bd|breakdown)|bd days\s*\/\s*hrs)$/i.test(String(column?.label || "").trim());
+      setOverallDurationSort(overall);
+      if (overall) setSiteSelection({ selectedSite: "" });
+    }
     const external = column?.header.props.onSort || (!key && columns.find((item) => item.header.props.onSort)?.header.props.onSort);
     if (external) { setSort({ key: "", direction: "asc" }); external(key, direction); }
     else setSort({ key, direction });
@@ -135,8 +142,8 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const availableBodySelections = useMemo(() => new Map(sections.filter((section) => section.type === "tbody").map((section) => {
     const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
     const selected = actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows;
-    return [section, groupBySite && actual.length ? groupReportRows(selected, reportSite, reportAsset, dataRows.map(reportSite)).flatMap(group => group.rows) : selected];
-  })), [sections, columns, localFilters, sort, groupBySite, dataRows]);
+    return [section, siteGrouping && actual.length ? groupReportRows(selected, reportSite, reportAsset, dataRows.map(reportSite)).flatMap(group => group.rows) : selected];
+  })), [sections, columns, localFilters, sort, siteGrouping, dataRows]);
   const availableRows = [...availableBodySelections.values()].flat().filter(isDataRow);
   const siteSummary = groupBySite ? groupReportRows(availableRows, reportSite, reportAsset) : [];
   const brandOf = row => String(row.props["data-report-brand"] || "").trim().replace(/\s+/g, " ").toUpperCase();
@@ -157,7 +164,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const summaryRegions = [...new Set(siteSummary.map(group => splitReportSite(group.label).region))];
   const reportTableRef = useRef(null);
   useEffect(() => { if (reportTableRef.current && groupBySite) reportTableRef.current.closest(".dashboard-asset-list")?.scrollTo({ top: 0, left: 0 }); }, [activeSite, groupBySite]);
-  const reportGrouping = groupBySite ? { site: reportSite, asset: reportAsset } : undefined;
+  const reportGrouping = siteGrouping ? { site: reportSite, asset: reportAsset } : undefined;
   const filterSignature = JSON.stringify(effectiveFilters);
   useEffect(() => {
     if (pageSize) setVisibleRowLimit(pageSize);
@@ -225,7 +232,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = useMemo(() => filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } }))), [filterableColumns]);
   const filterColumns = useMemo(() => filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) })), [filterableColumns]);
-  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(allColumnKeys); };
+  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setOverallDurationSort(false); setVisible(allColumnKeys); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} defaultToday={defaultDateToday} />;
   // Saved reports: named views of this table (visible columns, filters, sort, date range).
@@ -258,7 +265,8 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
       const index = slot, span = Math.max(1, Number(cell.props.colSpan) || 1);
       slot += span;
       const column = columns.find((item) => item.index === index);
-      if (cell.type !== "th" || !column || span > 1 || cell.props.onSort || !tableCellText(cell).trim() || column.label === "Actions") return cell;
+      if (cell.type !== "th" || !column || span > 1 || !tableCellText(cell).trim() || column.label === "Actions") return cell;
+      if (cell.props.onSort) return React.cloneElement(cell, { onSort: applySort });
       const active = sort.key === column.key;
       if (FilterableHeader && column.key !== disabledDateKey) {
         return <FilterableHeader key={cell.key ?? column.key} label={column.label} sortKey={column.key} sort={sort} onSort={applySort}
@@ -292,7 +300,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   const siteSummaryBar = groupBySite && <div className="site-report-summary" aria-label="Site-wise counts">
     <b>Site-wise summary · {siteSummary.length} sites</b>
     <div className="site-summary-options">
-      <button type="button" className="site-summary-button" aria-pressed={!activeSite} onClick={() => selectSite("")}><strong>All sites</strong><span>{reportCount(new Set(availableRows.map(reportAsset)).size, availableRows.length)}</span></button>
+      <button type="button" className="site-summary-button" aria-pressed={!overallDurationSort && !activeSite} onClick={() => selectSite("")}><strong>All sites</strong><span>{reportCount(new Set(availableRows.map(reportAsset)).size, availableRows.length)}</span></button>
       {contextualBrand && <button type="button" className="site-summary-button" aria-pressed={activeSite === contextualBrand.key} onClick={() => selectSite(contextualBrand.key)}>
         <strong>View All {contextualBrand.brand}</strong><span>{reportCount(contextualBrand.assets, contextualBrand.rows.length)}</span>
       </button>}
@@ -313,7 +321,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
       if (showRowNumbers && section.type === "colgroup") return React.cloneElement(section, {}, <col key="row-number" />, section.props.children);
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);
-      if (section.type === "thead" && groupBySite && tableProps["data-oem-column-layout"] && selectedRows.length) return null;
+      if (section.type === "thead" && siteGrouping && tableProps["data-oem-column-layout"] && selectedRows.length) return null;
       if (section.type === "thead") sectionRows = sectionRows.map((row, position) => position === sectionRows.length - 1 ? sortableHeaderRow(row) : row);
       if (section.type === "tbody") {
         const hadData = sectionRows.some(isDataRow);
@@ -329,7 +337,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
           withNumberCell(cells,<th key="row-number" className="table-serial-header" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>{SERIAL_COLUMN_LABEL}</th>)) : projected;
         if (!isDataRow(row)) return React.cloneElement(projected, {}, cells.map((cell) => React.cloneElement(cell, { colSpan: Math.max(1, indices.length + 1) })));
         const numbered = React.cloneElement(projected, {}, withNumberCell(cells,<td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>));
-        if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
+        if (siteGrouping && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
           const group = siteSummary.find(item => item.label === reportSite(row));
           return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{tableProps["data-oem-column-layout"] && sections.filter(item => item.type === "thead").flatMap(item => tableElements(item.props.children)).map((header, index) => { const projectedHeader = projectTableRow(sortableHeaderRow(header), indices); return React.cloneElement(projectedHeader, {key: `site-columns-${index}`, className: "site-report-columns"}, withNumberCell(tableElements(projectedHeader.props.children),<th key="row-number" scope="col">{SERIAL_COLUMN_LABEL}</th>)); })}{numbered}</React.Fragment>;
         }
