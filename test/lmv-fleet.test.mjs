@@ -8,6 +8,23 @@ import {fleetSectionExport} from '../src/dashboard-section-export.mjs';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 
+test('the lower-row Breakdown legend opens the LMV breakdown list by click or keyboard',async()=>{
+  const React=(await import('react')).default;
+  const {transformWithOxc}=await import('vite');
+  const source=readFileSync(new URL('../src/lmv-fleet.jsx',import.meta.url),'utf8');
+  const controls=source.slice(source.indexOf('export const LMV_MODES='),source.indexOf('const modeLabel=')).replaceAll('export ','');
+  const compiled=(await transformWithOxc(controls,'lmv-controls.jsx',{jsx:{runtime:'classic'}})).code;
+  const render=new Function('React','lmvCounts',`${compiled};return LmvFleetControls;`)(React,lmvCounts);
+  const selections=[];
+  const tree=render({records:[],loaded:true,onInspect:selection=>selections.push(selection)});
+  const find=node=>Array.isArray(node)?node.map(find).find(Boolean):React.isValidElement(node)?node.props['aria-label']==='View LMV breakdown vehicles'?node:find(node.props.children):null;
+  const legend=find(tree);
+  assert.ok(legend);
+  legend.props.onClick();
+  for(const key of ['Enter',' ']){let prevented=false;legend.props.onKeyDown({key,preventDefault(){prevented=true;}});assert.equal(prevented,true);}
+  assert.deepEqual(selections,[{mode:'breakdown'},{mode:'breakdown'},{mode:'breakdown'}]);
+});
+
 test('LMV route and one-time demo seed are wired into the application',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/await seedLmvDemoRecords\(client\)/);

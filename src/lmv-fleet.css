@@ -84,12 +84,12 @@
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-heading > h2,
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { align-self:stretch; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .fleet-row-side,
-.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { grid-column:3; grid-row:1; justify-self:end; min-width:0; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { grid-column:3; grid-row:1; justify-self:stretch; min-width:0; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side .lmv-fleet-tools { padding:0; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side button.secondary { min-height:28px; padding:4px 8px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .fleet-row-side,
-.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { display:flex; flex-direction:row; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px 8px; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { display:flex; flex-direction:row; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:4px 12px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .fleet-row-side .mine-fleet-chart-tools { display:flex; margin:0; gap:6px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-legend { font-size:12px !important; gap:6px 10px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-legend span { gap:5px; }
