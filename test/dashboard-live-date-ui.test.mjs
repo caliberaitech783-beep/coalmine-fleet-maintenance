@@ -1,3 +1,4 @@
+import * as combinedFleetModel from '../src/total-fleet-model.mjs';
 import * as lmvModel from '../lmv-fleet.mjs';
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -208,7 +209,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
-    ...lmvModel,
+    ...lmvModel,...combinedFleetModel,
     useLmvFleet: () => ({records:lmvRecords,loaded:true,error:"",retry(){}}),
     LmvFleetControls: Null,LmvFleetView: Null,LmvFleetDialog: Null,ReportSection: Null,
     dashboardMisQueue, misQueueDate, lifecycleTimeMatches,
@@ -1263,4 +1264,26 @@ test('LMV controls switch the dedicated chart and open scoped reports without ch
   tree=view.render();
   const dialog=findAll(tree,node=>node.props.selection?.reports)[0];
   assert.equal(dialog.props.records.length,5);
+});
+
+test('main Total Fleet and each site count include LMVs and open exactly their matching assets',()=>{
+  const view=harness({lmvRecords:lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5))});
+  let tree=view.render();
+  const list=()=>findAll(tree,node=>node.props.columns===combinedFleetModel.TOTAL_FLEET_DETAIL_COLUMNS&&node.props.rowKey)[0];
+  assert.equal(text(fleetCount(tree,'Total')),'8');
+  assert.equal(text(fleetCount(tree,'Breakdown')),'3');
+  assert.equal(text(byLabel(tree,'View BD Balance list')),'2');
+  fleetCount(tree,'Total').props.onClick();tree=view.render();
+  assert.equal(list().props.rows.length,8);
+  assert.equal(list().props.rows.filter(row=>row.fleetCategory==='otherVehicles').length,5);
+  fleetCount(tree,'Breakdown').props.onClick();tree=view.render();
+  assert.equal(list().props.rows.length,3);
+  byLabel(tree,'View BD Balance list').props.onClick();tree=view.render();
+  assert.equal(list().props.rows.length,2);
+  assert.ok(list().props.rows.every(row=>!row.fleetOem));
+  button(tree,'BD Balance 2').props.onClick();tree=view.render();assert.equal(list().props.rows.length,2);
+  button(tree,'Total Fleet 8').props.onClick();tree=view.render();assert.equal(list().props.rows.length,8);
+  button(tree,'BD (%) 37.5').props.onClick();tree=view.render();assert.equal(list().props.rows.length,3);
+  fleetCount(tree,'OEM BD').props.onClick();tree=view.render();assert.equal(list().props.rows.length,1);
+  assert.equal(oemChart(tree).props.chart.rows.length,1);
 });

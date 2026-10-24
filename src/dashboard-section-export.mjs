@@ -22,11 +22,13 @@ const FLEET_COLUMNS = [
   {label: 'Total fleet', value: row => row.total},
   {label: 'Equipment BD', value: row => row.bdEquipment},
   {label: 'Vehicle BD', value: row => row.bdVehicles},
-  {label: 'BD balance', value: row => row.bdTotal},
+  {label: 'BD balance', value: row => row.includesLmv ? row.bdBalance : row.bdTotal},
   {label: 'BD (%)', value: row => percent(row.bdTotal, row.total)},
 ];
 const fleetRow = (region, name, counts = {}) => ({
   region, name,
+  includesLmv: counts.includesLmv === true,
+  bdBalance: counts.balance ?? counts.breakdown?.total ?? 0,
   equipment: counts.equipment || 0, vehicles: counts.vehicles || 0, total: counts.total || 0,
   lmvTotal: counts.lmv?.total || 0, lmvBd: counts.lmv?.breakdown || 0, lmvOnroad: counts.lmv?.onroad || 0, lmvIdle: counts.lmv?.idle || 0, lmvOem: counts.lmv?.oem || 0,
   bdEquipment: counts.breakdown?.equipment || 0, bdVehicles: counts.breakdown?.vehicles || 0, bdTotal: counts.breakdown?.total || 0,
@@ -74,6 +76,7 @@ export function fleetSectionExport({mode = 'total', place = 'All regions', regio
   if (totals) {
     const rest = (pick) => Math.max(0, (pick(totals) || 0) - regions.reduce((total, region) => total + (pick(region) || 0), 0));
     const other = fleetRow('Other', 'Location matches no chart site', {
+      includesLmv: totals.includesLmv === true, balance: rest(counts=>counts.balance ?? counts.breakdown?.total),
       lmv: {total:rest(counts=>counts.lmv?.total),breakdown:rest(counts=>counts.lmv?.breakdown),oem:rest(counts=>counts.lmv?.oem),onroad:rest(counts=>counts.lmv?.onroad),idle:rest(counts=>counts.lmv?.idle)},
       equipment: rest(counts => counts.equipment), vehicles: rest(counts => counts.vehicles), total: rest(counts => counts.total),
       breakdown: {equipment: rest(counts => counts.breakdown?.equipment), vehicles: rest(counts => counts.breakdown?.vehicles), total: rest(counts => counts.breakdown?.total)},
@@ -81,12 +84,13 @@ export function fleetSectionExport({mode = 'total', place = 'All regions', regio
     if (other.total || other.bdTotal || other.lmvTotal) rows.push(other);
     rows.push(fleetRow('Total', 'All sites', totals));
   }
-  const hasLmv = regions.some(region => region.lmv !== undefined);
+  const hasLmv = totals?.lmv !== undefined || regions.some(region => region.lmv !== undefined);
   if (hasLmv && totals && !totals.lmv) {
     const totalRow=rows[rows.length-1];
     for (const key of ['lmvTotal','lmvBd','lmvOnroad','lmvIdle','lmvOem']) totalRow[key]=rows.filter(row=>row.name.endsWith(' total')).reduce((sum,row)=>sum+row[key],0);
   }
   const columns=hasLmv?[...FLEET_COLUMNS,
+    {label:'Breakdown (including OEM)',value:row=>row.bdTotal},
     {label:'Other vehicles / Total LMV',value:row=>row.lmvTotal},
     {label:'LMV BD',value:row=>row.lmvBd},
     {label:'LMV BD (%)',value:row=>percent(row.lmvBd,row.lmvTotal)},
@@ -94,7 +98,7 @@ export function fleetSectionExport({mode = 'total', place = 'All regions', regio
     {label:'LMV BD Balance',value:row=>row.lmvBd-row.lmvOem},
     {label:'LMV on road',value:row=>row.lmvOnroad},
     {label:'LMV idle',value:row=>row.lmvIdle},
-    {label:'Combined fleet including LMV',value:row=>row.total+row.lmvTotal},
+    {label:'Combined fleet including LMV',value:row=>row.includesLmv?row.total:row.total+row.lmvTotal},
   ]:FLEET_COLUMNS;
   return {title: heading('Total Fleet', place, stale ? 'Last checked data' : 'Live fleet'), columns, rows};
 }

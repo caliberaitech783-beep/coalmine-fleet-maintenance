@@ -12,7 +12,7 @@ test('fleet header and card blank space have no drilldown action while count but
  assert.ok(header.startsWith('<header>'));
  assert.ok(header.includes('setFleetChartMode(mode)'));
  assert.ok(header.includes('className="mine-fleet-toggle-count"'));
- assert.ok(header.includes('else openBreakdownList()'));
- assert.ok(header.includes('openAssetDrilldown("all")'));
+ assert.ok(header.includes('else openFleetChartList("fleet-breakdown:account")'));
+ assert.ok(header.includes('openFleetChartList("all")'));
  assert.doesNotMatch(header,/<h2[^>]*onClick/);
 });

@@ -12,7 +12,7 @@ test("the OEM breakdown panel is measured against the screen instead of scrollin
   assert.match(source, /--mine-oem-chart-caption/, "so are the site captions under the bars");
   assert.match(source, /mine-fleet-region-chart[^>]*ref=\{fleetChartRef\}/, "the chart panel is the element that gets measured");
   assert.match(source, /window\.addEventListener\("resize", fitOemChart\)/, "resizing the window re-fits the chart");
-  assert.match(source, /<OemBreakdownChart chart=\{oemChart\}[^>]*availableHeight=\{oemPlotSpace\}/);
+  assert.match(source, /<OemBreakdownChart chart=\{mainFleetOemChart\}[^>]*availableHeight=\{oemPlotSpace\}/);
 });
 
 test("fleet intelligence connects category and group drilldowns without a region-site subpanel", () => {
@@ -30,7 +30,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /const liveBreakdownAssetCount = liveFleetCounts\.breakdown\.total/);
-  assert.match(source, /mode === "total" \? \(showOemBreakdowns \? oemFleetEquipment\.length : assetCounts\.total\)/);
+  assert.match(source, /mode === "total" \? mainFleetTotal/);
   assert.match(source, /region\.total\.toLocaleString\(\)\} fleet/);
   assert.match(source, /const siteRequests = liveBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
   assert.match(source, /const fleet = fleetChartCounts\(records,siteRequests\)/);
@@ -98,9 +98,9 @@ test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(44px, 3vw, 58px\)/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-count\s*\{[^}]*font-size:\s*18px !important/);
   assert.match(source, /<small className="mine-fleet-site-summary"><b>\{site\.name\}<\/b>/);
-  assert.match(source, /openAssetDrilldown\(`offroad-site:\$\{site\.name\}`\)\}>BD Balance \{site\.breakdown\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(source, /setTotalFleetSelection\(\{site:site\.name,mode:"balance"\}\)/);
   assert.match(source, /const fleetBreakdownDrilldownTitle = .*\}BD Balance`/);
-  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(source, /openFleetChartList\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
   // BD (%) is the site BD balance share of its total fleet, one decimal like the day-wise table.
   assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><button type="button" className="lmv-site-metric"/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-entry \{ grid-template-rows: minmax\(0, 1fr\) 104px; \}/);

@@ -37,8 +37,8 @@ export function LmvFleetControls({records,mode,onMode,onInspect,loaded,error,ret
     <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view">
       {LMV_MODES.map(([key,label,count])=><div key={key} className={`mine-fleet-view-option ${mode===key?'active':''}`}><button type="button" disabled={!loaded} aria-pressed={mode===key} onClick={()=>onMode(key)}>{label}</button><button type="button" disabled={!loaded} className="mine-fleet-toggle-count" aria-label={`View ${label} LMV records`} onClick={()=>onInspect({mode:key})}>{loaded?counts[count]:'—'}</button></div>)}
     </div>
-    <button type="button" className="secondary" onClick={()=>onMode('')} aria-pressed={!mode}>All fleet bars</button>
-    <button type="button" className="secondary" disabled={!loaded} onClick={onReports}>LMV reports</button>
+    <div className="lmv-fleet-tools"><button type="button" className="secondary" onClick={()=>onMode('')} aria-pressed={!mode}>All fleet bars</button>
+    <button type="button" className="secondary" disabled={!loaded} onClick={onReports}>LMV reports</button></div>
     {counts.demo>0&&<small>{counts.demo} labelled demo LMVs · sample statuses</small>}
     {error&&<span role="alert">{error} <button type="button" onClick={retry}>Retry</button></span>}
   </div>;
