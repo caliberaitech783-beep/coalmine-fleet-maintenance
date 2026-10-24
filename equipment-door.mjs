@@ -11,11 +11,16 @@ export function equipmentDoorNumber(record = {}) {
   const identifiers = new Set([record.reg,record.registration,record.registrationNumber,record.chassisNo,
     record.chassis,record.manufacturerSerialNo,record.engineNo].map(key).filter(Boolean));
   const name = text(record.equipmentName);
+  const modelName = [record.model,record.modelNo,record.itemName,record.group,record.category].some(value =>
+    key(value) && (key(value) === key(name) || text(value).toLowerCase().startsWith(`${name.toLowerCase()}-`)));
+  // Registration-only names and short fleet labels are intentional master names.
+  // A duplicate Registration No. must not block copying them into Door No.
+  const fleetName = usable(name) && /^[A-Z]+\d/i.test(name) && !modelName ? name : '';
   const masterLabel = usable(name) && /\d/.test(name) && !identifiers.has(key(name)) &&
     ![record.model,record.modelNo,record.itemName,record.group,record.category].some(value => key(value) && key(value) === key(name)) ? name : '';
   // The fleet label is the requested Door No., including its registration suffix.
   // Prefer it over legacy Oracle IDs already stored in the door column.
-  if (masterLabel && /^[A-Z]+\d+[A-Z0-9]*\s*[-–—]\s*\S/i.test(name)) return masterLabel;
+  if (fleetName) return fleetName;
   if (usable(door) && !identifiers.has(key(door))) return door;
   return masterLabel || (usable(door) ? door : '');
 }

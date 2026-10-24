@@ -9,9 +9,9 @@ import {downtimeMatrixRange} from '../src/downtime-matrix.mjs';
 const master={door:'V316',reg:'2328930',equipmentName:'VOLVO TIPPER',chassisNo:'CH123',currentLocation:'Mine'};
 
 test('master rows and requests copy the full equipment name over legacy Oracle identifiers',()=>{
-  for(const equipmentName of ['S52 - MH34BZ0371','HP6 - 40034','PL63- MH34CD4480','PL69–MP66ZB8422']) {
+  for(const equipmentName of ['S52 - MH34BZ0371','HP6 - 40034','PL63- MH34CD4480','PL69–MP66ZB8422','MH34BZ 5366','CG15EA4047','B14','WT33 - MH34BZ6294','MH34BZ8708 -T-23']) {
     for(const door of ['', '-', 'ORACLE123', 'S52', equipmentName]) {
-      const record={equipmentName,door,reg:'MH34BZ0371',chassisNo:'CH123'};
+      const record={equipmentName,door,reg:equipmentName,chassisNo:'CH123'};
       const normalized=equipmentMasterWithDoor(record);
       assert.equal(normalized.door,equipmentName);
       assert.equal(normalized.equipmentName,equipmentName);
