@@ -29,7 +29,7 @@ test('site preview separates period activity, continuing BD, first trip and idle
  assert.deepEqual(result.rows.map(row=>row[0]),['🔴 IN','🔴 Continuing BD','🟢 CLOSED','🟢 OUT','🟠 IDLE']);
  assert.equal(result.rows.find(row=>row[0]==='🟢 CLOSED')[6],'4');
  assert.equal(result.rows.find(row=>row[0]==='🟢 CLOSED')[7],'2');
- assert.equal(result.rows.find(row=>row[0]==='🔴 IN')[6],'—');
+ assert.equal(result.rows.find(row=>row[0]==='🔴 IN')[6],'Pending closing reading');
  assert.equal(result.rows.length,5);
  assert.ok(!HOURLY_PREVIEW_COLUMNS.some(label=>/OEM|Opening [KH]MR|Closing [KH]MR/.test(label)));
 });
@@ -151,4 +151,14 @@ test('each hourly selection uses its exact elapsed window',()=>{
   const report=buildHourlyBreakdownPreview([], '2026-10-24T23:00:00+05:30','Sasti OC',`${hours}-hour`);
   assert.equal(Date.parse(report.end)-Date.parse(report.start),hours*3600000);
  }
+});
+
+test('missing closing readings become differences after readings are saved, including zero',()=>{
+ const row={site:'Majri OC',door:'V164',equipmentGroup:'VOLVO TIPPERS',meterType:'KMR',start:'2026-10-24 20:14:27',openingMeterReadings:{KMR:'235099',HMR:'15755'},closingMeterReadings:{}};
+ const values=()=>buildHourlyBreakdownPreview([row],'2026-10-25T00:11:35+05:30','Majri OC','4-hour').rows[0].slice(6,8);
+ assert.deepEqual(values(),['Pending closing reading','Pending closing reading']);
+ row.closingMeterReadings={KMR:'235104.5',HMR:'15756.25'};
+ assert.deepEqual(values(),['5.5','1.25']);
+ row.openingMeterReadings={KMR:'0',HMR:'0'};row.closingMeterReadings={KMR:'0',HMR:'0'};
+ assert.deepEqual(values(),['0','0']);
 });

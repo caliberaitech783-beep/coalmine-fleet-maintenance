@@ -16,7 +16,8 @@ const count = rows => new Set(rows.map(vehicle)).size;
 const difference = (row, type) => {
   const opening = requestMeterReadings(row, 'opening')[type];
   const closing = requestMeterReadings(row, 'closing')[type];
-  if (opening == null || closing == null || String(opening).trim() === '' || String(closing).trim() === '') return '—';
+  if (closing == null || String(closing).trim() === '') return 'Pending closing reading';
+  if (opening == null || String(opening).trim() === '') return '—';
   return Number.isFinite(Number(opening)) && Number.isFinite(Number(closing)) ? String(Number((Number(closing)-Number(opening)).toFixed(3))) : '—';
 };
 
