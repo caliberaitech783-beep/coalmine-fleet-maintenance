@@ -80,7 +80,7 @@ test("user and privilege changes revoke only the affected accounts", async () =>
   const revoker = server.slice(server.indexOf("async function revokeAuthorizationSessions"), server.indexOf("function maskedSecret"));
   const masterRoutes = server.slice(server.indexOf("app.post('/api/masters/:master'"), server.indexOf("app.use(express.static"));
   const postRoute = masterRoutes.slice(0, masterRoutes.indexOf("app.post('/api/masters/:master/:id/password'"));
-  const equipmentPost = postRoute.slice(postRoute.indexOf("master==='Equipment master'"), postRoute.indexOf("master==='Privilege'"));
+  const equipmentPost = postRoute.slice(postRoute.indexOf("}else if(master==='Equipment master'"), postRoute.indexOf("}else if(master==='Privilege'"));
   const privilegeStart = postRoute.indexOf("master==='Privilege'");
   const privilegePost = postRoute.slice(privilegeStart, postRoute.indexOf("const saved=rows.map", privilegeStart));
 
