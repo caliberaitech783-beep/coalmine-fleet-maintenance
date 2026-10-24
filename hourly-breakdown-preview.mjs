@@ -70,7 +70,7 @@ export function buildAllSitesHourlyBreakdownPreview(requests,cutoff,period='two-
   return {site:'All sites',period:sites[0].period,start:sites[0].start,end:sites[0].end,sites};
 }
 
-export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,linkedTelegramChat,sendTelegramDocument,buildTableExportPdf}) {
+export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,telegramSiteGroups,telegramSiteGroupDetails,sendTelegramDocument,buildTableExportPdf}) {
   const loadReport=async({allSites=false,period='two-hour'}={})=>{
     let client;
     try {
@@ -120,19 +120,22 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
       const site=REGION_DATA.flatMap(region=>region.sites).find(site=>canonicalSiteName(site)===canonicalSiteName(req.body?.site));
       if(!site)return res.status(400).json({error:'Choose a configured report site.'});
       if(!['two-hour','today','1-hour','2-hour','3-hour','4-hour','5-hour','6-hour','7-hour','8-hour'].includes(req.body?.period))return res.status(400).json({error:'Choose Latest 1–8 hours or Today.'});
-      // Resolve the signed-in user's link server-side; caller-supplied recipients are ignored.
-      const chatId=String(await linkedTelegramChat(req.session.login)||'');
-      if(!/^\d+$/.test(chatId))return res.status(400).json({error:'Connect Telegram from your Pulse profile first. Reports go only to your linked private chat.'});
+      // Resolve the selected site's group server-side. Never accept a private
+      // recipient or fall back to the central bot/admin conversation.
+      const group=(await telegramSiteGroups()).find(group=>canonicalSiteName(group.site)===canonicalSiteName(site));
+      const chatId=String(group?.chatId||'');
+      if(!/^-[1-9]\d*$/.test(chatId))return res.status(409).json({error:`Register the Telegram group for ${site} before sending this report.`});
+      await telegramSiteGroupDetails(chatId);
       const bundle=await loadReport({allSites:true,period:req.body.period});
       const report=bundle.sites.find(report=>report.site===site);
       const summary=Object.entries(report.counts).map(([name,count])=>`${name}: ${count}`).join(' · ');
       const title=`${site} · Consolidated BD report`;
       const buffer=await buildTableExportPdf({title:`${title}\n${report.period}\n${summary}`,columns:report.columns.map(label=>({label})),rows:report.rows,pageSize:'A3'});
       const filename=`consolidated-bd-${site.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${report.end.replace(/[:.]/g,'-')}.pdf`;
-      req.audit={eventType:'Integration',module:'Telegram',action:'Send BD report to myself',targetType:'Current user Telegram',targetId:site,changedFields:[]};
+      req.audit={eventType:'Integration',module:'Telegram',action:'Send BD report to site group',targetType:'Telegram site group',targetId:site,changedFields:[]};
       const sent=await sendTelegramDocument({chatId,buffer,filename,caption:`${title}\n${report.period}\n${summary}`});
       if(!sent?.sent)throw new Error('Telegram did not confirm delivery.');
-      res.status(201).json({sent:true,messageId:sent.messageId,site,period:report.period});
+      res.status(201).json({sent:true,messageId:sent.messageId,site,period:report.period,destination:'site-group',groupTitle:group.title||site});
     }catch(error){next(error);}
   });
 }

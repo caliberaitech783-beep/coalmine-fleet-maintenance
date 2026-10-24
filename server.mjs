@@ -2114,7 +2114,7 @@ function requireAdministrator(req,res,next){
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
 }
 
-registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,linkedTelegramChat,sendTelegramDocument,buildTableExportPdf});
+registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,telegramSiteGroups,telegramSiteGroupDetails,sendTelegramDocument,buildTableExportPdf});
 
 const REMOTE_ASSISTANCE_LIVE_STATUSES=['Pending','Approved','Active'];
 const REMOTE_ASSISTANCE_DURATIONS=new Set([5,10,15]);
@@ -8829,20 +8829,7 @@ if(scheduledJobsEnabled){
   },driverSyncIntervalMs,11_000);
   requestDriverSyncTimer.unref?.();
   const hourlyTelegramDelivery=createHourlyTelegramDelivery({pool,loadSource:directorReportSourceData,buildPdf:buildTableExportPdf,sendDocument:sendTelegramDocument,
-    loadRecipients:async()=>{
-      const [{rows:users},{rows:hierarchy},chats]=await Promise.all([
-        pool.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'"),
-        pool.query("SELECT record_data FROM master_records WHERE master_name='Hierarchy master'"),telegramChatsByLogin()]);
-      return users.flatMap(({record_data:user})=>{
-        if(user.disabled===true||user.active===false||['inactive','disabled','deleted','blocked'].includes(String(user.status||'').trim().toLowerCase()))return [];
-        const profile=resolveMobileAccess({user}),designation=flowDesignationForUser(user,profile);
-        if(!['director','projectManager','productionManager','maintenanceManager','misManager'].includes(designation?.key))return [];
-        const login=reportRecipientLogin(user),chatId=chats.get(login);
-        if(!chatId)return [];
-        const rule=hierarchyRuleForDesignation(hierarchy,designation);
-        return [{login,chatId,sites:hierarchyRecipientReportScope(user,profile,rule?.siteAccess).sites}];
-      });
-    }});
+    loadGroups:telegramSiteGroups});
   const hourlyTelegramTimer=setStaggeredInterval(()=>{
     if(databaseReady)void runAuditedBackendProcess({module:'Scheduled reports',action:'Send site hourly Telegram PDFs'},()=>hourlyTelegramDelivery())
       .catch(error=>console.error('Hourly Telegram delivery failed',error.message));

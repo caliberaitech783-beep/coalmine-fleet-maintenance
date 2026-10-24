@@ -28,7 +28,7 @@ export function hourlyTelegramSlots(shifts,now=new Date()){
 
 // Claim before sending. A crash/ambiguous Telegram response leaves a reviewable
 // Sending/Failed row rather than retrying a document that may already be delivered.
-export function createHourlyTelegramDelivery({pool,loadRecipients,loadSource,buildPdf,sendDocument}){
+export function createHourlyTelegramDelivery({pool,loadGroups,loadSource,buildPdf,sendDocument}){
   let running=false;
   return async function deliver(now=new Date()){
     if(running)return {skipped:true};
@@ -37,13 +37,16 @@ export function createHourlyTelegramDelivery({pool,loadRecipients,loadSource,bui
       const {rows}=await pool.query("SELECT record_data FROM master_records WHERE master_name='Shift Master'");
       const slots=hourlyTelegramSlots(rows.map(r=>r.record_data),now);
       if(!slots.length)return {skipped:true};
-      const recipients=await loadRecipients();
+      const groups=await loadGroups();
       let source, sent=0,failed=0;
       for(const slot of slots){
-        const targets=new Map(recipients.filter(r=>/^\d+$/.test(String(r.chatId))&&(r.sites===null||r.sites.some(site=>canonicalSiteName(site)===canonicalSiteName(slot.site)))).map(r=>[String(r.chatId),r]));
+        const targets=new Map(groups.filter(group=>/^-[1-9]\d*$/.test(String(group.chatId))&&canonicalSiteName(group.site)===canonicalSiteName(slot.site)).map(group=>[String(group.chatId),group]));
+        if(targets.size!==1){
+          console.error('Hourly Telegram report needs exactly one registered site group',slot.site);failed++;continue;
+        }
         let buffer,caption;
         for(const [chatId,recipient] of targets){
-          const scope=`HOURLY-TELEGRAM-${chatId}`;
+          const scope=`HOURLY-TELEGRAM-SITE-${canonicalSiteName(slot.site)}-${chatId}`;
           const claim=await pool.query("INSERT INTO whatsapp_consolidated_report_runs (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW()) ON CONFLICT (slot_key,recipient_login,scope_key) DO NOTHING RETURNING id",[slot.key,chatId,scope]);
           if(!claim.rowCount)continue;
           try{
@@ -59,7 +62,7 @@ export function createHourlyTelegramDelivery({pool,loadRecipients,loadSource,bui
             sent++;
           }catch(error){
             await pool.query("UPDATE whatsapp_consolidated_report_runs SET status='Failed - review Telegram before retry',updated_at=NOW() WHERE id=$1",[claim.rows[0].id]);
-            console.error('Hourly Telegram report failed',recipient.login,slot.site,error.message);failed++;
+            console.error('Hourly Telegram site group report failed',recipient.site,error.message);failed++;
           }
         }
       }

@@ -112,7 +112,7 @@ test('today report covers midnight IST through cutoff, including morning Jayant 
  assert.ok(!jayant.rows.some(row=>row[1]==='J3'));
 });
 
-test('Telegram BD report is fresh, site-specific and sent only to the current private link',async()=>{
+test('Telegram BD report is fresh, site-specific and sent only to the registered site group',async()=>{
  let route,recipient,pdfInput,committed=false,released=false;
  const client={query:async sql=>{
   if(sql==='SELECT NOW() AS cutoff')return {rows:[{cutoff:'2026-10-24T18:00:00+05:30'}]};
@@ -122,7 +122,8 @@ test('Telegram BD report is fresh, site-specific and sent only to the current pr
  },release(){released=true;}};
  const session=()=>{},admin=()=>{};
  registerHourlyBreakdownPreview({get(){},post:(...args)=>route=args},{pool:{connect:async()=>client},requireSession:session,requireAdministrator:admin,
-  linkedTelegramChat:async login=>{assert.equal(login,'my-login');return '123456';},
+  telegramSiteGroups:async()=>[{site:'Jayant OC',chatId:'-123456',title:'Caliber Pulse Jayant'},{site:'Sasti OC',chatId:'-654321'}],
+  telegramSiteGroupDetails:async chatId=>{assert.equal(chatId,'-123456');},
   buildTableExportPdf:async input=>{pdfInput=input;return Buffer.from('pdf');},
   sendTelegramDocument:async input=>{assert.ok(committed&&released);recipient=input;return {sent:true,messageId:42};},
  });
@@ -130,19 +131,19 @@ test('Telegram BD report is fresh, site-specific and sent only to the current pr
  let result,status;
  await route.at(-1)({session:{login:'my-login'},body:{site:'Jayant OC',period:'two-hour',chatId:'999999'}},{status(value){status=value;return this;},json(value){result=value;}},error=>{throw error;});
  assert.equal(status,201);assert.equal(result.messageId,42);
- assert.equal(recipient.chatId,'123456');
+ assert.equal(recipient.chatId,'-123456');assert.equal(result.destination,'site-group');
  assert.match(recipient.caption,/Jayant OC.*Consolidated BD/s);
  assert.match(recipient.caption,/04:00:00 PM to .*06:00:00 PM/);
  assert.equal(pdfInput.rows.length,1);
  assert.equal(pdfInput.pageSize,'A3');
 });
 
-test('Telegram BD report rejects missing or group links and invalid periods before loading records',async()=>{
- for(const [body,link] of [[{site:'Jayant OC',period:'two-hour'},''],[{site:'Jayant OC',period:'two-hour'},'-123'],[{site:'Jayant OC',period:'last-year'},'123'],[{site:'Unknown',period:'two-hour'},'123']]){
+test('Telegram BD report rejects missing or private mappings and invalid periods before loading records',async()=>{
+ for(const [body,link,expected] of [[{site:'Jayant OC',period:'two-hour'},'',409],[{site:'Jayant OC',period:'two-hour'},'123',409],[{site:'Jayant OC',period:'last-year'},'-123',400],[{site:'Unknown',period:'two-hour'},'-123',400]]){
   let route,status;
-  registerHourlyBreakdownPreview({get(){},post:(...args)=>route=args},{pool:{connect(){assert.fail('Must not load records');}},requireSession(){},requireAdministrator(){},linkedTelegramChat:async()=>link});
+  registerHourlyBreakdownPreview({get(){},post:(...args)=>route=args},{pool:{connect(){assert.fail('Must not load records');}},requireSession(){},requireAdministrator(){},telegramSiteGroups:async()=>link?[{site:'Jayant OC',chatId:link}]:[]});
   await route.at(-1)({session:{login:'me'},body},{status(value){status=value;return this;},json(){}},error=>{throw error;});
-  assert.equal(status,400);
+  assert.equal(status,expected);
  }
 });
 

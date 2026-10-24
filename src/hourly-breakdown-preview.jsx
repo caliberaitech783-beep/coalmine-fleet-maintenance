@@ -20,17 +20,17 @@ export default function HourlyBreakdownPreview({session}) {
     try{
       const response=await fetch('/api/reports/hourly-breakdown-preview/telegram',{method:'POST',headers:{Authorization:`Bearer ${session.token}`,'Content-Type':'application/json'},body:JSON.stringify({site,period})});
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Telegram delivery failed.');
-      setDelivery(`Sent ${data.site} BD report to your linked Telegram account. ${data.period}`);
+      setDelivery(`Sent ${data.site} BD report to its Telegram group (${data.groupTitle}). ${data.period}`);
     }catch(error){setError(error.message);}finally{setSending(false);}
   };
   return <section className="panel" aria-label="Hourly breakdown manual preview" style={{padding:20,marginBottom:20}}>
-    <h2>Hourly Breakdown Report - manual preview</h2><p>Preview reports or send a fresh report to your linked private Telegram account.</p>
+    <h2>Hourly Breakdown Report - manual preview</h2><p>Preview reports or send a fresh report to the selected site's Telegram group.</p>
     <label>Zone <select aria-label="Report zone" value={zone} disabled={loading} onChange={event=>{setZone(event.target.value);setSite('all');setReport(null);}}><option value="all">All zones</option>{REGION_DATA.map(region=><option key={region.code} value={region.code}>{region.code} — {region.name}</option>)}</select></label>{' '}<label>Site <select aria-label="Report site" value={site} disabled={loading} onChange={event=>{setSite(event.target.value);setReport(null);}}><option value="all">All sites</option>{availableSites.map(name=><option key={name} value={name}>{name}</option>)}</select></label>{' '}<label>Report period <select aria-label="Consolidated BD report period" value={period} disabled={loading} onChange={event=>{setPeriod(event.target.value);setReport(null);}}><option value="two-hour">Latest 2 hours</option>{[1,3,4,5,6,7,8].map(hours=><option key={hours} value={`${hours}-hour`}>Latest {hours} hour{hours===1?'':'s'}</option>)}<option value="today">Today (IST)</option></select></label>{' '}
     <button type="button" disabled={loading} onClick={load}>{loading?'Loading report...':'Preview Hourly Breakdown Report'}</button>
     {error&&<p role="alert">{error}</p>}
     {delivery&&<p role="status">{delivery}</p>}
     {report?.sites&&<h3>All sites · Consolidated BD report</h3>}
-    {(report?.sites||(report?[report]:[])).map(report=><div key={report.site} aria-label={`${report.site} hourly report`}><h3>{report.site}</h3><p>{report.period}</p><button type="button" onClick={()=>downloadReport(report)}>Download {report.site} CSV</button>{' '}<button type="button" disabled={sending||loading} onClick={()=>send(report.site)}>{sending?'Sending...':`Send ${report.site} to my Telegram`}</button>
+    {(report?.sites||(report?[report]:[])).map(report=><div key={report.site} aria-label={`${report.site} hourly report`}><h3>{report.site}</h3><p>{report.period}</p><button type="button" onClick={()=>downloadReport(report)}>Download {report.site} CSV</button>{' '}<button type="button" disabled={sending||loading} onClick={()=>send(report.site)}>{sending?'Sending...':`Send ${report.site} to site group`}</button>
       <dl style={{display:'flex',flexWrap:'wrap',gap:24}}>{Object.entries(report.counts).map(([label,value])=><div key={label}><dt>{label}</dt><dd style={{fontSize:24,fontWeight:700}}>{value}</dd></div>)}</dl>
       <div style={{overflowX:'auto'}}><table><thead><tr>{report.columns.map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{report.rows.map((row,index)=><tr key={index}>{row.map((value,i)=><td key={i} style={{whiteSpace:'pre-wrap',minWidth:i===4||i===5?200:90}}>{value}</td>)}</tr>)}</tbody></table></div>
       {!report.rows.length&&<p>No qualifying breakdown or idle records in this window.</p>}
