@@ -18,9 +18,8 @@ export default function FleetSiteBars({ site, axisMax, lmvAxisMax = axisMax, sho
       return <span className={`mine-fleet-bar-column ${key}`} key={key}>
         <i className={`mine-fleet-bar ${key}`} style={{ height: `${totalHeight}%` }} title={showBreakdown ? `${label}: ${total} total, ${breakdown} breakdown, ${total - breakdown} remaining` : `${label}: ${total} total`}>
           <b className="mine-fleet-bar-count">{total.toLocaleString()}</b>
-          {showBreakdown && breakdown > 0 && key === "otherVehicles" && <b className="mine-fleet-lmv-bd-count">BD ({breakdown.toLocaleString()})</b>}
           {showBreakdown && breakdown > 0 && <span className={`mine-fleet-breakdown-segment${breakdown / scale < 0.12 ? " small-segment" : ""}${breakdown < total ? " partial-segment" : ""}`} style={{ height: `${breakdownShare}%` }}>
-            {key !== "otherVehicles" && <b className="mine-fleet-breakdown-count">{breakdown.toLocaleString()}</b>}
+            <b className="mine-fleet-breakdown-count">{breakdown.toLocaleString()}</b>
           </span>}
         </i>
       </span>;

@@ -1,4 +1,4 @@
-.lmv-fleet-controls { display:grid; grid-template-columns:minmax(230px,1fr) auto minmax(180px,1fr); align-items:center; gap:10px 14px; padding:8px 14px; border:0; background:transparent; }
+.lmv-fleet-controls { display:grid; grid-template-columns:minmax(230px,1fr) auto minmax(180px,1fr); align-items:center; gap:10px 14px; padding:0 14px 8px; border:0; background:transparent; }
 .lmv-fleet-controls>strong { display:flex; align-items:center; gap:6px; color:var(--mine-text,#16304b); }
 .mine-dashboard .lmv-fleet-controls>strong { font-size:24px; line-height:1.2; }
 .mine-dashboard .mine-fleet-region-chart .lmv-fleet-controls .mine-fleet-chart-toggle { width:var(--fleet-counter-width,auto); min-height:calc(var(--fleet-counter-height,66px) + 14px); max-width:100%; box-sizing:border-box; flex:none; justify-self:center; justify-content:space-between; margin:0; }
@@ -10,7 +10,6 @@
 .lmv-fleet-controls>small { color:var(--mine-muted,#52637a); }
 .mine-dashboard .mine-fleet-bar.otherVehicles { background:linear-gradient(180deg,#2dd4bf,#0f766e); }
 .mine-dashboard .mine-fleet-bar.otherVehicles .mine-fleet-breakdown-segment { min-height:0; }
-.mine-dashboard .mine-fleet-bar.otherVehicles .mine-fleet-lmv-bd-count { position:absolute; bottom:calc(100% + 28px); left:50%; transform:translateX(-50%); padding:2px 4px; background:var(--fleet-breakdown,#a00000); color:#fff; border-radius:3px; white-space:nowrap; font-size:12px; line-height:16px; }
 .mine-fleet-bar.otherVehicles .mine-fleet-bar-count { color:#0f766e; }
 .mine-dashboard .has-lmv-bars .mine-fleet-bar-column { width:clamp(28px,2vw,42px); }
 .mine-dashboard .has-lmv-bars .mine-fleet-site-bars { gap:clamp(5px,.5vw,10px); }
@@ -67,3 +66,7 @@
 .mine-dashboard.mine-dashboard-night .mine-fleet-bar.otherVehicles .mine-fleet-bar-count { color:#5eead4; }
 
 @media(max-width:1350px) { .lmv-fleet-tools { grid-column:1/-1; } }
+
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars > header { padding-bottom:0; border-bottom:0; align-items:end; }
+.mine-dashboard .lmv-fleet-controls .mine-fleet-view-option.breakdown.active { background:var(--brand-purple,#522e90); }
+.mine-dashboard .lmv-fleet-controls .mine-fleet-view-option.breakdown > .mine-fleet-toggle-count { background:#c62828; color:#fff; }

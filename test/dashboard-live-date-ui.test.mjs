@@ -1287,3 +1287,17 @@ test('main Total Fleet and each site count include LMVs and open exactly their m
   fleetCount(tree,'OEM BD').props.onClick();tree=view.render();assert.equal(list().props.rows.length,1);
   assert.equal(oemChart(tree).props.chart.rows.length,1);
 });
+
+test('LMV today badge excludes demo statuses, deduplicates requests, and opens exactly the off-road vehicles',()=>{
+  const samples=lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5));
+  const view=harness({lmvRecords:samples});
+  const request={ref:'LMV-TODAY',door:samples[3].door,equipment:samples[3].equipmentName,site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`};
+  let tree=view.render([request,{...request,ref:'LMV-TODAY-2'},{...request,ref:'LMV-CLOSED',door:samples[0].door,status:'Closed'}]);
+  const controls=findAll(tree,node=>node.props.onMode&&node.props.onReports)[0];
+  assert.equal(controls.props.todayCount,1);
+  controls.props.onTodayInspect();tree=view.render([request]);
+  const dialog=findAll(tree,node=>node.props.selection?.today)[0];
+  assert.deepEqual(dialog.props.records.map(row=>row.door),[samples[3].door]);
+  tree=harness({lmvRecords:samples}).render([]);
+  assert.equal(findAll(tree,node=>node.props.onMode&&node.props.onReports)[0].props.todayCount,0);
+});
