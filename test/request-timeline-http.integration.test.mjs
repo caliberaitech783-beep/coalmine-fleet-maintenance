@@ -27,11 +27,11 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
   }
   const ref=`REQ-TIMELINE-${run}`,door=`TL-${run}`,chassis=`TLC-${run}`;
   const start=india(Date.now()-300000).replace('T',' · ');
-  const create=extra=>call('production','POST','/api/requests',{ref,door,chassis,site,complaint:'Isolated timeline test',start,meterType:'HMR',...extra},201);
+  const create=extra=>call('production','POST','/api/requests',{ref,door,chassis,site,complaint:'Isolated timeline test',start,meterType:'HMR',openingMeterReading:'100',closingMeterReading:'120',oemResponsibility:'NON OEM',...extra},201);
   const read=()=>call('production','GET',`/api/requests/${ref}/timeline`);
   const raw=async()=> (await pool.query('SELECT id,started_at,accepted_at,expected_completion_at,expected_completion_changed_at,closed_at,verified_at FROM maintenance_requests WHERE reference=$1',[ref])).rows[0];
   const etc=india(Date.now()+3600000).slice(0,16);
-  const edit=extra=>call('maintenance','PATCH',`/api/requests/${ref}`,{complaint:'Isolated timeline test',expectedCompletionAt:etc,meterType:'HMR',...extra});
+  const edit=extra=>call('maintenance','PATCH',`/api/requests/${ref}`,{complaint:'Isolated timeline test',expectedCompletionAt:etc,meterType:'HMR',openingMeterReading:'100',closingMeterReading:'120',oemResponsibility:'NON OEM',...extra});
   let originalId;
 
   await t.test('future submission and invalid dates are rejected without inserting a request',async()=>{
@@ -78,7 +78,7 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
     const accepted=(await raw()).accepted_at;
     const beforeAcceptance=pair(accepted.getTime()-1000),future=pair(Date.now()+600000);
     for(const value of [beforeAcceptance,future]){
-      const denied=await call('maintenance','PATCH',`/api/requests/${ref}/close`,{closingDate:value.date,closingTime:value.time,maintenanceWork:'Fixture repair',status:'Closed'},400);
+      const denied=await call('maintenance','PATCH',`/api/requests/${ref}/close`,{closingDate:value.date,closingTime:value.time,maintenanceWork:'Fixture repair',status:'Closed',meterType:'HMR',closingMeterReading:'120'},400);
       assert.equal(denied.code,'INVALID_REQUEST_TIMELINE');assert.equal((await raw()).closed_at,null);
     }
     // Whole-second manual fields cannot represent the server's fractional capture.
@@ -86,7 +86,7 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
     const wait=Math.max(0,Math.ceil(accepted.getTime()/1000)*1000-Date.now()+10);
     if(wait)await new Promise(resolve=>setTimeout(resolve,wait));
     const closed=pair(Date.now());
-    await call('maintenance','PATCH',`/api/requests/${ref}/close`,{closingDate:closed.date,closingTime:closed.time,maintenanceWork:'Fixture repair',status:'Closed'});
+    await call('maintenance','PATCH',`/api/requests/${ref}/close`,{closingDate:closed.date,closingTime:closed.time,maintenanceWork:'Fixture repair',status:'Closed',meterType:'HMR',closingMeterReading:'120'});
     const closedAt=(await raw()).closed_at;
     for(const value of [pair(closedAt.getTime()-1000),future]){
       const denied=await call('mis','PATCH',`/api/requests/${ref}/verify`,{firstTripDone:true,firstTripDate:value.date,firstTripTime:value.time,firstTripCardImage:'data:image/png;base64,iVBORw==',closingMeterReading:'123'},400);
@@ -117,16 +117,15 @@ test('isolated real PostgreSQL timeline validation, transactional corrections, s
     assert.ok((await pool.query("SELECT id FROM audit_events WHERE target_reference=$1 AND changed_fields @> $2::jsonb",[ref,JSON.stringify([{requestId:String(originalId)}])])).rowCount>0);
   });
 
-  await t.test('clearing a legacy first-trip time requires a reason and preserves that original value in history',async()=>{
+  await t.test('mandatory first-trip confirmation cannot clear a legacy time, even with a correction reason',async()=>{
     const oldTrip=new Date(Date.now()-60000);
     await pool.query("UPDATE maintenance_requests SET status='Closed',accepted_at=$1,closed_at=$2,first_trip_at=$3,first_trip_done=TRUE WHERE reference=$4",[new Date(Date.now()-180000),new Date(Date.now()-120000),oldTrip,ref]);
     const body={firstTripDone:false,firstTripCardImage:'data:image/png;base64,iVBORw==',closingMeterReading:'123'};
     const denied=await call('mis','PATCH',`/api/requests/${ref}/verify`,body,400);
-    assert.equal(denied.code,'TIMELINE_CORRECTION_REASON_REQUIRED');assert.match(denied.error,/first trip/i);
+    assert.match(denied.error,/first-trip confirmation is mandatory/i);
+    const retry=await call('mis','PATCH',`/api/requests/${ref}/verify`,{...body,correctionReason:'Legacy trip entry belongs to a different shift.'},400);
+    assert.match(retry.error,/first-trip confirmation is mandatory/i);
     assert.equal((await raw()).verified_at,null);
     assert.equal((await pool.query('SELECT first_trip_at FROM maintenance_requests WHERE reference=$1',[ref])).rows[0].first_trip_at.getTime(),oldTrip.getTime());
-    await call('mis','PATCH',`/api/requests/${ref}/verify`,{...body,correctionReason:'Legacy trip entry belongs to a different shift.'});
-    const correction=(await read()).history.find(item=>item.event==='firstTripAt');
-    assert.equal(correction.oldValue,oldTrip.toISOString());assert.equal(correction.newValue,null);assert.equal(correction.correction,true);assert.equal(correction.reason,'Legacy trip entry belongs to a different shift.');
   });
 });

@@ -13,5 +13,5 @@ test('Tender central sessions bind the account and password version and keep BDM
  await endTenderSession(pool,profile,id);assert.equal(await currentTenderSession(pool,profile,id),false);
 });
 test('A central Tender tracking token cannot sign into BDMS',async()=>{
- const store=createSessionStore({query:async()=>({rows:[{role:'admin',permissions:{application:'Tender'}}]})});assert.equal(await store.get('private-tracking-token'),null);
+ const store=createSessionStore({query:async()=>({rows:[{role:'admin',permissions:{application:'Tender'}}]})});assert.equal(await store.get('11111111-1111-4111-8111-111111111111'),null);
 });

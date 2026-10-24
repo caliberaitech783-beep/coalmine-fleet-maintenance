@@ -24,6 +24,12 @@ test('real database role cycles, queues, red flags, reports and permission bound
   const health=await fetch(`${base}/api/health`).then(r=>r.json());
   assert.equal(health.database,'connected');
   assert.equal(health.scheduledJobsEnabled,false,'External scheduled work must be disabled');
+  await t.test('malformed bearer credentials return 401 instead of PostgreSQL UUID errors',async()=>{
+    for(const credential of ['Bearer','Bearer undefined','Bearer null','Bearer not-a-uuid']){
+      const response=await fetch(base+'/api/masters?names=Equipment%20master',{headers:{Authorization:credential}});
+      assert.equal(response.status,401);assert.match((await response.json()).error,/sign.in/i);
+    }
+  });
   const pool=new pg.Pool({connectionString:databaseUrl});
   t.after(()=>pool.end());
   const run=Date.now().toString(36);
@@ -75,9 +81,9 @@ test('real database role cycles, queues, red flags, reports and permission bound
     assert.equal(row.status,'Open');assert.equal(row.driverName,'','Missing driver must not become fictitious Demo Driver');
     return row;
   }
-  const change=(row,extra={})=>({category:row.category,complaint:row.complaint,expectedCompletionAt:india(3600000).slice(0,16),meterType:'HMR',...extra});
-  const closeBody=(extra={})=>{const [closingDate,closingTime]=india().split('T');return {closingDate,closingTime,maintenanceWork:'Audit repair completed',...extra}};
-  const verification=()=>({firstTripDone:true,firstTripCardImage:image,closingMeterReading:'200'});
+  const change=(row,extra={})=>({category:row.category,complaint:row.complaint,expectedCompletionAt:india(3600000).slice(0,16),meterType:'HMR',openingMeterReading:'100',closingMeterReading:'200',oemResponsibility:'NON OEM',...extra});
+  const closeBody=(extra={})=>{const [closingDate,closingTime]=india().split('T');return {closingDate,closingTime,maintenanceWork:'Audit repair completed',meterType:'HMR',openingMeterReading:'100',closingMeterReading:'200',...extra}};
+  const verification=()=>({firstTripDate:india().split('T')[0],firstTripTime:india().split('T')[1],firstTripDone:true,firstTripCardImage:image,closingMeterReading:'200'});
   const productionFirstTrip=()=>{const [firstTripDate,firstTripTime]=india().split('T');return {firstTripDate,firstTripTime,productionFirstTripRemark:'Production received vehicle and started first trip.'};};
   async function awaitManualTimestampAfter(row,field){
     // Form inputs carry whole seconds; production capture retains PostgreSQL
@@ -120,7 +126,7 @@ test('real database role cycles, queues, red flags, reports and permission bound
     await assertClosedQueues(closed);
     await call('production','PATCH',`/api/requests/${row.ref}/verify`,verification(),403);
     await call('otherMis','PATCH',`/api/requests/${row.ref}/verify`,verification(),403);
-    await call('mis','PATCH',`/api/requests/${row.ref}/verify`,verification(),409);
+    await call('mis','PATCH',`/api/requests/${row.ref}/verify`,{...verification(),firstTripDone:false},400);
     await awaitManualTimestampAfter(closed,'closedAt');
     const productionTrip=await call('production','PATCH',`/api/requests/${row.ref}/production-first-trip`,productionFirstTrip());
     assert.ok(productionTrip.productionFirstTripAt);
@@ -139,10 +145,12 @@ test('real database role cycles, queues, red flags, reports and permission bound
   });
   for(const role of ['maintenanceManager','productionManager','projectManager'])await t.test(`idle → ${role} approval → all closed queues → MIS first-trip verification`,async()=>{
     const row=await create();
-    await call('maintenance','PATCH',`/api/requests/${row.ref}`,change(row));
+    const accepted=await call('maintenance','PATCH',`/api/requests/${row.ref}`,change(row));
+    await awaitManualTimestampAfter(accepted,'acceptedAt');
     const idle=await call('maintenance','PATCH',`/api/requests/${row.ref}/close`,closeBody({ideal:true,idleReason:'No work'}));
-    assert.equal(idle.status,'Idle');assert.ok(idle.idealRequestedAt);assert.equal(idle.closedAt,null);
-    assert.ok(!contains((await rows('mis')).filter(visibleInMisRequests),row.ref));
+    assert.equal(idle.status,'Closed');assert.equal(idle.vehicleIdle,true);assert.ok(idle.idealRequestedAt);assert.ok(idle.closedAt);
+    assert.ok(contains((await rows('mis')).filter(visibleInMisRequests),row.ref));
+    await call('mis','PATCH',`/api/requests/${row.ref}/verify`,verification(),409);
     await call('production','PATCH',`/api/requests/${row.ref}/ideal-onroad`,{},403);
     await call('otherManager','PATCH',`/api/requests/${row.ref}/ideal-onroad`,{},409);
     const approved=await call(role,'PATCH',`/api/requests/${row.ref}/ideal-onroad`,{});
@@ -160,6 +168,7 @@ test('real database role cycles, queues, red flags, reports and permission bound
   await t.test('idle cancel returns to active maintenance without losing arrival history',async()=>{
     const row=await create();
     const accepted=await call('maintenance','PATCH',`/api/requests/${row.ref}`,change(row));
+    await awaitManualTimestampAfter(accepted,'acceptedAt');
     await call('maintenance','PATCH',`/api/requests/${row.ref}/close`,closeBody({ideal:true,idleReason:'No driver'}));
     await call('productionManager','PATCH',`/api/requests/${row.ref}/idle-cancel`,{},403);
     const reopened=await call('maintenanceManager','PATCH',`/api/requests/${row.ref}/idle-cancel`,{});

@@ -1,4 +1,5 @@
 const DEFAULT_SESSION_MAX_AGE_DAYS = 7;
+const validSessionToken = token => typeof token === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token);
 
 export function createSessionStore(pool, {
   maxAgeDays = DEFAULT_SESSION_MAX_AGE_DAYS,
@@ -52,7 +53,7 @@ export function createSessionStore(pool, {
     },
 
     async get(token) {
-      if (!token) return null;
+      if (!validSessionToken(token)) return null;
       const {rows} = await pool.query(
         `SELECT role, employee_name AS name, login_name AS login, user_type AS "userType",
                 assigned_role AS "assignedRole", permissions, created_at,
@@ -69,7 +70,7 @@ export function createSessionStore(pool, {
     },
 
     async touch(token, {ipAddress = "", deviceId = "", userAgent = ""} = {}) {
-      if (!token) return;
+      if (!validSessionToken(token)) return;
       await pool.query(
         `UPDATE auth_sessions
          SET last_seen_at = NOW(), ip_address = $2, device_id = $3, user_agent = $4
