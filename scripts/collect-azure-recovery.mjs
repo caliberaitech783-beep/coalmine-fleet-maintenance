@@ -83,10 +83,8 @@ if(process.env.CREATE_FULL_BACKUP==='true'){
   for(let i=0;i<120;i++){
     const status=await (await call('/api/full-backup-system/status')).json();
     if(status.id===job.id&&['Completed','Partial'].includes(status.status)){
-      const response=await call(`/api/full-backup-system/${job.id}/download`);
-      const {pipeline}=await import('node:stream/promises');const {createWriteStream}=await import('node:fs');
-      const file=path.join(output,'full-recovery',status.fileName);await pipeline(Readable.fromWeb(response.body),createWriteStream(file,{mode:0o600}));
-      const {fileHash}=await import('../full-backup.mjs');if(await fileHash(file)!==status.checksum)throw Error('Downloaded backup checksum mismatch');
+      const {downloadRecoveryArchive}=await import('./download-recovery-archive.mjs');
+      await downloadRecoveryArchive({url:base+`/api/full-backup-system/${job.id}/download`,headers,target:path.join(output,'full-recovery',status.fileName),checksum:status.checksum});
       console.log(JSON.stringify({summary,backup:{id:job.id,status:status.status,checksum:status.checksum,fileName:status.fileName}}));process.exit(0);
     }
     if(status.id===job.id&&status.status==='Failed')throw Error('Full backup failed; see Admin > Full Backup');
@@ -99,9 +97,7 @@ console.log(JSON.stringify(summary));
 // without overriding the administrator's enabled/time/weekday settings.
 const latest=await (await call('/api/full-backup-system/status')).json();
 if(latest.id&&['Completed','Partial'].includes(latest.status)&&Date.now()-Date.parse(latest.startedAt)<26*3600000){
-  const response=await call(`/api/full-backup-system/${latest.id}/download`);
-  const {pipeline}=await import('node:stream/promises');const {createWriteStream}=await import('node:fs');
-  const file=path.join(output,'full-recovery',latest.fileName);await pipeline(Readable.fromWeb(response.body),createWriteStream(file,{mode:0o600}));
-  const {fileHash}=await import('../full-backup.mjs');if(await fileHash(file)!==latest.checksum)throw Error('Downloaded backup checksum mismatch');
+  const {downloadRecoveryArchive}=await import('./download-recovery-archive.mjs');
+  await downloadRecoveryArchive({url:base+`/api/full-backup-system/${latest.id}/download`,headers,target:path.join(output,'full-recovery',latest.fileName),checksum:latest.checksum});
   console.log(JSON.stringify({copiedFullBackup:latest.id,status:latest.status,checksum:latest.checksum}));
 }

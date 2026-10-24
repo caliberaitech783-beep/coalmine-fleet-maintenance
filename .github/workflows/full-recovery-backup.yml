@@ -15,7 +15,7 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 180
     env:
       AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
       AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
