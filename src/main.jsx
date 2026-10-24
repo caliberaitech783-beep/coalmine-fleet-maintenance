@@ -3236,6 +3236,7 @@ const masterFields = {
     ["print", "Print", "checkbox"],
   ],
 };
+masterFields["LMV master"] = masterFields["Equipment master"];
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
@@ -4860,7 +4861,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       alert("Select at least one region and keep at least one site included for this Non Admin user.");
       return;
     }
-    if (name === "Equipment master" && !record.status)
+    if (["Equipment master", "LMV master"].includes(name) && !record.status)
       record.status = "Operational";
     if (name === "Users & employees" && record.userType === "Super Admin" && !record.masterAccess && !record.tabAccess) {
       alert("Select at least one visible master or tab for this Super Admin.");
@@ -4929,7 +4930,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
-      alert(name === "Equipment master"
+      alert(["Equipment master", "LMV master"].includes(name)
         ? `ERP sync completed. ${details.updated || 0} vehicles updated. Driver names available: ${details.driversFound || 0}/${details.total || 0}. Models available: ${details.modelsFound || 0}/${details.total || 0}. ${details.missingDrivers || 0} driver names and ${details.missingModels || 0} models still need source data or matching ERP records.`
         : `${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
       window.location.reload();
@@ -4966,7 +4967,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       <div className="master-actions">
         {["Vehicle transfers", "Equipment master"].includes(name) && (
           <button className="secondary" type="button" onClick={syncOracle} disabled={syncingOracle}>
-            <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : name === "Equipment master" ? "Sync drivers & models" : "Sync Oracle"}
+            <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : ["Equipment master", "LMV master"].includes(name) ? "Sync drivers & models" : "Sync Oracle"}
           </button>
         )}
         {onDeleteAll && (
@@ -4974,7 +4975,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
             <Trash2 /> Delete all
           </button>
         )}
-        {name === "Equipment master" && onDeleteSelected && (
+        {["Equipment master", "LMV master"].includes(name) && onDeleteSelected && (
           <button className="secondary danger" type="button" onClick={openDeleteSelectedReview} disabled={!selectedRecordCount || deletingSelected} title="Review and delete every saved record matching the current Equipment Master filters">
             <Trash2 /> {deletingSelected ? "Deleting..." : `Delete selected (${selectedRecordCount})`}
           </button>
@@ -5115,7 +5116,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
                     <>{label}<DateInput name={key} /></>
                   ) : type === "shift-status" ? (
                     <>{label} *<select name={key} required defaultValue="Active"><option>Active</option><option>Inactive</option></select></>
-                  ) : name === "Equipment master" && key === "status" ? (
+                  ) : ["Equipment master", "LMV master"].includes(name) && key === "status" ? (
                     <>{label} *
                     <select name={key} required defaultValue="Operational"><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select></>
                   ) : key === "level" ? (
@@ -5253,6 +5254,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
   );
 }
 function Equipment({
+  masterName = "Equipment master",
   initialFilter = "all",
   initialLocation = "",
   initialCategory = "all",
@@ -5387,7 +5389,7 @@ function Equipment({
             · {rows.length} records shown
           </p>
         </div>
-        <MasterActions name="Equipment master" records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} onDeleteSelected={onDeleteSelected} selectedRecords={rows} />
+        <MasterActions name={masterName} records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} onDeleteSelected={onDeleteSelected} selectedRecords={rows} />
       </header>
       <div className="toolbar">
         <div>
@@ -9357,10 +9359,10 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   );
 };
 const OriginalEquipment = Equipment;
-Equipment = function EquipmentWithData(props) {
-  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad, onDeleteSelected] = useMasterRecords("Equipment master", vehicles);
-  if (loadError && !loaded) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
-  if (!loaded) return <MasterLoader name="Equipment master" />;
+Equipment = function EquipmentWithData({masterName = "Equipment master", ...props}) {
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad, onDeleteSelected] = useMasterRecords(masterName, masterName === "Equipment master" ? vehicles : []);
+  if (loadError && !loaded) return <MasterLoadError name={masterName} error={loadError} retry={retryLoad} />;
+  if (!loaded) return <MasterLoader name={masterName} />;
   const addEquipment = (incoming) =>
     onAdd(
       incoming.map(normalizeEquipmentRecord),
@@ -9368,6 +9370,7 @@ Equipment = function EquipmentWithData(props) {
   return (
     <OriginalEquipment
       {...props}
+      masterName={masterName}
       records={records}
       onAdd={addEquipment}
       onEdit={(id, record) => onEdit(id, normalizeEquipmentRecord(record))}
@@ -9377,6 +9380,17 @@ Equipment = function EquipmentWithData(props) {
     />
   );
 };
+function EquipmentMasterPage(props) {
+  const [masterName, setMasterName] = useState("Equipment master");
+  return <>
+    <div className="tabs" role="tablist" aria-label="Equipment sub-masters">
+      {["Equipment master", "LMV master"].map(name => <button type="button" role="tab" id={name === "LMV master" ? "lmv-master-tab" : "equipment-master-tab"} aria-controls="equipment-submaster-panel" aria-selected={masterName === name} className={masterName === name ? "active" : ""} key={name} onClick={() => setMasterName(name)}>{name === "LMV master" ? "LMV Master" : "Equipment Master"}</button>)}
+    </div>
+    <div role="tabpanel" id="equipment-submaster-panel" aria-labelledby={masterName === "LMV master" ? "lmv-master-tab" : "equipment-master-tab"}>
+      <Equipment {...props} key={masterName} masterName={masterName} pageTitle={masterName === "LMV master" ? "LMV Master" : "Equipment master"} />
+    </div>
+  </>;
+}
 const OriginalGeneric = Generic;
 function PrivilegeMasterPage(props) {
   const [users, , usersLoaded, , , , usersLoadError, retryUsersLoad] = useMasterRecords("Users & employees");
@@ -12138,7 +12152,7 @@ function App() {
   ) : renderedActive === "Vehicle transfers" ? (
     <VehicleTransferWorkflow session={session} Dialog={Modal} />
   ) : renderedActive === "Equipment master" ? (
-    <Equipment initialFilter={renderedEquipmentFilter} initialLocation={renderedEquipmentLocation} initialCategory={renderedEquipmentCategory} allowedLocations={renderedEquipmentLocations} statusRequests={requests} />
+    <EquipmentMasterPage initialFilter={renderedEquipmentFilter} initialLocation={renderedEquipmentLocation} initialCategory={renderedEquipmentCategory} allowedLocations={renderedEquipmentLocations} statusRequests={requests} />
   ) : renderedActive === "Breakdown master" ? (
     renderedBreakdownFleetFilter ? <Equipment initialFilter={renderedBreakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={renderedBreakdownFleetSites} /> : <Breakdown requests={requests} />
   ) : renderedActive === "Region master" ? (

@@ -7947,8 +7947,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
         if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
       }
-      const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.master_name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data;
-      if(managerRecord&&row.master_name==='Equipment master'){
+      const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):['Equipment master','LMV master'].includes(row.master_name)?equipmentMasterWithDoor(row.record_data):row.record_data;
+      if(managerRecord&&['Equipment master','LMV master'].includes(row.master_name)){
         const equipmentSite=canonicalSiteName(record.currentLocation||record.site||record.location||'');
         if(!reportScopeIncludesSite(managerScope,equipmentSite))continue;
       }
@@ -7991,7 +7991,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         try{
           if(isCdirMaster(master))return cdirCleanRecord(master,record);
           if(master==='Shift Master')return normalizeOperationalSiteFields(normalizeShiftRecord(record));
-          if(master==='Equipment master')return normalizeOperationalSiteFields(equipmentMasterWithDoor(record));
+          if(['Equipment master','LMV master'].includes(master))return normalizeOperationalSiteFields(equipmentMasterWithDoor(record));
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
@@ -8030,7 +8030,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         await client.query('ROLLBACK').catch(()=>{});
         throw error;
       }finally{client.release()}
-    }else if(master==='Equipment master'||master==='Shift Master'){
+    }else if(master==='Equipment master'||master==='Shift Master'||master==='LMV master'){
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
@@ -8038,7 +8038,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           'SELECT id,record_data FROM master_records WHERE master_name=$1 FOR UPDATE',
           [master]
         );
-        const identityFor=master==='Equipment master'?equipmentIdentity:shiftIdentity;
+        const identityFor=master==='Shift Master'?shiftIdentity:equipmentIdentity;
         const byIdentity=new Map(existing.rows.map(row=>[identityFor(row.record_data),row]).filter(([identity])=>identity));
         rows=[];
         for(const record of prepared){
@@ -8174,7 +8174,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;
     if(isCdirMaster(master)&&await cdirReferenceCount(master,previousRecord))return res.status(409).json({error:'This shared directory definition is in use. Direct changes could alter approved employee records. Submit employee changes through Directory Update Approvals instead.'});
-    if(master==='Equipment master')Object.assign(record,equipmentMasterWithDoor(record));
+    if(['Equipment master','LMV master'].includes(master))Object.assign(record,equipmentMasterWithDoor(record));
     let storedRecord=isCdirMaster(master)?cdirCleanRecord(master,record):master==='Shift Master'
       ?normalizeOperationalSiteFields(normalizeShiftRecord(record))
       :normalizeOperationalSiteFields(record);
@@ -8321,7 +8321,7 @@ app.delete('/api/masters/:master/selected',requireSuper,async(req,res,next)=>{
     const master=decodeURIComponent(req.params.master);
     const cdirError=cdirWriteError(req,master);
     if(cdirError)return res.status(403).json({error:cdirError});
-    if(master!=='Equipment master')return res.status(403).json({error:'Selected-record deletion is only available for Equipment master.'});
+    if(!['Equipment master','LMV master'].includes(master))return res.status(403).json({error:'Selected-record deletion is only available for equipment masters.'});
     const reason=String(req.get(AUDIT_REASON_HEADER)||'').trim();
     if(!reason)return res.status(400).json({error:'A deletion reason is required for the Audit Trail.'});
     if(!Array.isArray(req.body?.ids)||!req.body.ids.length)return res.status(400).json({error:'Select at least one equipment record to delete.'});
