@@ -20,11 +20,11 @@ const requests = [
   {ref: "REQ-4", door: "EX-20", start: "2026-09-11 09:00", status: "Closed", maintenanceWork: "Serviced"},
 ];
 
-test('a missing master door stays blank while fleet history and driver remain attached',()=>{
+test('a registration-only equipment name fills the missing door while fleet history and driver remain attached',()=>{
   const equipment={door:'',reg:'UP64AT9857',equipmentName:'UP64AT9857',chassisNo:'CH123'};
   const request={...equipment,ref:'REQ-REG',start:'2026-09-27 10:00',driverName:'Driver'};
   const [row]=vehicleFleetRows([equipment],[request]);
-  assert.equal(row.reportDoor,'');
+  assert.equal(row.reportDoor,'UP64AT9857');
   assert.equal(row.breakdownCount,1);
   assert.equal(row.driverName,'Driver');
   assert.equal(vehicleRepairHistoryRows([request],row)[0].ref,'REQ-REG');
