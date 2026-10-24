@@ -33,13 +33,11 @@ export const LMV_MODES=[['total','Total LMV','total'],['balance','BD Balance','b
 export function LmvFleetControls({records,mode,onMode,onInspect,loaded,error,retry,onReports}) {
   const counts=lmvCounts(records);
   return <div className="lmv-fleet-controls">
-    <strong><i />Other vehicles / LMV</strong>
-    <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view">
+    <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view" title={counts.demo>0 ? `${counts.demo} labelled demo LMVs · sample statuses` : 'Other vehicles / LMV'}>
       {LMV_MODES.map(([key,label,count])=><div key={key} className={`mine-fleet-view-option ${mode===key?'active':''}`}><button type="button" disabled={!loaded} aria-pressed={mode===key} onClick={()=>onMode(key)}>{label}</button><button type="button" disabled={!loaded} className="mine-fleet-toggle-count" aria-label={`View ${label} LMV records`} onClick={()=>onInspect({mode:key})}>{loaded?counts[count]:'—'}</button></div>)}
     </div>
     <div className="lmv-fleet-tools"><button type="button" className="secondary" onClick={()=>onMode('')} aria-pressed={!mode}>All fleet bars</button>
     <button type="button" className="secondary" disabled={!loaded} onClick={onReports}>LMV reports</button></div>
-    {counts.demo>0&&<small>{counts.demo} labelled demo LMVs · sample statuses</small>}
     {error&&<span role="alert">{error} <button type="button" onClick={retry}>Retry</button></span>}
   </div>;
 }

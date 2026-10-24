@@ -47,6 +47,18 @@ test("legacy case counts cannot overflow asset bars or produce negative remainin
   }
 });
 
+test("LMV uses its readable scale and puts BD counts above the column without duplicate segment labels", () => {
+  const tree = FleetSiteBars({ site: { equipment: 50, vehicles: 200, otherVehicles: 5, breakdown: { otherVehicles: 2 } }, axisMax: 250, lmvAxisMax: 8, showBreakdown: true });
+  const bars = all(tree, node => node.type === "i");
+  assert.deepEqual(bars.map(bar => bar.props.style.height), ["20%", "80%", "62.5%"]);
+  const lmv = bars[2];
+  assert.equal(all(lmv, node => node.props.className === "mine-fleet-lmv-bd-count").length, 1);
+  assert.equal(all(lmv, node => node.props.className === "mine-fleet-breakdown-count").length, 0);
+  assert.equal(all(lmv, node => node.props.className?.startsWith("mine-fleet-breakdown-segment"))[0].props.style.height, "40%");
+  const total = FleetSiteBars({ site: { otherVehicles: 5, breakdown: { otherVehicles: 2 } }, axisMax: 8 });
+  assert.equal(all(total, node => node.props.className === "mine-fleet-lmv-bd-count").length, 0);
+});
+
 test("empty, non-finite and negative chart inputs never render invalid dimensions", () => {
   for (const site of [undefined, {}, { equipment: -1, vehicles: Infinity, breakdown: { equipment: -9, vehicles: NaN } }]) {
     const tree = FleetSiteBars({ site, axisMax: NaN, showBreakdown: true });

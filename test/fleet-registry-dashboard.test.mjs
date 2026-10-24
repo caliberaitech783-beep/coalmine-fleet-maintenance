@@ -83,7 +83,7 @@ test("breakdown mode keeps total counts and green segments on one common scale",
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
   assert.match(bars, /const totalHeight = fleetBarHeightPercent\(total, scale\);/);
   assert.match(bars, /const breakdownShare = total \? breakdown \/ total \* 100 : 0;/);
-  assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
+  assert.match(bars, /Math\.max\(1, nonNegativeCount\(key === "otherVehicles" \? lmvAxisMax : axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
   assert.match(source, /const fleetChartAllKey = showFleetBreakdowns \? "fleet-breakdown:all" : "all"/);
@@ -175,7 +175,7 @@ test("the region and site graph title identifies the current view and only count
 });
 
 test("breakdown segment clicks initially select the site and retain category while allowing regional navigation", () => {
-  assert.match(source, /event\.target\.closest\("\.mine-fleet-breakdown-segment"\)\?\.closest\("\.mine-fleet-bar-column"\)/);
+  assert.match(source, /event\.target\.closest\("\.mine-fleet-breakdown-segment"\) \|\| event\.target\.closest\("\.mine-fleet-lmv-bd-count"\)/);
   assert.match(source, /\x60offroad-site:\$\{site\.name\}\|\$\{segmentColumn\.classList\.contains\("vehicles"\) \? "vehicles" : "equipment"\}\x60/);
   assert.match(source, /const offroadCategory = key\.startsWith\("offroad-site:"\) \? key\.slice\(13\)\.split\("\|"\)\[1\] \|\| "" : "";/);
   assert.match(source, /key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment"/);
