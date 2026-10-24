@@ -10,9 +10,10 @@ try{
   const host=hosts.find(host=>host.includes('.scm.'));
   if(!host)throw Error('SCM unavailable');
   const token=az(['account','get-access-token','--resource','https://management.azure.com/']).accessToken;
-  const remote=String.raw`import pg from 'pg';
-import {TELEGRAM_SITES,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
-import {telegramSiteGroupDetails} from './telegram.mjs';
+  const remote=String.raw`(async()=>{
+const {default:pg}=await import('pg');
+const {TELEGRAM_SITES,normalizeTelegramSiteGroups}=await import('./telegram-site-groups.mjs');
+const {telegramSiteGroupDetails}=await import('./telegram.mjs');
 let pool;
 try{
 const env=process.env;
@@ -27,9 +28,12 @@ return {site,registered:Boolean(group),botReady};
 }));
 console.log(JSON.stringify({source:'production',ready:sites.every(site=>site.botReady),sites}));
 }catch(error){console.log(JSON.stringify({ready:false,code:/^[A-Z0-9_]{1,60}$/.test(String(error.code||''))?error.code:'UNAVAILABLE'}));process.exitCode=1;}
-finally{await pool?.end();}`;
-  const quote=value=>"'"+value.replace(/'/g,"'\"'\"'")+"'";
-  const body=JSON.stringify({command:`node --input-type=module -e ${quote(remote)}`,dir:'/home/site/wwwroot'});
+finally{await pool?.end();}
+})().catch(()=>{console.log(JSON.stringify({ready:false,code:'PROBE_EXECUTION_FAILED'}));process.exitCode=1;});`;
+  // Kudu's command parser does not preserve POSIX nested single-quote escaping.
+  // Encode source only; database and bot credentials remain in the runtime.
+  const encoded=Buffer.from(remote).toString('base64');
+  const body=JSON.stringify({command:`node --input-type=module -e "eval(Buffer.from('${encoded}','base64').toString())"`,dir:'/home/site/wwwroot'});
   stage='Production runtime probe';
   let response=await fetch(`https://${host}/api/command`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body,signal:AbortSignal.timeout(60000)});
   if(response.status===401){

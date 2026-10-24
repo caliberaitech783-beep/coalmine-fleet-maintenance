@@ -38,7 +38,6 @@ env:
 
 jobs:
   telegram-readiness:
-    if: inputs.verify_telegram_only == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -53,6 +52,7 @@ jobs:
       - name: Inspect production Telegram group readiness
         run: node scripts/verify-telegram-membership-readiness.mjs
   build:
+    needs: telegram-readiness
     if: inputs.verify_telegram_only != true
     runs-on: ubuntu-latest
     services:
