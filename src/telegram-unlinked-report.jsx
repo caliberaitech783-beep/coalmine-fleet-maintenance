@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {canViewTelegramUnlinkedReport,telegramUnlinkedRows} from './telegram-unlinked-report.mjs';
+import TelegramMembershipReport from './telegram-membership-report.jsx';
 
 const columns=[
   {key:'name',label:'Employee name',value:row=>row.name},
@@ -28,9 +29,10 @@ export default function TelegramUnlinkedReport({session,ReportSection,onBack}) {
   if(!allowed)return <section className="panel"><h1>Access denied</h1><p>This report is available to Admin and Super Admin.</p></section>;
   const rows=telegramUnlinkedRows(data?.users||[],data?.loginUsers||[]);
   return <section className="reports-page panel pagepanel">
-    <header><div><h1>Telegram Not Linked Report</h1><p>Users with a recorded login who have not linked Telegram. Exempt users are included and marked separately.</p></div><div className="reports-header-actions"><button onClick={onBack}>Back to reports</button><button disabled={loading} onClick={()=>setRefresh(value=>value+1)}>{loading?'Loading…':'Refresh'}</button></div></header>
+    <header><div><h1>Telegram Membership Report</h1><p>Check required site group membership for all users. The legacy connection report is included below; its historical exemptions do not bypass mandatory membership.</p></div><div className="reports-header-actions"><button onClick={onBack}>Back to reports</button><button disabled={loading} onClick={()=>setRefresh(value=>value+1)}>{loading?'Loading…':'Refresh'}</button></div></header>
     {error&&<p role="alert">{error}</p>}
     {loading&&<p role="status">Loading Telegram link status…</p>}
+    <TelegramMembershipReport token={session.token} ReportSection={ReportSection}/>
     {data&&<ReportSection title="Telegram Not Linked Report" description={`${rows.length} logged-in users not linked · ${rows.filter(row=>row.exempt).length} exempt`} rows={rows} columns={columns} rowKey={row=>row.login} emptyMessage="No users with a recorded login are waiting to link Telegram." />}
   </section>;
 }

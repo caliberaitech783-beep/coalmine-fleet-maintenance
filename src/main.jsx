@@ -1182,7 +1182,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Hourly Breakdown Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), {id:'lmv',label:'Other vehicles / LMV reports',icon:FileBarChart}, ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
+  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Hourly Breakdown Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Membership Report',icon:FileBarChart}] : []), {id:'lmv',label:'Other vehicles / LMV reports',icon:FileBarChart}, ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
   const canViewReports = visibleReportNav.length > 0;
   const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
@@ -8104,7 +8104,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
           <button type="button" className="secondary" onClick={()=>setActiveReportCategory("lmv")}>Other vehicles / LMV reports</button>
           {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
           <button type="button" className="secondary" onClick={()=>setActiveReportCategory('downtime-matrix')}>Hourly Breakdown Report</button>
-          {canViewTelegramUnlinkedReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('telegram-unlinked')}>Telegram Not Linked Report</button>}
+          {canViewTelegramUnlinkedReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('telegram-unlinked')}>Telegram Membership Report</button>}
           {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
           <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!accessibleReportGroups.length}><Download /> Download reports ZIP</button>
@@ -9103,25 +9103,10 @@ function MetaWhatsAppSetup() {
           : <p className="telegram-links-empty">No users have connected yet.</p>}
       </div>
       {telegramRule && <div className="telegram-links telegram-requirement">
-        <h3>Require Telegram at login <span className={telegramRule.enabled ? "on" : ""}>{telegramRule.enabled ? "On" : "Off"}</span></h3>
-        <p>When on, every user who has not connected Telegram sees a "Connect Telegram to continue" screen after signing in and cannot use the app until they connect. Users who block the bot are disconnected and asked again at their next sign-in. Tick users below to exempt them.</p>
-        <p className="telegram-requirement-summary">
-          {telegramRule.users.filter((user) => user.linked).length} connected · {telegramRule.users.filter((user) => !user.linked && !telegramExempt.has(user.login)).length} not connected · {telegramExempt.size} exempt · {telegramRule.users.length} users
-        </p>
-        <ActionsTable printTitle="Telegram status of all users" exportTitle="Telegram status of all users"><thead><tr><th>Exempt</th><th>Employee</th><th>Login</th><th>Role</th><th>Location</th><th>Telegram</th></tr></thead>
-          <tbody>{telegramRule.users.map((user) => <tr key={user.login}>
-            <td><input type="checkbox" aria-label={`Exempt ${user.name} from Telegram`} checked={telegramExempt.has(user.login)} onChange={() => toggleTelegramExempt(user.login)} /></td>
-            <td>{user.name}</td><td>{user.login.toUpperCase()}</td><td>{user.role || "--"}</td><td>{user.site || "--"}</td>
-            <td>{user.linked ? `Connected${user.username ? ` (@${user.username})` : ""}` : telegramExempt.has(user.login) ? "Exempt" : "Not connected"}</td>
-          </tr>)}</tbody></ActionsTable>
-        {telegramRuleNotice && <div className={`meta-whatsapp-feedback ${telegramRuleNotice.ok ? "success" : "error"}`} role={telegramRuleNotice.ok ? "status" : "alert"}>{telegramRuleNotice.text}</div>}
-        <footer>
-          <button type="button" onClick={() => saveTelegramRule(telegramRule.enabled)} disabled={telegramRuleSaving}><Save />Save exemptions</button>
-          <button type="button" className="primary" onClick={() => {
-            if (!telegramRule.enabled && !window.confirm(`Require Telegram at login? ${telegramRule.users.filter((user) => !user.linked && !telegramExempt.has(user.login)).length} users who have not connected yet will be asked to connect before they can continue.`)) return;
-            saveTelegramRule(!telegramRule.enabled);
-          }} disabled={telegramRuleSaving}>{telegramRuleSaving ? <RefreshCw className="spin" /> : <ShieldCheck />}{telegramRule.enabled ? "Turn off requirement" : "Require Telegram at login"}</button>
-        </footer>
+        <h3>Mandatory site group membership <span className="on">On for every user</span></h3>
+        <p>All users must connect Telegram and verify membership in every allocated site group before accessing Pulse. The former Require Telegram at login switch and exemptions no longer override this requirement.</p>
+        <p>{telegramRule.users.filter(user=>user.linked).length} connected · {telegramRule.users.filter(user=>!user.linked).length} not connected · {telegramRule.users.length} users</p>
+        <p>Open Reports → Telegram Membership Report to see users who have not joined, missing site allocations and verification issues.</p>
       </div>}
     </div>
   </section>;

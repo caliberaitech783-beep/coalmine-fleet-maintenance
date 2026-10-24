@@ -119,6 +119,8 @@ import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,reg
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
+import {telegramChatMember} from './telegram.mjs';
+import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS} from './telegram-membership.mjs';
 import {telegramInvitationBatch,telegramInvitationSummary} from './telegram-site-invitations.mjs';
 import {telegramSiteCampaignId,telegramSiteExport,telegramCampaignRecipients,telegramCampaignMessage,telegramCampaignBatch} from './telegram-site-campaign.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -2544,7 +2546,18 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
 
 async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  return sessionStore.get(token);
+  const session=await sessionStore.get(token);
+  if(session&&!membershipOnboardingPath(req.path)){
+    // These existing administrator-authorized routes remain available solely
+    // to inspect membership and repair Telegram group configuration.
+    const remediation=session.role==='super'&&session.permissions?.adminLevel!=='Manager'&&
+      (req.path.startsWith('/api/telegram/site-groups')||req.path==='/api/telegram/settings');
+    if(!remediation){
+      const status=await telegramMembershipFor(session.login);
+      if(!status.allowed){const error=new Error('Join and verify all assigned site Telegram groups to continue.');error.status=403;error.code='TELEGRAM_MEMBERSHIP_REQUIRED';throw error;}
+    }
+  }
+  return session;
 }
 
 function sessionActivityDetails(req){
@@ -3831,6 +3844,44 @@ app.post('/api/telegram/test-templates',requireSuper,requireWhatsAppAdministrato
 
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
 
+const membershipChecker=createMembershipChecker({checkMember:telegramChatMember,checkGroup:telegramSiteGroupDetails});
+async function telegramMembershipFor(login,force=false){
+  const [user,groups,{rows}]=await Promise.all([bdmsUserRecord(login),telegramSiteGroups(),
+    pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
+  return membershipChecker({user:user||{},groups,chatId:rows[0]?.chat_id,force});
+}
+
+app.get('/api/telegram/site-groups/membership',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
+  try{
+    const offset=Math.max(0,Number.parseInt(_req.query.offset,10)||0);
+    const [{rows},groups,{rows:links}]=await Promise.all([
+      pool.query("SELECT DISTINCT ON (lower(trim(record_data->>'login'))) record_data FROM master_records WHERE master_name='Users & employees' AND trim(COALESCE(record_data->>'login',''))<>'' ORDER BY lower(trim(record_data->>'login')),created_at"),
+      telegramSiteGroups(),pool.query('SELECT login,chat_id FROM telegram_user_links')]);
+    const linked=new Map(links.map(row=>[row.login,row.chat_id]));
+    const users=await Promise.all(rows.slice(offset,offset+5).map(async({record_data:user})=>{
+      const login=String(user.login).trim().toLowerCase();
+      const status=await membershipChecker({user,groups,chatId:linked.get(login)});
+      return {login,name:String(user.employee||login),site:String(user.site||user.location||''),...status};
+    }));
+    res.set('Cache-Control','no-store');res.json({users,nextOffset:offset+5<rows.length?offset+5:null,total:rows.length,generatedAt:new Date().toISOString()});
+  }catch(error){next(error)}
+});
+
+let mandatoryInvitationsRunning=false;
+async function sendMandatorySiteInvitations(){
+  if(mandatoryInvitationsRunning||!databaseReady||!telegramConfiguration().botToken)return;
+  mandatoryInvitationsRunning=true;
+  try{
+    const recipients=telegramCampaignRecipients(await telegramLinkedSiteUsers(),Object.entries(REQUIRED_SITE_LINKS).map(([site,inviteLink])=>({site,inviteLink})));
+    const prefix='telegram_site_campaign:mandatory-site-joining-2026-10-25:';
+    return await telegramCampaignBatch({recipients,
+      read:async()=>{const {rows}=await pool.query('SELECT setting_key,setting_value FROM app_settings WHERE setting_key LIKE $1',[`${prefix}%`]);return new Map(rows.map(row=>[row.setting_key.slice(prefix.length),row.setting_value]));},
+      claim:async recipient=>(await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,'{"status":"Sending"}'::jsonb,NOW()) ON CONFLICT (setting_key) DO NOTHING RETURNING setting_key`,[`${prefix}${recipient.chatId}`])).rowCount===1,
+      send:recipient=>sendTelegramText({chatId:recipient.chatId,message:`Mandatory Telegram membership for Caliber Pulse\n\n${recipient.links.map(link=>`${link.site}\n${link.invitationLink}`).join('\n\n')}\n\nJoin every assigned site group, then open https://pulse.cmll.in and select Verify and continue. Actual membership is required for application access. If your site allocation is incorrect, contact your administrator.`},{fetchImpl:(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(10000)})}),
+      finish:async(recipient,value)=>{await pool.query('UPDATE app_settings SET setting_value=$2::jsonb,updated_at=NOW() WHERE setting_key=$1',[`${prefix}${recipient.chatId}`,JSON.stringify(value)]);},
+    });
+  }finally{mandatoryInvitationsRunning=false;}
+}
 const TELEGRAM_REQUIREMENT_SETTING_KEY='telegram_required';
 async function storedTelegramRequirement(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_REQUIREMENT_SETTING_KEY]);
@@ -3856,7 +3907,7 @@ app.get('/api/telegram/me',requireSession,async(req,res,next)=>{
     ]);
     const available=Boolean(telegramConfiguration().botToken);
     res.set('Cache-Control','no-store');
-    res.json({available,linked:Boolean(rows[0]),required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available}),...(rows[0]||{})});
+    res.json({available,linked:Boolean(rows[0]),required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available}),...(rows[0]||{}),...await telegramMembershipFor(sessionLogin(req),req.query.verify==='1'),adminSetupAllowed:req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager'});
   }catch(error){next(error)}
 });
 
@@ -4711,8 +4762,9 @@ async function telegramInvitationRecords(){
 }
 async function telegramSiteGroups(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
-  return normalizeTelegramSiteGroups(rows[0]?.setting_value);
+  return normalizeTelegramSiteGroups(rows[0]?.setting_value).map(group=>({...group,inviteLink:REQUIRED_SITE_LINKS[group.site]||group.inviteLink}));
 }
+
 async function updateTelegramSiteGroups(change){
   const client=await pool.connect();
   try{
@@ -8719,6 +8771,7 @@ async function initializeDatabase(){
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
       const startupJobs=[
+        ()=>sendMandatorySiteInvitations().catch(error=>console.error('Mandatory Telegram invitations failed.',error.message)),
         ()=>runAuditedBackendProcess({module:'Application performance',action:'Measure request history removed from polling feed'},()=>measureRequestHistoryPayload(pool)).catch(error=>console.error('Request history measurement failed.',error.message)),
         ()=>oracleConfigured&&runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers()).then(result=>console.log('Oracle request-driver sync completed.',result)).catch(error=>console.error('Oracle request-driver startup sync failed.',error)),
         ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports()).then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error)),
@@ -8753,6 +8806,9 @@ async function loadOemEmailData(){
 }
 void initializeDatabase();
 if(scheduledJobsEnabled){
+  setStaggeredInterval(()=>{
+    void sendMandatorySiteInvitations().catch(error=>console.error('Mandatory Telegram invitations failed.',error.message));
+  },60000,1000);
   setStaggeredInterval(()=>{
     if(!databaseReady)return;
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:loadOemEmailData})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));

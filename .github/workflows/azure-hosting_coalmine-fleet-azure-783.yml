@@ -139,6 +139,17 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
 
+      - name: Set up Node.js for Telegram membership preflight
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+          cache: npm
+      - name: Verify mandatory Telegram groups before deployment
+        shell: bash
+        run: |
+          npm ci --omit=dev --ignore-scripts
+          node scripts/verify-telegram-membership-readiness.mjs
+
       - name: Enforce Azure performance configuration
         shell: bash
         run: bash scripts/configure-azure-performance.sh

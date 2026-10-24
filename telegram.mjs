@@ -188,7 +188,12 @@ export async function telegramChatMemberStatus(chatId,userId,{env=process.env,fe
   return clean(member?.status);
 }
 
-export async function telegramSiteGroupDetails(chatId,{env=process.env,fetchImpl=fetch}={}){
+const membershipFetch=(url,options)=>fetch(url,{...options,signal:AbortSignal.timeout(5000)});
+export async function telegramChatMember(chatId,userId,{env=process.env,fetchImpl=membershipFetch}={}){
+  return telegramRequest('getChatMember',{env,fetchImpl,json:{chat_id:chatId,user_id:Number(userId)}});
+}
+
+export async function telegramSiteGroupDetails(chatId,{env=process.env,fetchImpl=membershipFetch}={}){
   const bot=await telegramRequest('getMe',{env,fetchImpl,json:{}});
   const chat=await telegramRequest('getChat',{env,fetchImpl,json:{chat_id:chatId}});
   if(!['group','supergroup'].includes(chat?.type))throw new Error('Choose a Telegram group.');

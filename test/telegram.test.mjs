@@ -211,10 +211,10 @@ test("Telegram can be required at login, with exempt users", async () => {
   assert.equal(telegramRequiredFor(rule, ""), false);
 });
 
-test("The login gate blocks unconnected users and admins manage exemptions", () => {
+test("The login gate requires actual site membership for every user", () => {
   const gate = readFileSync(new URL("../src/telegram-gate.jsx", import.meta.url), "utf8");
-  assert.match(gate, /const blocking = Boolean\(state\?\.required && !state\?\.linked\);/);
-  assert.match(gate, /Connect Telegram to continue/);
+  assert.match(gate, /const blocking = !state \|\| state.allowed!==true;/);
+  assert.match(gate, /Join your site Telegram groups to continue/);
   assert.match(gate, /play\.google\.com\/store\/apps\/details\?id=org\.telegram\.messenger/);
   assert.match(gate, /web\.telegram\.org/);
   assert.match(gate, /onClick=\{logout\}/);
@@ -224,7 +224,7 @@ test("The login gate blocks unconnected users and admins manage exemptions", () 
   assert.ok(server.includes("app.put('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator"));
   assert.ok(server.includes("action:'Save Telegram login requirement'"));
   assert.match(source, /Require Telegram at login/);
-  assert.match(source, /toggleTelegramExempt\(user\.login\)/);
+  assert.match(source, /Mandatory site group membership/);
 });
 
 test("Join requests and group upgrades are parsed from webhook updates", () => {

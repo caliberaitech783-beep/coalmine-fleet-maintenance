@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Download, Globe, LogOut, Send, Smartphone } from "lucide-react";
 import { startVisiblePoll } from "./visible-poll.mjs";
 import "./telegram-gate.css";
+import TelegramSiteGroups from './telegram-site-groups.jsx';
+import TelegramMembershipReport from './telegram-membership-report.jsx';
 
 export const TELEGRAM_INSTALL_LINKS = {
   android: "https://play.google.com/store/apps/details?id=org.telegram.messenger",
@@ -17,20 +19,25 @@ export function telegramDevice(userAgent = "") {
   return "desktop";
 }
 
-// When an administrator requires Telegram, a signed-in user who has not
-// connected it (or who blocked the bot, which disconnects them) cannot use the
-// app until they connect. Exempt users and a switched-off requirement never see it.
+// Every signed-in user must verify membership in all allocated site groups.
 export default function TelegramGate({ token, logout }) {
   const [state, setState] = useState(null);
   const [message, setMessage] = useState("");
-  const blocking = Boolean(state?.required && !state?.linked);
+  const [adminHelp,setAdminHelp]=useState(false);
+  const wasBlocked=useRef(false);
+  const blocking = !state || state.allowed!==true;
+  useEffect(()=>{setState(null);wasBlocked.current=false;setAdminHelp(false);},[token]);
+  useEffect(()=>{
+    if(state?.allowed===false)wasBlocked.current=true;
+    if(state?.allowed===true&&wasBlocked.current)window.location.reload();
+  },[state?.allowed]);
   useEffect(() => {
     if (!token) return undefined;
     let active = true;
     const check = () => fetch("/api/telegram/me", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => response.ok ? response.json() : null)
+      .then((response) => {if(!response.ok)throw new Error();return response.json();})
       .then((result) => { if (active && result) setState(result); })
-      .catch(() => {});
+      .catch(() => {if(active){setState(previous=>({...previous,allowed:false}));setMessage('Membership could not be checked. Please retry.');}});
     check();
     // Every few seconds while blocked (to close as soon as Start is tapped), otherwise every minute.
     const stop = startVisiblePoll(check, blocking ? 3000 : 60000);
@@ -46,7 +53,7 @@ export default function TelegramGate({ token, logout }) {
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not start the Telegram connection.");
       if (tab) tab.location.href = result.url; else window.location.href = result.url;
-      setMessage("Telegram is opening. Tap Start there. This screen closes by itself once you are connected.");
+      setMessage("Telegram is opening. Tap Start, then join every assigned site group below.");
     } catch (error) {
       tab?.close();
       setMessage(error.message);
@@ -59,9 +66,10 @@ export default function TelegramGate({ token, logout }) {
       : [["Download Telegram Desktop", TELEGRAM_INSTALL_LINKS.desktop, Download], ["Or use Telegram Web (no install)", TELEGRAM_INSTALL_LINKS.web, Globe]];
   return createPortal(<div className="telegram-gate-overlay">
     <section className="telegram-gate" role="alertdialog" aria-modal="true" aria-labelledby="telegram-gate-title">
-      <header><span><Send /></span><div><small>Required by your administrator</small><h2 id="telegram-gate-title">Connect Telegram to continue</h2></div></header>
+      <header><span><Send /></span><div><small>Required for every user</small><h2 id="telegram-gate-title">Join your site Telegram groups to continue</h2></div></header>
       <div className="telegram-gate-body">
-        <p>Caliber Pulse alerts, reports and password OTPs are sent on Telegram. Connect once to keep using the app.</p>
+        <p>Connect your own Telegram account and join every assigned site group to receive updates and reports. Actual membership must be verified before Pulse access is allowed.</p>
+        {!state&&<p role="status">Checking Telegram membership…</p>}
         <ol>
           <li><b>Install Telegram</b> and sign up with your mobile number. Skip this if you already have it.
             <div className="telegram-gate-links">{install.map(([label, href, Icon]) => <a key={href} href={href} target="_blank" rel="noreferrer"><Icon />{label}</a>)}</div>
@@ -69,11 +77,20 @@ export default function TelegramGate({ token, logout }) {
           <li><b>Connect</b> your Caliber Pulse login:
             <div className="telegram-gate-links"><button type="button" className="telegram-gate-connect" onClick={connect}><Send />Connect Telegram</button></div>
           </li>
-          <li>In Telegram, tap <b>Start</b>. This screen closes automatically.</li>
+          <li>In Telegram, tap <b>Start</b>. {state?.linked?'Your account is connected.':'Then return here to join your groups.'}</li>
+          <li><b>Join all your assigned site groups:</b>
+            {state?.groups?.map(group=><div key={group.site} className="telegram-gate-links"><span>{group.site} — {group.status}</span>{!group.joined&&<a href={group.inviteLink} target="_blank" rel="noreferrer">Join group</a>}</div>)}
+            {state?.assignmentRequired&&<p role="alert">No recognized site is allocated to your account. Contact your administrator to correct your site allocation.</p>}
+          </li>
         </ol>
+        <button type="button" onClick={async()=>{
+          setMessage('Verifying membership…');
+          try{const response=await fetch('/api/telegram/me?verify=1',{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error();const result=await response.json();setState(result);setMessage(result.allowed?'Verified.':'Membership is still incomplete. Join all listed groups, or contact your administrator if verification is unavailable.');}catch{setMessage('Verification is unavailable. Please retry.');}
+        }}>Verify and continue</button>
         {message && <p className="telegram-gate-message" role="status">{message}</p>}
+        {state?.adminSetupAllowed&&<details onToggle={event=>setAdminHelp(event.currentTarget.open)}><summary>Administrator: membership report and group setup</summary>{adminHelp&&<><p>This provides Telegram setup and membership review only. Normal Pulse access still requires verified membership.</p><TelegramMembershipReport token={token}/><TelegramSiteGroups token={token}/></>}</details>}
       </div>
-      <footer><span>Cannot use Telegram? Ask your administrator for an exemption.</span><button type="button" onClick={logout}><LogOut />Sign out</button></footer>
+      <footer><span>Need help joining? Contact your site administrator.</span><button type="button" onClick={logout}><LogOut />Sign out</button></footer>
     </section>
   </div>, document.body);
 }

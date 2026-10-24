@@ -1,5 +1,13 @@
 # Caliber Pulse project workflow
 
+## Mandatory Telegram site membership
+
+Every Pulse account must connect its own Telegram account and pass actual membership checks for every explicitly allocated mine site. Historical connection exemptions and the old requirement switch do not bypass this policy. Accounts without a recognized site, missing registered groups, unlinked accounts and failed verification remain blocked. The shared session reader enforces this for normal and administrator APIs. Only Telegram onboarding, logout/session lifecycle and existing administrator-authorized Telegram setup/report routes remain available for remediation.
+
+The gate presents the owner's eight site-specific links and a manual Verify and continue action. Membership checks require bot administrator/invitation permissions and accept restricted members only when Telegram returns is_member=true. Successful and negative checks expire after one minute; explicit verification rechecks immediately. Group permission checks expire after five minutes. Verification failures do not grant access. After completing onboarding the page reloads to recover initial data requests denied while blocked.
+
+Reports → Telegram Membership Report includes the Not Joined report for all configured login accounts, in batches of five, with site, membership/setup status, last check time and the joining link. Loading or failed batches are labelled incomplete. A durable one-time mandatory campaign sends each connected assigned Telegram account its site links in batches of five each minute, including newly connected users. Attempts are atomically claimed before sending; uncertain deliveries are not automatically repeated. Unlinked users receive links in the access gate until the bot can contact them. The full deployment checks all eight registered groups and bot permissions using its Azure identity before deploying; runtime secrets are never logged.
+
 ## Authoritative equipment door numbers
 
 Door-number displays and request creation use Equipment Master labels: an explicit door, or the imported fleet label displayed under Equipment Name when door is blank or duplicates a registration/serial identifier. A generic model/name or standalone registration/chassis is never substituted for a missing label. Saved requests resolve against the current master without rewriting history; missing or ambiguous matches display no guessed door. Downtime Matrix and exports share this mapping.
