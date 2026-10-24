@@ -21,6 +21,7 @@ test('readiness probes the production runtime and publishes only readiness data'
   const remote=Buffer.from(encoded,'base64').toString();
   assert.match(remote,/SELECT setting_value FROM app_settings/);
   assert.match(remote,/telegramSiteGroupDetails/);
+  assert.match(remote,/createRequire\('\/home\/site\/wwwroot\/server\.mjs'\)/);
   assert.doesNotThrow(()=>new AsyncFunction(remote),'the runtime probe is valid JavaScript');
   assert.doesNotMatch(result.output.join('\n'),/test-arm-token|test-password|test-publisher|DATABASE_URL|TELEGRAM_BOT_TOKEN/);
 });

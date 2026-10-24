@@ -13,10 +13,12 @@ try{
   const remote=String.raw`(async()=>{
 let pool;let probeStage='dependencies';
 try{
-const {default:pg}=await import('pg');
+const {createRequire}=await import('node:module');
+const require=createRequire('/home/site/wwwroot/server.mjs');
+const pg=require('pg');
 probeStage='site modules';
-const {TELEGRAM_SITES,normalizeTelegramSiteGroups}=await import('./telegram-site-groups.mjs');
-const {telegramSiteGroupDetails}=await import('./telegram.mjs');
+const {TELEGRAM_SITES,normalizeTelegramSiteGroups}=await import('file:///home/site/wwwroot/telegram-site-groups.mjs');
+const {telegramSiteGroupDetails}=await import('file:///home/site/wwwroot/telegram.mjs');
 probeStage='configuration';
 const env=process.env;
 if(!env.DATABASE_URL||!env.TELEGRAM_BOT_TOKEN)throw Object.assign(Error(),{code:'CONFIGURATION_MISSING'});
