@@ -121,6 +121,7 @@ import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocume
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {telegramChatMember} from './telegram.mjs';
 import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS} from './telegram-membership.mjs';
+import {registerTelegramMembershipReadiness} from './telegram-membership-readiness.mjs';
 import {telegramInvitationBatch,telegramInvitationSummary} from './telegram-site-invitations.mjs';
 import {telegramSiteCampaignId,telegramSiteExport,telegramCampaignRecipients,telegramCampaignMessage,telegramCampaignBatch} from './telegram-site-campaign.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -3845,6 +3846,7 @@ app.post('/api/telegram/test-templates',requireSuper,requireWhatsAppAdministrato
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
 
 const membershipChecker=createMembershipChecker({checkMember:telegramChatMember,checkGroup:telegramSiteGroupDetails});
+registerTelegramMembershipReadiness(app,{scheduledJobsEnabled,commit:deploymentSha,groups:telegramSiteGroups,checkGroup:telegramSiteGroupDetails});
 async function telegramMembershipFor(login,force=false){
   const [user,groups,{rows}]=await Promise.all([bdmsUserRecord(login),telegramSiteGroups(),
     pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
@@ -8677,6 +8679,10 @@ app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutab
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
 app.use((error,req,res,next)=>{
+  if(error.code==='TELEGRAM_MEMBERSHIP_REQUIRED'){
+    req.audit=false;
+    return res.status(403).json({error:error.message,code:error.code});
+  }
   const auditedError=auditSafeError(error);
   req.auditErrorCode=auditedError.code;
   req.auditResponseError=`${auditedError.code}: ${auditedError.message}`;

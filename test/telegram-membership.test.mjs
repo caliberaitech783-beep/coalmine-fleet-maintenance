@@ -25,6 +25,12 @@ test('temporary failures never fabricate membership and group bot administration
   const result=await check({user:{site:'Sasti OC'},groups,chatId:'123'});
   assert.equal(result.allowed,false);assert.equal(result.groups[0].status,'Verification unavailable');assert.equal(checked,0);
 });
+test('concurrent application requests share one Telegram membership check',async()=>{
+  let memberCalls=0,groupCalls=0;
+  const check=createMembershipChecker({checkGroup:async()=>{groupCalls++;},checkMember:async()=>{memberCalls++;await new Promise(resolve=>setTimeout(resolve,5));return {status:'member'};}});
+  const results=await Promise.all(Array.from({length:20},()=>check({user:{site:'Sasti OC'},groups,chatId:'123'})));
+  assert.ok(results.every(result=>result.allowed));assert.equal(memberCalls,1);assert.equal(groupCalls,1);
+});
 test('verification expires after one minute, manual verification bypasses cache, site and identity changes recheck',async()=>{
   let time=0,calls=0,member=true;
   const check=createMembershipChecker({now:()=>time,checkGroup:async()=>{},checkMember:async()=>{calls++;return {status:member?'member':'left'};}});
@@ -52,6 +58,14 @@ test('real shared session reader blocks normal and privileged APIs while allowin
     if(session.permissions?.adminLevel==='Super Admin')assert.equal(await read({headers:{},path:'/api/telegram/site-groups/membership'}),session);
     else await assert.rejects(read({headers:{},path:'/api/telegram/site-groups/membership'}));
   }
+});
+test('expected membership denials return onboarding status without generating repeated error audits',()=>{
+  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const start=source.indexOf('app.use((error,req,res,next)=>{');
+  let handler;new Function('app','auditSafeError',source.slice(start,source.indexOf('\n});',start)+4))({use:value=>{handler=value;}},()=>{throw Error('Onboarding was treated as a server error');});
+  const req={};let status,body;
+  handler({code:'TELEGRAM_MEMBERSHIP_REQUIRED',message:'Join first'},req,{status:value=>{status=value;return {json:value=>{body=value;}};}},()=>{throw Error('Unexpected error logging');});
+  assert.equal(status,403);assert.equal(body.code,'TELEGRAM_MEMBERSHIP_REQUIRED');assert.equal(req.audit,false);
 });
 
 test('membership report includes never-signed-in accounts and returns bounded progress with missing groups',async()=>{

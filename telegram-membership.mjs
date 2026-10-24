@@ -17,7 +17,7 @@ export function membershipOnboardingPath(path){
 }
 
 export function createMembershipChecker({checkMember,checkGroup,now=Date.now,ttl=60000}){
-  const cache=new Map(),groupChecks=new Map();
+  const cache=new Map(),groupChecks=new Map(),inFlight=new Map();
   return async function membership({user,chatId,groups,force=false}){
     const sites=TELEGRAM_SITES.filter(site=>telegramUserHasSite(user,site));
     const results=await Promise.all(sites.map(async site=>{
@@ -27,18 +27,27 @@ export function createMembershipChecker({checkMember,checkGroup,now=Date.now,ttl
         const key=`${group.chatId}:${chatId}`;
         let saved=cache.get(key);
         if(force||!saved||now()-saved.time>=ttl){
+          let pending=inFlight.get(key);
+          if(!pending){
+            pending=(async()=>{
+              let checked=groupChecks.get(group.chatId);
+              if(!checked||now()-checked.time>=300000){
+                checked={time:now(),promise:Promise.resolve().then(()=>checkGroup(group.chatId))};
+                groupChecks.set(group.chatId,checked);
+              }
+              try{await checked.promise;}catch(error){groupChecks.delete(group.chatId);throw error;}
+              const member=await checkMember(group.chatId,chatId);
+              const result={time:now(),joined:['member','administrator','creator'].includes(member.status)||(member.status==='restricted'&&member.is_member===true)};
+              cache.set(key,result);
+              if(cache.size>10000)for(const [id,value] of cache)if(now()-value.time>=ttl)cache.delete(id);
+              return result;
+            })();
+            inFlight.set(key,pending);
+          }
           try{
-            let checked=groupChecks.get(group.chatId);
-            if(!checked||now()-checked.time>=300000){
-              checked={time:now(),promise:Promise.resolve().then(()=>checkGroup(group.chatId))};
-              groupChecks.set(group.chatId,checked);
-            }
-            try{await checked.promise;}catch(error){groupChecks.delete(group.chatId);throw error;}
-            const member=await checkMember(group.chatId,chatId);
-            saved={time:now(),joined:['member','administrator','creator'].includes(member.status)||(member.status==='restricted'&&member.is_member===true)};
-            cache.set(key,saved);
-            if(cache.size>10000)for(const [id,value] of cache)if(now()-value.time>=ttl)cache.delete(id);
+            saved=await pending;
           }catch{saved=null;cache.delete(key);row.status='Verification unavailable';}
+          finally{if(inFlight.get(key)===pending)inFlight.delete(key);}
         }
         if(saved){row.joined=saved.joined;row.status=saved.joined?'Joined':'Not joined';row.checkedAt=new Date(saved.time).toISOString();}
       }

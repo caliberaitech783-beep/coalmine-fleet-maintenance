@@ -144,12 +144,6 @@ jobs:
         with:
           node-version: "22.x"
           cache: npm
-      - name: Verify mandatory Telegram groups before deployment
-        shell: bash
-        run: |
-          npm ci --omit=dev --ignore-scripts
-          node scripts/verify-telegram-membership-readiness.mjs
-
       - name: Enforce Azure performance configuration
         shell: bash
         run: bash scripts/configure-azure-performance.sh
@@ -213,6 +207,10 @@ jobs:
             fi
             sleep 5
           done
+
+      - name: Verify mandatory Telegram groups inside staging
+        shell: bash
+        run: node scripts/verify-telegram-membership-readiness.mjs
 
       - name: Swap staging into production with automatic rollback
         shell: bash
