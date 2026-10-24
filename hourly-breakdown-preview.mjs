@@ -24,8 +24,9 @@ export function hourlyBreakdownWindow(cutoff,period='two-hour') {
   const end=new Date(cutoff).getTime();
   if(!Number.isFinite(end))throw new Error('A valid report cutoff is required.');
   const day=new Date(end+330*60000).toISOString().slice(0,10);
-  const start=period==='today'?Date.parse(`${day}T00:00:00+05:30`):end-2*3600000;
-  return {end,start,previous:start-(period==='today'?86400000:2*3600000)};
+  const hours=/^[1-8]-hour$/.test(period)?Number(period.split('-')[0]):2;
+  const start=period==='today'?Date.parse(`${day}T00:00:00+05:30`):end-hours*3600000;
+  return {end,start,previous:start-(period==='today'?86400000:hours*3600000)};
 }
 
 export function buildHourlyBreakdownPreview(requests, cutoff, site='Sasti OC',period='two-hour') {
@@ -109,7 +110,7 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
   };
   app.get('/api/reports/hourly-breakdown-preview',requireSession,requireAdministrator,async(req,res,next)=>{
     try{
-      const result=await loadReport({allSites:req.query?.site==='all',period:req.query?.period==='today'?'today':'two-hour'});
+      const result=await loadReport({allSites:req.query?.site==='all',period:(['two-hour','today','1-hour','2-hour','3-hour','4-hour','5-hour','6-hour','7-hour','8-hour'].includes(req.query?.period)?req.query.period:'two-hour')});
       res.set('Cache-Control','no-store');res.json(result);
     }catch(error){next(error);}
   });
@@ -117,7 +118,7 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
     try{
       const site=REGION_DATA.flatMap(region=>region.sites).find(site=>canonicalSiteName(site)===canonicalSiteName(req.body?.site));
       if(!site)return res.status(400).json({error:'Choose a configured report site.'});
-      if(!['two-hour','today'].includes(req.body?.period))return res.status(400).json({error:'Choose Latest 2 hours or Today.'});
+      if(!['two-hour','today','1-hour','2-hour','3-hour','4-hour','5-hour','6-hour','7-hour','8-hour'].includes(req.body?.period))return res.status(400).json({error:'Choose Latest 1–8 hours or Today.'});
       // Resolve the signed-in user's link server-side; caller-supplied recipients are ignored.
       const chatId=String(await linkedTelegramChat(req.session.login)||'');
       if(!/^\d+$/.test(chatId))return res.status(400).json({error:'Connect Telegram from your Pulse profile first. Reports go only to your linked private chat.'});

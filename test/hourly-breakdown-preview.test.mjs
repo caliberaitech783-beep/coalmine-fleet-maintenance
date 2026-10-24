@@ -145,3 +145,10 @@ test('Telegram BD report rejects missing or group links and invalid periods befo
   assert.equal(status,400);
  }
 });
+
+test('each hourly selection uses its exact elapsed window',()=>{
+ for(let hours=1;hours<=8;hours++){
+  const report=buildHourlyBreakdownPreview([], '2026-10-24T23:00:00+05:30','Sasti OC',`${hours}-hour`);
+  assert.equal(Date.parse(report.end)-Date.parse(report.start),hours*3600000);
+ }
+});
