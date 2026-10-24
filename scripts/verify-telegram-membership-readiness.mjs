@@ -38,6 +38,7 @@ finally{await pool?.end();}`;
   }
   if(!response.ok)throw Error('Probe HTTP '+response.status);
   const output=await response.json();
+  console.log(JSON.stringify({runtimeProbe:{exitCode:output.ExitCode,fields:Object.keys(output),nodeMissing:/node.*not found|node.*not recognized/i.test(String(output.Error||'')),moduleMissing:/Cannot find package|Cannot find module/i.test(String(output.Error||'')),syntaxError:/SyntaxError/.test(String(output.Error||''))}}));
   const result=JSON.parse(String(output.Output||'').trim().split('\n').filter(line=>line.startsWith('{')).at(-1)||'{}');
   console.log(JSON.stringify(result));
   if(result.ready!==true){
