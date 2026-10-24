@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildHourlyBreakdownPreview,registerHourlyBreakdownPreview,HOURLY_PREVIEW_COLUMNS} from '../hourly-breakdown-preview.mjs';
+import {buildHourlyBreakdownPreview,buildAllSitesHourlyBreakdownPreview,registerHourlyBreakdownPreview,HOURLY_PREVIEW_COLUMNS} from '../hourly-breakdown-preview.mjs';
 
 test('preview follows existing global retirement and owner visibility rules',()=>{
  const base={site:'Sasti OC',start:'2026-09-01 10:00:00'};
@@ -54,4 +54,44 @@ test('daily update precedes differences calculated as closing minus opening',()=
  assert.match(report.rows[0][5],/Repair ongoing/);
  assert.deepEqual(report.rows[0].slice(6,8),['4.5','2.25']);
  assert.equal(report.rows[0].length,report.columns.length);
+});
+
+test('all sites report keeps canonical site groups, empty sites and meter columns',()=>{
+ const cutoff='2026-10-23T12:00:00+05:30';
+ const base={start:'2026-10-23 10:30:00',equipmentGroup:'Tipper',openingMeterReadings:{KMR:'100',HMR:'10'},closingMeterReadings:{KMR:'112.5',HMR:'13'}};
+ const report=buildAllSitesHourlyBreakdownPreview([
+  {...base,site:'Sasti OB',door:'A'},
+  {...base,site:'Majri OC',door:'B'},
+  {...base,site:'Dudhichua East OC',door:'C'},
+ ],cutoff);
+ assert.equal(report.site,'All sites');
+ assert.equal(report.sites.length,8);
+ assert.equal(report.sites.filter(site=>site.site==='Sasti OC').length,1);
+ for(const [site,door] of [['Sasti OC','A'],['Majri OC','B'],['Dudhichua East OC','C']]){
+  const group=report.sites.find(row=>row.site===site);
+  assert.equal(group.rows.length,1);
+  assert.equal(group.rows[0][1],door);
+  assert.equal(group.rows[0][0],'🔴 IN');
+  assert.deepEqual(group.rows[0].slice(6,8),['12.5','3']);
+  assert.equal(group.counts['New BD'],1);
+ }
+ assert.equal(report.sites.find(site=>site.site==='Lalpeth OC').rows.length,0);
+ assert.ok(report.sites.every(site=>site.end===report.end&&site.start===report.start));
+});
+
+test('all sites API removes only the site predicate and keeps one read-only snapshot',async()=>{
+ let route;const calls=[];
+ const client={query:async(sql,params)=>{
+  calls.push({sql,params});
+  if(sql==='SELECT NOW() AS cutoff')return {rows:[{cutoff:'2026-10-23T12:00:00+05:30'}]};
+  if(sql.includes('FROM maintenance_requests WHERE'))return {rows:[{ref:'M1',site:'Majri OC',door:'B',start:'2026-10-23 11:00:00'}]};
+  return {rows:[]};
+ },release(){}};
+ registerHourlyBreakdownPreview({get:(...args)=>route=args},{pool:{connect:async()=>client},requireSession(){},requireAdministrator(){}});
+ let result;
+ await route.at(-1)({query:{site:'all'}},{set(){},json(value){result=value;}},error=>{throw error;});
+ assert.equal(calls.find(call=>call.sql.includes('FROM maintenance_requests WHERE')).params[0],null);
+ assert.equal(calls[0].sql,'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+ assert.equal(calls.at(-1).sql,'COMMIT');
+ assert.equal(result.sites.find(site=>site.site==='Majri OC').rows.length,1);
 });

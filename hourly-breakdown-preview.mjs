@@ -4,6 +4,7 @@ import {requestMeterReadings} from './request-equipment.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {requestsWithDoorNumbers} from './equipment-door.mjs';
 import {requestsVisibleGlobally} from './mis-request-visibility.mjs';
+import {REGION_DATA,displaySiteName} from './region-scope.mjs';
 
 export const HOURLY_PREVIEW_COLUMNS = ['Section','Door no. with Registered no.','Total BD Time','Type of BD','BD Details','Daily Update','Diff KMR','Diff. HMR','Start Time','End Time','Equipment Category','Idle Since / Duration / Reason'];
 const at = value => parseReportTimestamp(value)?.getTime();
@@ -19,10 +20,10 @@ const difference = (row, type) => {
   return Number.isFinite(Number(opening)) && Number.isFinite(Number(closing)) ? String(Number((Number(closing)-Number(opening)).toFixed(3))) : '—';
 };
 
-export function buildHourlyBreakdownPreview(requests, cutoff) {
+export function buildHourlyBreakdownPreview(requests, cutoff, site='Sasti OC') {
   const end = new Date(cutoff).getTime(), start = end-2*3600000, previous = start-2*3600000;
   if (!Number.isFinite(end)) throw new Error('A valid report cutoff is required.');
-  const source = requestsVisibleGlobally(requests).filter(row => canonicalSiteName(row.site) === canonicalSiteName('Sasti OC') && at(row.start) <= end);
+  const source = requestsVisibleGlobally(requests).filter(row => canonicalSiteName(row.site) === canonicalSiteName(site) && at(row.start) <= end);
   const inWindow = (value, from=start, to=end) => value >= from && value < to;
   const openAt = (row, time) => at(row.start) < time && (!endOfBd(row) || endOfBd(row) >= time);
   const idleAt = (row, time) => {
@@ -49,14 +50,21 @@ export function buildHourlyBreakdownPreview(requests, cutoff) {
       rows.push([sectionLabel,identity,elapsedLabel(row.start,new Date(effectiveEnd)),row.category || '—',row.complaint || '—',updates || 'No maintenance update recorded',difference(row,'KMR'),difference(row,'HMR'),label(row.start),closedAt && closedAt < end ? label(new Date(closedAt)) : 'Pending',row.equipmentGroup || row.equipment || '—',section==='IDLE' ? `${label(row.idealRequestedAt)} / ${elapsedLabel(row.idealRequestedAt,new Date(end))} / ${row.idleReason || 'Reason not recorded'}` : '—']);
     }
   }
-  return {site:'Sasti OC',start:new Date(start).toISOString(),end:new Date(end).toISOString(),period:`${label(new Date(start))} to ${label(new Date(end))} IST`,columns:HOURLY_PREVIEW_COLUMNS,
+  return {site:displaySiteName(site),start:new Date(start).toISOString(),end:new Date(end).toISOString(),period:`${label(new Date(start))} to ${label(new Date(end))} IST`,columns:HOURLY_PREVIEW_COLUMNS,
     counts:{'Opening BD':count(source.filter(row=>openAt(row,start))),'New BD':count(incoming),'Closing BD':count(closed),'Previous BD':count(source.filter(row=>inWindow(at(row.start),previous,start))),'Previous Close':count(source.filter(row=>inWindow(endOfBd(row),previous,start))),'Total Idle Now':count(idle)},rows};
+}
+
+export function buildAllSitesHourlyBreakdownPreview(requests,cutoff) {
+  const names=[...new Map([...REGION_DATA.flatMap(region=>region.sites),...requests.map(row=>row.site).filter(Boolean)].map(site=>[canonicalSiteName(site),displaySiteName(site)])).values()];
+  const sites=names.map(site=>buildHourlyBreakdownPreview(requests,cutoff,site));
+  return {site:'All sites',period:sites[0].period,start:sites[0].start,end:sites[0].end,sites};
 }
 
 export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator}) {
   app.get('/api/reports/hourly-breakdown-preview',requireSession,requireAdministrator,async(req,res,next)=>{
     let client;
     try {
+      const allSites=req.query?.site==='all';
       client=await pool.connect();
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const {rows:[clock]}=await client.query('SELECT NOW() AS cutoff');
@@ -69,10 +77,10 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
         first_trip_at AS "firstTripAt",opening_meter_readings AS "openingMeterReadings",closing_meter_readings AS "closingMeterReadings",
         meter_type AS "meterType",opening_meter_reading AS "openingMeterReading",closing_meter_reading AS "closingMeterReading",
         (SELECT production_first_trip_at FROM production_first_trip_acceptances p WHERE p.request_reference=maintenance_requests.reference) AS "productionFirstTripAt"
-        FROM maintenance_requests WHERE archived_at IS NULL AND lower(trim(site))=ANY($1::text[]) AND started_at<$2
+        FROM maintenance_requests WHERE archived_at IS NULL AND ($1::text[] IS NULL OR lower(trim(site))=ANY($1::text[])) AND started_at<$2
         AND (closed_at IS NULL OR closed_at>=$3 OR first_trip_at>=$3 OR ideal_requested_at IS NOT NULL
           OR EXISTS(SELECT 1 FROM production_first_trip_acceptances p WHERE p.request_reference=maintenance_requests.reference AND production_first_trip_at>=$3))`,
-        [['sasti oc','sasti ob','sasti ii','sasti'],cutoff,previous]);
+        [allSites?null:['sasti oc','sasti ob','sasti ii','sasti'],cutoff,previous]);
       const refs=rows.map(row=>row.ref);
       const {rows:remarks}=await client.query(`SELECT request_reference AS ref,remark,delay_reason AS "delayReason",created_at AS "createdAt"
         FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) AND created_at<$2 ORDER BY created_at DESC`,[refs,cutoff]);
@@ -85,7 +93,8 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
         'itemName',record_data->>'itemName','group',record_data->>'group','category',record_data->>'category',
         'currentLocation',record_data->>'currentLocation','location',record_data->>'location','site',record_data->>'site'
         ) AS record FROM master_records WHERE master_name='Equipment master'`);
-      const result=buildHourlyBreakdownPreview(requestsWithDoorNumbers(rows,equipment.map(row=>row.record)).map(row=>({...row,dailyRemarks:grouped.get(row.ref)||[]})),cutoff);
+      const prepared=requestsWithDoorNumbers(rows,equipment.map(row=>row.record)).map(row=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
+      const result=allSites?buildAllSitesHourlyBreakdownPreview(prepared,cutoff):buildHourlyBreakdownPreview(prepared,cutoff);
       await client.query('COMMIT');
       res.set('Cache-Control','no-store');res.json(result);
     } catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});next(error);}
