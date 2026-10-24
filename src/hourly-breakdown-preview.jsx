@@ -3,6 +3,7 @@ import React,{useState} from 'react';
 export default function HourlyBreakdownPreview({session}) {
   const [report,setReport]=useState(null),[loading,setLoading]=useState(false),[error,setError]=useState('');
   const [period,setPeriod]=useState('two-hour');
+  const [sending,setSending]=useState(false),[delivery,setDelivery]=useState('');
   if(session?.role!=='super'||!['Admin','Super Admin'].includes(session.permissions?.adminLevel))return null;
   const load=async(site='all')=>{
     setLoading(true);setError('');
@@ -11,14 +12,23 @@ export default function HourlyBreakdownPreview({session}) {
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load the site report.');setReport(data);
     }catch(error){setError(error.message);}finally{setLoading(false);}
   };
+  const send=async site=>{
+    setSending(true);setDelivery('');setError('');
+    try{
+      const response=await fetch('/api/reports/hourly-breakdown-preview/telegram',{method:'POST',headers:{Authorization:`Bearer ${session.token}`,'Content-Type':'application/json'},body:JSON.stringify({site,period})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Telegram delivery failed.');
+      setDelivery(`Sent ${data.site} BD report to your linked Telegram account. ${data.period}`);
+    }catch(error){setError(error.message);}finally{setSending(false);}
+  };
   return <section className="panel" aria-label="Hourly breakdown manual preview" style={{padding:20,marginBottom:20}}>
-    <h2>Hourly Breakdown Report - manual preview</h2><p>Review only. This does not send messages or enable a schedule.</p>
+    <h2>Hourly Breakdown Report - manual preview</h2><p>Preview reports or send a fresh report to your linked private Telegram account.</p>
     <label>Report period <select aria-label="Consolidated BD report period" value={period} disabled={loading} onChange={event=>{setPeriod(event.target.value);setReport(null);}}><option value="two-hour">Latest 2 hours</option><option value="today">Today (IST)</option></select></label>{' '}
     <button type="button" disabled={loading} onClick={()=>load('all')}>{loading?'Loading report...':`Preview all sites - ${period==='today'?'today':'latest 2 hours'}`}</button>{' '}
     <button type="button" disabled={loading} onClick={()=>load('sasti')}>Preview Sasti OC - {period==='today'?'today':'latest 2 hours'}</button>
     {error&&<p role="alert">{error}</p>}
+    {delivery&&<p role="status">{delivery}</p>}
     {report?.sites&&<h3>All sites · Consolidated BD report</h3>}
-    {(report?.sites||(report?[report]:[])).map(report=><div key={report.site} aria-label={`${report.site} hourly report`}><h3>{report.site}</h3><p>{report.period}</p><button type="button" onClick={()=>downloadReport(report)}>Download {report.site} CSV</button>
+    {(report?.sites||(report?[report]:[])).map(report=><div key={report.site} aria-label={`${report.site} hourly report`}><h3>{report.site}</h3><p>{report.period}</p><button type="button" onClick={()=>downloadReport(report)}>Download {report.site} CSV</button>{' '}<button type="button" disabled={sending||loading} onClick={()=>send(report.site)}>{sending?'Sending...':`Send ${report.site} to my Telegram`}</button>
       <dl style={{display:'flex',flexWrap:'wrap',gap:24}}>{Object.entries(report.counts).map(([label,value])=><div key={label}><dt>{label}</dt><dd style={{fontSize:24,fontWeight:700}}>{value}</dd></div>)}</dl>
       <div style={{overflowX:'auto'}}><table><thead><tr>{report.columns.map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{report.rows.map((row,index)=><tr key={index}>{row.map((value,i)=><td key={i} style={{whiteSpace:'pre-wrap',minWidth:i===4||i===5?200:90}}>{value}</td>)}</tr>)}</tbody></table></div>
       {!report.rows.length&&<p>No qualifying breakdown or idle records in this window.</p>}

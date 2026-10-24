@@ -68,12 +68,10 @@ export function buildAllSitesHourlyBreakdownPreview(requests,cutoff,period='two-
   return {site:'All sites',period:sites[0].period,start:sites[0].start,end:sites[0].end,sites};
 }
 
-export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator}) {
-  app.get('/api/reports/hourly-breakdown-preview',requireSession,requireAdministrator,async(req,res,next)=>{
+export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,linkedTelegramChat,sendTelegramDocument,buildTableExportPdf}) {
+  const loadReport=async({allSites=false,period='two-hour'}={})=>{
     let client;
     try {
-      const allSites=req.query?.site==='all';
-      const period=req.query?.period==='today'?'today':'two-hour';
       client=await pool.connect();
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const {rows:[clock]}=await client.query('SELECT NOW() AS cutoff');
@@ -105,8 +103,34 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
       const prepared=requestsWithDoorNumbers(rows,equipment.map(row=>row.record)).map(row=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
       const result=allSites?buildAllSitesHourlyBreakdownPreview(prepared,cutoff,period):buildHourlyBreakdownPreview(prepared,cutoff,'Sasti OC',period);
       await client.query('COMMIT');
-      res.set('Cache-Control','no-store');res.json(result);
-    } catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});next(error);}
+      return result;
+    } catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});throw error;}
     finally{client?.release();}
+  };
+  app.get('/api/reports/hourly-breakdown-preview',requireSession,requireAdministrator,async(req,res,next)=>{
+    try{
+      const result=await loadReport({allSites:req.query?.site==='all',period:req.query?.period==='today'?'today':'two-hour'});
+      res.set('Cache-Control','no-store');res.json(result);
+    }catch(error){next(error);}
+  });
+  if(app.post)app.post('/api/reports/hourly-breakdown-preview/telegram',requireSession,requireAdministrator,async(req,res,next)=>{
+    try{
+      const site=REGION_DATA.flatMap(region=>region.sites).find(site=>canonicalSiteName(site)===canonicalSiteName(req.body?.site));
+      if(!site)return res.status(400).json({error:'Choose a configured report site.'});
+      if(!['two-hour','today'].includes(req.body?.period))return res.status(400).json({error:'Choose Latest 2 hours or Today.'});
+      // Resolve the signed-in user's link server-side; caller-supplied recipients are ignored.
+      const chatId=String(await linkedTelegramChat(req.session.login)||'');
+      if(!/^\d+$/.test(chatId))return res.status(400).json({error:'Connect Telegram from your Pulse profile first. Reports go only to your linked private chat.'});
+      const bundle=await loadReport({allSites:true,period:req.body.period});
+      const report=bundle.sites.find(report=>report.site===site);
+      const summary=Object.entries(report.counts).map(([name,count])=>`${name}: ${count}`).join(' · ');
+      const title=`${site} · Consolidated BD report`;
+      const buffer=await buildTableExportPdf({title:`${title}\n${report.period}\n${summary}`,columns:report.columns.map(label=>({label})),rows:report.rows,pageSize:'A3'});
+      const filename=`consolidated-bd-${site.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${report.end.replace(/[:.]/g,'-')}.pdf`;
+      req.audit={eventType:'Integration',module:'Telegram',action:'Send BD report to myself',targetType:'Current user Telegram',targetId:site,changedFields:[]};
+      const sent=await sendTelegramDocument({chatId,buffer,filename,caption:`${title}\n${report.period}\n${summary}`});
+      if(!sent?.sent)throw new Error('Telegram did not confirm delivery.');
+      res.status(201).json({sent:true,messageId:sent.messageId,site,period:report.period});
+    }catch(error){next(error);}
   });
 }

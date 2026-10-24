@@ -2108,7 +2108,7 @@ function requireAdministrator(req,res,next){
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
 }
 
-registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator});
+registerHourlyBreakdownPreview(app,{pool,requireSession,requireAdministrator,linkedTelegramChat,sendTelegramDocument,buildTableExportPdf});
 
 const REMOTE_ASSISTANCE_LIVE_STATUSES=['Pending','Approved','Active'];
 const REMOTE_ASSISTANCE_DURATIONS=new Set([5,10,15]);

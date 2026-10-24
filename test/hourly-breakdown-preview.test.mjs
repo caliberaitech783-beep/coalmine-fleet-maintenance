@@ -111,3 +111,37 @@ test('today report covers midnight IST through cutoff, including morning Jayant 
  assert.ok(jayant.rows.some(row=>row[0]==='🟢 CLOSED'&&row[1]==='J1'));
  assert.ok(!jayant.rows.some(row=>row[1]==='J3'));
 });
+
+test('Telegram BD report is fresh, site-specific and sent only to the current private link',async()=>{
+ let route,recipient,pdfInput,committed=false,released=false;
+ const client={query:async sql=>{
+  if(sql==='SELECT NOW() AS cutoff')return {rows:[{cutoff:'2026-10-24T18:00:00+05:30'}]};
+  if(sql==='COMMIT')committed=true;
+  if(sql.includes('FROM maintenance_requests WHERE'))return {rows:[{ref:'J1',site:'Jayant OC',start:'2026-10-24 17:00:00'},{ref:'S1',site:'Sasti OC',start:'2026-10-24 17:00:00'}]};
+  return {rows:[]};
+ },release(){released=true;}};
+ const session=()=>{},admin=()=>{};
+ registerHourlyBreakdownPreview({get(){},post:(...args)=>route=args},{pool:{connect:async()=>client},requireSession:session,requireAdministrator:admin,
+  linkedTelegramChat:async login=>{assert.equal(login,'my-login');return '123456';},
+  buildTableExportPdf:async input=>{pdfInput=input;return Buffer.from('pdf');},
+  sendTelegramDocument:async input=>{assert.ok(committed&&released);recipient=input;return {sent:true,messageId:42};},
+ });
+ assert.equal(route[1],session);assert.equal(route[2],admin);
+ let result,status;
+ await route.at(-1)({session:{login:'my-login'},body:{site:'Jayant OC',period:'two-hour',chatId:'999999'}},{status(value){status=value;return this;},json(value){result=value;}},error=>{throw error;});
+ assert.equal(status,201);assert.equal(result.messageId,42);
+ assert.equal(recipient.chatId,'123456');
+ assert.match(recipient.caption,/Jayant OC.*Consolidated BD/s);
+ assert.match(recipient.caption,/04:00:00 PM to .*06:00:00 PM/);
+ assert.equal(pdfInput.rows.length,1);
+ assert.equal(pdfInput.pageSize,'A3');
+});
+
+test('Telegram BD report rejects missing or group links and invalid periods before loading records',async()=>{
+ for(const [body,link] of [[{site:'Jayant OC',period:'two-hour'},''],[{site:'Jayant OC',period:'two-hour'},'-123'],[{site:'Jayant OC',period:'last-year'},'123'],[{site:'Unknown',period:'two-hour'},'123']]){
+  let route,status;
+  registerHourlyBreakdownPreview({get(){},post:(...args)=>route=args},{pool:{connect(){assert.fail('Must not load records');}},requireSession(){},requireAdministrator(){},linkedTelegramChat:async()=>link});
+  await route.at(-1)({session:{login:'me'},body},{status(value){status=value;return this;},json(){}},error=>{throw error;});
+  assert.equal(status,400);
+ }
+});
