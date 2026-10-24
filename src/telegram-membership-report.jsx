@@ -34,7 +34,7 @@ export default function TelegramMembershipReport({token,ReportSection=Membership
   const rows=users.filter(user=>!user.allowed).flatMap(user=>user.groups.length?user.groups.filter(group=>!group.joined).map(group=>({...group,name:user.name,login:user.login})):[{name:user.name,login:user.login,site:user.site||'Unassigned',status:'Site allocation required'}]);
   return <section>
     <h2>Telegram Site Groups — Not Joined Report</h2>
-    <p>All configured login accounts are checked, including users who have never signed in. Every assigned site group is mandatory; previous Telegram exemptions do not apply.</p>
+    <p>All configured login accounts are checked, including users who have never signed in. Managed sites/regions determine managers’ required groups; office accounts without a mine allocation require all eight groups. Previous Telegram exemptions do not apply.</p>
     <button type="button" disabled={loading} onClick={()=>setRevision(value=>value+1)}>{loading?'Checking membership…':'Refresh membership'}</button>
     <p role="status">{progress}{loading?' · Report incomplete while checking':''}</p>
     {error&&<p role="alert">{error} Results below are incomplete.</p>}

@@ -213,7 +213,7 @@ test("Telegram can be required at login, with exempt users", async () => {
 
 test("The login gate requires actual site membership for every user", () => {
   const gate = readFileSync(new URL("../src/telegram-gate.jsx", import.meta.url), "utf8");
-  assert.match(gate, /const blocking = !state \|\| state.allowed!==true;/);
+  assert.match(gate, /Object.hasOwn\(state,'allowed'\).*state.allowed!==true/);
   assert.match(gate, /Join your site Telegram groups to continue/);
   assert.match(gate, /play\.google\.com\/store\/apps\/details\?id=org\.telegram\.messenger/);
   assert.match(gate, /web\.telegram\.org/);

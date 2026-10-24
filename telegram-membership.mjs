@@ -1,4 +1,6 @@
 import {TELEGRAM_SITES,telegramUserHasSite} from './telegram-site-groups.mjs';
+import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {resolveMobileAccess} from './mobile-access.mjs';
 
 export const REQUIRED_SITE_LINKS={
   'Jayant OC':'https://t.me/+_UoCyKUxIbwyMzE1',
@@ -16,10 +18,19 @@ export function membershipOnboardingPath(path){
   return ['/api/telegram/me','/api/telegram/link','/api/logout','/api/session-status','/api/session-heartbeat'].includes(path);
 }
 
+export function requiredTelegramSites(user={}){
+  const profile=resolveMobileAccess({user});
+  const assigned=profile.permissions?.adminLevel==='Manager'
+    ?TELEGRAM_SITES.filter(site=>reportScopeIncludesSite(managerReportScope(user),site))
+    :TELEGRAM_SITES.filter(site=>telegramUserHasSite(user,site));
+  // Owner policy: office/no-mine accounts must join all eight groups.
+  return assigned.length?assigned:[...TELEGRAM_SITES];
+}
+
 export function createMembershipChecker({checkMember,checkGroup,now=Date.now,ttl=60000}){
   const cache=new Map(),groupChecks=new Map(),inFlight=new Map();
   return async function membership({user,chatId,groups,force=false}){
-    const sites=TELEGRAM_SITES.filter(site=>telegramUserHasSite(user,site));
+    const sites=requiredTelegramSites(user);
     const results=await Promise.all(sites.map(async site=>{
       const group=groups.find(group=>group.site===site);
       const row={site,inviteLink:REQUIRED_SITE_LINKS[site],joined:false,status:!chatId?'Not connected':!group?'Group not configured':'Not joined',checkedAt:null};

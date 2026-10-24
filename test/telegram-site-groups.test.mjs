@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from '../telegram-site-groups.mjs';
 import {parseTelegramUpdate,telegramSiteGroupDetails,createTelegramJoinRequestLink} from '../telegram.mjs';
+import {requiredTelegramSites} from '../telegram-membership.mjs';
 
 test('site groups use all eight sites and recognize legacy and short labels',()=>{
   assert.equal(TELEGRAM_SITES.length,8);
@@ -62,7 +63,7 @@ function webhookHarness(user){
   const bindings={app:{post:(_path,fn)=>{handler=fn}},telegramWebhookSecret:()=> 'secret',parseTelegramUpdate,
     sendTelegramText:async message=>{messages.push(message)},pool:{query:async()=>({rows:user?[{login:'user'}]:[]})},
     bdmsUserRecord:async()=>user,telegramSiteGroups:async()=>[{site:'Sasti OC',chatId:'-100'}],
-    telegramGroupSettings:async()=>({chatId:'-999'}),telegramUserHasSite,telegramSiteName,TELEGRAM_SITES,
+    telegramGroupSettings:async()=>({chatId:'-999'}),telegramUserHasSite,telegramSiteName,TELEGRAM_SITES,requiredTelegramSites,
     answerTelegramJoinRequest:async(...args)=>{decisions.push(args)},appendBackendProcessAudit:async()=>{},
     isBdmsAdministrator:value=>value.adminLevel==='Admin',telegramChatMemberStatus:async()=> 'creator',
     telegramSiteGroupDetails:async()=>({title:'Caliber Pulse Sasti'}),createTelegramJoinRequestLink:async()=> 'invite',
@@ -74,7 +75,7 @@ function webhookHarness(user){
   }};
 }
 test('actual webhook admits only connected users assigned to the requested site',async()=>{
-  for(const [user,allowed] of [[{site:'Sasti OC'},true],[{site:'Majri OC'},false],[{site:'Sasti OC | Majri OC'},true],[{adminLevel:'Admin'},false],[null,false]]){
+  for(const [user,allowed] of [[{site:'Sasti OC'},true],[{site:'Majri OC'},false],[{site:'Sasti OC | Majri OC'},true],[{adminLevel:'Admin'},true],[null,false]]){
     const api=webhookHarness(user);
     assert.equal(await api.run({chat_join_request:{chat:{id:-100},from:{id:123},user_chat_id:123}}),200);
     assert.deepEqual(api.decisions,[['-100','123',allowed]]);

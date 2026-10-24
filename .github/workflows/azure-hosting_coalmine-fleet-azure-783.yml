@@ -16,6 +16,11 @@ on:
         description: "Optional immutable report-only commit based on current production"
         required: false
         type: string
+      verify_telegram_only:
+        description: "Read-only production Telegram group readiness check"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,7 +37,23 @@ env:
   LIVE_URL: https://pulse.cmll.in
 
 jobs:
+  telegram-readiness:
+    if: inputs.verify_telegram_only == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+      - name: Inspect production Telegram group readiness
+        run: node scripts/verify-telegram-membership-readiness.mjs
   build:
+    if: inputs.verify_telegram_only != true
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -208,7 +229,7 @@ jobs:
             sleep 5
           done
 
-      - name: Verify mandatory Telegram groups inside staging
+      - name: Verify production Telegram groups before swap
         shell: bash
         run: node scripts/verify-telegram-membership-readiness.mjs
 

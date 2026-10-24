@@ -120,8 +120,7 @@ import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} 
 import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {telegramChatMember} from './telegram.mjs';
-import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS} from './telegram-membership.mjs';
-import {registerTelegramMembershipReadiness} from './telegram-membership-readiness.mjs';
+import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS,requiredTelegramSites} from './telegram-membership.mjs';
 import {telegramInvitationBatch,telegramInvitationSummary} from './telegram-site-invitations.mjs';
 import {telegramSiteCampaignId,telegramSiteExport,telegramCampaignRecipients,telegramCampaignMessage,telegramCampaignBatch} from './telegram-site-campaign.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -3846,7 +3845,6 @@ app.post('/api/telegram/test-templates',requireSuper,requireWhatsAppAdministrato
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
 
 const membershipChecker=createMembershipChecker({checkMember:telegramChatMember,checkGroup:telegramSiteGroupDetails});
-registerTelegramMembershipReadiness(app,{scheduledJobsEnabled,commit:deploymentSha,groups:telegramSiteGroups,checkGroup:telegramSiteGroupDetails});
 async function telegramMembershipFor(login,force=false){
   const [user,groups,{rows}]=await Promise.all([bdmsUserRecord(login),telegramSiteGroups(),
     pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
@@ -3874,7 +3872,8 @@ async function sendMandatorySiteInvitations(){
   if(mandatoryInvitationsRunning||!databaseReady||!telegramConfiguration().botToken)return;
   mandatoryInvitationsRunning=true;
   try{
-    const recipients=telegramCampaignRecipients(await telegramLinkedSiteUsers(),Object.entries(REQUIRED_SITE_LINKS).map(([site,inviteLink])=>({site,inviteLink})));
+    const users=(await telegramLinkedSiteUsers()).map(row=>({...row,user:{...row.user,site:requiredTelegramSites(row.user).join(' | ')}}));
+    const recipients=telegramCampaignRecipients(users,Object.entries(REQUIRED_SITE_LINKS).map(([site,inviteLink])=>({site,inviteLink})));
     const prefix='telegram_site_campaign:mandatory-site-joining-2026-10-25:';
     return await telegramCampaignBatch({recipients,
       read:async()=>{const {rows}=await pool.query('SELECT setting_key,setting_value FROM app_settings WHERE setting_key LIKE $1',[`${prefix}%`]);return new Map(rows.map(row=>[row.setting_key.slice(prefix.length),row.setting_value]));},
@@ -4049,7 +4048,7 @@ app.post('/api/telegram/webhook',async(req,res)=>{
       if(siteGroup){
         const {rows}=await pool.query('SELECT login FROM telegram_user_links WHERE chat_id=$1',[update.userId]);
         const users=await Promise.all(rows.map(({login})=>bdmsUserRecord(login)));
-        const approved=users.some(user=>telegramUserHasSite(user,siteGroup.site));
+        const approved=users.some(user=>user&&requiredTelegramSites(user).includes(siteGroup.site));
         await answerTelegramJoinRequest(update.groupChatId,update.userId,approved);
         await appendBackendProcessAudit({module:'Telegram',action:approved?'Approve site group join request':'Decline site group join request',
           targetReference:siteGroup.site,reason:approved?'Connected user assigned to this site':'No connected account assigned to this site'}).catch(()=>{});

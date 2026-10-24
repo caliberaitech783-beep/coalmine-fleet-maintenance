@@ -25,7 +25,9 @@ export default function TelegramGate({ token, logout }) {
   const [message, setMessage] = useState("");
   const [adminHelp,setAdminHelp]=useState(false);
   const wasBlocked=useRef(false);
-  const blocking = !state || state.allowed!==true;
+  // A UI-only release can precede the server swap. Keep the prior connection
+  // rule until the server returns its authoritative membership decision.
+  const blocking = !state || (Object.hasOwn(state,'allowed') ? state.allowed!==true : Boolean(state.required&&!state.linked));
   useEffect(()=>{setState(null);wasBlocked.current=false;setAdminHelp(false);},[token]);
   useEffect(()=>{
     if(state?.allowed===false)wasBlocked.current=true;
@@ -68,7 +70,7 @@ export default function TelegramGate({ token, logout }) {
     <section className="telegram-gate" role="alertdialog" aria-modal="true" aria-labelledby="telegram-gate-title">
       <header><span><Send /></span><div><small>Required for every user</small><h2 id="telegram-gate-title">Join your site Telegram groups to continue</h2></div></header>
       <div className="telegram-gate-body">
-        <p>Connect your own Telegram account and join every assigned site group to receive updates and reports. Actual membership must be verified before Pulse access is allowed.</p>
+        <p>Connect your own Telegram account and join every required site group to receive updates and reports. Managers follow their managed sites or regions. Office accounts without a mine allocation must join all eight groups. Actual membership must be verified before Pulse access is allowed.</p>
         {!state&&<p role="status">Checking Telegram membership…</p>}
         <ol>
           <li><b>Install Telegram</b> and sign up with your mobile number. Skip this if you already have it.

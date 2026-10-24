@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS} from '../telegram-membership.mjs';
+import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS,requiredTelegramSites} from '../telegram-membership.mjs';
 import {telegramCampaignRecipients,telegramCampaignBatch} from '../telegram-site-campaign.mjs';
 
 const groups=[{site:'Sasti OC',chatId:'-1'},{site:'Majri OC',chatId:'-2'}];
@@ -13,7 +13,20 @@ test('every allocated site needs real membership, including restricted is_member
     assert.equal(result.groups[0].inviteLink,REQUIRED_SITE_LINKS['Sasti OC']);
   }
 });
-test('unlinked, unassigned and unconfigured accounts cannot gain access; roles and exemptions cannot bypass',async()=>{
+test('office accounts require all eight groups; managers follow configured managed sites and regions',async()=>{
+  assert.equal(requiredTelegramSites({site:'Nagpur'}).length,8);
+  assert.equal(requiredTelegramSites({}).length,8);
+  const manager={userType:'Super User',adminLevel:'Manager',managerSites:'Majri OC | Sasti OC',site:'Nagpur'};
+  assert.deepEqual(requiredTelegramSites(manager),['Sasti OC','Majri OC']);
+  assert.deepEqual(requiredTelegramSites({...manager,managerSites:'',managerRegion:'NCL'}),['Jayant OC','Dudhichua OC','Dudhichua East OC']);
+  assert.equal(requiredTelegramSites({...manager,managerSites:'',managerRegion:'All'}).length,8);
+  const allGroups=Object.keys(REQUIRED_SITE_LINKS).map((site,index)=>({site,chatId:String(-index-1)}));
+  let missing='Jayant OC';
+  const check=createMembershipChecker({checkGroup:async()=>{},checkMember:async chatId=>({status:allGroups.find(group=>group.chatId===chatId).site===missing?'left':'member'})});
+  const input={user:{site:'Nagpur'},groups:allGroups,chatId:'123',force:true};
+  assert.equal((await check(input)).allowed,false);missing='';assert.equal((await check(input)).allowed,true);
+});
+test('unlinked and unconfigured accounts cannot gain access; roles and exemptions cannot bypass',async()=>{
   const check=createMembershipChecker({checkGroup:async()=>{},checkMember:async()=>({status:'member'})});
   for(const input of [{user:{site:'Sasti OC'},groups},{user:{site:'Nagpur',adminLevel:'Super Admin'},groups,chatId:'123'},{user:{site:'Sasti OC',exempt:true},groups:[],chatId:'123'}])assert.equal((await check(input)).allowed,false);
   const result=await check({user:{site:'Sasti OC | Majri OC'},groups:[groups[0]],chatId:'123'});
@@ -93,7 +106,7 @@ test('mandatory background invitations send only allocated links, continue batch
   const saved=new Map(),sent=[];
   const bindings={databaseReady:true,telegramConfiguration:()=>({botToken:'test'}),
     telegramLinkedSiteUsers:async()=>Array.from({length:6},(_,index)=>({login:`user${index}`,chatId:String(index+1),user:{site:'Majri OC'}})),
-    telegramCampaignRecipients,telegramCampaignBatch,REQUIRED_SITE_LINKS,
+    telegramCampaignRecipients,telegramCampaignBatch,REQUIRED_SITE_LINKS,requiredTelegramSites,
     pool:{query:async(sql,params)=>{
       const key=params[0];
       if(sql.startsWith('SELECT'))return {rows:[...saved].map(([setting_key,setting_value])=>({setting_key,setting_value}))};
