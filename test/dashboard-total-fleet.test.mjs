@@ -65,5 +65,5 @@ test('LMV bars retain their teal fill and proportional breakdown height, with a 
   const css=readFileSync(new URL('../src/lmv-fleet.css',import.meta.url),'utf8');
   assert.match(css,/\.mine-dashboard \.mine-fleet-bar\.otherVehicles\s*\{[^}]*linear-gradient\(180deg,#2dd4bf,#0f766e\)/);
   assert.match(css,/\.mine-dashboard \.mine-fleet-bar\.otherVehicles \.mine-fleet-breakdown-segment\s*\{\s*min-height:0/);
-  assert.match(css,/\.mine-dashboard \.lmv-fleet-controls \.mine-fleet-chart-toggle\s*\{[^}]*width:auto/);
+  assert.match(css,/\.mine-dashboard \.mine-fleet-region-chart \.lmv-fleet-controls \.mine-fleet-chart-toggle\s*\{[^}]*width:var\(--fleet-counter-width,auto\)/);
 });

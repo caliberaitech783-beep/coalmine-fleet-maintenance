@@ -1,7 +1,7 @@
 .lmv-fleet-controls { display:grid; grid-template-columns:minmax(230px,1fr) auto minmax(180px,1fr); align-items:center; gap:10px 14px; padding:14px; border-top:1px solid #14b8a644; border-bottom:1px solid #14b8a644; background:color-mix(in srgb,#14b8a6 7%,var(--mine-panel,#fff)); }
 .lmv-fleet-controls>strong { display:flex; align-items:center; gap:6px; color:var(--mine-text,#16304b); }
 .mine-dashboard .lmv-fleet-controls>strong { font-size:24px; line-height:1.2; }
-.mine-dashboard .lmv-fleet-controls .mine-fleet-chart-toggle { width:auto; flex:none; justify-self:center; margin:0; }
+.mine-dashboard .mine-fleet-region-chart .lmv-fleet-controls .mine-fleet-chart-toggle { width:var(--fleet-counter-width,auto); min-height:var(--fleet-counter-height,0px); max-width:100%; box-sizing:border-box; flex:none; justify-self:center; justify-content:space-between; margin:0; }
 .lmv-fleet-tools { display:flex; justify-content:flex-end; align-items:center; gap:8px; flex-wrap:wrap; }
 .lmv-fleet-controls>small,.lmv-fleet-controls>[role="alert"] { grid-column:1/-1; }
 .lmv-fleet-controls>strong i,.mine-fleet-chart-legend i.otherVehicles { display:inline-block; width:14px; height:14px; border-radius:4px; background:#14b8a6; }

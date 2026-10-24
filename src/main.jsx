@@ -2211,6 +2211,22 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // Measure the space the OEM chart may use so the panel never needs a page scroll.
   const fleetChartRef = useRef(null);
   const dailyBdExportRef = useRef(null);
+  useEffect(() => {
+    const panel = fleetChartRef.current;
+    const counters = panel?.querySelector('[aria-label="Fleet chart view"]');
+    if (!counters) return undefined;
+    const alignLmvCounters = () => {
+      const {width, height} = counters.getBoundingClientRect();
+      panel.style.setProperty("--fleet-counter-width", width + "px");
+      panel.style.setProperty("--fleet-counter-height", height + "px");
+    };
+    alignLmvCounters();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(alignLmvCounters) : null;
+    observer?.observe(counters);
+    window.addEventListener("resize", alignLmvCounters);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", alignLmvCounters); };
+  }, []);
+
   const [oemPlotSpace, setOemPlotSpace] = useState(0);
   useEffect(() => {
     const fitOemChart = () => setOemPlotSpace(oemChartPlotSpace(fleetChartRef.current));
