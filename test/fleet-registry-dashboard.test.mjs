@@ -67,7 +67,7 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} showBreakdown=\{showFleetBreakdowns\}/);
   assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Total Fleet"\}<\/h2>/);
+  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Vehicles & Equipments"\}<\/h2>/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
@@ -165,7 +165,7 @@ test("breakdown trend chart drops the forecast legend, view toggle and wording",
 });
 
 test("the region and site graph title identifies the current view and only counts open lists", () => {
-  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Total Fleet"\}<\/h2>/);
+  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Vehicles & Equipments"\}<\/h2>/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-title"/);
   assert.match(source, /className="mine-fleet-toggle-count"/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);

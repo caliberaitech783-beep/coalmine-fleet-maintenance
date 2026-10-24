@@ -33,6 +33,7 @@ export const LMV_MODES=[['total','Total LMV','total'],['balance','BD Balance','b
 export function LmvFleetControls({records,mode,onMode,onInspect,loaded,error,retry,onReports,todayCount=0,onTodayInspect}) {
   const counts=lmvCounts(records);
   return <div className="lmv-fleet-controls">
+    <h2>Other Vehicle (LMV)</h2>
     <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view" title={counts.demo>0 ? `${counts.demo} labelled demo LMVs · sample statuses` : 'Other vehicles / LMV'}>
       {LMV_MODES.map(([key,label,count])=><div key={key} className={`mine-fleet-view-option ${mode===key||(!mode&&key==='breakdown')?'active':''} ${key==='breakdown'?'breakdown':''}`}><button type="button" disabled={!loaded} aria-pressed={mode===key} onClick={()=>onMode(key)}>{label}</button><button type="button" disabled={!loaded} className="mine-fleet-toggle-count" aria-label={`View ${label} LMV records`} onClick={()=>onInspect({mode:key})}>{loaded?counts[count]:'—'}</button>{key==='breakdown'&&<button type="button" disabled={!loaded} className={`mine-fleet-count-trend ${todayCount?'up':'flat'}`} title="Today’s LMV breakdown requests still off-road across selected sites" aria-label="View today’s active LMV breakdown vehicles" onClick={onTodayInspect}>{todayCount>0&&<span aria-hidden="true">↑</span>}<span>{todayCount>0?`+${todayCount}`:'0'}</span></button>}</div>)}
     </div>

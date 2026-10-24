@@ -1,7 +1,7 @@
 .lmv-fleet-controls { display:grid; grid-template-columns:minmax(230px,1fr) auto minmax(180px,1fr); align-items:center; gap:10px 14px; padding:0 14px 8px; border:0; background:transparent; }
 .lmv-fleet-controls>strong { display:flex; align-items:center; gap:6px; color:var(--mine-text,#16304b); }
 .mine-dashboard .lmv-fleet-controls>strong { font-size:24px; line-height:1.2; }
-.mine-dashboard .mine-fleet-region-chart .lmv-fleet-controls .mine-fleet-chart-toggle { width:var(--fleet-counter-width,auto); min-height:calc(var(--fleet-counter-height,66px) + 14px); max-width:100%; box-sizing:border-box; flex:none; justify-self:center; justify-content:space-between; margin:0; }
+.mine-dashboard .mine-fleet-region-chart .lmv-fleet-controls .mine-fleet-chart-toggle { width:var(--fleet-counter-width,auto); min-height:var(--fleet-counter-height,66px); max-width:100%; box-sizing:border-box; flex:none; justify-self:center; justify-content:space-between; margin:0; }
 .lmv-fleet-tools { grid-column:3; display:flex; justify-content:flex-end; align-items:center; gap:8px; flex-wrap:wrap; }
 .lmv-fleet-controls>small,.lmv-fleet-controls>[role="alert"] { grid-column:1/-1; }
 .lmv-fleet-controls>strong i,.mine-fleet-chart-legend i.otherVehicles { display:inline-block; width:14px; height:14px; border-radius:4px; background:#14b8a6; }
@@ -70,3 +70,7 @@
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars > header { padding-bottom:0; border-bottom:0; align-items:end; }
 .mine-dashboard .lmv-fleet-controls .mine-fleet-view-option.breakdown.active { background:var(--brand-purple,#522e90); }
 .mine-dashboard .lmv-fleet-controls .mine-fleet-view-option.breakdown > .mine-fleet-toggle-count { background:#c62828; color:#fff; }
+
+.mine-dashboard .lmv-fleet-controls > h2 { grid-column:1; grid-row:1; margin:0; font-size:28px; line-height:1.2; color:var(--mine-text,#16304b); }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars > header { margin-bottom:0; }
+@media(max-width:760px) { .mine-dashboard .lmv-fleet-controls > h2 { font-size:22px; } }
