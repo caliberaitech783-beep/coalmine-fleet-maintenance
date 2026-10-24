@@ -11,13 +11,16 @@ try{
   if(!host)throw Error('SCM unavailable');
   const token=az(['account','get-access-token','--resource','https://management.azure.com/']).accessToken;
   const remote=String.raw`(async()=>{
+let pool;let probeStage='dependencies';
+try{
 const {default:pg}=await import('pg');
+probeStage='site modules';
 const {TELEGRAM_SITES,normalizeTelegramSiteGroups}=await import('./telegram-site-groups.mjs');
 const {telegramSiteGroupDetails}=await import('./telegram.mjs');
-let pool;
-try{
+probeStage='configuration';
 const env=process.env;
 if(!env.DATABASE_URL||!env.TELEGRAM_BOT_TOKEN)throw Object.assign(Error(),{code:'CONFIGURATION_MISSING'});
+probeStage='database';
 pool=new pg.Pool({connectionString:env.DATABASE_URL,ssl:env.DATABASE_SSL==='false'?false:{rejectUnauthorized:false},connectionTimeoutMillis:10000,max:1});
 const {rows}=await pool.query("SELECT setting_value FROM app_settings WHERE setting_key='telegram_site_groups'");
 const groups=normalizeTelegramSiteGroups(rows[0]?.setting_value);
@@ -27,7 +30,7 @@ if(group)try{await telegramSiteGroupDetails(group.chatId,{env,fetchImpl:(url,opt
 return {site,registered:Boolean(group),botReady};
 }));
 console.log(JSON.stringify({source:'production',ready:sites.every(site=>site.botReady),sites}));
-}catch(error){console.log(JSON.stringify({ready:false,code:/^[A-Z0-9_]{1,60}$/.test(String(error.code||''))?error.code:'UNAVAILABLE'}));process.exitCode=1;}
+}catch(error){console.log(JSON.stringify({ready:false,stage:probeStage,code:/^[A-Z0-9_]{1,60}$/.test(String(error.code||''))?error.code:'UNAVAILABLE'}));process.exitCode=1;}
 finally{await pool?.end();}
 })().catch(()=>{console.log(JSON.stringify({ready:false,code:'PROBE_EXECUTION_FAILED'}));process.exitCode=1;});`;
   // Kudu's command parser does not preserve POSIX nested single-quote escaping.
