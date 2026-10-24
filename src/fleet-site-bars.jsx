@@ -3,14 +3,14 @@ import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 
 const nonNegativeCount = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
 
-export default function FleetSiteBars({ site, axisMax, lmvAxisMax = axisMax, showBreakdown = false, columns = null }) {
+export default function FleetSiteBars({ site, axisMax, showBreakdown = false, columns = null }) {
   return <span className="mine-fleet-site-bars">
     {(columns || [["equipment", "Equipment"], ["vehicles", "Vehicles"], ...(site?.otherVehicles !== undefined ? [["otherVehicles", "Other vehicles / LMV"]] : [])]).map(([key, label]) => {
       const total = nonNegativeCount(site?.[key]);
       // These segments represent physical assets, so they cannot exceed the
       // registered total even if an older caller sends request-case counts.
       const breakdown = Math.min(total, nonNegativeCount(site?.breakdown?.[key]));
-      const scale = Math.max(1, nonNegativeCount(key === "otherVehicles" ? lmvAxisMax : axisMax), total);
+      const scale = Math.max(1, nonNegativeCount(axisMax), total);
       const totalHeight = fleetBarHeightPercent(total, scale);
       // The green segment is the breakdown share of its own bar, so its absolute
       // height equals the breakdown count on the same linear scale as the totals.

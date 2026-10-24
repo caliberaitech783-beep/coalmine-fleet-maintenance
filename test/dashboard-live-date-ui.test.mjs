@@ -1269,6 +1269,9 @@ test('LMV controls switch the dedicated chart and open scoped reports without ch
 test('main Total Fleet and each site count include LMVs and open exactly their matching assets',()=>{
   const view=harness({lmvRecords:lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5))});
   let tree=view.render();
+  const plotted=findAll(tree,node=>node.props.site?.otherVehicles!==undefined&&node.props.axisMax);
+  assert.ok(plotted.length>0);
+  assert.ok(plotted.every(node=>node.props.axisMax===plotted[0].props.axisMax&&!node.props.lmvAxisMax), "all categories and sites share one linear scale");
   const list=()=>findAll(tree,node=>node.props.columns===combinedFleetModel.TOTAL_FLEET_DETAIL_COLUMNS&&node.props.rowKey)[0];
   assert.equal(text(fleetCount(tree,'Total')),'8');
   assert.equal(text(fleetCount(tree,'Breakdown')),'3');

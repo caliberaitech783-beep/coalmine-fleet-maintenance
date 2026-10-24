@@ -83,7 +83,7 @@ test("breakdown mode keeps total counts and green segments on one common scale",
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
   assert.match(bars, /const totalHeight = fleetBarHeightPercent\(total, scale\);/);
   assert.match(bars, /const breakdownShare = total \? breakdown \/ total \* 100 : 0;/);
-  assert.match(bars, /Math\.max\(1, nonNegativeCount\(key === "otherVehicles" \? lmvAxisMax : axisMax\), total\)/);
+  assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
   assert.match(source, /const fleetChartAllKey = showFleetBreakdowns \? "fleet-breakdown:all" : "all"/);
