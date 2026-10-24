@@ -34,7 +34,7 @@ test("shared tables number every row by default with the Sr. No. label and forwa
 
 test("report, backup and WhatsApp rule tables start with a Sr. No. column", () => {
   const main = read("../src/main.jsx");
-  assert.match(main, /const serialNumberFirst = title === "Downtime Matrix Report";/);
+  assert.match(main, /const serialNumberFirst = title === "Hourly Breakdown Report";/);
   assert.match(main, /<thead><tr>\{\(serialNumberFirst \|\| displayedColumns\[0\]\?\.key!=='requestShift'\)/);
   assert.match(main, /<td className="table-serial-cell">\{firstVisibleRow \+ index\}<\/td>/);
   assert.match(main, /colSpan=\{displayedColumns\.length \+ 1\} className="empty-state"/);

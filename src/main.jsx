@@ -1178,7 +1178,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Downtime Matrix Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
+  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Hourly Breakdown Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
   const canViewReports = visibleReportNav.length > 0;
   const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
@@ -4291,7 +4291,7 @@ function ActionsTable(props) {
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} children={withRequestShiftCells(children,shiftData)} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "", onExportViewChange = null, onResetSearch = null }) {
-  const serialNumberFirst = title === "Downtime Matrix Report";
+  const serialNumberFirst = title === "Hourly Breakdown Report";
   const {shifts}=useRequestShiftData();
   columns=useMemo(() => requestShiftColumns(columns,rows,shifts), [columns,rows,shifts]);
   const [appliedColumns, applyColumns] = useColumnPreferences(layoutKey || "report-table", columns, visibleColumnKeys);
@@ -8029,7 +8029,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
         </div>
         <div className="reports-header-actions">
           {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
-          <button type="button" className="secondary" onClick={()=>setActiveReportCategory('downtime-matrix')}>Downtime Matrix Report</button>
+          <button type="button" className="secondary" onClick={()=>setActiveReportCategory('downtime-matrix')}>Hourly Breakdown Report</button>
           {canViewTelegramUnlinkedReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('telegram-unlinked')}>Telegram Not Linked Report</button>}
           {reportAdministrator && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
           <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")}><Clock /> My report schedule</button>

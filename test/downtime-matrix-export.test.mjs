@@ -23,14 +23,14 @@ test('PDF heading keeps the selected site exactly once',()=>{
 });
 test('filtered export names group and selected day and omits redundant column',()=>{
   const result=downtimeMatrixExport({columns,rows,filters:{equipmentGroup:'EXCAVATOR'}},context);
-  assert.equal(result.title,'Downtime Matrix Report - Dhoptala OC (2nd) - EXCAVATOR - 17-10-2026');
+  assert.equal(result.title,'Hourly Breakdown Report - Dhoptala OC (2nd) - EXCAVATOR - 17-10-2026');
   assert.deepEqual(result.columns.map(c=>c.key),['door','start']);
   assert.equal(result.rows,rows);
   assert.equal(columns.length,3);
 });
 test('unfiltered export retains equipment group even when only one group exists',()=>{
   const result=downtimeMatrixExport({columns,rows,filters:{}},context);
-  assert.equal(result.title,'Downtime Matrix Report - Dhoptala OC (2nd)');
+  assert.equal(result.title,'Hourly Breakdown Report - Dhoptala OC (2nd)');
   assert.equal(result.columns,columns);
 });
 test('filter removal updates export even if the resulting rows do not change',()=>{
