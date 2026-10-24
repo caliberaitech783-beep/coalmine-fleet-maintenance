@@ -1,3 +1,5 @@
+import {seedLmvDemoRecords} from './lmv-fleet.mjs';
+import {registerLmvFleet} from './lmv-fleet-api.mjs';
 import {registerFullBackup} from './full-backup.mjs';
 import {telegramNotificationText,telegramReportText} from './telegram-message-format.mjs';
 import {groupCurrentUserSessions} from './single-login.mjs';
@@ -1211,6 +1213,7 @@ async function migrate(){
         VALUES ('shift_master_defaults_seeded_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
+    await seedLmvDemoRecords(client);
     // Privileged accounts must be provisioned explicitly by an authorized
     // administrator, never recreated with a known password during startup.
     // Existing accounts and credentials are not changed by this policy.
@@ -8607,6 +8610,7 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
 
 // Vite fingerprints every file under /app-assets, so a deploy changes the URL and
 // browsers may keep these for a year. index.html is still revalidated.
+registerLmvFleet(app,{pool,requireSession,currentDashboardAuthorization});
 registerBreakdownResponsibilityRoute();
 registerReopenBreakdownRoute();
 // Legacy directory snapshots embed unfiltered phone numbers. Use the protected API.

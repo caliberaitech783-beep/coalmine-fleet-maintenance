@@ -1,3 +1,4 @@
+import {seedLmvDemoRecords} from '../lmv-fleet.mjs';
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
 import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 import assert from 'node:assert/strict';
@@ -28,10 +29,11 @@ async function runStartup({users=[],initialized=true}={}){
       if(sql.startsWith('INSERT INTO master_records')){
         const target=sql.includes("SELECT 'Delayed Reason'")
           ?'Delayed Reason'
+          :sql.includes("VALUES ('LMV master'") ? 'LMV master'
           :sql.includes("VALUES ('Shift Master'")
             ?'Shift Master'
             :values?.[0];
-        assert.ok(['Repair type master','Breakdown Sub-Category','Delayed Reason','Shift Master'].includes(target),'startup must not insert a user account');
+        assert.ok(['Repair type master','Breakdown Sub-Category','Delayed Reason','Shift Master','LMV master'].includes(target),'startup must not insert a user account');
       }
       // The only permitted master update tags breakdown types on Delayed Reason records; it can never touch accounts.
       const delayedReasonTypeSeed=sql.startsWith("UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)")&&sql.includes("WHERE master_name='Delayed Reason'");
@@ -43,6 +45,7 @@ async function runStartup({users=[],initialized=true}={}){
     release(){released=true;},
   };
   const context={
+    seedLmvDemoRecords,
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],BREAKDOWN_SUB_CATEGORY_DEFAULTS:['Tyre puncture'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
     SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,CDIR_DELETION_SCHEMA,CDIR_CHANGE_SCHEMA,

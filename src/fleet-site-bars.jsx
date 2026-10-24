@@ -3,9 +3,9 @@ import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 
 const nonNegativeCount = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
 
-export default function FleetSiteBars({ site, axisMax, showBreakdown = false }) {
+export default function FleetSiteBars({ site, axisMax, showBreakdown = false, columns = null }) {
   return <span className="mine-fleet-site-bars">
-    {[["equipment", "Equipment"], ["vehicles", "Vehicles"]].map(([key, label]) => {
+    {(columns || [["equipment", "Equipment"], ["vehicles", "Vehicles"], ...(site?.otherVehicles !== undefined ? [["otherVehicles", "Other vehicles / LMV"]] : [])]).map(([key, label]) => {
       const total = nonNegativeCount(site?.[key]);
       // These segments represent physical assets, so they cannot exceed the
       // registered total even if an older caller sends request-case counts.

@@ -1,0 +1,51 @@
+.lmv-fleet-controls { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 14px; border-top:1px solid #14b8a644; border-bottom:1px solid #14b8a644; background:color-mix(in srgb,#14b8a6 7%,var(--mine-panel,#fff)); }
+.lmv-fleet-controls>strong { display:flex; align-items:center; gap:6px; color:var(--mine-text,#16304b); }
+.lmv-fleet-controls>strong i,.mine-fleet-chart-legend i.otherVehicles { display:inline-block; width:14px; height:14px; border-radius:4px; background:#14b8a6; }
+.lmv-fleet-controls .mine-fleet-chart-toggle { margin:0; }
+.mine-dashboard .lmv-fleet-controls .mine-fleet-view-option.active { background:#0f766e; }
+.lmv-fleet-controls>small { color:var(--mine-muted,#52637a); }
+.mine-fleet-bar.otherVehicles { background:linear-gradient(180deg,#2dd4bf,#0f766e); }
+.mine-fleet-bar.otherVehicles .small-segment .mine-fleet-breakdown-count { bottom:-18px; }
+.mine-fleet-bar.otherVehicles .mine-fleet-bar-count { color:#0f766e; }
+.mine-dashboard .has-lmv-bars .mine-fleet-bar-column { width:clamp(28px,2vw,42px); }
+.mine-dashboard .has-lmv-bars .mine-fleet-site-bars { gap:clamp(5px,.5vw,10px); }
+.mine-dashboard .has-lmv-bars .mine-fleet-chart-layout { height:490px; min-height:490px; }
+.mine-dashboard .has-lmv-bars .mine-fleet-site-entry { grid-template-rows:minmax(0,1fr) 168px; }
+.mine-dashboard .has-lmv-bars .mine-fleet-chart-grid { bottom:232px; }
+.mine-dashboard .lmv-site-metric { color:#0f766e; }
+.mine-dashboard-night .lmv-site-metric { color:#5eead4; }
+.lmv-fleet-view { padding:14px; }
+.lmv-view-heading { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:12px; color:var(--mine-text,#16304b); }
+.lmv-view-heading>span { color:var(--mine-muted,#52637a); margin-right:auto; }
+.lmv-site-chart { display:flex; overflow-x:auto; border:1px solid var(--mine-line,#d9e3ef); }
+.lmv-region { display:flex; flex:1 0 auto; flex-direction:column; border-right:2px solid #14b8a644; }
+.lmv-region:last-child { border:0; }
+.lmv-sites { display:flex; }
+.lmv-site { display:flex; flex:1 0 150px; min-width:150px; flex-direction:column; align-items:center; gap:5px; padding:8px; text-align:center; color:var(--mine-text,#16304b); }
+.lmv-site>b { min-height:38px; max-width:155px; }
+.lmv-site>button:not(.lmv-bars-trigger) { border:0; border-radius:4px; padding:2px 4px; color:inherit; background:transparent; font-weight:700; cursor:pointer; }
+.lmv-site>button:hover,.lmv-site>button:focus-visible { outline:2px solid #14b8a6; }
+.lmv-site>button.lmv-bd-percent { color:var(--fleet-breakdown,#a00000); }
+.lmv-bars-trigger { height:220px; width:100%; padding:24px 10px 0; border:0; background:repeating-linear-gradient(to top,transparent 0,transparent 39px,#14b8a622 39px,#14b8a622 40px); cursor:pointer; }
+.lmv-region footer { margin-top:auto; border-top:2px solid #14b8a6; padding:10px; text-align:center; color:var(--mine-text,#16304b); }
+.lmv-oem-bars { display:flex; align-items:flex-end; justify-content:center; height:100%; gap:8px; }
+.lmv-oem-column { position:relative; display:flex; align-items:flex-end; justify-content:center; height:100%; width:28px; }
+.lmv-oem-column>i { position:relative; width:100%; min-height:1px; border-radius:4px 4px 0 0; }
+.lmv-oem-column b { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); color:var(--mine-text,#16304b); }
+.lmv-oem-column>small { position:absolute; bottom:0; max-width:60px; transform:translateY(100%); font-size:9px; color:var(--mine-text,#16304b); }
+.lmv-oem-bars { padding-bottom:26px; }
+.lmv-reports { min-width:0; }
+.lmv-reports>.tabs { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.lmv-reports>.tabs button { padding:8px 12px; }
+.lmv-demo-notice { padding:10px 12px; border:1px solid #14b8a666; border-radius:8px; background:#14b8a611; }
+.lmv-report-controls { display:flex; gap:12px; flex-wrap:wrap; }
+.lmv-report-controls label { display:grid; gap:4px; }
+@media(max-width:700px) {
+  .mine-dashboard .has-lmv-bars .mine-fleet-chart-layout { height:505px; min-height:505px; }
+  .mine-dashboard .has-lmv-bars .mine-fleet-site-entry { grid-template-rows:minmax(0,1fr) 250px; }
+  .mine-dashboard .has-lmv-bars .mine-fleet-chart-grid { bottom:314px; }
+  .lmv-fleet-controls .mine-fleet-chart-toggle { flex-wrap:wrap; max-width:100%; }
+  .lmv-sites { min-width:max-content; }
+}
+
+.mine-dashboard.mine-dashboard-night .mine-fleet-bar.otherVehicles .mine-fleet-bar-count { color:#5eead4; }

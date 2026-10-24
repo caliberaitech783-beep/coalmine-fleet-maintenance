@@ -1,3 +1,5 @@
+import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage} from "./lmv-fleet.jsx";
+import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
 import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
 import {HR_APPLICATION_URL,HR_PERMISSION_OPTIONS,HR_ALL_PERMISSIONS,normalizedHrSelection,hrAccessEnabled} from '../hr-permissions.mjs';
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
@@ -348,6 +350,7 @@ import "./vehicle-history-density.css";
 import "./ticket-status-tabs.css";
 import "./linked-request-picker.css";
 import "./mobile-scroll-containment.css";
+import "./lmv-fleet.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import EmployeeTenureReport from "./employee-tenure-report.jsx";
@@ -1178,7 +1181,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Hourly Breakdown Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
+  const visibleReportNav = [...(configuredReportNav.length ? configuredReportNav : departmentReportNav), {id:'downtime-matrix',label:'Hourly Breakdown Report',icon:FileBarChart}, ...(canViewTelegramUnlinkedReport(session) ? [{id:'telegram-unlinked',label:'Telegram Not Linked Report',icon:FileBarChart}] : []), {id:'lmv',label:'Other vehicles / LMV reports',icon:FileBarChart}, ...(canViewBdAgeingReport(session) ? [{id:'bd-ageing',label:'BD Ageing Report',icon:FileBarChart}] : [])];
   const canViewReports = visibleReportNav.length > 0;
   const visibleIbossNav = [["Accounts",Landmark,"iboss-accounts"]].filter(()=>ibossAccountsAllowed(session,viewPermissions));
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
@@ -1841,6 +1844,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     window.addEventListener('resize', updateOffset);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
   }, []);
+  const lmvFleet = useLmvFleet(authToken);
+  const [lmvMode,setLmvMode] = useState("");
+  const [lmvSelection,setLmvSelection] = useState(null);
   const {records:equipmentRecords,scope:equipmentScope,shiftRecords,breakdownCountChange,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
@@ -2002,6 +2008,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const visibleBreakdowns = useMemo(() => historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveEquipment,visibleEquipment]);
   const liveFleetCounts = useMemo(() => fleetChartCounts(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
+  const visibleLmv = lmvFleet.records.filter(record => (!selectedRegion || selectedRegion.sites.some(site => recordBelongsToSite(record,site))) && (dashboardSite === "all" || recordBelongsToSite(record,dashboardSite)));
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
@@ -2173,11 +2180,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .map((site) => {
           const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
           const siteRequests = liveBreakdowns.filter((request) => recordBelongsToSite(request, site));
-          return { name: site, ...fleetChartCounts(records, siteRequests) };
+          const lmv = lmvCounts(visibleLmv.filter(record => recordBelongsToSite(record,site)));
+          const fleet = fleetChartCounts(records,siteRequests);
+          return { name: site, ...fleet, otherVehicles: lmv.total, lmv, breakdown: {...fleet.breakdown,otherVehicles:lmv.breakdown} };
         });
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       const regionRequests = liveBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
-      return { ...region, sites, ...fleetChartCounts(records, regionRequests) };
+      return { ...region, sites, ...fleetChartCounts(records, regionRequests), lmv: lmvCounts(visibleLmv.filter(record => sites.some(site => recordBelongsToSite(record,site.name)))) };
     }).filter(region => region.sites.length > 0);
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const showOemBreakdowns = fleetChartMode === "oem";
@@ -2227,7 +2236,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetChartAllKey = showFleetBreakdowns ? "fleet-breakdown:all" : "all";
   // The fleet chart uses fixed 25-unit grid steps on one linear scale, so every bar is proportional to its count.
   const fleetChartStep = 25;
-  const fleetChartPeak = fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])).reduce((maximum, value) => Math.max(maximum, Number(value) || 0), 0);
+  const fleetChartPeak = fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles, site.otherVehicles])).reduce((maximum, value) => Math.max(maximum, Number(value) || 0), 0);
   const fleetChartAxisMax = Math.max(fleetChartStep, Math.ceil(fleetChartPeak / fleetChartStep) * fleetChartStep);
   const fleetChartTicks = Array.from({ length: fleetChartAxisMax / fleetChartStep + 1 }, (_, index) => index * fleetChartStep);
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
@@ -2625,7 +2634,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   if (hourlyBreakdownVisible) return <HourlyBreakdownView ActionsTable={ActionsTable} requests={requestsWithDoorNumbers(scopedBreakdowns,scopedEquipment)} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
   // Each section's export table: its Export menu offers it, and the whole dashboard's Excel workbook has a sheet
   // per section (both Tracking Vehicle Throughput tabs) after the KPI sheet. Tables are built only when asked for.
-  const fleetSectionTable = () => fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: liveFleetCounts, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel });
+  const fleetSectionTable = () => lmvMode ? {title:`Other vehicles / LMV · ${lmvMode} · Current status`,columns:LMV_DETAIL_COLUMNS,rows:lmvRowsForMode(visibleLmv,lmvMode)} : fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: {...liveFleetCounts,lmv:lmvCounts(visibleLmv)}, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel });
   const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
   const lifecycleSectionTable = () => requestLifecycleExport({ trend: requestLifecycleTrend, readings: requestLifecycleReadings, place: `${requestLifecycleSite || requestLifecycleRegion?.code || dashboardScopeLabel}${dashboardShiftDetail}`, rangeLabel: requestLifecycleRangeLabel });
   const trendSectionTable = () => breakdownTrendExport({ trend: breakdownTrend, place: `${activeTrendSite === "all" ? dashboardScopeLabel : activeTrendSite}${dashboardShiftDetail}`, from: breakdownTrendStartKey, to: breakdownTrendAnchorKey, total: breakdownTrendTotal, average: breakdownTrendAverage });
@@ -2651,13 +2660,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       {cardSearchOpen && <DashboardCardSearch cards={dashboardSearchCards} onSelect={showDashboardCard} close={() => setCardSearchOpen(false)} />}
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} ref={fleetChartRef} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
+        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""} has-lmv-bars`} ref={fleetChartRef} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Total Fleet"}</h2>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
                 {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Breakdown minus OEM BD"><button type="button" disabled={!equipmentLoaded} onClick={() => openAssetDrilldown("fleet-breakdown:balance")}>BD Balance</button><button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label="View BD Balance list" onClick={() => openAssetDrilldown("fleet-breakdown:balance")}>{equipmentLoaded ? (accountBreakdownCount - oemChart.rows.length).toLocaleString() : "—"}</button></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${todayBreakdownDirection}` : mode}`}>
-                  <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => setFleetChartMode(mode)}>{label}</button>
+                  <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => {setLmvMode("");setFleetChartMode(mode);}}>{label}</button>
                   <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : accountBreakdownCount} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); openOemDrilldown(); }
                     else if (mode === "total") { if (showOemBreakdowns) setOemDrilldownKind("fleet"); else openAssetDrilldown("all"); }
@@ -2668,10 +2677,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 
               </div>
             </div>
-            <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}{equipmentLoaded && <ExportMenu {...fleetSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+            <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span><span role="button" tabIndex={0} onClick={()=>setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"})} onKeyDown={event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"});}}}><i className="otherVehicles" />Other vehicles / LMV</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}{equipmentLoaded && <ExportMenu {...fleetSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
           {showOemBreakdowns && <div className="mine-oem-view-tabs" role="group" aria-label="OEM BD report view">{[["chart", "Chart"], ["details", "Site-wise detailing"]].map(([view, label]) => <button type="button" key={view} aria-pressed={oemView === view} onClick={() => setOemView(view)}>{label}</button>)}<div className="mine-oem-view-toolbar" ref={setOemViewToolbarTarget} /></div>}
-          {equipmentLoaded ? (showOemBreakdowns ? (oemView === "details" ? <section className="mine-oem-inline-details" aria-label="Site-wise OEM breakdown detailing"><OemBreakdownDetails viewToolbarTarget={oemViewToolbarTarget} key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, dashboardShift].join("|")} selection={oemSiteDetailSelection} title={`OEM BD · Site-wise detailing · ${oemSiteDetailSelection.label}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} /></section> : <OemBreakdownChart chart={oemChart} toolbarTarget={oemViewToolbarTarget} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onFilterOem={filterOemChart} onReset={resetOemFilters} />) : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
+          <LmvFleetControls records={visibleLmv} mode={lmvMode} onMode={setLmvMode} onInspect={setLmvSelection} loaded={lmvFleet.loaded} error={lmvFleet.error} retry={lmvFleet.retry} onReports={()=>setLmvSelection({reports:true})} />
+          {equipmentLoaded ? (lmvMode ? <LmvFleetView records={visibleLmv} regions={fleetRegionInsights} mode={lmvMode} onInspect={setLmvSelection} ExportMenu={ExportMenu} stale={Boolean(lmvFleet.error)} /> : showOemBreakdowns ? (oemView === "details" ? <section className="mine-oem-inline-details" aria-label="Site-wise OEM breakdown detailing"><OemBreakdownDetails viewToolbarTarget={oemViewToolbarTarget} key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, dashboardShift].join("|")} selection={oemSiteDetailSelection} title={`OEM BD · Site-wise detailing · ${oemSiteDetailSelection.label}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} /></section> : <OemBreakdownChart chart={oemChart} toolbarTarget={oemViewToolbarTarget} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onFilterOem={filterOemChart} onReset={resetOemFilters} />) : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${fleetBarHeightPercent(tick, fleetChartAxisMax)}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
                 <div className="mine-fleet-chart-sites">{region.sites.map((site) => <div className="mine-fleet-site-entry" key={site.name}>
@@ -2679,16 +2689,18 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                     const segmentColumn = showFleetBreakdowns && event.detail !== 0 ? event.target.closest(".mine-fleet-breakdown-segment")?.closest(".mine-fleet-bar-column") : null;
                     const totalColumn = event.target.closest(".mine-fleet-bar")?.closest(".mine-fleet-bar-column");
                     if (event.detail !== 0 && !segmentColumn && !totalColumn) return;
+                    if ((segmentColumn || totalColumn)?.classList.contains("otherVehicles")) { setLmvSelection({site:site.name,mode:segmentColumn?"breakdown":"total"}); return; }
                     openAssetDrilldown(segmentColumn ? `offroad-site:${site.name}|${segmentColumn.classList.contains("vehicles") ? "vehicles" : "equipment"}` : totalColumn ? `site-total:${site.name}|${totalColumn.classList.contains("vehicles") ? "vehicles" : "equipment"}` : `${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`);
                   }} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}><FleetSiteBars site={site} axisMax={fleetChartAxisMax} showBreakdown={showFleetBreakdowns} /></button>
-                  <small className="mine-fleet-site-summary"><b>{site.name}</b><button type="button" onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD Balance {site.breakdown.total.toLocaleString()}</button><button type="button" onClick={() => openAssetDrilldown(`site:${site.name}`)}>Total Fleet {site.total.toLocaleString()}</button><button type="button" className="bd-percent" title={`BD Balance ${site.breakdown.total} of ${site.total} total fleet`} onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD (%) {(site.total ? site.breakdown.total / site.total * 100 : 0).toFixed(1)}</button></small>
+                  <small className="mine-fleet-site-summary"><b>{site.name}</b><button type="button" onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD Balance {site.breakdown.total.toLocaleString()}</button><button type="button" onClick={() => openAssetDrilldown(`site:${site.name}`)}>Total Fleet {site.total.toLocaleString()}</button><button type="button" className="bd-percent" title={`BD Balance ${site.breakdown.total} of ${site.total} total fleet`} onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD (%) {(site.total ? site.breakdown.total / site.total * 100 : 0).toFixed(1)}</button><button type="button" className="lmv-site-metric" disabled={!lmvFleet.loaded} onClick={()=>setLmvSelection({site:site.name,mode:"breakdown"})}>LMV BD {lmvFleet.loaded ? site.lmv.breakdown : "—"}</button><button type="button" className="lmv-site-metric" onClick={()=>setLmvSelection({site:site.name,mode:"total"})}>Total LMV {lmvFleet.loaded ? site.lmv.total : "—"}</button><button type="button" className="lmv-site-metric" onClick={()=>setLmvSelection({site:site.name,mode:"breakdown"})}>LMV BD (%) {lmvFleet.loaded ? site.lmv.bdPercent.toFixed(1) : "—"}</button></small>
                 </div>)}</div>
-                <footer {...listAction(showFleetBreakdowns ? `fleet-breakdown:region:${region.code}` : `region:${region.code}`, `All ${region.code} ${showFleetBreakdowns ? "breakdown requests" : "fleet records"}`)}><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span><span className="mine-region-bd-summary">BD Balance {region.breakdown.total.toLocaleString()}<br />BD (%) {(region.total ? region.breakdown.total / region.total * 100 : 0).toFixed(1)}</span></footer>
+                <footer {...listAction(showFleetBreakdowns ? `fleet-breakdown:region:${region.code}` : `region:${region.code}`, `All ${region.code} ${showFleetBreakdowns ? "breakdown requests" : "fleet records"}`)}><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span><span className="mine-region-bd-summary">BD Balance {region.breakdown.total.toLocaleString()}<br />BD (%) {(region.total ? region.breakdown.total / region.total * 100 : 0).toFixed(1)}</span><span className="lmv-site-metric">Total LMV {region.lmv.total} · LMV BD {region.lmv.breakdown} · LMV BD (%) {region.lmv.bdPercent.toFixed(1)}</span></footer>
               </section>)}</div>
             </div>
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
+        {lmvSelection && <LmvFleetDialog key={JSON.stringify(lmvSelection)} selection={lmvSelection} records={visibleLmv} regions={fleetRegionInsights} close={()=>setLmvSelection(null)} Dialog={Modal} ReportSection={ReportSection} />}
         {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
         {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
@@ -7541,6 +7553,7 @@ function withTimelineLinks(columns, token) {
   });
 }
 function ReportsPage(props) {
+  if (props.activeReportCategory === "lmv") return <LmvReportsPage key={props.session?.token} token={props.session?.token || authToken} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.("general")} />;
   if (props.activeReportCategory === 'telegram-unlinked') return <TelegramUnlinkedReport key={props.session?.token} session={props.session} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.('general')} />;
   if (props.activeReportCategory === 'bd-ageing') return <BdAgeingReport key={props.session?.token} session={props.session} ReportSection={ReportSection} onBack={()=>props.setActiveReportCategory?.('general')} />;
   return <StandardReportsPage {...props} />;
@@ -8030,6 +8043,7 @@ function StandardReportsPage({ requests = [], activeReportCategory = "general", 
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
+          <button type="button" className="secondary" onClick={()=>setActiveReportCategory("lmv")}>Other vehicles / LMV reports</button>
           {canViewBdAgeingReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('bd-ageing')}>BD Ageing Report</button>}
           <button type="button" className="secondary" onClick={()=>setActiveReportCategory('downtime-matrix')}>Hourly Breakdown Report</button>
           {canViewTelegramUnlinkedReport(session) && <button type="button" className="secondary" onClick={()=>setActiveReportCategory('telegram-unlinked')}>Telegram Not Linked Report</button>}

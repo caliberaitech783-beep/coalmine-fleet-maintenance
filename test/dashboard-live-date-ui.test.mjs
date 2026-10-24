@@ -1,3 +1,4 @@
+import * as lmvModel from '../lmv-fleet.mjs';
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
@@ -197,7 +198,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.equal(button(tree, "Reset dates").props.disabled, true);
 });
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = []} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = [], lmvRecords = []} = {}) {
   const slots = [];
   let cursor = 0;
   let initialized = false;
@@ -207,6 +208,9 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    ...lmvModel,
+    useLmvFleet: () => ({records:lmvRecords,loaded:true,error:"",retry(){}}),
+    LmvFleetControls: Null,LmvFleetView: Null,LmvFleetDialog: Null,ReportSection: Null,
     dashboardMisQueue, misQueueDate, lifecycleTimeMatches,
     activeTodayBreakdowns,
     useMasterRecords: () => [repairTypes],
@@ -1183,7 +1187,7 @@ test("each dashboard section offers its own Export menu with the figures it show
   assert.match(fleet.props.title, / · Live fleet$/);
   assert.deepEqual(fleet.props.rows.map((row) => row.name), ["Sasti OB", "WCL total", "All sites"]);
   const [site] = fleet.props.rows;
-  assert.equal(text(byClass(tree, "mine-fleet-site-summary")), `${cell(fleet, site, "Site name")}BD Balance ${cell(fleet, site, "BD balance")}Total Fleet ${cell(fleet, site, "Total fleet")}BD (%) ${cell(fleet, site, "BD (%)")}`);
+  assert.equal(text(byClass(tree, "mine-fleet-site-summary")), `${cell(fleet, site, "Site name")}BD Balance ${cell(fleet, site, "BD balance")}Total Fleet ${cell(fleet, site, "Total fleet")}BD (%) ${cell(fleet, site, "BD (%)")}LMV BD ${cell(fleet, site, "LMV BD")}Total LMV ${cell(fleet, site, "Other vehicles / Total LMV")}LMV BD (%) ${cell(fleet, site, "LMV BD (%)")}`);
   // Tracking Vehicle Throughput follows its open tab and period, matching the site row on screen.
   let throughput = menu("Tracking Vehicle Throughput");
   assert.match(throughput.props.title, /^Tracking Vehicle Throughput · Site-wise BD Movement · /);
@@ -1242,4 +1246,21 @@ test("section Smart Print captures the panel, and the whole dashboard exports ev
   button(byLabel(tree, "Fleet chart view"), "OEM BD").props.onClick();
   tree = view.render();
   assert.deepEqual(names(), ["KPIs", "OEM BD"]);
+});
+
+test('LMV controls switch the dedicated chart and open scoped reports without changing equipment totals',()=>{
+  const samples=lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5));
+  const view=harness({lmvRecords:samples});
+  let tree=view.render();
+  let controls=findAll(tree,node=>node.props.onMode&&node.props.onReports)[0];
+  assert.equal(controls.props.records.length,5);
+  controls.props.onMode('breakdown');
+  tree=view.render();
+  const chart=findAll(tree,node=>node.props.mode==='breakdown'&&node.props.ExportMenu&&node.props.onInspect)[0];
+  assert.deepEqual(lmvModel.lmvCounts(chart.props.records),{total:5,onroad:2,idle:1,unknown:0,breakdown:2,oem:1,balance:1,bdPercent:40,demo:5});
+  controls=findAll(tree,node=>node.props.onMode&&node.props.onReports)[0];
+  controls.props.onReports();
+  tree=view.render();
+  const dialog=findAll(tree,node=>node.props.selection?.reports)[0];
+  assert.equal(dialog.props.records.length,5);
 });

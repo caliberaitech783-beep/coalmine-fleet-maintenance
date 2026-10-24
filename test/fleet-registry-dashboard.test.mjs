@@ -33,7 +33,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /mode === "total" \? \(showOemBreakdowns \? oemFleetEquipment\.length : assetCounts\.total\)/);
   assert.match(source, /region\.total\.toLocaleString\(\)\} fleet/);
   assert.match(source, /const siteRequests = liveBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
-  assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
+  assert.match(source, /const fleet = fleetChartCounts\(records,siteRequests\)/);
   assert.match(source, /\.\.\.fleetChartCounts\(records, regionRequests\)/);
   assert.doesNotMatch(source, /breakdown: fleetBreakdownCaseCounts\(/);
   assert.match(source, /key\.startsWith\("site:"\)/);
@@ -76,7 +76,7 @@ test("dashboard opens in site-wise OEM breakdown mode by default", () => {
 });
 
 test("breakdown mode keeps total counts and green segments on one common scale", () => {
-  assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
+  assert.match(source, /const fleet = fleetChartCounts\(records,siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
@@ -102,7 +102,7 @@ test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(source, /const fleetBreakdownDrilldownTitle = .*\}BD Balance`/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
   // BD (%) is the site BD balance share of its total fleet, one decimal like the day-wise table.
-  assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><\/small>/);
+  assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><button type="button" className="lmv-site-metric"/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-entry \{ grid-template-rows: minmax\(0, 1fr\) 104px; \}/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend \{[^}]*font-size: 14px !important;[^}]*font-weight: 800;/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend i \{ width: 14px; height: 14px;/);
