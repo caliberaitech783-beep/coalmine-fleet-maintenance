@@ -33,7 +33,7 @@
 .lmv-site>button:not(.lmv-bars-trigger) { border:0; border-radius:4px; padding:2px 4px; color:inherit; background:transparent; font-weight:700; cursor:pointer; }
 .lmv-site>button:hover,.lmv-site>button:focus-visible { outline:2px solid #14b8a6; }
 .lmv-site>button.lmv-bd-percent { color:var(--fleet-breakdown,#a00000); }
-.lmv-bars-trigger { height:220px; width:100%; padding:24px 10px 0; border:0; background:repeating-linear-gradient(to top,transparent 0,transparent 39px,#14b8a622 39px,#14b8a622 40px); cursor:pointer; }
+.lmv-bars-trigger { height:260px; width:100%; padding:56px 10px 0; border:0; background:repeating-linear-gradient(to top,transparent 0,transparent 39px,#14b8a622 39px,#14b8a622 40px); cursor:pointer; }
 .lmv-region footer { margin-top:auto; border-top:2px solid #14b8a6; padding:10px; text-align:center; color:var(--mine-text,#16304b); }
 .lmv-oem-bars { display:flex; align-items:flex-end; justify-content:center; height:100%; gap:8px; }
 .lmv-oem-column { position:relative; display:flex; align-items:flex-end; justify-content:center; height:100%; width:28px; }
