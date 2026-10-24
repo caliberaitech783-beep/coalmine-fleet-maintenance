@@ -26,10 +26,10 @@ test('site preview separates period activity, continuing BD, first trip and idle
  ];
  const result=buildHourlyBreakdownPreview(source,cutoff);
  assert.deepEqual(result.counts,{'Opening BD':2,'New BD':1,'Closing BD':1,'Previous BD':1,'Previous Close':1,'Total Idle Now':1});
- assert.deepEqual(result.rows.map(row=>row[0]),['IN','Continuing BD','CLOSED','OUT','IDLE']);
- assert.equal(result.rows.find(row=>row[0]==='CLOSED')[5],'4');
- assert.equal(result.rows.find(row=>row[0]==='CLOSED')[6],'2');
- assert.equal(result.rows.find(row=>row[0]==='IN')[5],'—');
+ assert.deepEqual(result.rows.map(row=>row[0]),['🔴 IN','🔴 Continuing BD','🟢 CLOSED','🟢 OUT','🟠 IDLE']);
+ assert.equal(result.rows.find(row=>row[0]==='🟢 CLOSED')[6],'4');
+ assert.equal(result.rows.find(row=>row[0]==='🟢 CLOSED')[7],'2');
+ assert.equal(result.rows.find(row=>row[0]==='🔴 IN')[6],'—');
  assert.equal(result.rows.length,5);
  assert.ok(!HOURLY_PREVIEW_COLUMNS.some(label=>/OEM|Opening [KH]MR|Closing [KH]MR/.test(label)));
 });
@@ -37,13 +37,21 @@ test('site preview separates period activity, continuing BD, first trip and idle
 test('window end is exclusive and later remarks and closures do not leak into the snapshot',()=>{
  const result=buildHourlyBreakdownPreview([{site:'Sasti OB',door:'A',start:'2026-10-23 09:00:00',closedAt:'2026-10-23 12:00:00',dailyRemarks:[{createdAt:'2026-10-23 11:30:00',remark:'Current work'},{createdAt:'2026-10-23 12:00:00',remark:'Next window'}]}],'2026-10-23T12:00:00+05:30');
  assert.equal(result.counts['Closing BD'],0);
- assert.equal(result.rows[0][8],'Pending');
- assert.match(result.rows[0][10],/Current work/);
- assert.doesNotMatch(result.rows[0][10],/Next window/);
+ assert.equal(result.rows[0][9],'Pending');
+ assert.match(result.rows[0][5],/Current work/);
+ assert.doesNotMatch(result.rows[0][5],/Next window/);
 });
 
 test('manual site preview is an authenticated administrator GET and uses a read-only snapshot',()=>{
  let route;const session=()=>{},admin=()=>{};
  registerHourlyBreakdownPreview({get:(...args)=>route=args},{pool:{},requireSession:session,requireAdministrator:admin});
  assert.equal(route[0],'/api/reports/hourly-breakdown-preview');assert.equal(route[1],session);assert.equal(route[2],admin);
+});
+
+test('daily update precedes differences calculated as closing minus opening',()=>{
+ const report=buildHourlyBreakdownPreview([{site:'Sasti OC',door:'A',equipmentGroup:'Tipper',start:'2026-10-23 09:00:00',openingMeterReadings:{KMR:'100.25',HMR:'20.5'},closingMeterReadings:{KMR:'104.75',HMR:'22.75'},dailyRemarks:[{createdAt:'2026-10-23 11:00:00',remark:'Repair ongoing'}]}],'2026-10-23T12:00:00+05:30');
+ assert.deepEqual(report.columns.slice(5,8),['Daily Update','Diff KMR','Diff. HMR']);
+ assert.match(report.rows[0][5],/Repair ongoing/);
+ assert.deepEqual(report.rows[0].slice(6,8),['4.5','2.25']);
+ assert.equal(report.rows[0].length,report.columns.length);
 });

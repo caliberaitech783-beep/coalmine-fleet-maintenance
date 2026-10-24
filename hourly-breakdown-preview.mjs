@@ -5,7 +5,7 @@ import {canonicalSiteName} from './site-location.mjs';
 import {requestsWithDoorNumbers} from './equipment-door.mjs';
 import {requestsVisibleGlobally} from './mis-request-visibility.mjs';
 
-export const HOURLY_PREVIEW_COLUMNS = ['Section','Door no. with Registered no.','Total BD Time','Type of BD','BD Details','Diff KMR','Diff. HMR','Start Time','End Time','Equipment Category','Daily Update','Idle Since / Duration / Reason'];
+export const HOURLY_PREVIEW_COLUMNS = ['Section','Door no. with Registered no.','Total BD Time','Type of BD','BD Details','Daily Update','Diff KMR','Diff. HMR','Start Time','End Time','Equipment Category','Idle Since / Duration / Reason'];
 const at = value => parseReportTimestamp(value)?.getTime();
 const label = value => value ? formatDisplayDateTime(value) : '—';
 const firstTrip = row => at(row.productionFirstTripAt) || at(row.firstTripAt);
@@ -45,7 +45,8 @@ export function buildHourlyBreakdownPreview(requests, cutoff) {
       const updates = (current.length ? current : remarks.slice(0,1)).map(remark => `${label(remark.createdAt)}: ${remark.remark || ''}${remark.delayReason ? ` (${remark.delayReason})` : ''}`).join('\n');
       const door = String(row.door || '').trim(), reg = String(row.reg || '').trim();
       const identity = [door || 'Door not recorded', ...(reg && !door.replace(/[^a-z0-9]/gi,'').toLowerCase().includes(reg.replace(/[^a-z0-9]/gi,'').toLowerCase()) ? [reg] : [])].join(' / ');
-      rows.push([section,identity,elapsedLabel(row.start,new Date(effectiveEnd)),row.category || '—',row.complaint || '—',difference(row,'KMR'),difference(row,'HMR'),label(row.start),closedAt && closedAt < end ? label(new Date(closedAt)) : 'Pending',row.equipmentGroup || row.equipment || '—',updates || 'No maintenance update recorded',section==='IDLE' ? `${label(row.idealRequestedAt)} / ${elapsedLabel(row.idealRequestedAt,new Date(end))} / ${row.idleReason || 'Reason not recorded'}` : '—']);
+      const sectionLabel = `${{IN:'🔴','Continuing BD':'🔴',CLOSED:'🟢',OUT:'🟢',IDLE:'🟠'}[section]} ${section}`;
+      rows.push([sectionLabel,identity,elapsedLabel(row.start,new Date(effectiveEnd)),row.category || '—',row.complaint || '—',updates || 'No maintenance update recorded',difference(row,'KMR'),difference(row,'HMR'),label(row.start),closedAt && closedAt < end ? label(new Date(closedAt)) : 'Pending',row.equipmentGroup || row.equipment || '—',section==='IDLE' ? `${label(row.idealRequestedAt)} / ${elapsedLabel(row.idealRequestedAt,new Date(end))} / ${row.idleReason || 'Reason not recorded'}` : '—']);
     }
   }
   return {site:'Sasti OC',start:new Date(start).toISOString(),end:new Date(end).toISOString(),period:`${label(new Date(start))} to ${label(new Date(end))} IST`,columns:HOURLY_PREVIEW_COLUMNS,

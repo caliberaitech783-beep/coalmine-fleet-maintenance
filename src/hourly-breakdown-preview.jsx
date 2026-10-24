@@ -16,7 +16,7 @@ export default function HourlyBreakdownPreview({session}) {
     {error&&<p role="alert">{error}</p>}
     {report&&<div aria-label="Sasti OC hourly report"><h3>Sasti OC</h3><p>{report.period}</p>
       <dl style={{display:'flex',flexWrap:'wrap',gap:24}}>{Object.entries(report.counts).map(([label,value])=><div key={label}><dt>{label}</dt><dd style={{fontSize:24,fontWeight:700}}>{value}</dd></div>)}</dl>
-      <div style={{overflowX:'auto'}}><table><thead><tr>{report.columns.map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{report.rows.map((row,index)=><tr key={index}>{row.map((value,i)=><td key={i} style={{whiteSpace:'pre-wrap',minWidth:i===4||i===10?200:90}}>{value}</td>)}</tr>)}</tbody></table></div>
+      <div style={{overflowX:'auto'}}><table><thead><tr>{report.columns.map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{report.rows.map((row,index)=><tr key={index}>{row.map((value,i)=><td key={i} style={{whiteSpace:'pre-wrap',minWidth:i===4||i===5?200:90}}>{value}</td>)}</tr>)}</tbody></table></div>
       {!report.rows.length&&<p>No qualifying breakdown or idle records in this window.</p>}
     </div>}
   </section>;
