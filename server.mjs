@@ -1,3 +1,4 @@
+import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
 import {seedLmvDemoRecords} from './lmv-fleet.mjs';
 import {registerLmvFleet} from './lmv-fleet-api.mjs';
 import {registerFullBackup} from './full-backup.mjs';
@@ -8766,6 +8767,26 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
   },driverSyncIntervalMs,11_000);
   requestDriverSyncTimer.unref?.();
+  const hourlyTelegramDelivery=createHourlyTelegramDelivery({pool,loadSource:directorReportSourceData,buildPdf:buildTableExportPdf,sendDocument:sendTelegramDocument,
+    loadRecipients:async()=>{
+      const [{rows:users},{rows:hierarchy},chats]=await Promise.all([
+        pool.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'"),
+        pool.query("SELECT record_data FROM master_records WHERE master_name='Hierarchy master'"),telegramChatsByLogin()]);
+      return users.flatMap(({record_data:user})=>{
+        if(user.disabled===true||user.active===false||['inactive','disabled','deleted','blocked'].includes(String(user.status||'').trim().toLowerCase()))return [];
+        const profile=resolveMobileAccess({user}),designation=flowDesignationForUser(user,profile);
+        if(!['director','projectManager','productionManager','maintenanceManager','misManager'].includes(designation?.key))return [];
+        const login=reportRecipientLogin(user),chatId=chats.get(login);
+        if(!chatId)return [];
+        const rule=hierarchyRuleForDesignation(hierarchy,designation);
+        return [{login,chatId,sites:hierarchyRecipientReportScope(user,profile,rule?.siteAccess).sites}];
+      });
+    }});
+  const hourlyTelegramTimer=setStaggeredInterval(()=>{
+    if(databaseReady)void runAuditedBackendProcess({module:'Scheduled reports',action:'Send site hourly Telegram PDFs'},()=>hourlyTelegramDelivery())
+      .catch(error=>console.error('Hourly Telegram delivery failed',error.message));
+  },60*1000,40_000);
+  hourlyTelegramTimer.unref?.();
   const consolidatedWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})

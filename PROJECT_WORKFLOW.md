@@ -701,3 +701,9 @@ User Sessions shows valid-user counts with clickable detail filters. Offline des
 ### Stable logins across applications
 
 The current-session registry is keyed by canonical login and application. A fresh Pulse login invalidates older Pulse logins, while MIS/HR sign-in cannot replace Pulse authorization. Existing registry entries migrate without reviving old tokens. User Sessions groups current application sessions by canonical account so counts and rows remain one per user. The current browser session remains its row's protected action target. Absolute seven-day expiry, permission/password revocation and forced logout remain enforced.
+
+## Recurring hourly Telegram breakdown PDFs
+
+The server checks hourly-breakdown-delivery.mjs every minute when scheduled jobs are enabled. Linked Directors, PMs, Production Managers, Maintenance Managers and MIS Managers receive separate site PDFs within their existing hierarchy/account site scope. Disabled users, missing/private-negative Telegram links, closed Lalpeth and sites without exactly one effective active A/Shift 1 record are excluded. Each cutoff is A-start plus 2-hour multiples through midnight IST, with a ten-minute dispatch grace. Reports use the exact cutoff, not the polling time. Midnight slots belong to the previous shift day. No earlier slots are backfilled after a long outage.
+
+whatsapp_consolidated_report_runs stores an independent HOURLY-BD slot and private-chat claim before each PDF send. Chat/site/slot claims prevent repeat sends across instances and restarts. Ambiguous failures remain Sending or Failed - review Telegram before retry, with no automatic duplicate retry. Existing WhatsApp schedules and manual preview remain separate. The legacy per-user hourly preference fields do not govern this globally authorized leadership delivery.
