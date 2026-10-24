@@ -9,6 +9,7 @@ import {dashboardEquipmentScope,scopeDashboardEquipmentRecords} from '../dashboa
 import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 import {isWorkflowWhatsAppRecipient} from '../whatsapp-workflow-policy.mjs';
+import {equipmentMasterWithDoor} from '../equipment-door.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const evaluate=(source,deps)=>new Function(...Object.keys(deps),source)(...Object.values(deps));
@@ -24,7 +25,7 @@ async function invoke(method,path,{record=user,session=sessionFor(),query={},bod
   const start=server.indexOf(`app.${method}('${path}',`);
   assert.ok(start>=0);
   evaluate(server.slice(start,server.indexOf('\napp.',start+1)),{
-    ...scope,canonicalSiteName,app:{[method]:(_path,...handlers)=>{handler=handlers.at(-1);}},requireSession(){},requirePermission:()=>()=>{},requireMaintenanceUpdatePermission:()=>()=>{},maintenanceManagerSession:()=>false,
+    ...scope,canonicalSiteName,equipmentMasterWithDoor,app:{[method]:(_path,...handlers)=>{handler=handlers.at(-1);}},requireSession(){},requirePermission:()=>()=>{},requireMaintenanceUpdatePermission:()=>()=>{},maintenanceManagerSession:()=>false,
     currentUserRecord:async()=>record,...dependencies,
   });
   await handler({session,query,body,params:{reference:'TEST'}},{set(){},status(code){result.status=code;return this;},json(body){result.body=body;}},error=>{throw error;});

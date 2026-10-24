@@ -15,7 +15,7 @@ export function equipmentDoorNumber(record = {}) {
     ![record.model,record.modelNo,record.itemName,record.group,record.category].some(value => key(value) && key(value) === key(name)) ? name : '';
   // The fleet label is the requested Door No., including its registration suffix.
   // Prefer it over legacy Oracle IDs already stored in the door column.
-  if (masterLabel && /\S\s*[-–—]\s*\S/.test(name)) return masterLabel;
+  if (masterLabel && /^[A-Z]+\d+[A-Z0-9]*\s*[-–—]\s*\S/i.test(name)) return masterLabel;
   if (usable(door) && !identifiers.has(key(door))) return door;
   return masterLabel || (usable(door) ? door : '');
 }
