@@ -15,7 +15,23 @@ let pool;let probeStage='dependencies';
 try{
 const {createRequire}=await import('node:module');
 const require=createRequire('/home/site/wwwroot/server.mjs');
-const pg=require('pg');
+let pg;
+try{pg=require('pg');}catch(error){
+if(error.code!=='MODULE_NOT_FOUND')throw error;
+// Linux App Service can relocate application node_modules outside the SCM
+// container. Keep the diagnostic dependency in SCM's temporary directory;
+// never install into or modify the running application's package tree.
+probeStage='probe dependencies';
+const {mkdirSync}=await import('node:fs');
+const {execFileSync}=await import('node:child_process');
+const temporary='/tmp/caliber-telegram-readiness';
+mkdirSync(temporary,{recursive:true,mode:0o700});
+const diagnosticRequire=createRequire(temporary+'/package.json');
+try{pg=diagnosticRequire('pg');}catch{
+execFileSync('npm',['install','--prefix',temporary,'--ignore-scripts','--omit=dev','--no-audit','--no-fund','pg@8.16.3'],{stdio:['ignore','pipe','pipe'],timeout:30000});
+pg=diagnosticRequire('pg');
+}
+}
 probeStage='site modules';
 const {TELEGRAM_SITES,normalizeTelegramSiteGroups}=await import('file:///home/site/wwwroot/telegram-site-groups.mjs');
 const {telegramSiteGroupDetails}=await import('file:///home/site/wwwroot/telegram.mjs');
