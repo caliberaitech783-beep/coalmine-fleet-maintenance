@@ -81,11 +81,20 @@
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-heading > h2,
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { justify-self:stretch; text-align:center; font-size:22px; line-height:1.2; white-space:normal; margin:0; padding:12px 10px; border-radius:8px; background:#522e90; color:#fff; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { background:#0f766e; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-heading > h2,
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { align-self:stretch; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .fleet-row-legend,
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { grid-column:3; grid-row:1; justify-self:end; min-width:0; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side .lmv-fleet-tools { padding:0; }
+.mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side button.secondary { min-height:28px; padding:4px 8px; }
 .mine-dashboard .mine-fleet-region-chart.has-lmv-bars > .mine-fleet-chart-tools { display:flex; justify-content:flex-end; padding:6px 14px; }
 @media(max-width:1100px) {
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars > header,
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls { grid-template-columns:200px minmax(0,1fr); }
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-tools { grid-column:2; grid-row:2; padding-top:6px; }
+  .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .fleet-row-legend,
+  .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-row-side { grid-column:2; grid-row:2; padding-block:4px; }
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-heading > h2,
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { font-size:18px; }
 }
