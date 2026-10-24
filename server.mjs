@@ -62,7 +62,7 @@ import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
-import {requestsWithDoorNumbers,equipmentDoorNumber} from './equipment-door.mjs';
+import {requestsWithDoorNumbers,equipmentDoorNumber,equipmentMasterWithDoor} from './equipment-door.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -7947,7 +7947,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
         if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
       }
-      const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
+      const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.master_name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
         const equipmentSite=canonicalSiteName(record.currentLocation||record.site||record.location||'');
         if(!reportScopeIncludesSite(managerScope,equipmentSite))continue;
@@ -7991,6 +7991,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         try{
           if(isCdirMaster(master))return cdirCleanRecord(master,record);
           if(master==='Shift Master')return normalizeOperationalSiteFields(normalizeShiftRecord(record));
+          if(master==='Equipment master')return normalizeOperationalSiteFields(equipmentMasterWithDoor(record));
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
@@ -8173,6 +8174,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;
     if(isCdirMaster(master)&&await cdirReferenceCount(master,previousRecord))return res.status(409).json({error:'This shared directory definition is in use. Direct changes could alter approved employee records. Submit employee changes through Directory Update Approvals instead.'});
+    if(master==='Equipment master')Object.assign(record,equipmentMasterWithDoor(record));
     let storedRecord=isCdirMaster(master)?cdirCleanRecord(master,record):master==='Shift Master'
       ?normalizeOperationalSiteFields(normalizeShiftRecord(record))
       :normalizeOperationalSiteFields(record);

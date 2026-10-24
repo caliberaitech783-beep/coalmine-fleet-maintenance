@@ -54,3 +54,9 @@ test("keeps only the requested Equipment Master groups", () => {
   assert.equal(isAllowedOracleEquipment({group: "LIGHT MOTOR VEHICLE", itemName: "CAR"}), false);
   assert.equal(isAllowedOracleEquipment({group: "OFFICE EQUIPMENT", itemName: "PRINTER"}), false);
 });
+
+test('Oracle sync copies the full equipment name rather than its internal ID into Door No.',()=>{
+  const record=oracleEquipmentMasterRecord({equipmentId:'ORACLE123',equipmentName:'S52 - MH34BZ0371'}, {door:'S52'});
+  assert.equal(record.door,'S52 - MH34BZ0371');
+  assert.equal(record.equipmentName,record.door);
+});

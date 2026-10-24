@@ -1,12 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {equipmentDoorNumber,requestsWithDoorNumbers} from '../equipment-door.mjs';
+import {equipmentDoorNumber,equipmentMasterWithDoor,requestsWithDoorNumbers} from '../equipment-door.mjs';
 import {requestEquipmentDetails,requestEquipmentCreationDetails} from '../request-equipment.mjs';
 import {equipmentMachineLabel} from '../src/dashboard-drilldown-model.mjs';
 import {fleetAssetRequestDetails} from '../dashboard-equipment-metrics.mjs';
 import {downtimeMatrixRange} from '../src/downtime-matrix.mjs';
 
 const master={door:'V316',reg:'2328930',equipmentName:'VOLVO TIPPER',chassisNo:'CH123',currentLocation:'Mine'};
+
+test('master rows and requests copy the full equipment name over legacy Oracle identifiers',()=>{
+  for(const equipmentName of ['S52 - MH34BZ0371','HP6 - 40034','PL63- MH34CD4480','PL69–MP66ZB8422']) {
+    for(const door of ['', '-', 'ORACLE123', 'S52', equipmentName]) {
+      const record={equipmentName,door,reg:'MH34BZ0371',chassisNo:'CH123'};
+      const normalized=equipmentMasterWithDoor(record);
+      assert.equal(normalized.door,equipmentName);
+      assert.equal(normalized.equipmentName,equipmentName);
+      assert.equal(requestEquipmentCreationDetails(record).door,equipmentName);
+      assert.deepEqual(equipmentMasterWithDoor(normalized),normalized);
+      assert.equal(record.door,door);
+    }
+  }
+});
 
 test('all shared door consumers use the exact Equipment Master field',()=>{
   for (const door of ['V316','00316','2328930','WT22 - MP66ZD0582']) {

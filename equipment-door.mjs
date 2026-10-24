@@ -13,8 +13,15 @@ export function equipmentDoorNumber(record = {}) {
   const name = text(record.equipmentName);
   const masterLabel = usable(name) && /\d/.test(name) && !identifiers.has(key(name)) &&
     ![record.model,record.modelNo,record.itemName,record.group,record.category].some(value => key(value) && key(value) === key(name)) ? name : '';
+  // The fleet label is the requested Door No., including its registration suffix.
+  // Prefer it over legacy Oracle IDs already stored in the door column.
+  if (masterLabel && /\S\s*[-–—]\s*\S/.test(name)) return masterLabel;
   if (usable(door) && !identifiers.has(key(door))) return door;
   return masterLabel || (usable(door) ? door : '');
+}
+
+export function equipmentMasterWithDoor(record = {}) {
+  return {...record, door: equipmentDoorNumber(record)};
 }
 
 // Build once per feed, rather than scanning the master again for every row.

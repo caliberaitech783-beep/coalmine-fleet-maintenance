@@ -45,6 +45,8 @@ Production URL: [https://pulse.cmll.in/](https://pulse.cmll.in/)
 
 ## 1. What the application does
 
+Equipment Master copies full fleet names such as `S52 - MH34BZ0371` into Door No. Existing master API responses, imports, edits, Oracle synchronization, and request/report door resolution use that full label instead of a legacy Oracle ID. Equipment name remains unchanged.
+
 Vehicle transfers shows the standard **Sync Oracle** button without a date field and retains full-history sync behavior. The protected transfer-sync API still accepts an optional `fromDate` as `YYYY-MM-DD` for explicitly requested one-time syncs; it is inclusive and preserves earlier Oracle transfer records. Equipment Master sync remains unchanged.
 
 Caliber Pulse is a mining-operations portal for:

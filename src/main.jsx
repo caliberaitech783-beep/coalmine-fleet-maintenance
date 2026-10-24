@@ -3378,6 +3378,7 @@ function normalizeEquipmentRecord(record = {}) {
   const acquisitionDate = record.acquisitionDate || record.acquired || "";
   return {
     ...record,
+    door: equipmentDoorNumber(record),
     location: currentLocation,
     currentLocation,
     acquired: acquisitionDate,

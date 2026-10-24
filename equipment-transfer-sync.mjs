@@ -83,7 +83,7 @@ export function applyLatestTransfer(record, latestByEquipment) {
 export function oracleEquipmentMasterRecord(equipment = {}, existing = {}) {
   return {
     ...existing,
-    door: equipment.equipmentId || equipment.equipmentName || existing.door || "",
+    door: equipment.equipmentName || equipment.equipmentId || existing.door || "",
     reg: equipment.registrationNo || equipment.vrnNo || existing.reg || "",
     currentLocation: displaySiteName(existing.lastTransferDate ? existing.currentLocation : (equipment.currentLocation || existing.currentLocation || "")),
     equipmentName: equipment.equipmentName || equipment.equipmentId || existing.equipmentName || "",
