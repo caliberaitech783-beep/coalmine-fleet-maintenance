@@ -20,8 +20,16 @@ const difference = (row, type) => {
   return Number.isFinite(Number(opening)) && Number.isFinite(Number(closing)) ? String(Number((Number(closing)-Number(opening)).toFixed(3))) : '—';
 };
 
-export function buildHourlyBreakdownPreview(requests, cutoff, site='Sasti OC') {
-  const end = new Date(cutoff).getTime(), start = end-2*3600000, previous = start-2*3600000;
+export function hourlyBreakdownWindow(cutoff,period='two-hour') {
+  const end=new Date(cutoff).getTime();
+  if(!Number.isFinite(end))throw new Error('A valid report cutoff is required.');
+  const day=new Date(end+330*60000).toISOString().slice(0,10);
+  const start=period==='today'?Date.parse(`${day}T00:00:00+05:30`):end-2*3600000;
+  return {end,start,previous:start-(period==='today'?86400000:2*3600000)};
+}
+
+export function buildHourlyBreakdownPreview(requests, cutoff, site='Sasti OC',period='two-hour') {
+  const {end,start,previous}=hourlyBreakdownWindow(cutoff,period);
   if (!Number.isFinite(end)) throw new Error('A valid report cutoff is required.');
   const source = requestsVisibleGlobally(requests).filter(row => canonicalSiteName(row.site) === canonicalSiteName(site) && at(row.start) <= end);
   const inWindow = (value, from=start, to=end) => value >= from && value < to;
@@ -54,9 +62,9 @@ export function buildHourlyBreakdownPreview(requests, cutoff, site='Sasti OC') {
     counts:{'Opening BD':count(source.filter(row=>openAt(row,start))),'New BD':count(incoming),'Closing BD':count(closed),'Previous BD':count(source.filter(row=>inWindow(at(row.start),previous,start))),'Previous Close':count(source.filter(row=>inWindow(endOfBd(row),previous,start))),'Total Idle Now':count(idle)},rows};
 }
 
-export function buildAllSitesHourlyBreakdownPreview(requests,cutoff) {
+export function buildAllSitesHourlyBreakdownPreview(requests,cutoff,period='two-hour') {
   const names=[...new Map([...REGION_DATA.flatMap(region=>region.sites),...requests.map(row=>row.site).filter(Boolean)].map(site=>[canonicalSiteName(site),displaySiteName(site)])).values()];
-  const sites=names.map(site=>buildHourlyBreakdownPreview(requests,cutoff,site));
+  const sites=names.map(site=>buildHourlyBreakdownPreview(requests,cutoff,site,period));
   return {site:'All sites',period:sites[0].period,start:sites[0].start,end:sites[0].end,sites};
 }
 
@@ -65,10 +73,11 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
     let client;
     try {
       const allSites=req.query?.site==='all';
+      const period=req.query?.period==='today'?'today':'two-hour';
       client=await pool.connect();
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const {rows:[clock]}=await client.query('SELECT NOW() AS cutoff');
-      const cutoff=new Date(clock.cutoff), previous=new Date(cutoff.getTime()-4*3600000);
+      const cutoff=new Date(clock.cutoff), previous=new Date(hourlyBreakdownWindow(cutoff,period).previous);
       // Read only the requested site's pending cases and recent transitions.
       // Omit media and full-history joins used by the global request feed.
       const {rows}=await client.query(`SELECT reference AS ref,site,status,owner_name AS owner,created_at AS "createdAt",equipment_group AS "equipmentGroup",equipment_name AS equipment,
@@ -94,7 +103,7 @@ export function registerHourlyBreakdownPreview(app,{pool,requireSession,requireA
         'currentLocation',record_data->>'currentLocation','location',record_data->>'location','site',record_data->>'site'
         ) AS record FROM master_records WHERE master_name='Equipment master'`);
       const prepared=requestsWithDoorNumbers(rows,equipment.map(row=>row.record)).map(row=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
-      const result=allSites?buildAllSitesHourlyBreakdownPreview(prepared,cutoff):buildHourlyBreakdownPreview(prepared,cutoff);
+      const result=allSites?buildAllSitesHourlyBreakdownPreview(prepared,cutoff,period):buildHourlyBreakdownPreview(prepared,cutoff,'Sasti OC',period);
       await client.query('COMMIT');
       res.set('Cache-Control','no-store');res.json(result);
     } catch(error){if(client)await client.query('ROLLBACK').catch(()=>{});next(error);}

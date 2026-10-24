@@ -95,3 +95,19 @@ test('all sites API removes only the site predicate and keeps one read-only snap
  assert.equal(calls.at(-1).sql,'COMMIT');
  assert.equal(result.sites.find(site=>site.site==='Majri OC').rows.length,1);
 });
+
+test('today report covers midnight IST through cutoff, including morning Jayant closures',()=>{
+ const base={site:'Jayant OC',door:'J1',start:'2026-10-23 23:00:00'};
+ const report=buildAllSitesHourlyBreakdownPreview([
+  {...base,closedAt:'2026-10-24 08:00:00'},
+  {...base,door:'J2',start:'2026-10-24 00:00:00'},
+  {...base,door:'J3',closedAt:'2026-10-23 23:59:59'},
+ ],'2026-10-24T18:00:00+05:30','today');
+ assert.equal(report.start,'2026-10-23T18:30:00.000Z');
+ const jayant=report.sites.find(site=>site.site==='Jayant OC');
+ assert.equal(jayant.counts['New BD'],1);
+ assert.equal(jayant.counts['Closing BD'],1);
+ assert.equal(jayant.counts['Opening BD'],1);
+ assert.ok(jayant.rows.some(row=>row[0]==='🟢 CLOSED'&&row[1]==='J1'));
+ assert.ok(!jayant.rows.some(row=>row[1]==='J3'));
+});
