@@ -40,3 +40,13 @@ test('12-hour form values round-trip to the existing machine format',()=>{
   assert.equal(parseTwelveHourTime('7:05:09 PM',{includeSeconds:true}), '19:05:09');
   assert.equal(parseTwelveHourTime('19:05'), '');
 });
+
+test('custom report noon and midnight labels retain correct machine times',()=>{
+ const options={includeSeconds:true,noonMidnight:true};
+ assert.equal(formatTimeInputValue('12:00:00',options),'12:00:00 Noon');
+ assert.equal(formatTimeInputValue('00:00:00',options),'12:00:00 Midnight');
+ assert.equal(parseTwelveHourTime('12:00:00 Noon',options),'12:00:00');
+ assert.equal(parseTwelveHourTime('12:00:00 MIDNIGHT',options),'00:00:00');
+ assert.equal(formatTimeInputValue('12:01:00',options),'12:01:00 PM');
+ assert.equal(parseTwelveHourTime('11:00:00 Noon',options),'');
+});

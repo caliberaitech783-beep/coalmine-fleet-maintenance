@@ -13,25 +13,25 @@ const normalizeDateTime = (value, includeSeconds = false) => String(value ?? '')
   .replace(' ', 'T')
   .slice(0, includeSeconds ? 19 : 16);
 
-export function TwelveHourTimeInput({name, value, defaultValue = '', onChange, includeSeconds = false, required = false, readOnly = false, className = '', ...props}) {
+export function TwelveHourTimeInput({name, value, defaultValue = '', onChange, includeSeconds = false, noonMidnight = false, required = false, readOnly = false, className = '', ...props}) {
   const controlled = value !== undefined;
   const sourceValue = controlled ? value : defaultValue;
-  const [displayValue, setDisplayValue] = useState(() => formatTimeInputValue(sourceValue, {includeSeconds}));
+  const [displayValue, setDisplayValue] = useState(() => formatTimeInputValue(sourceValue, {includeSeconds, noonMidnight}));
 
   useEffect(() => {
-    if (controlled) setDisplayValue(formatTimeInputValue(value, {includeSeconds}));
-  }, [controlled, value, includeSeconds]);
+    if (controlled) setDisplayValue(formatTimeInputValue(value, {includeSeconds, noonMidnight}));
+  }, [controlled, value, includeSeconds, noonMidnight]);
 
-  const machineValue = parseTwelveHourTime(displayValue, {includeSeconds});
+  const machineValue = parseTwelveHourTime(displayValue, {includeSeconds, noonMidnight});
   const updateDisplay = (event) => {
     const nextDisplay = event.target.value.toUpperCase();
     setDisplayValue(nextDisplay);
-    const nextValue = parseTwelveHourTime(nextDisplay, {includeSeconds});
+    const nextValue = parseTwelveHourTime(nextDisplay, {includeSeconds, noonMidnight});
     if (nextValue) onChange?.(nextValue);
   };
   const normalizeDisplay = () => {
-    const normalized = parseTwelveHourTime(displayValue, {includeSeconds});
-    if (normalized) setDisplayValue(formatTimeInputValue(normalized, {includeSeconds}));
+    const normalized = parseTwelveHourTime(displayValue, {includeSeconds, noonMidnight});
+    if (normalized) setDisplayValue(formatTimeInputValue(normalized, {includeSeconds, noonMidnight}));
   };
 
   return <>
@@ -44,8 +44,8 @@ export function TwelveHourTimeInput({name, value, defaultValue = '', onChange, i
       onChange={updateDisplay}
       onBlur={normalizeDisplay}
       placeholder={includeSeconds ? '07:00:00 PM' : '07:00 PM'}
-      pattern={includeSeconds ? TWELVE_HOUR_TIME_SECONDS_PATTERN : TWELVE_HOUR_TIME_PATTERN}
-      title={includeSeconds ? 'Enter time as h:mm:ss AM/PM' : 'Enter time as h:mm AM/PM'}
+      pattern={noonMidnight ? '(?:'+(includeSeconds ? TWELVE_HOUR_TIME_SECONDS_PATTERN : TWELVE_HOUR_TIME_PATTERN)+')|(?:12:00'+(includeSeconds ? ':00' : '')+'\\s*(?:Noon|Midnight|NOON|MIDNIGHT))' : includeSeconds ? TWELVE_HOUR_TIME_SECONDS_PATTERN : TWELVE_HOUR_TIME_PATTERN}
+      title={noonMidnight ? 'Enter h:mm:ss AM/PM, 12:00:00 Noon or 12:00:00 Midnight' : includeSeconds ? 'Enter time as h:mm:ss AM/PM' : 'Enter time as h:mm AM/PM'}
       required={required}
       readOnly={readOnly}
       aria-readonly={readOnly || undefined}
@@ -55,14 +55,14 @@ export function TwelveHourTimeInput({name, value, defaultValue = '', onChange, i
   </>;
 }
 
-export function TwelveHourDateTimeInput({name, value, defaultValue = '', onChange, includeSeconds = false, required = false, min = '', max = '', className = ''}) {
+export function TwelveHourDateTimeInput({name, value, defaultValue = '', onChange, includeSeconds = false, noonMidnight = false, required = false, min = '', max = '', className = ''}) {
   const controlled = value !== undefined;
   const initialValue = normalizeDateTime(controlled ? value : defaultValue, includeSeconds);
   const [localValue, setLocalValue] = useState(initialValue);
 
   useEffect(() => {
     if (controlled) setLocalValue(normalizeDateTime(value, includeSeconds));
-  }, [controlled, value, includeSeconds]);
+  }, [controlled, value, includeSeconds, noonMidnight]);
 
   const currentValue = controlled ? normalizeDateTime(value, includeSeconds) : localValue;
   const [dateValue = '', timeValue = ''] = currentValue.split('T');
@@ -83,6 +83,7 @@ export function TwelveHourDateTimeInput({name, value, defaultValue = '', onChang
     <TwelveHourTimeInput
       value={timeValue}
       includeSeconds={includeSeconds}
+      noonMidnight={noonMidnight}
       required={required}
       onChange={(nextTime) => commit(dateValue, nextTime)}
     />

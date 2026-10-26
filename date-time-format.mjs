@@ -81,14 +81,16 @@ export function formatDisplayTime(value, emptyValue = '—') {
   return `${pad(hour12)}:${parts.minute}:${parts.second} ${hour24 >= 12 ? 'PM' : 'AM'}`;
 }
 
-export function formatTimeInputValue(value, {includeSeconds = false, emptyValue = ''} = {}) {
-  const formatted = formatDisplayTime(value, emptyValue);
+export function formatTimeInputValue(value, {includeSeconds = false, emptyValue = '', noonMidnight = false} = {}) {
+  const normal = formatDisplayTime(value, emptyValue);
+  const formatted = noonMidnight ? normal.replace('12:00:00 PM','12:00:00 Noon').replace('12:00:00 AM','12:00:00 Midnight') : normal;
   if (!formatted || formatted === emptyValue) return formatted;
   return includeSeconds ? formatted : formatted.replace(/^(\d{2}:\d{2}):\d{2}\s+/, '$1 ');
 }
 
-export function parseTwelveHourTime(value, {includeSeconds = false} = {}) {
-  const text = String(value ?? '').trim();
+export function parseTwelveHourTime(value, {includeSeconds = false, noonMidnight = false} = {}) {
+  const raw = String(value ?? '').trim();
+  const text = noonMidnight ? raw.replace(/^12:00(?::00)?\s+Noon$/i,includeSeconds?'12:00:00 PM':'12:00 PM').replace(/^12:00(?::00)?\s+Midnight$/i,includeSeconds?'12:00:00 AM':'12:00 AM') : raw;
   const pattern = includeSeconds
     ? /^(0?[1-9]|1[0-2]):([0-5]\d):([0-5]\d)\s*([AP]M)$/i
     : /^(0?[1-9]|1[0-2]):([0-5]\d)\s*([AP]M)$/i;

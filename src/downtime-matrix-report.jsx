@@ -9,7 +9,7 @@ import './downtime-matrix-report.css';
 import {downtimeMatrixExport} from './downtime-matrix-export.mjs';
 
 const hours = downtimeHoursMinutes;
-const hour = value => value == null ? '—' : formatDisplayDateTime(value);
+const hour = value => value == null ? '—' : formatDisplayDateTime(value).replace('12:00:00 PM','12:00:00 Noon').replace('12:00:00 AM','12:00:00 Midnight');
 const columns = [
   {key:'door',label:'Door number',value:r=>r.door},
   {key:'equipmentGroup',label:'Equipment group',value:r=>r.equipmentGroup || '—'},
@@ -46,14 +46,14 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
   const visible = rows.filter(row=>row.site===selectedSite);
   const details = downtimeMatrixDetails(visible);
   return <section className="reports-page panel pagepanel">
-    <header><div><h1>Hourly Breakdown Report</h1><p>Available hours = selected period hours − breakdown downtime. Each breakdown is shown separately.</p></div><button type="button" onClick={onBack}>Back to reports</button></header>
+    <header><div><h1>Custom Breakdown Report</h1><p>Available hours = selected period hours − breakdown downtime. Each breakdown is shown separately.</p></div><button type="button" onClick={onBack}>Back to reports</button></header>
     <form className="downtime-period-filters" onSubmit={apply}>
       <label>Zone<select value={zone} onChange={event=>{setZone(event.target.value);setSite('');}}><option value="all">All zones</option>{REGION_DATA.map(region=><option key={region.code} value={region.code}>{region.code} — {region.name}</option>)}</select></label>
       <label>Site<select value={selectedSite} onChange={event=>setSite(event.target.value)}>{sites.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
       <label>From date (IST)<input required type="date" value={draft.fromDate} max={downtimeToday()} onChange={event=>update('fromDate',event.target.value)} /></label>
-      <label>From time<TwelveHourTimeInput required value={draft.fromTime} onChange={value=>update('fromTime',value)} /></label>
+      <label>From time<TwelveHourTimeInput noonMidnight includeSeconds required value={draft.fromTime} onChange={value=>update('fromTime',value)} /></label>
       <label>To date (IST)<input required type="date" value={draft.toDate} onChange={event=>update('toDate',event.target.value)} /></label>
-      <label>To time<TwelveHourTimeInput required value={draft.toTime} onChange={value=>update('toTime',value)} /></label>
+      <label>To time<TwelveHourTimeInput noonMidnight includeSeconds required value={draft.toTime} onChange={value=>update('toTime',value)} /></label>
       <button type="submit" className="primary">Apply</button>
     </form>
     {error && <p role="alert">{error}</p>}
@@ -61,6 +61,6 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
       {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><span>{value}</span></button>)}
     </div>
     <p>Breakdowns are clipped to the selected period, including the To minute. Overlaps count once in available hours. Available hours repeat for each breakdown of the same machine and are provisional when the period includes future time.</p>
-    <ReportSection title="Hourly Breakdown Report" exportTransform={view=>downtimeMatrixExport(view,{site:selectedSite,rangeLabel})} description={`${rangeLabel} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected period and site." />
+    <ReportSection title="Custom Breakdown Report" exportTransform={view=>downtimeMatrixExport(view,{site:selectedSite,rangeLabel})} description={`${rangeLabel} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected period and site." />
   </section>;
 }
