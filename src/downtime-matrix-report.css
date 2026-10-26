@@ -4,3 +4,9 @@
 .downtime-site-tabs button[aria-pressed=true] { border-bottom-color:#7739bf; background:#7739bf12; }
 .downtime-site-tabs button:focus-visible { outline:2px solid #7739bf; outline-offset:-3px; }
 .downtime-period-filters { display:flex; flex-wrap:wrap; gap:18px; padding:18px 24px; align-items:flex-end; } .downtime-period-filters label { display:flex; flex-direction:column; gap:8px; font-weight:600; } .downtime-period-filters input { padding:12px; border:1px solid var(--line,#dce3ef); border-radius:8px; background:var(--panel,#fff); color:inherit; }
+.downtime-period-filters > label { max-width:100%; min-width:0; }
+.report-time-select { display:grid; grid-template-columns:repeat(3,minmax(42px,1fr)) minmax(110px,1.8fr); gap:6px; width:330px; max-width:100%; }
+.report-time-part { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.report-time-part small { font-size:10px; color:var(--muted,#71809d); }
+.downtime-period-filters .report-time-select select { width:100%; min-width:0; padding:12px 6px; border:1px solid var(--line,#dce3ef); border-radius:8px; background:var(--panel,#fff); color:inherit; font-variant-numeric:tabular-nums; }
+@media(max-width:600px) { .downtime-period-filters > label:has(.report-time-select) { width:100%; } .report-time-select { width:100%; } }

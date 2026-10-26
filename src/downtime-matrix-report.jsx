@@ -4,9 +4,33 @@ import {canonicalSiteName} from '../site-location.mjs';
 import {customBreakdownRange,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes} from './downtime-matrix.mjs';
 import {parseRequestTimelineTimestamp} from '../request-timeline.mjs';
 import {formatDisplayDateTime} from '../date-time-format.mjs';
-import {TwelveHourTimeInput} from './twelve-hour-input.jsx';
 import './downtime-matrix-report.css';
 import {downtimeMatrixExport} from './downtime-matrix-export.mjs';
+
+export function ReportTimeSelect({label,value,onChange}) {
+  const [rawHour='00',minute='00',second='00']=String(value||'00:00:00').split(':');
+  const hour24=Number(rawHour),hour=String(hour24%12||12).padStart(2,'0'),period=hour24>=12?'PM':'AM';
+  const boundary=hour==='12'&&minute==='00'&&second==='00';
+  const options=count=>Array.from({length:count},(_,index)=>String(index).padStart(2,'0'));
+  const update=(part,next)=>{
+    const selected={hour,minute,second,period,[part]:next};
+    const nextHour=Number(selected.hour)%12+(selected.period==='PM'?12:0);
+    onChange(`${String(nextHour).padStart(2,'0')}:${selected.minute}:${selected.second}`);
+  };
+  return <span className="report-time-select" role="group" aria-label={label}>
+    {[
+      ['hour','Hour',hour,options(12).map((_,index)=>String(index+1).padStart(2,'0'))],
+      ['minute','Min',minute,options(60)],
+      ['second','Sec',second,options(60)],
+      ['period','AM/PM',period,['AM','PM']],
+    ].map(([part,caption,selected,choices])=><span className="report-time-part" key={part}>
+      <small>{caption}</small>
+      <select required aria-label={`${label} ${part}`} value={selected} onChange={event=>update(part,event.target.value)}>
+        {choices.map(choice=><option key={choice} value={choice}>{part==='period'&&boundary?`${choice} (${choice==='AM'?'Midnight':'Noon'})`:choice}</option>)}
+      </select>
+    </span>)}
+  </span>;
+}
 
 const hours = downtimeHoursMinutes;
 const hour = value => value == null ? '—' : formatDisplayDateTime(value).replace('12:00:00 PM','12:00:00 Noon').replace('12:00:00 AM','12:00:00 Midnight');
@@ -51,9 +75,9 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
       <label>Zone<select value={zone} onChange={event=>{setZone(event.target.value);setSite('');}}><option value="all">All zones</option>{REGION_DATA.map(region=><option key={region.code} value={region.code}>{region.code} — {region.name}</option>)}</select></label>
       <label>Site<select value={selectedSite} onChange={event=>setSite(event.target.value)}>{sites.map(name=><option key={name} value={name}>{name}</option>)}</select></label>
       <label>From date (IST)<input required type="date" value={draft.fromDate} max={downtimeToday()} onChange={event=>update('fromDate',event.target.value)} /></label>
-      <label>From time<TwelveHourTimeInput noonMidnight includeSeconds required value={draft.fromTime} onChange={value=>update('fromTime',value)} /></label>
+      <label>From time<ReportTimeSelect label="From time" value={draft.fromTime} onChange={value=>update('fromTime',value)} /></label>
       <label>To date (IST)<input required type="date" value={draft.toDate} onChange={event=>update('toDate',event.target.value)} /></label>
-      <label>To time<TwelveHourTimeInput noonMidnight includeSeconds required value={draft.toTime} onChange={value=>update('toTime',value)} /></label>
+      <label>To time<ReportTimeSelect label="To time" value={draft.toTime} onChange={value=>update('toTime',value)} /></label>
       <button type="submit" className="primary">Apply</button>
     </form>
     {error && <p role="alert">{error}</p>}
