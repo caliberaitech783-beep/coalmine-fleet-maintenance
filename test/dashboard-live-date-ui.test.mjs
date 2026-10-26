@@ -1272,7 +1272,7 @@ test('main Total Fleet and each site count include LMVs and open exactly their m
   const plotted=findAll(tree,node=>node.props.site?.otherVehicles!==undefined&&node.props.axisMax);
   assert.ok(plotted.length>0);
   assert.ok(plotted.every(node=>node.props.axisMax===plotted[0].props.axisMax&&!node.props.lmvAxisMax), "all categories and sites share one linear scale");
-  const list=()=>findAll(tree,node=>node.props.columns===combinedFleetModel.TOTAL_FLEET_DETAIL_COLUMNS&&node.props.rowKey)[0];
+  const list=()=>findAll(tree,node=>node.props.rowsAreScoped && / · \d+ assets$/.test(node.props.title || '') && node.props.bdBalanceColumns !== undefined)[0];
   assert.equal(text(fleetCount(tree,'Total')),'8');
   assert.equal(text(fleetCount(tree,'Breakdown')),'3');
   assert.equal(text(byLabel(tree,'View BD Balance list')),'2');
@@ -1281,6 +1281,9 @@ test('main Total Fleet and each site count include LMVs and open exactly their m
   assert.equal(list().props.rows.filter(row=>row.fleetCategory==='otherVehicles').length,5);
   fleetCount(tree,'Breakdown').props.onClick();tree=view.render();
   assert.equal(list().props.rows.length,3);
+  assert.equal(list().props.bdBalanceColumns,true);
+  assert.equal(typeof list().props.Remarks,'function');
+  assert.ok(list().props.RequestTimelineButton);
   byLabel(tree,'View BD Balance list').props.onClick();tree=view.render();
   assert.equal(list().props.rows.length,2);
   assert.ok(list().props.rows.every(row=>!row.fleetOem));
