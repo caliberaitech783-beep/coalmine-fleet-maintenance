@@ -19,7 +19,7 @@ const routeOf = (start) => server.slice(server.indexOf(start), server.indexOf('\
 
 test('announcement text is trimmed, required and capped at 2,000 characters', () => {
   assert.equal(normalizeAnnouncement('  Site closed tomorrow.\r\nReport at 8 AM.  '), 'Site closed tomorrow.\nReport at 8 AM.');
-  assert.equal(announcementValidationError('   '), 'Write the announcement or add an image before sending.');
+  assert.equal(announcementValidationError('   '), 'Write the announcement or add an image or MP4 video before sending.');
   assert.equal(announcementValidationError('x'.repeat(ANNOUNCEMENT_MAX_LENGTH + 1)), 'Keep the announcement within 2000 characters.');
   assert.equal(announcementValidationError('Safety briefing at 9 AM in the workshop.'), '');
   assert.equal(announcementValidationError('प्रोडक्शन यूज़र के लिए पहली ट्रिप का वेरिफिकेशन जरूरी है।'.repeat(20)), '');
@@ -48,7 +48,7 @@ test('only Admin and Super Admin can send, list or withdraw announcements; every
   assert.match(server, /app\.get\('\/api\/announcements\/pending',requireSession,/);
   assert.match(server, /app\.patch\('\/api\/announcements\/:announcementId\/acknowledge',requireSession,/);
   const send = routeOf("app.post('/api/announcements',");
-  assert.ok(send.includes('announcementValidationError(message,{hasImage:Boolean(image)})'));
+  assert.ok(send.includes('announcementValidationError(message,{hasImage:Boolean(image),hasVideo:Boolean(video)})'));
   assert.ok(send.includes('announcementImageError(image)'));
   assert.match(send, /action:'Send announcement'/, 'publishing is audited');
   const withdraw = routeOf("app.patch('/api/announcements/:announcementId/withdraw',");
@@ -119,6 +119,6 @@ test('announcements may carry one validated image served separately from the pol
   assert.doesNotMatch(server.slice(server.indexOf("app.get('/api/announcements/pending'"), server.indexOf("app.get('/api/announcements/:announcementId/image'")), /a\.image_data AS/);
   const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   assert.match(source, /onPaste=\{pasteImage\}/);
-  assert.match(source, /JSON\.stringify\(\{message:text,image\}\)/);
+  assert.match(source, /JSON\.stringify\(\{message:text,image,video\}\)/);
   assert.match(source, /current\.hasImage&&<AnnouncementImage/);
 });

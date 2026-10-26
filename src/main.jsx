@@ -1,3 +1,4 @@
+import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
 import {totalFleetRecords,totalFleetCounts,totalFleetSelectionRows,totalFleetDetailRows,totalFleetOemChartRows,TOTAL_FLEET_DETAIL_COLUMNS} from "./total-fleet-model.mjs";
 import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage} from "./lmv-fleet.jsx";
 import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
@@ -7,7 +8,7 @@ import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdow
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
-import { compressImageDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
+import { compressImageDataUrl, readBlobDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
 import {TENDER_PERMISSION_OPTIONS,TENDER_ALL_PERMISSIONS,normalizedTenderSelection} from '../tender-permissions.mjs';
@@ -1412,7 +1413,7 @@ function AnnouncementHistoryButton({token}) {
     <section className="announcement-history"><p>Previously sent announcements remain available here after you close their popup.</p>
       {error&&<p role="alert">{error}</p>}{loading&&<p role="status">Loading announcements...</p>}
       {!loading&&!error&&!rows.length&&<p>No announcements yet.</p>}
-      <ul>{rows.map(row=><li key={row.id}>{row.message&&<p style={{whiteSpace:'pre-wrap'}}>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||'Administrator'}</small></li>)}</ul>
+      <ul>{rows.map(row=><li key={row.id}>{row.message&&<p style={{whiteSpace:'pre-wrap'}}>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} />}{row.hasVideo&&<AnnouncementVideo id={row.id} token={token} />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||'Administrator'}</small></li>)}</ul>
       {cursor&&<button type="button" disabled={loading} onClick={loadMore}>Load older announcements</button>}
     </section>
   </Modal>,document.body)}</>;
@@ -7185,22 +7186,53 @@ function AnnouncementImage({id,token,className="announcement-image"}) {
   return <a className={className} href={src} target="_blank" rel="noreferrer" title="Open the full image"><img src={src} alt="Announcement attachment" /></a>;
 }
 
+function AnnouncementVideo({id,token,className="announcement-video"}) {
+  const [src,setSrc]=useState(''),[failed,setFailed]=useState(false),[attempt,setAttempt]=useState(0);
+  useEffect(()=>{
+    let active=true,objectUrl='';
+    setSrc('');setFailed(false);
+    fetch(`/api/announcements/${encodeURIComponent(id)}/video`,{headers:{Authorization:`Bearer ${token}`}})
+      .then(response=>{if(!response.ok)throw new Error('Video unavailable');return response.blob();})
+      .then(blob=>{if(active){objectUrl=URL.createObjectURL(blob);setSrc(objectUrl);}})
+      .catch(()=>{if(active)setFailed(true);});
+    return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+  },[id,token,attempt]);
+  if(failed)return <p role="alert" className={className}>Could not load the video. <button type="button" onClick={()=>setAttempt(value=>value+1)}>Retry</button></p>;
+  if(!src)return <span className={className}>Loading video...</span>;
+  return <div className={className}><video controls playsInline preload="metadata" src={src} aria-label="Announcement video" /><a href={src} download={`announcement-${id}.mp4`}>Download MP4</a></div>;
+}
+
 function AnnouncementComposer({session,onClose,onSent}) {
   const [message,setMessage]=useState("");
   const [image,setImage]=useState("");
+  const [video,setVideo]=useState(""),[attaching,setAttaching]=useState(false);
+  const attachmentSequence=useRef(0);
   const [sending,setSending]=useState(false);
   const [error,setError]=useState("");
   const imageInput=useRef(null);
-  const attachImage=async(file)=>{
-    setError("");
-    try{setImage(await compressImageDataUrl(file));}
-    catch(imageError){setError(imageError.message);}
+  const attachFile=async(file)=>{
+    if(!file)return;
+    const sequence=++attachmentSequence.current;
+    setError('');setImage('');setVideo('');setAttaching(true);
+    try{
+      const isMp4=file.type==='video/mp4'||((!file.type||file.type==='application/octet-stream')&&/\.mp4$/i.test(file.name||''));
+      if(isMp4){
+        if(file.size>ANNOUNCEMENT_VIDEO_MAX_BYTES)throw new Error('The MP4 video must be 10 MB or smaller.');
+        const data=(await readBlobDataUrl(file)).replace(/^data:[^;]*;base64,/,'data:video/mp4;base64,');
+        const validationError=announcementVideoError(data);if(validationError)throw new Error(validationError);
+        if(sequence===attachmentSequence.current)setVideo(data);
+      }else{
+        if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type||''))throw new Error('Choose a JPEG, PNG, WebP or GIF image, or an MP4 video up to 10 MB.');
+        const data=await compressImageDataUrl(file);if(sequence===attachmentSequence.current)setImage(data);
+      }
+    }catch(attachmentError){if(sequence===attachmentSequence.current)setError(attachmentError.message);}
+    finally{if(sequence===attachmentSequence.current)setAttaching(false);}
   };
   const pasteImage=(event)=>{
     const item=[...(event.clipboardData?.items||[])].find((entry)=>entry.kind==='file'&&entry.type.startsWith('image/'));
     if(!item)return;
     event.preventDefault();
-    void attachImage(item.getAsFile());
+    void attachFile(item.getAsFile());
   };
   const [history,setHistory]=useState([]);
   const [withdrawingId,setWithdrawingId]=useState("");
@@ -7216,10 +7248,11 @@ function AnnouncementComposer({session,onClose,onSent}) {
   const send=async(event)=>{
     event.preventDefault();
     const text=message.trim();
-    if(!text&&!image){setError('Write the announcement or add an image before sending.');return;}
+    if(attaching||sending)return;
+    if(!text&&!image&&!video){setError('Write the announcement or add an image or MP4 video before sending.');return;}
     setSending(true);setError("");
     try{
-      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text,image})});
+      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text,image,video})});
       const responseText=await response.text();
       let result={};
       try{result=responseText?JSON.parse(responseText):{};}catch{}
@@ -7243,15 +7276,18 @@ function AnnouncementComposer({session,onClose,onSent}) {
       <div className="session-message-recipient"><span><Users /></span><div><small>Send to</small><b>All users</b><p>Every signed-in user sees this as a popup until they close it. Users who sign in later also see it, for 30 days.</p></div></div>
       <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="2000" value={message} onPaste={pasteImage} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone... You can also paste an image here (Ctrl + V)." /></label>
       <div className="announcement-image-picker">
-        <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(event)=>{void attachImage(event.target.files?.[0]);event.target.value="";}} />
-        {image
-          ?<figure><img src={image} alt="Image to send with the announcement" /><button type="button" onClick={()=>setImage("")} disabled={sending}><X />Remove image</button></figure>
-          :<button type="button" onClick={()=>imageInput.current?.click()} disabled={sending}><ImagePlus />Add image</button>}
+        <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,.mp4" disabled={sending||attaching} hidden onChange={(event)=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
+        {video
+          ?<figure><video controls playsInline preload="metadata" src={video} aria-label="Video to send with the announcement" /><button type="button" onClick={()=>setVideo("")} disabled={sending||attaching}><X />Remove video</button></figure>
+          :image
+          ?<figure><img src={image} alt="Image to send with the announcement" /><button type="button" onClick={()=>setImage("")} disabled={sending||attaching}><X />Remove image</button></figure>
+          :<button type="button" onClick={()=>imageInput.current?.click()} disabled={sending}><ImagePlus />{attaching?"Reading attachment…":"Add image or MP4"}</button>}
       </div>
-      <div className="session-message-compose-meta"><span>{message.length} / 2,000 characters{image?' · 1 image':''}</span>{error&&<b role="alert">{error}</b>}</div>
-      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||(!message.trim()&&!image)}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
+      <small>JPEG, PNG, WebP or GIF image, or one MP4 video up to 10 MB.</small>
+      <div className="session-message-compose-meta"><span>{message.length} / 2,000 characters{image?' · 1 image':video?' · 1 MP4 video':''}</span>{error&&<b role="alert">{error}</b>}</div>
+      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||attaching||(!message.trim()&&!image&&!video)}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
     </form>
-    {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}>{row.message&&<p>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} className="announcement-image thumbnail" />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
+    {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}>{row.message&&<p>{row.message}</p>}{row.hasImage&&<AnnouncementImage id={row.id} token={token} className="announcement-image thumbnail" />}{row.hasVideo&&<AnnouncementVideo id={row.id} token={token} className="announcement-video thumbnail" />}<small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
   </Modal>;
 }
 
@@ -7303,7 +7339,7 @@ function SessionMessageInbox({session}) {
   return createPortal(<div className="session-message-inbox-overlay">
     <section className={`session-message-inbox${isAnnouncement?' announcement':''}`} role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
       <header><span><MessageCircle /></span><div><small>{isAnnouncement?'Announcement to all users':'Direct message'}</small><h2 id="session-message-title">{isAnnouncement?'Announcement':'Message'} from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
-      <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{isAnnouncement&&current.hasImage&&<AnnouncementImage id={current.id} token={session.token} />}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
+      <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{isAnnouncement&&current.hasImage&&<AnnouncementImage id={current.id} token={session.token} />}{isAnnouncement&&current.hasVideo&&<AnnouncementVideo id={current.id} token={session.token} />}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
       {error&&<div className="session-message-inbox-error" role="alert"><AlertTriangle />{error}</div>}
       <footer><span>This message will remain open until you close it.</span><button type="button" onClick={dismiss} disabled={closingId===String(current.id)}><X />{closingId===String(current.id)?'Closing...':'Close message'}</button></footer>
     </section>

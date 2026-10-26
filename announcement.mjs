@@ -9,6 +9,23 @@ export const ANNOUNCEMENT_ACTIVE_DAYS = 30;
 // The browser shrinks pasted images first; this is the server-side ceiling.
 export const ANNOUNCEMENT_IMAGE_MAX_CHARS = 3 * 1024 * 1024;
 const ANNOUNCEMENT_IMAGE_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
+export const ANNOUNCEMENT_VIDEO_MAX_BYTES = 10 * 1024 * 1024;
+const ANNOUNCEMENT_VIDEO_PATTERN = /^data:video\/mp4;base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export function announcementVideoError(video = "") {
+  if (!video) return "";
+  if (typeof video !== "string" || !ANNOUNCEMENT_VIDEO_PATTERN.test(video)) return "Choose an MP4 video.";
+  if (dataUrlBytes(video) > ANNOUNCEMENT_VIDEO_MAX_BYTES) return "The MP4 video must be 10 MB or smaller.";
+  try {
+    if (atob(video.slice(video.indexOf(',') + 1).slice(0, 32)).slice(4, 8) !== 'ftyp') return "Choose a valid MP4 video.";
+  } catch { return "Choose a valid MP4 video."; }
+  return "";
+}
+
+export function announcementVideoBinary(video = "") {
+  if (!video || announcementVideoError(video)) return null;
+  return { contentType: 'video/mp4', bytes: Buffer.from(video.slice(video.indexOf(',') + 1), 'base64') };
+}
 
 export function normalizeAnnouncement(value = "") {
   return String(value ?? "").replace(/\r\n?/g, "\n").trim();
@@ -28,9 +45,10 @@ export function announcementImageBinary(image = "") {
   return { contentType: `image/${match[1]}`, bytes: Buffer.from(image.slice(image.indexOf(",") + 1), "base64") };
 }
 
-export function announcementValidationError(value = "", { hasImage = false } = {}) {
+export function announcementValidationError(value = "", { hasImage = false, hasVideo = false } = {}) {
   const message = normalizeAnnouncement(value);
-  if (!message && !hasImage) return "Write the announcement or add an image before sending.";
+  if (hasImage && hasVideo) return "Attach one image or one MP4 video, not both.";
+  if (!message && !hasImage && !hasVideo) return "Write the announcement or add an image or MP4 video before sending.";
   if (message.length > ANNOUNCEMENT_MAX_LENGTH) return `Keep the announcement within ${ANNOUNCEMENT_MAX_LENGTH} characters.`;
   return "";
 }
