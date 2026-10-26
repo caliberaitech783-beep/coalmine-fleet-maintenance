@@ -1284,6 +1284,13 @@ test('main Total Fleet and each site count include LMVs and open exactly their m
   assert.equal(list().props.bdBalanceColumns,true);
   assert.equal(typeof list().props.Remarks,'function');
   assert.ok(list().props.RequestTimelineButton);
+  assert.equal(typeof list().props.onHourlyReport,'function');
+  list().props.onHourlyReport();tree=view.render();
+  assert.equal(typeof tree.props.onBack,'function');
+  assert.ok(Array.isArray(tree.props.requests));
+  assert.ok(tree.props.sites.length);
+  tree.props.onBack();tree=view.render();
+  assert.equal(list().props.rows.length,3,'Back returns to the same breakdown asset report');
   byLabel(tree,'View BD Balance list').props.onClick();tree=view.render();
   assert.equal(list().props.rows.length,2);
   assert.ok(list().props.rows.every(row=>!row.fleetOem));
