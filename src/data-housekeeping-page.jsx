@@ -44,7 +44,7 @@ export function RetentionRulesPage({ token }) {
     try {
       await request(token, "/api/log-retention", { method: "PUT", body: JSON.stringify(Object.fromEntries(Object.entries(days).map(([key, value]) => [key, Number(value || 0)]))) });
       await load();
-      setMessage("Retention rules saved. They apply at the next clean-up check, within five minutes.");
+      setMessage("Retention rules saved. Use Run clean-up now to review the selection and approve it by WhatsApp OTP. Automatic deletion is held.");
     } catch (saveError) { setError(saveError.message); } finally { setBusy(""); }
   };
   const runNow = async () => {
@@ -62,7 +62,7 @@ export function RetentionRulesPage({ token }) {
   const retention = overview?.retention;
   return <section className="panel pagepanel generic housekeeping-page">
     <header>
-      <div><h1><CalendarClock aria-hidden="true" /> Retention rules</h1><p>How long Caliber Pulse keeps logs and old media before the daily automatic clean-up removes them</p></div>
+      <div><h1><CalendarClock aria-hidden="true" /> Retention rules</h1><p>Choose which old logs and media to review for cleanup. Every cleanup requires owner WhatsApp OTP approval; automatic deletion is held.</p></div>
       <div className="housekeeping-actions">
         <button type="button" onClick={runNow} disabled={!overview || Boolean(busy) || changed} title={changed ? "Save the changes first" : "Apply the saved rules now"}>
           <Play aria-hidden="true" />{busy === "run" ? "Cleaning…" : "Run clean-up now"}

@@ -67,6 +67,9 @@ export function decodeCdirRoster(encoded){
 export async function replaceCdirRoster(pool,encoded){
   if(!encoded)return null;
   const {revision,masters,summary}=decodeCdirRoster(encoded);
+  // Deployment configuration is not a human deletion approval. Preserve the
+  // live roster; the normal governed employee/contact workflow remains available.
+  if(pool.deletionProtectionEnabled)return {revision,...summary,applied:false,held:true};
   const client=await pool.connect();
   try{
     await client.query('BEGIN');

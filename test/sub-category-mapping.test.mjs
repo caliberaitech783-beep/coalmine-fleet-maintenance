@@ -69,7 +69,7 @@ test('all 122 spreadsheet mappings are present and restricted to their repair ty
   assert.equal(validateRequestSubCategory('drive line',' engine ',mappings),'Engine');
 });
 
-test('migration replaces the flat master once, preserves the snapshot and requests, and respects later admin edits',async()=>{
+test('startup retains an existing flat master and request history pending OTP-approved replacement',async()=>{
   const db=new PGlite();
   try{
     await db.exec(`CREATE TABLE master_records(id serial,master_name text,record_data jsonb);
@@ -81,11 +81,25 @@ test('migration replaces the flat master once, preserves the snapshot and reques
     const sqlCode=source.slice(start,source.indexOf('    for(const delayedReason',start));
     const migrate=new Function('client','BREAKDOWN_SUB_CATEGORY_MAPPINGS',`return (async()=>{${sqlCode}})()`);
     await migrate(db,mappings);
-    assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Breakdown Sub-Category'")).rows.length,122);
-    assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Repair type master'")).rows.length,20);
+    assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Breakdown Sub-Category'")).rows.length,1);
+    assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Repair type master'")).rows.length,1);
     assert.deepEqual((await db.query('SELECT * FROM maintenance_requests')).rows,[{reference:'OLD',sub_category:'Legacy fault'}]);
     assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Users & employees'")).rows.length,1);
-    assert.match((await db.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_before_excel_v2'")).rows[0].value,/Legacy fault/);
+    assert.equal((await db.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_excel_v2'")).rows.length,0);
+    await migrate(db,mappings);
+    assert.deepEqual((await db.query("SELECT record_data FROM master_records WHERE master_name='Breakdown Sub-Category'")).rows,[{record_data:{subCategory:'Legacy fault'}}]);
+  }finally{await db.close();}
+});
+
+test('an empty master receives initial mappings once and later administrator deletions survive startup',async()=>{
+  const db=new PGlite();
+  try{
+    await db.exec('CREATE TABLE master_records(id serial,master_name text,record_data jsonb); CREATE TABLE app_metadata(key text PRIMARY KEY,value text,updated_at timestamptz);');
+    const start=source.indexOf('    // Replace the legacy flat master once');
+    const sqlCode=source.slice(start,source.indexOf('    for(const delayedReason',start));
+    const migrate=new Function('client','BREAKDOWN_SUB_CATEGORY_MAPPINGS',`return (async()=>{${sqlCode}})()`);
+    await migrate(db,mappings);
+    assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Breakdown Sub-Category'")).rows.length,122);
     await db.query("DELETE FROM master_records WHERE master_name='Breakdown Sub-Category' AND record_data->>'subCategory'='Clutch'");
     await migrate(db,mappings);
     assert.equal((await db.query("SELECT * FROM master_records WHERE master_name='Breakdown Sub-Category'")).rows.length,121);

@@ -1,4 +1,5 @@
 import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
+import {fetchWithDeletionApproval} from './deletion-approval.jsx';
 import {totalFleetRecords,totalFleetCounts,totalFleetSelectionRows,totalFleetDetailRows,totalFleetOemChartRows,TOTAL_FLEET_DETAIL_COLUMNS} from "./total-fleet-model.mjs";
 import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage} from "./lmv-fleet.jsx";
 import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
@@ -463,7 +464,7 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
     // error; writes are never replayed because the server may have applied them.
     const finishWrite = siteUpdateSafety.beginApiWrite(input, requestInit);
     try {
-      const response = await fetchWithTransientRetry(nativeFetch, input, requestInit, {
+      const response = await fetchWithTransientRetry((request,options)=>fetchWithDeletionApproval(nativeFetch,request,options), input, requestInit, {
         onRetry: ({attempt, reason, status}) => console.warn(`Retrying ${url} after a transient ${reason === "status" ? `HTTP ${status}` : "network failure"} (attempt ${attempt + 1}).`),
       });
       await sessionExpiry.check(response, authenticatedRequest);

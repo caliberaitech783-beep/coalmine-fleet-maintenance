@@ -1,4 +1,6 @@
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
+import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback} from './deletion-approval.mjs';
+import {createDeletionWhatsApp} from './deletion-sms.mjs';
 import {seedLmvDemoRecords} from './lmv-fleet.mjs';
 import {registerLmvFleet} from './lmv-fleet-api.mjs';
 import {registerFullBackup} from './full-backup.mjs';
@@ -12,7 +14,6 @@ import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
-import {runSessionRetention} from './session-retention.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
@@ -276,13 +277,14 @@ const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
 
-const pool=new Pool({
+const rawPool=new Pool({
   connectionString:connectionString||undefined,
   ssl:databaseSsl,
   max:10,
   idleTimeoutMillis:30000,
   connectionTimeoutMillis:10000
 });
+const pool=protectDeletionPool(rawPool);
 
 async function currentDataRevisions(keys,client=pool){
   const normalized=[...new Set(keys.map(value=>String(value||'').trim()).filter(Boolean))].sort();
@@ -298,7 +300,7 @@ async function currentDataRevisions(keys,client=pool){
 // which is what turned a momentary database hiccup into a site-wide outage.
 pool.on('error',error=>console.error('PostgreSQL pool connection error (will reconnect on next query).',error));
 process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
-const sessionStore=createSessionStore(pool,{cleanup:()=>runSessionRetention({pool,storageRoot:backupStorageRoot})});
+const sessionStore=createSessionStore(pool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
 let databaseReady=false;
 let cdirRosterRevision=null;
 let databaseError='Database initialization is pending.';
@@ -1162,11 +1164,12 @@ async function migrate(){
     }
     // Replace the legacy flat master once, preserving its snapshot and all request history.
     const {rows:subCategorySeed}=await client.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_excel_v2' FOR UPDATE");
-    if(!subCategorySeed.length){
+    const {rows:existingSubCategories}=await client.query("SELECT id FROM master_records WHERE master_name='Breakdown Sub-Category' LIMIT 1");
+    if(!subCategorySeed.length&&!existingSubCategories.length){
       await client.query(`INSERT INTO app_metadata(key,value,updated_at)
         SELECT 'breakdown_sub_category_before_excel_v2',COALESCE(jsonb_agg(record_data),'[]'::jsonb)::text,NOW()
         FROM master_records WHERE master_name='Breakdown Sub-Category' ON CONFLICT(key) DO NOTHING`);
-      await client.query("DELETE FROM master_records WHERE master_name='Breakdown Sub-Category'");
+      // Existing mappings must be replaced through an OTP-approved master action.
       for(const mapping of BREAKDOWN_SUB_CATEGORY_MAPPINGS){
         await client.query("INSERT INTO master_records(master_name,record_data) VALUES('Breakdown Sub-Category',$1::jsonb)",[JSON.stringify(mapping)]);
       }
@@ -1201,13 +1204,8 @@ async function migrate(){
     }
     // One-time: the Delayed Reason master keeps only the approved reasons.
     const {rows:delayedApprovedOnly}=await client.query("SELECT value FROM app_metadata WHERE key='delayed_reason_master_approved_only_v1' FOR UPDATE");
-    if(!delayedApprovedOnly.length){
-      await client.query(`DELETE FROM master_records WHERE master_name='Delayed Reason'
-        AND NOT (lower(trim(COALESCE(record_data->>'delayedReason',''))) = ANY($1::text[]))`,[DELAYED_REASON_DEFAULTS.map((reason)=>reason.trim().toLowerCase())]);
-      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
-        VALUES ('delayed_reason_master_approved_only_v1','true',NOW())
-        ON CONFLICT (key) DO NOTHING`);
-    }
+    // Legacy destructive seed cleanup is held for an OTP-approved master action.
+    // Do not mark it applied when existing data was retained.
     const {rows:shiftSeed}=await client.query("SELECT value FROM app_metadata WHERE key='shift_master_defaults_seeded_v1' FOR UPDATE");
     if(!shiftSeed.length){
       for(const defaultRecord of SHIFT_MASTER_DEFAULTS){
@@ -1461,6 +1459,48 @@ app.use((req,res,next)=>{
 // Audit interception is registered first so malformed and oversized request
 // bodies are also logged.
 app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
+const deletionApproval=installDeletionApproval(app,{
+  pool,rawPool,requireSession,
+  sms:createDeletionWhatsApp({readSettings:storedWhatsAppSettings}),
+  skipApproval:async(req,route)=>{
+    if(route==='/api/masters/:master/:id'&&deletionProtectedMaster(req.params.master))return true;
+    if(route==='/api/requests/:reference/close'){
+      const {rows:[row]}=await pool.query(`SELECT issues,first_trip_card_image,
+        EXISTS(SELECT 1 FROM production_first_trip_acceptances WHERE request_reference=$1) AS acceptance
+        FROM maintenance_requests WHERE reference=$1`,[req.params.reference]);
+      const resets=row&&(req.body?.status==='Running BD'||row.issues?.length);
+      return !resets||(!row.acceptance&&!row.first_trip_card_image);
+    }
+    return false;
+  },
+  resolveSelection:(req,route,client)=>resolveDeletionSelection(req,route,client,{
+    savedReportKey:savedReportUserKey,housekeeping:housekeepingCategory,retention:storedLogRetention,cutoff:housekeepingCutoff,
+    pcKeySetting:PC_BACKUP_KEY_SETTING,
+    authorizeCdir:async(request,db)=>{
+      const {rows}=await db.query('SELECT record_data FROM cdir_deletion_requests WHERE id=$1',[request.params.id]);
+      const record=rows[0]?.record_data;
+      if(!record||record.status!=='Pending'||String(record.requestedLogin).toLowerCase()===String(request.session.login).toLowerCase())return false;
+      const ctx=employeeTransferAccess(request.session,await currentUserRecord(request.session));
+      return ctx.canSubmit&&employeeTransferSiteAllowed(ctx,record.site);
+    },
+    authorizeCorrection:async(request,db)=>{
+      const {rows}=await db.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1`,[request.params.id]);
+      if(!rows[0])return false;
+      const access=await requestCorrectionAccessContext(request.session,db);
+      return canDeletePendingCorrection(rows[0],{...access,inScope:reportScopeIncludesSite(access.scope,rows[0].site)});
+    },
+    restoreTables:async(request,db)=>{
+      const pending=pendingBackupImports.get(String(request.body?.token||''));
+      if(!pending||pending.expiresAt<Date.now()||pending.login!==String(request.session.login||''))throw Object.assign(new Error('Inspect the restore archive again before requesting deletion approval.'),{status:410});
+      for await(const record of readBackupRecords(pending.filePath)){
+        if(record.type!=='header'||record.format!==BACKUP_FORMAT)throw Object.assign(new Error('Invalid restore archive.'),{status:400});
+        const {rows}=await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename=ANY($1::text[])",[record.tables||[]]);
+        return rows.map(row=>row.tablename);
+      }
+      throw Object.assign(new Error('The restore archive is empty.'),{status:400});
+    },
+  }),
+});
 const misCredentialIdentity=installPulseApplicationIdentity(app,{pool,sessionStore});
 const misLoginHandoff=installMisLoginHandoff(app,{pool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
@@ -1653,7 +1693,8 @@ async function applyOwnerLogRetention(){
   return {before,next};
 }
 let logRetentionRunning=false;
-async function runLogRetention(now=new Date()){
+async function runLogRetention(now=new Date(approvedDeletionTime()||Date.now())){
+  if(!deletionApproved())return {skipped:true,reason:'Automatic cleanup is held. Use Run now, review the exact selection, and approve by WhatsApp OTP.'};
   if(logRetentionRunning)return {skipped:true,reason:'already running'};
   logRetentionRunning=true;
   try{
@@ -2130,13 +2171,7 @@ async function expireRemoteAssistanceSessions(){
     SET status='Expired',ended_at=COALESCE(ended_at,NOW())
     WHERE status=ANY($1::text[]) AND expires_at<=NOW()
     RETURNING id`,[REMOTE_ASSISTANCE_LIVE_STATUSES]);
-  if(rows.length){
-    const ids=rows.map(row=>row.id);
-    await Promise.all([
-      pool.query('DELETE FROM remote_assistance_event_batches WHERE assistance_id=ANY($1::uuid[])',[ids]),
-      pool.query('DELETE FROM remote_assistance_commands WHERE assistance_id=ANY($1::uuid[])',[ids]),
-    ]);
-  }
+  // End access immediately; retain assistance history until OTP-approved cleanup.
   return rows.length;
 }
 
@@ -2272,24 +2307,8 @@ async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=nu
 }
 
 async function pruneStoredBackups(){
-  const {settings}=await readBackupSettings();
-  const {rows}=await pool.query(`SELECT id,storage_path FROM backup_runs
-    WHERE storage_path<>'' AND trigger_type<>'Manual export' AND status='Completed'
-    ORDER BY completed_at DESC NULLS LAST,started_at DESC`);
-  const expired=rows.slice(settings.maxBackups);
-  const rootPrefix=`${backupStorageRoot}${path.sep}`;
-  for(const row of expired){
-    const target=path.resolve(row.storage_path);
-    if(target.startsWith(rootPrefix))await fs.rm(target,{force:true}).catch(()=>{});
-    await pool.query("UPDATE backup_runs SET status='Expired',storage_path='' WHERE id=$1",[row.id]);
-  }
-  const {rows:dated}=await pool.query(`SELECT id,storage_path FROM backup_runs
-    WHERE storage_path<>'' AND expires_at<NOW()`);
-  for(const row of dated){
-    const target=path.resolve(row.storage_path);
-    if(target.startsWith(rootPrefix))await fs.rm(target,{force:true}).catch(()=>{});
-    await pool.query("UPDATE backup_runs SET status='Expired',storage_path='' WHERE id=$1",[row.id]);
-  }
+  // Recovery files are retained until their individual deletion receives owner OTP approval.
+  return {skipped:true,reason:'Backup expiration is held for owner WhatsApp OTP approval.'};
 }
 
 let scheduledBackupRunning=false;
@@ -2571,6 +2590,9 @@ function sessionActivityDetails(req){
 }
 
 async function touchUserSessionActivity(req,session={}){
+  // OTP review has its own durable history. Updating activity here would
+  // invalidate the very cleanup/restore snapshot being authorized.
+  if(req.path.startsWith('/api/deletion-approvals/')||req.get('X-Deletion-Approval'))return;
   const sessionId=auditClean(session.sessionId,80);
   if(!sessionId)return;
   const details=sessionActivityDetails(req);
@@ -2999,10 +3021,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
         assistanceId,REMOTE_ASSISTANCE_LIVE_STATUSES,req.session.sessionId,administrator,String(req.session.login||'')
       ]);
     if(!rows.length)return res.status(404).json({error:'This assistance session is no longer active.'});
-    await Promise.all([
-      pool.query('DELETE FROM remote_assistance_event_batches WHERE assistance_id=$1',[assistanceId]),
-      pool.query('DELETE FROM remote_assistance_commands WHERE assistance_id=$1',[assistanceId]),
-    ]);
+    // Ending access does not authorize deleting assistance history.
     const target=rows[0];
     req.audit={eventType:'Security',module:'Remote assistance',action:'End Caliber Pulse assistance',targetType:'User session',targetReference:target.targetLogin||target.targetName||assistanceId,changedFields:[]};
     res.status(204).end();
@@ -3143,9 +3162,9 @@ app.post('/api/backups/export',requireSuper,requireAdministrator,async(req,res,n
     res.set('Cache-Control','no-store');
     res.set('X-Backup-Checksum',result.checksum);
     res.download(result.filePath,result.fileName,async(error)=>{
-      await fs.rm(result.filePath,{force:true}).catch(()=>{});
-      await pool.query("UPDATE backup_runs SET storage_path='',status=$1,error_message=$2 WHERE id=$3",[
-        error?'Failed':'Exported',error?String(error.message||'Download interrupted').slice(0,500):'',result.id
+      // A completed recovery export is retained; downloading is not deletion approval.
+      await pool.query("UPDATE backup_runs SET status='Completed',error_message=$1 WHERE id=$2",[
+        error?String(error.message||'Download interrupted').slice(0,500):'',result.id
       ]).catch(()=>{});
       if(error&&!res.headersSent)next(error);
     });
@@ -3171,11 +3190,13 @@ app.delete('/api/backups/:backupId',requireSuper,requireAdministrator,async(req,
       if(existsSync(originalPath)){
         stagedPath=`${originalPath}.deleting-${backupId}`;
         await fs.rename(originalPath,stagedPath);
+        const rollbackOriginal=originalPath,rollbackStaged=stagedPath;
+        afterDeletionRollback(async()=>{if(existsSync(rollbackStaged))await fs.rename(rollbackStaged,rollbackOriginal);});
       }
     }
     await client.query('DELETE FROM backup_runs WHERE id=$1',[backupId]);
     await client.query('COMMIT');transactionStarted=false;
-    if(stagedPath)await fs.rm(stagedPath,{force:true}).catch(error=>console.error('Deleted backup file cleanup failed:',error.message));
+    if(stagedPath){const approvedFile=stagedPath;afterDeletionCommit(()=>fs.rm(approvedFile,{force:true}).catch(error=>console.error('Approved backup file cleanup failed:',error.message)));}
     req.audit={eventType:'Administration',module:'Backup',action:'Delete backup',targetType:'Database backup',targetReference:backup.file_name,reason:`Deleted ${backup.status} backup history${originalPath?' and recovery file':''}`,changedFields:['history','recoveryFile']};
     res.status(204).end();
   }catch(error){
@@ -3308,7 +3329,7 @@ app.post('/api/backups/import/restore',requireSuper,requireTrueSuperAdmin,async(
       const {rows:locks}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");
       locked=Boolean(locks[0]?.locked);
       if(!locked)throw Object.assign(new Error('Another backup or restore is already running. Try again after it completes.'),{status:409});
-      restored=await restoreDatabase({client,input:pending.filePath});
+      restored=await restoreDatabase({client,input:pending.filePath,preserveTables:['deletion_approvals','backup_runs','full_backup_runs']});
     }finally{
       if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
       client.release();
@@ -5438,7 +5459,7 @@ async function publishCrmReportFiles({scopeLabel,start,end,openTickets=[],closed
   const pdfFilename=siteReportFilename('CRM',scopeLabel,slotKey,'pdf');
   const xlsxFilename=pdfFilename.replace(/\.pdf$/i,'.xlsx');
   const pdfCode=randomUUID().replace(/-/g,'').slice(0,10),xlsxCode=randomUUID().replace(/-/g,'').slice(0,10);
-  await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+  // Retain expired report content until OTP-approved cleanup.
   await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at) VALUES
     ($1,$2,$3,'application/pdf',$4,NOW()+INTERVAL '14 days'),
     ($5,$6,$7,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$8,NOW()+INTERVAL '14 days')`,
@@ -5650,7 +5671,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),report
     const xlsx=buildXlsxReportBundleBuffer({title:`${title} | ${subtitle}`,tables});
     const pdfFilename=siteReportFilename('Fleet',site,slotKey,'pdf'),xlsxFilename=siteReportFilename('Fleet',site,slotKey,'xlsx');
     const pdfCode=randomUUID().replace(/-/g,'').slice(0,16),xlsxCode=randomUUID().replace(/-/g,'').slice(0,16);
-    await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+    // Retain expired report content until OTP-approved cleanup.
     await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at) VALUES
       ($1,$2,$3,'application/pdf',$4,NOW()+INTERVAL '14 days'),
       ($5,$6,$7,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$8,NOW()+INTERVAL '14 days')`,
@@ -5665,7 +5686,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),report
   const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
   if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[],shiftRecords:sourceData.shiftRecords||[]},siteAccess).requests;
   const tables=buildDirectorReportTables(sourceData).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
-  await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+  // Retain expired report content until OTP-approved cleanup.
   const links=[];
   const files=[];
   const shortReportCode=()=>randomUUID().replace(/-/g,'').slice(0,10);
@@ -7532,6 +7553,7 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
     await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
     rows[0].subCategory=storedSubCategory;
     if(rows.length && (status==='Running BD'||before.issues?.length)){
+      if((before.firstTripCardImage||before.productionFirstTripAt)&&!deletionApproved())throw Object.assign(new Error('First-trip evidence changed. Review this action again and approve its removal by WhatsApp OTP.'),{status:409});
       const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2::timestamptz ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
       rows[0]=saved.rows[0];
       await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[reference]);
@@ -8632,7 +8654,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
     const activityWorkbook=buildXlsxWorkbookBuffer('Caliber Pulse User Activity',USER_ACTIVITY_EXPORT_COLUMNS,activityRows.map((row)=>USER_ACTIVITY_EXPORT_COLUMNS.map(({key})=>userActivityExportCell(row,key))));
     const auditShortCode=randomUUID().replace(/-/g,'').slice(0,16);
     const activityShortCode=randomUUID().replace(/-/g,'').slice(0,16);
-    await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+    // Retain expired report content until OTP-approved cleanup.
     const [auditUrl,userActivityUrl]=await Promise.all([
       publishAuditWorkbook({shortCode:auditShortCode,filename:`Caliber Pulse-Audit-Trail-${slotKey}.xlsx`,workbook:auditWorkbook}),
       publishAuditWorkbook({shortCode:activityShortCode,filename:`Caliber Pulse-User-Activity-${slotKey}.xlsx`,workbook:activityWorkbook}),
@@ -8700,8 +8722,9 @@ async function sendScheduledAuditLogExports(now=new Date()){
     let purgedEventCount=0;
     try{
       await client.query('BEGIN');
-      const purged=await client.query(`DELETE FROM audit_events WHERE occurred_at<=$1`,[exportCutoff]);
-      purgedEventCount=Number(purged.rowCount||0);
+      // Report delivery does not authorize erasing its source audit records.
+      // Use the Audit Trail purge screen for exact selection + WhatsApp OTP.
+      purgedEventCount=0;
       // Preserve session metadata for the dedicated backup-gated retention job.
       status=`Sent - ${confirmedEmails} administrator email(s) confirmed${deliveryFailures?`; ${deliveryFailures} WhatsApp warning(s)`:''}`;
       await client.query(`UPDATE audit_log_export_runs SET status=$1,mail_confirmed_at=NOW(),purged_at=NOW(),purged_event_count=$2,updated_at=NOW() WHERE slot_key=$3`,[status,purgedEventCount,slotKey]);
@@ -8813,7 +8836,7 @@ async function initializeDatabase(){
       .catch(error=>console.error('Could not create the C-Dir masters from the directory file.',error.message));
     if(process.env.CDIR_ROSTER_IMPORT_BROTLI_BASE64&&scheduledJobsEnabled){
       const imported=await replaceCdirRoster(pool,process.env.CDIR_ROSTER_IMPORT_BROTLI_BASE64);
-      cdirRosterRevision=imported.revision;
+      if(!imported.held)cdirRosterRevision=imported.revision;
       if(imported.applied)await appendBackendProcessAudit({module:'C-Dir',action:'Replace approved employee roster',targetReference:imported.revision,
         reason:`${imported.rows} roster rows imported: ${imported.active} active assignments, ${imported.vacant} vacancies. Previous C-Dir masters retained for recovery.`});
     }else{

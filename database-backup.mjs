@@ -236,7 +236,7 @@ export async function* readBackupRecords(input){
   }
 }
 
-export async function restoreDatabase({client,input,log=()=>{},records=null}){
+export async function restoreDatabase({client,input,log=()=>{},records=null,preserveTables=['deletion_approvals']}){
   const source=records||readBackupRecords(input);
   const targetColumns=new Map();
   const restored={};
@@ -265,6 +265,9 @@ export async function restoreDatabase({client,input,log=()=>{},records=null}){
         header=record;
         const existing=[];
         for(const table of record.tables||[]){
+          // Recovery must never restore old OTP approvals or erase the approval
+          // authorizing this restore. Its live audit history is retained.
+          if(preserveTables.includes(table))continue;
           const {rows}=await client.query(COLUMN_LIST_SQL,[table]);
           if(rows.length){existing.push(table);targetColumns.set(table,rows);}
           else skippedTables.push(table);

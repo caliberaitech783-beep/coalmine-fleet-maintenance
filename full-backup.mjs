@@ -47,10 +47,7 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
   }
   async function publicKey(){return fs.readFile(path.join(root,'recovery-public.pem'),'utf8');}
   async function prune(){
-    const config=await settings();const {rows}=await pool.query("SELECT id,file_name,completed_at FROM full_backup_runs WHERE status IN ('Completed','Partial') AND file_name<>'' ORDER BY started_at DESC");
-    for(const [index,row] of rows.entries())if(index>=config.maxBackups||Date.now()-new Date(row.completed_at)>config.retentionDays*86400000){
-      await fs.rm(safeFile(row.file_name),{force:true});await pool.query("UPDATE full_backup_runs SET status='Expired',file_name='' WHERE id=$1",[row.id]);
-    }
+    return {skipped:true,reason:'Backup expiration requires owner WhatsApp OTP approval.'};
   }
   function safeFile(name){if(!/^full-backup-[a-f0-9-]+\.enc$/.test(name))throw Error('Invalid backup filename');return path.join(folder,name);}
   async function run({trigger='Manual',actor='',slot=null}={}){

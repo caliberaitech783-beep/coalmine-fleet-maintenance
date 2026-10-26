@@ -6,7 +6,7 @@ const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
 const slice = server.slice(server.indexOf("const LOG_RETENTION_SETTING_KEY="), server.indexOf("app.get('/api/log-retention'"));
 
 // Run the real settings reader and daily job against a recording fake database.
-function harness(stored, {lastRunDate = ''} = {}) {
+function harness(stored, {lastRunDate = '', approved = false} = {}) {
   const statements = [];
   const pool = {
     async query(sql, values = []) {
@@ -16,16 +16,16 @@ function harness(stored, {lastRunDate = ''} = {}) {
       return {rowCount: 3, rows: []};
     },
   };
-  const api = new Function('pool', 'AUDIT_PURGE_MAX_DAYS', 'auditIndiaDateKey',
-    `${slice};return {storedLogRetention,runLogRetention,LOG_RETENTION_KEYS};`)(pool, 3650, () => '2026-09-22');
+  const api = new Function('pool', 'AUDIT_PURGE_MAX_DAYS', 'auditIndiaDateKey', 'deletionApproved', 'approvedDeletionTime',
+    `${slice};return {storedLogRetention,runLogRetention,LOG_RETENTION_KEYS};`)(pool, 3650, () => '2026-09-22', () => approved, () => undefined);
   return {...api, statements};
 }
 
 const now = new Date('2026-09-22T06:30:00Z');
 const daysBefore = (days) => new Date(now.getTime() - days * 86400000).toISOString();
 
-test('a setting saved before this release keeps its meaning: audit only, nothing else deleted', async () => {
-  const {runLogRetention, statements} = harness({auditDays: 5, activityDays: 0});
+test('an approved run keeps an existing rule scoped to audit only', async () => {
+  const {runLogRetention, statements} = harness({auditDays: 5, activityDays: 0}, {approved:true});
   const result = await runLogRetention(now);
   assert.equal(result.auditDeleted, 3);
   assert.deepEqual(statements.map(({sql}) => sql.split(' WHERE')[0]).filter((sql) => !sql.startsWith('INSERT')),
@@ -34,13 +34,13 @@ test('a setting saved before this release keeps its meaning: audit only, nothing
 });
 
 test('everything off means the job does nothing at all', async () => {
-  const {runLogRetention, statements} = harness({auditDays: 0, activityDays: 0, whatsappDays: 0, notificationDays: 0, mediaDays: 0});
+  const {runLogRetention, statements} = harness({auditDays: 0, activityDays: 0, whatsappDays: 0, notificationDays: 0, mediaDays: 0}, {approved:true});
   assert.deepEqual(await runLogRetention(now), {skipped: true, reason: 'automatic clean-up is off'});
   assert.equal(statements.length, 0);
 });
 
 test('each part deletes only what is older than its own number of days', async () => {
-  const {runLogRetention, statements} = harness({auditDays: 5, activityDays: 30, whatsappDays: 90, notificationDays: 60, mediaDays: 365});
+  const {runLogRetention, statements} = harness({auditDays: 5, activityDays: 30, whatsappDays: 90, notificationDays: 60, mediaDays: 365}, {approved:true});
   const result = await runLogRetention(now);
   const find = (prefix) => statements.find(({sql}) => sql.startsWith(prefix));
 
@@ -61,9 +61,16 @@ test('each part deletes only what is older than its own number of days', async (
 });
 
 test('the job runs once per India day', async () => {
-  const {runLogRetention, statements} = harness({auditDays: 5, whatsappDays: 90}, {lastRunDate: '2026-09-22'});
+  const {runLogRetention, statements} = harness({auditDays: 5, whatsappDays: 90}, {lastRunDate: '2026-09-22',approved:true});
   assert.deepEqual(await runLogRetention(now), {skipped: true, reason: 'already ran today'});
   assert.equal(statements.length, 0);
+});
+
+test('without WhatsApp approval automatic cleanup writes nothing, even when retention is configured', async () => {
+  const {runLogRetention,statements}=harness({auditDays:5,mediaDays:1});
+  const result=await runLogRetention(now);
+  assert.equal(result.skipped,true);assert.match(result.reason,/WhatsApp OTP/);
+  assert.equal(statements.length,0);
 });
 
 test('stored values outside 0 to 3650 fall back to the safe default', async () => {

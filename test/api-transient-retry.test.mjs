@@ -90,5 +90,5 @@ test("delays honour Retry-After within a bound and fall back to the schedule", (
 
 test("the application fetch interceptor routes API calls through the transient retry", () => {
   assert.match(main, /import \{fetchWithTransientRetry,isNetworkFailure,isTransientStatus\} from "\.\/api-transient-retry\.mjs";/);
-  assert.match(main, /window\.__sessionExpiryFetch = true;[\s\S]*fetchWithTransientRetry\(nativeFetch, input, requestInit/);
+  assert.match(main, /window\.__sessionExpiryFetch = true;[\s\S]*fetchWithTransientRetry\(\(request,options\)=>fetchWithDeletionApproval\(nativeFetch,request,options\), input, requestInit/);
 });

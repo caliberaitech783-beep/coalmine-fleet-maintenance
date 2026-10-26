@@ -16,7 +16,7 @@ test('the requests table only displays the delayed reason; only approved reasons
   assert.match(server,/const dailyDelayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
   assert.match(server,/const editDelayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
   assert.match(server,/delayed_reason_master_approved_only_v1/);
-  assert.match(server,/DELETE FROM master_records WHERE master_name='Delayed Reason'\s+AND NOT \(lower\(trim\(COALESCE\(record_data->>'delayedReason',''\)\)\) = ANY\(\$1::text\[\]\)\)/);
+  assert.doesNotMatch(server,/DELETE FROM master_records WHERE master_name='Delayed Reason'/,'startup must retain existing master values until an OTP-approved action');
   const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf('app.use(express.static(staticRoot))'));
   assert.match(route,/requireMaintenanceUpdatePermission\('editRequests'\)/);
   assert.match(route,/withMaintenanceArrivalGuard/);

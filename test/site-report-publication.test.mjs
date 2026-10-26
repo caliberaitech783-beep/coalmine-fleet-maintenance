@@ -22,8 +22,8 @@ test('site publication stores a real combined PDF and workbook with direct links
     {ref:'MAJRI-SECRET',site:'Majri OC',start:'2026-09-14 21:00:00',status:'Open'},
   ],equipmentRecords:[],transferRecords:[]};
   const result=await publish({baseUrl:'https://reports.example',slotKey:'morning',now:window.end,window,sourceData,siteAccess:'Sasti OC',reportTitles:DIRECTOR_REPORT_TITLES.slice(0,3)});
-  assert.equal(writes.length,2);assert.match(writes[0].sql,/DELETE FROM published_reports WHERE expires_at<=NOW\(\)/);
-  const stored=writes[1];assert.match(stored.sql,/INTERVAL '14 days'/);
+  assert.equal(writes.length,1);assert.ok(!writes.some(write=>/DELETE FROM/.test(write.sql)),'publishing must retain previously published files');
+  const stored=writes[0];assert.match(stored.sql,/INTERVAL '14 days'/);
   assert.equal(result.files.length,2);assert.equal(result.links.length,1);assert.equal(result.links[0].rowCount,1);
   const [pdf,xlsx]=result.files;
   assert.equal(pdf.content.subarray(0,5).toString(),'%PDF-');

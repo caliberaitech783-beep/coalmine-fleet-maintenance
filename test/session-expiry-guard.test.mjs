@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 import vm from "node:vm";
 import {authenticatedApiRequest, createSessionExpiryGuard, removeMatchingStoredSession} from "../src/session-expiry-guard.mjs";
 import {fetchWithTransientRetry} from "../src/api-transient-retry.mjs";
+import {fetchWithDeletionApproval} from "../src/deletion-approval-fetch.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {createSiteUpdateSafety} from "../src/site-update-safety.mjs";
 
@@ -131,7 +132,7 @@ test("the actual fetch interceptor never replays a completed save or logs out fo
   const calls = [], redirects = [], cleared = [];
   const context = {
     authToken: token, clientDeviceId: "device-test", SESSION_EXPIRED_PARAM: "session-expired",
-    authenticatedApiRequest, createSessionExpiryGuard, fetchWithTransientRetry, edgeSafeJsonInit,
+    authenticatedApiRequest, createSessionExpiryGuard, fetchWithTransientRetry, fetchWithDeletionApproval, edgeSafeJsonInit,
     siteUpdateSafety: createSiteUpdateSafety({origin}),
     Headers, Request, console,
     clearStoredSession: value => cleared.push(value),
