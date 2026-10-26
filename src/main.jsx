@@ -10493,7 +10493,6 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
-      <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
@@ -10509,6 +10508,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(request.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
+        <div className="full"><BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required /></div>
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly required={requireMeters} />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required={requireMeters} />
         <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "Images compressed to 100 KB maximum · PDF maximum 5 MB"}</small></label>
