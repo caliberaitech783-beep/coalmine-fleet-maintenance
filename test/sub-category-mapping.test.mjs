@@ -9,6 +9,18 @@ import {BREAKDOWN_SUB_CATEGORY_MAPPINGS,subCategoriesForRepairType,validateReque
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const mappings=BREAKDOWN_SUB_CATEGORY_MAPPINGS;
+test('the four work categories share the complete approved component list',()=>{
+  const expected=[...new Set(mappings.map(row=>row.subCategory))];
+  for(const type of ['PREVENTIVE','ACCIDENTAL','AGGREGATE REPAIR','SCHEDULED SERVICE']){
+    assert.deepEqual(subCategoriesForRepairType(type,mappings),expected,type);
+    for(const name of expected)assert.equal(validateRequestSubCategory(type,name,mappings,{required:true}),name);
+    assert.throws(()=>validateRequestSubCategory(type,'',mappings,{required:true}),/Select a sub-category/);
+    assert.equal(validateRequestSubCategory(type,'',mappings),'','production can leave the selection empty');
+    assert.throws(()=>validateRequestSubCategory(type,'Unlisted component',mappings,{required:true}),/belonging/);
+  }
+  assert.deepEqual(subCategoriesForRepairType('Preventive',[{repairType:'SUSPENSION',subCategory:'Administrator added component'}]),['Administrator added component']);
+  assert.equal(subCategoriesForRepairType('SUSPENSION',mappings).length,9);
+});
 test('existing repair type labels fetch every corresponding Excel sub-category',()=>{
   const aliases={
     SUSPENSION:'SUSPENSION SYSTEM',

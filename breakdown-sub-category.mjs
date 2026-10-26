@@ -32,10 +32,13 @@ const repairTypeAliases=new Map([
   ['other','OTHERS'],
 ].flatMap(group=>group.map(label=>[typeToken(label),typeToken(group[0])])));
 const normalizeType=value=>repairTypeAliases.get(typeToken(value))||typeToken(value);
+// These describe the kind of work, so any component in the approved master
+// can be repaired or serviced under them.
+const componentWideRepairTypes=new Set(['preventive','accidental','aggregaterepair','scheduledservice']);
 export function subCategoriesForRepairType(repairType,records=[]){
   const key=normalizeType(repairType);
   if(!key)return [];
-  return [...new Set(records.filter(row=>normalizeType(row?.repairType)===key).map(row=>String(row.subCategory||'').trim()).filter(Boolean))];
+  return [...new Set(records.filter(row=>componentWideRepairTypes.has(key)||normalizeType(row?.repairType)===key).map(row=>String(row.subCategory||'').trim()).filter(Boolean))];
 }
 export function validateRequestSubCategory(category,value,records,{required=false}={}){
   const name=String(value??'').trim();
