@@ -7,6 +7,7 @@ import {runInNewContext} from 'node:vm';
 import * as timeline from '../request-timeline.mjs';
 import {validMeterReadings,validateClosingMeterReadings} from '../request-workflow.mjs';
 import {approvedDelayedReason} from '../delayed-reason.mjs';
+import {managerRoleSelection} from '../admin-access.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const authSource=server.slice(server.indexOf('async function requireSession('),server.indexOf('async function requireSuper('));
@@ -68,6 +69,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   };
   const register=(_path,...handlers)=>{chain=handlers;};
   const context={ requestSubCategory: async (_client,_category,value)=>String(value||""),
+    managerRoleSelection,userManagesSite:(user,site)=>siteAccess.reportScopeIncludesSite(siteAccess.managerReportScope(user),site),
     ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,
@@ -140,6 +142,26 @@ test('wrong roles and other-site users cannot bypass maintenance write guards',a
     const forbidden=harness(kind);
     assert.equal((await forbidden.call({session:{...allowed,assignedRole:'MIS User'}})).status,403);
     assert.equal(forbidden.queries.length,0);
+  }
+});
+
+test('every Maintenance Manager can close an open request in scope, including multi-role managers',async()=>{
+  const row={...waiting,start:'2026-09-08T12:30:00Z'};
+  for(const roles of [['Maintenance Manager'],['Production Manager','Maintenance Manager']]){
+    const session={role:'super',name:'Maintenance manager',permissions:{adminLevel:'Manager',managerRoles:roles}};
+    const app=harness('close',{row,user:{managerSites:'Sasti OB'}});
+    const result=await app.call({session,body:{status:'Closed'}});
+    assert.equal(result.status,200);
+    assert.equal(app.saved.status,'Closed');
+    assert.equal(app.committed,true);
+  }
+  const session={role:'super',permissions:{adminLevel:'Manager',managerRoles:['Maintenance Manager']}};
+  const denied=harness('close',{row,user:{managerSites:'Majri OB'}});
+  assert.equal((await denied.call({session,body:{status:'Closed'}})).status,403);
+  assert.equal(denied.queries.some(({sql})=>sql.startsWith('UPDATE ')),false);
+  for(const role of ['Production Manager','Project Manager','MIS Manager']){
+    const app=harness('close',{row});
+    assert.equal((await app.call({session:{...session,permissions:{adminLevel:'Manager',managerRoles:[role]}}})).status,403);
   }
 });
 

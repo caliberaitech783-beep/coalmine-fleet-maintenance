@@ -1688,6 +1688,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
         ];
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
   const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
+  const canCloseRequests=activeManagerRole==="Maintenance Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest);
   const canUpdateRequests=activeManagerRole==="Maintenance Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest&&onAddDailyRemark);
   const canUpdateResponsibility=activeManagerRole==="Project Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest);
   const canReopenRequests=["Maintenance Manager","Project Manager"].includes(activeManagerRole)&&managerDataReady&&!managerReconnecting&&Boolean(onUpdateRequest);
@@ -1754,16 +1755,16 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </Modal>}
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button data-nav="active" className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button data-nav="idle" className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}{productionManagerView&&<button data-nav="productionFirstTrip" className={`${queueTab==="firstTrip"?"active":""}${productionFirstTripRows.length?" first-trip-pending-tab first-trip-pending-alert":""}`} onClick={()=>setQueueTab("firstTrip")}>First trip entry ({managerDataReady?productionFirstTripRows.length:"—"})</button>}<button data-nav="history" className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button>{canReopenRequests&&<button type="button" data-nav="reopen" onClick={()=>setReopeningBreakdown(true)}>Reopen Breakdown</button>}</div>
     {managerDataReady && <>
-<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":queueTab==="firstTrip"?"Production first-trip entries":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length} record{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length === 1 ? "" : "s"} in this view</p></div></header>{queueTab==="firstTrip"?<><MobileWorkflowTable rows={productionFirstTripRows} exportTitle="Production First Trip Entry" showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Closed date & time" closedTimeAfterStarted showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></>:<BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):canUpdateResponsibility?(row)=>{if(row.acceptedAt) setRequestUpdate({kind:"responsibility",request:row});else alert("Maintenance must accept this vehicle before breakdown responsibility can be edited.");}:null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} stableToolbar />}</article>
+<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":queueTab==="firstTrip"?"Production first-trip entries":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length} record{(queueTab==="firstTrip"?productionFirstTripRows:visibleDetailRows).length === 1 ? "" : "s"} in this view</p></div></header>{queueTab==="firstTrip"?<><MobileWorkflowTable rows={productionFirstTripRows} exportTitle="Production First Trip Entry" showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Closed date & time" closedTimeAfterStarted showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></>:<BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):canUpdateResponsibility?(row)=>{if(row.acceptedAt) setRequestUpdate({kind:"responsibility",request:row});else alert("Maintenance must accept this vehicle before breakdown responsibility can be edited.");}:null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} onClose={canCloseRequests?(row)=>openRequestUpdate(row,"close"):null} stableToolbar />}</article>
     </>}
     {reopeningBreakdown&&canReopenRequests&&<Modal className="reopen-breakdown-modal" title="Reopen Breakdown" close={()=>setReopeningBreakdown(false)}><ReopenBreakdownForm requests={historyRows} close={()=>setReopeningBreakdown(false)} onSave={(reference,payload)=>onUpdateRequest(reference,payload,"reopen-breakdown")} /></Modal>}
-    {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
+    {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} linkedRequests={requestRows} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
     {productionFirstTrip && <ProductionFirstTripForm request={requestRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveManagerProductionFirstTrip} />}
     {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} TimelineButton={TimelineButton} />}
   </section>;
 }
 // Edit, Daily update and arrival red-flag dialogs opened from the Maintenance Manager's workload table.
-function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange, onUpdateRequest, onAddDailyRemark }) {
+function ManagerRequestUpdate({ update, request, equipmentRecords = [], linkedRequests = [], onChange, onUpdateRequest, onAddDailyRemark }) {
   const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
   const close = () => onChange(null);
   const requireArrival = (error, next) => {
@@ -1775,6 +1776,10 @@ function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange
     try { await onUpdateRequest(payload.ref, payload, update.kind === "responsibility" ? "breakdown-responsibility" : "edit"); close(); }
     catch (error) { if (update.kind === "responsibility" || !requireArrival(error, "edit")) throw error; }
   };
+  const saveClose = async (payload) => {
+    try { await onUpdateRequest(request.ref, payload, "close"); close(); }
+    catch (error) { if (!requireArrival(error, "close")) throw error; }
+  };
   const saveRemark = async (payload) => {
     try { await onAddDailyRemark(request.ref, payload); close(); }
     catch (error) { if (!requireArrival(error, "remark")) alert(error.message); }
@@ -1785,6 +1790,7 @@ function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange
   };
   if (update.kind === "responsibility") return <ResponsibilityRequestEditForm request={request} close={close} onSave={saveEdit} Dialog={Modal} />;
   if (update.kind === "edit") return <RequestEditForm canEditResponsibility onAddDailyRemark={onAddDailyRemark} request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
+  if (update.kind === "close") return <CloseRequestForm request={request} linkedRequests={linkedRequests} equipmentRecords={equipmentRecords} close={close} onSave={saveClose} />;
   if (update.kind === "remark") return <DailyRemarkForm request={request} close={close} onSave={saveRemark} />;
   return <RequestRedFlagForm flagKind="arrival" request={request} close={close} onSave={saveArrivalFlag} />;
 }
@@ -3029,23 +3035,25 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     default: return null;
   }
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showUserRole = true, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, showStatusFilter = true, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, onEdit, onRemark, exportTitle = "Breakdown report", columnOrder = null }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showUserRole = true, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, showStatusFilter = true, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, onEdit, onRemark, onClose, exportTitle = "Breakdown report", columnOrder = null }) {
   if (exportTitle === "Closed Production Requests") showStatusFilter = false;
-  const showActionColumn = showReadOnlyAction || Boolean(onDelete || onDeleteSelected || onEdit || onRemark);
+  const showActionColumn = showReadOnlyAction || Boolean(onDelete || onDeleteSelected || onEdit || onRemark || onClose);
   // Edits and daily updates apply only to active, unverified requests, matching the server's rule.
   const rowUpdatable = (row) => !["closed", "idle", "ideal"].includes(String(row.status || "").trim().toLowerCase()) && !row.verifiedAt;
   const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !isIdleVehicleRequest(row));
   const [selectedRefs, setSelectedRefs] = useState(() => new Set());
   const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
   useEffect(() => { setSelectedRefs((current) => { const present = new Set(rows.map((row) => row.ref)); const next = new Set([...current].filter((ref) => present.has(ref))); return next.size === current.size ? current : next; }); }, [rows]);
-  const requestActions = (onDelete || onDeleteSelected || onEdit || onRemark) ? (row) => {
+  const requestActions = (onDelete || onDeleteSelected || onEdit || onRemark || onClose) ? (row) => {
+    const canClose = onClose && !["closed", "idle", "ideal"].includes(String(row.status || "").trim().toLowerCase()) && (!row.verifiedAt || row.status === "Running BD");
     const canEdit = onEdit && rowUpdatable(row), canRemark = onRemark && rowUpdatable(row), canDelete = onDelete && rowDeletable(row);
     return <>
       {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
       {canEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
       {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
       {canRemark && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
-      {!canEdit && !canRemark && !canDelete && <span>Read only</span>}
+      {canClose && <button type="button" onClick={() => onClose(row)}><CheckCircle2 /> Close request</button>}
+      {!canEdit && !canRemark && !canDelete && !canClose && <span>Read only</span>}
     </>;
   } : null;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);

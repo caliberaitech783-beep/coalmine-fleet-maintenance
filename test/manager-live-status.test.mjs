@@ -13,6 +13,7 @@ import { isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import {isNetworkFailure, isTransientStatus} from "../src/api-transient-retry.mjs";
 import {requestWriteConnectionMessage, requestWriteOutcomeConfirmed} from "../src/request-write-recovery.mjs";
 import {createSiteUpdateSafety} from "../src/site-update-safety.mjs";
+import {arrivalRedFlagRequired} from '../request-acceptance.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const managerSource = source.slice(source.indexOf("function ManagerDashboard("), source.indexOf("function Dashboard("));
@@ -60,7 +61,7 @@ function managerHarness(equipment, equipmentState = {}) {
     if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
-  const scope = { isIdleVehicleRequest,
+  const scope = { isIdleVehicleRequest,arrivalRedFlagRequired,
     React, useState, useMemo: (calculate) => calculate(), fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses, requestWithEquipmentMasterDetails,
     recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory, isProductionFirstTripPending,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
@@ -83,6 +84,23 @@ const open = { ref: "OPEN", door: "D1", chassis: "CH1", site: "Sasti OB", status
 const idle = { ref: "IDLE", door: "D2", chassis: "CH2", site: "Sasti OB", status: "Idle" };
 const closed = { ref: "CLOSED", door: "D3", chassis: "CH3", site: "Sasti OB", status: "Closed" };
 const verified = { ...closed, ref: "VERIFIED", verifiedAt: "2026-09-09 12:00:00", firstTripDone: true, productionFirstTripAt: "2026-09-09 11:45:00" };
+
+test('only the Maintenance Manager workload exposes Close request and opens the close dialog for an Open request',()=>{
+  const row={...open,status:'Open'};
+  for(const role of ['Maintenance Manager','Production Manager','Project Manager','MIS Manager']){
+    const app=managerHarness(equipment);
+    const props={managerRole:role,requests:[row],onUpdateRequest:async()=>{}};
+    let tree=app.render(props);
+    const action=table(tree).props.onClose;
+    assert.equal(typeof action,role==='Maintenance Manager'?'function':'object',role);
+    if(role==='Maintenance Manager'){
+      action(row);tree=app.render(props);
+      const dialog=all(tree,node=>node.type?.name==='ManagerRequestUpdate')[0];
+      assert.equal(dialog.props.update.kind,'close');
+      assert.equal(dialog.props.request.ref,row.ref);
+    }
+  }
+});
 
 for (const managerRole of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${managerRole}: create action follows privilege and supplies site-scoped form data`, () => {
   const app=managerHarness(equipment);

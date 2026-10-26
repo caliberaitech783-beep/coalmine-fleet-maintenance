@@ -7400,7 +7400,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
 });
 
 
-app.patch('/api/requests/:reference/close',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpdatePermission('closeRequests'),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const closingDate=String(req.body?.closingDate||'');
@@ -7434,6 +7434,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       const assignedScope=userSiteScope(user);
       if(!reportScopeIncludesSite(assignedScope,existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
+    if(maintenanceManagerSession(req.session)&&!userManagesSite(await currentUserRecord(req.session),existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance sites.'});
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
