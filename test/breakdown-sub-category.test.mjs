@@ -43,9 +43,9 @@ test('it is a Masters sub menu that administrators can add to, edit and delete, 
   assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:['Equipment master']},'Breakdown Sub-Category'),false);
 });
 
-test('request forms load the mapped master and production selection stays optional',()=>{
+test('request forms load the mapped master and new requests require selection from the cutoff',()=>{
   assert.match(client,/useMasterRecords\("Breakdown Sub-Category"\)/);
-  assert.match(client,/<BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} \/>/);
+  assert.match(client,/<BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} required={requestRequiresSubCategory\(\)} \/>/);
   assert.match(client,/<BreakdownSubCategorySelect key={editCategory}[^\n]+ required \/>/);
   assert.match(server,/sub_category=\$15/);
 });

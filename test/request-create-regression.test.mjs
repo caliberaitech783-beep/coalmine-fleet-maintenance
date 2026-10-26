@@ -1,3 +1,4 @@
+import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestShiftLabel} from '../request-shift.mjs';
 import test from "node:test";
@@ -18,7 +19,7 @@ const deferred = () => {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const evaluate = (source, dependencies) => new Function("BreakdownSubCategorySelect", "requestSubCategory", ...Object.keys(dependencies), source )(()=>null, async (_client,_category,value)=>String(value||""), ...Object.values(dependencies));
+const evaluate = (source, dependencies) => new Function("requestRequiresSubCategory", "BreakdownSubCategorySelect", "requestSubCategory", ...Object.keys(dependencies), source )(requestRequiresSubCategory, ()=>null, async (_client,_category,value)=>String(value||""), ...Object.values(dependencies));
 
 function createRoute({ conflict = null, insertError, reports = async () => {}, notify = async () => {} } = {}) {
   let handler, status, body, inserts = 0;

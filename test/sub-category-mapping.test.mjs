@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import React from 'react';
 import {transformWithOxc} from 'vite';
-import {BREAKDOWN_SUB_CATEGORY_MAPPINGS,subCategoriesForRepairType,validateRequestSubCategory} from '../breakdown-sub-category.mjs';
+import {BREAKDOWN_SUB_CATEGORY_MAPPINGS,subCategoriesForRepairType,validateRequestSubCategory,requestRequiresSubCategory,validateExistingRequestSubCategory} from '../breakdown-sub-category.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -127,4 +127,22 @@ test('creation SQL persists the validated sub-category and permits an empty prod
     result=await save(...Object.values(context));
     assert.deepEqual(result.rows,[{ref:'REQ-OPTIONAL',subCategory:''}]);
   }finally{await db.close();}
+});
+
+
+test('sub-category policy uses the inclusive India-time creation cutoff',()=>{
+  for(const date of ['2026-10-26 16:59:59','2026-10-26T11:29:59Z',null,'invalid'])assert.equal(requestRequiresSubCategory(date),false);
+  for(const date of ['2026-10-26 17:00:00','2026-10-26T11:30:00Z','2026-10-27 09:00:00'])assert.equal(requestRequiresSubCategory(date),true);
+});
+test('legacy requests preserve missing and obsolete sub-categories through closure',()=>{
+  for(const subCategory of ['', 'Obsolete fault']){
+    const old={createdAt:'2026-10-26 16:59:59',subCategory};
+    assert.equal(validateExistingRequestSubCategory(old,'DRIVELINE','Battery',mappings),subCategory);
+  }
+  const current={createdAt:'2026-10-26 17:00:00'};
+  assert.throws(()=>validateExistingRequestSubCategory(current,'DRIVELINE','',mappings),/Select a sub-category/);
+  assert.throws(()=>validateExistingRequestSubCategory(current,'DRIVELINE','Battery',mappings),/belonging/);
+  assert.equal(validateExistingRequestSubCategory(current,'DRIVELINE','Engine',mappings),'Engine');
+  const linked=[{createdAt:'2026-10-25 17:00:00',subCategory:'Old fault'},current];
+  assert.deepEqual(linked.map(row=>validateExistingRequestSubCategory(row,'DRIVELINE',row.subCategory||'Engine',mappings)),['Old fault','Engine']);
 });

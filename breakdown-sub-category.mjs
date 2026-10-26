@@ -63,3 +63,16 @@ export function breakdownSubCategoryNames(records=[]){
   const names=[...seen.values()],others=names.filter(isOthersName);
   return [...names.filter((name)=>!isOthersName(name)).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})),others[0]||BREAKDOWN_SUB_CATEGORY_OTHERS];
 }
+
+// Use creation time, never the editable breakdown start time.
+export const SUB_CATEGORY_REQUIRED_FROM='2026-10-26T17:00:00+05:30';
+export function requestRequiresSubCategory(createdAt=new Date()){
+  const value=typeof createdAt==='string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(createdAt)
+    ? createdAt.replace(' ','T')+'+05:30' : createdAt;
+  const timestamp=new Date(value).getTime();
+  return Number.isFinite(timestamp) && timestamp>=Date.parse(SUB_CATEGORY_REQUIRED_FROM);
+}
+export function validateExistingRequestSubCategory(request,category,value,records){
+  if(!requestRequiresSubCategory(request.createdAt ?? null))return request.subCategory ?? '';
+  return validateRequestSubCategory(category,value,records,{required:true});
+}

@@ -1,3 +1,4 @@
+import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
 import assert from 'node:assert/strict';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
 import {readFileSync} from 'node:fs';
@@ -47,7 +48,7 @@ function harness(){
     if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;
     return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];
   };
-  const scope={ BreakdownSubCategorySelect: () => null, maintenanceMetersRequired:session=>session?.role==='normal'&&session?.assignedRole==='Maintenance User',isIdleVehicleRequest,React:{...React,useId:()=> 'test-controls'},useState:state,useRef:value=>state(()=>({current:value}))[0],useEffect:()=>{},useDeferredValue:value=>value,TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
+  const scope={ requestRequiresSubCategory, BreakdownSubCategorySelect: () => null, maintenanceMetersRequired:session=>session?.role==='normal'&&session?.assignedRole==='Maintenance User',isIdleVehicleRequest,React:{...React,useId:()=> 'test-controls'},useState:state,useRef:value=>state(()=>({current:value}))[0],useEffect:()=>{},useDeferredValue:value=>value,TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     useMemo: factory=>factory(),
     WORKFLOW_INITIAL_RENDER_ROWS: Number(source.match(/const WORKFLOW_INITIAL_RENDER_ROWS = (\d+)/)[1]),
     WORKFLOW_RENDER_BATCH: Number(source.match(/const WORKFLOW_RENDER_BATCH = (\d+)/)[1]),

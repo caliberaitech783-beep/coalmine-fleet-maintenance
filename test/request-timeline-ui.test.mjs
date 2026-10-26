@@ -1,3 +1,4 @@
+import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -71,7 +72,7 @@ function harness(name, extra = {}) {
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
-  const scope = { BreakdownSubCategorySelect: () => null, AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", isIdleVehicleRequest,requestStatusLabel,
+  const scope = { requestRequiresSubCategory, BreakdownSubCategorySelect: () => null, AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", isIdleVehicleRequest,requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,

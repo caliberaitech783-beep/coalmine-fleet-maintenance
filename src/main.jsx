@@ -3,7 +3,7 @@ import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage}
 import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
 import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
 import {HR_APPLICATION_URL,HR_PERMISSION_OPTIONS,HR_ALL_PERMISSIONS,normalizedHrSelection,hrAccessEnabled} from '../hr-permissions.mjs';
-import {subCategoriesForRepairType} from "../breakdown-sub-category.mjs";
+import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdown-sub-category.mjs";
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
@@ -6311,7 +6311,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               {!repairTypeRecords.some(record => /^others?$/i.test(String(record.repairType || "").trim())) && <option value="Other">Other</option>}
             </select>
           </label>
-          <BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} />
+          <BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} required={requestRequiresSubCategory()} />
           <div>
             <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
               group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
@@ -10027,7 +10027,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   const delayedReasonOptions=typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
     {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header><DailyUpdatesPanel remarks={history} category={request.category} formatDateTime={formatTwelveHourDateTime} missingLabel="Not recorded" /></section>}
-    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({subCategory:String(form.get("subCategory")||"").trim(),remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required /><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
+    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({subCategory:String(form.get("subCategory")||"").trim(),remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label>{requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}<label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
 
@@ -10409,7 +10409,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
               ))}
           </select>
         </label>
-        <BreakdownSubCategorySelect key={editCategory} category={editCategory} initialValue={editCategory===request.category ? request.subCategory : ""} required />
+        {requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect key={editCategory} category={editCategory} initialValue={editCategory===request.category ? request.subCategory : ""} required />}
         <label>Door number<input value={request.door || ""} readOnly aria-readonly="true" /></label>
         <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
@@ -10508,7 +10508,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(request.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
-        <div className="full"><BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required /></div>
+        <div className="full">{requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}</div>
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly required={requireMeters} />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required={requireMeters} />
         <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "Images compressed to 100 KB maximum · PDF maximum 5 MB"}</small></label>

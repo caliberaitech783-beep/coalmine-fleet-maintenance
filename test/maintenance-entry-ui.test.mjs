@@ -1,3 +1,4 @@
+import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestShiftLabel} from '../request-shift.mjs';
 import test from 'node:test';
@@ -42,7 +43,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { BreakdownSubCategorySelect: Null, AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { requestRequiresSubCategory, BreakdownSubCategorySelect: Null, AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   scope.siteUpdateSafety = createSiteUpdateSafety();
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
@@ -137,7 +138,7 @@ test('successful creation closes only after save and never opens a blocking succ
   assert.deepEqual(alerts, ['Save failed.']);
 });
 
-test('the create request form submits an optional breakdown sub-category', async () => {
+test('the create request form submits the selected breakdown sub-category', async () => {
   const EquipmentCombobox = () => null;
   const saved = [];
   const app = harness(formCode, 'MaintenanceForm', {

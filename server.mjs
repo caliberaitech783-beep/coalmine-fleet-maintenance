@@ -149,7 +149,7 @@ import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.m
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,approvedDelayedReason,delayedReasonRequired} from './delayed-reason.mjs';
-import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_MAPPINGS,validateRequestSubCategory} from './breakdown-sub-category.mjs';
+import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_MAPPINGS,validateRequestSubCategory,requestRequiresSubCategory,validateExistingRequestSubCategory} from './breakdown-sub-category.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {archiveSchemaSql,previewRequestArchive,archiveRequests,restoreRequestArchive} from './request-archive.mjs';
@@ -7086,7 +7086,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
       const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
-      const storedSubCategory=await requestSubCategory(client,eligible.rows[0].category,req.body?.subCategory ?? eligible.rows[0].subCategory,true);
+      const storedSubCategory=await requestSubCategory(client,eligible.rows[0].category,req.body?.subCategory ?? eligible.rows[0].subCategory,true,eligible.rows[0]);
       await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
       eligible.rows[0].subCategory=storedSubCategory;
       if(oemResponsibility!==undefined&&!eligible.rows[0].acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
@@ -7211,8 +7211,9 @@ app.get('/api/request-shifts',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-async function requestSubCategory(client,category,value,required=false){
+async function requestSubCategory(client,category,value,required=false,existingRequest=null){
   const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Breakdown Sub-Category'");
+  if(existingRequest)return validateExistingRequestSubCategory(existingRequest,category,value,rows.map(row=>row.record_data));
   return validateRequestSubCategory(category,value,rows.map(row=>row.record_data),{required});
 }
 
@@ -7244,7 +7245,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const {rows}=await createRequestWithVehicleLock({door,chassis,existingReference:req.body?.existingReference,existingReason:req.body?.existingReason},async(client,duplicate)=>{
     if(duplicate && displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
-    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory,req.session.assignedRole==='Maintenance User');
+    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory,requestRequiresSubCategory());
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
@@ -7364,7 +7365,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card (images up to 100 KB, PDF up to 5 MB).`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
-    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory ?? before.subCategory,true);
+    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory ?? before.subCategory,true,before);
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(maintenanceMetersRequired(req.session)&&req.body?.openingMeterReading===undefined){
       normalizedOpeningMeterReading=String(openingMeterReadings[normalizedMeterType] ?? before.openingMeterReadings?.[normalizedMeterType] ?? (before.meterType===normalizedMeterType?before.openingMeterReading:'') ?? '').trim();
@@ -7436,7 +7437,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
-    const storedSubCategory=await requestSubCategory(client,before.category,reference===primaryReference ? (req.body?.subCategory ?? before.subCategory) : before.subCategory,true);
+    const storedSubCategory=await requestSubCategory(client,before.category,reference===primaryReference ? (req.body?.subCategory ?? before.subCategory) : before.subCategory,true,before);
 
     before={...before,subCategory:storedSubCategory};
     // Each visit keeps its own opening evidence; only the on-road evidence is shared.
