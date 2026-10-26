@@ -11,8 +11,10 @@ export function ReportTimeSelect({label,value,onChange}) {
   const [rawHour='00',minute='00',second='00']=String(value||'00:00:00').split(':');
   const hour24=Number(rawHour),hour=String(hour24%12||12).padStart(2,'0'),period=hour24>=12?'PM':'AM';
   const boundary=hour==='12'&&minute==='00'&&second==='00';
+  const selectedPeriod=boundary?(hour24===12?'Noon':'Midnight'):period;
   const options=count=>Array.from({length:count},(_,index)=>String(index).padStart(2,'0'));
   const update=(part,next)=>{
+    if(part==='period' && (next==='Noon'||next==='Midnight')){onChange(next==='Noon'?'12:00:00':'00:00:00');return;}
     const selected={hour,minute,second,period,[part]:next};
     const nextHour=Number(selected.hour)%12+(selected.period==='PM'?12:0);
     onChange(`${String(nextHour).padStart(2,'0')}:${selected.minute}:${selected.second}`);
@@ -22,11 +24,11 @@ export function ReportTimeSelect({label,value,onChange}) {
       ['hour','Hour',hour,options(12).map((_,index)=>String(index+1).padStart(2,'0'))],
       ['minute','Min',minute,options(60)],
       ['second','Sec',second,options(60)],
-      ['period','AM/PM',period,['AM','PM']],
+      ['period','Period',selectedPeriod,['Noon','Midnight','AM','PM']],
     ].map(([part,caption,selected,choices])=><span className="report-time-part" key={part}>
       <small>{caption}</small>
       <select required aria-label={`${label} ${part}`} value={selected} onChange={event=>update(part,event.target.value)}>
-        {choices.map(choice=><option key={choice} value={choice}>{part==='period'&&boundary?`${choice} (${choice==='AM'?'Midnight':'Noon'})`:choice}</option>)}
+        {choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
       </select>
     </span>)}
   </span>;
