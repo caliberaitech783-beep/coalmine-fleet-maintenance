@@ -67,3 +67,11 @@ test('LMV bars retain their teal fill and proportional breakdown height, with a 
   assert.match(css,/\.mine-dashboard \.mine-fleet-bar\.otherVehicles \.mine-fleet-breakdown-segment\s*\{\s*min-height:0/);
   assert.match(css,/\.mine-dashboard \.mine-fleet-region-chart \.lmv-fleet-controls \.mine-fleet-chart-toggle\s*\{[^}]*width:var\(--fleet-counter-width,auto\)/);
 });
+test('combined fleet count drilldowns retain the detailed breakdown report instead of the reduced LMV table',()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const modal=source.slice(source.indexOf('{totalFleetSelection && <Modal'),source.indexOf('{totalFleetSelection && <Modal')+1600);
+  assert.match(modal,/<DashboardRecordBrowser rows=\{totalFleetDetailRows\(combinedListRows,liveBreakdowns\)\}/);
+  assert.match(modal,/bdBalanceColumns=\{\["breakdown", "balance", "oem"\]\.includes\(totalFleetSelection.mode\)\}/);
+  for(const feature of ['ActionsTable={ActionsTable}','Remarks={MaintenanceRemarks}','RequestTimelineButton={RequestTimelineButton}','formatDate={formatTwelveHourDateTime}']) assert.ok(modal.includes(feature),feature);
+  assert.doesNotMatch(modal.split('</Modal>')[0],/<ReportSection/);
+});
