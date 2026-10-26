@@ -20,18 +20,28 @@ test('manager form forwards Jayant and multi-site assignments to the existing eq
   }
 });
 
-test('all manager profiles require an explicit desktop or mobile create privilege',()=>{
+test('Maintenance Managers can create in both views; other manager profiles retain explicit grants',()=>{
   for(const managerRole of MANAGER_ROLE_OPTIONS){
     const user={userType:'Super User',adminLevel:'Manager',managerRole};
-    assert.equal(resolveMobileAccess({user}).permissions.createRequests,false);
+    const maintenance=managerRole==='Maintenance Manager';
+    assert.equal(resolveMobileAccess({user}).permissions.createRequests,maintenance);
     for(const [desktop,mobile] of [[true,false],[false,true],[true,true],[false,false]]){
       const permissions=resolveMobileAccess({user:{...user,desktopManagerCreateRequest:desktop,mobileManagerCreateRequest:mobile}}).permissions;
-      assert.equal(permissions.createRequests,desktop||mobile);
-      assert.equal(navigationPermissionsForView(permissions,false).desktopManagerCreateRequest,desktop);
-      assert.equal(navigationPermissionsForView(permissions,true).desktopManagerCreateRequest,mobile);
+      assert.equal(permissions.createRequests,maintenance||desktop||mobile);
+      assert.equal(navigationPermissionsForView(permissions,false).desktopManagerCreateRequest,maintenance||desktop);
+      assert.equal(navigationPermissionsForView(permissions,true).desktopManagerCreateRequest,maintenance||mobile);
     }
   }
   assert.equal(resolveMobileAccess({user:{userType:'Super User',adminLevel:'Admin'}}).permissions.createRequests,true);
+});
+
+test('Maintenance Manager access also works in a secondary assigned manager profile',()=>{
+  for(const managerRole of [['Project Manager','Maintenance Manager'],'MIS Manager | Maintenance Manager']){
+    const permissions=resolveMobileAccess({user:{userType:'Super User',adminLevel:'Manager',managerRole}}).permissions;
+    assert.equal(permissions.createRequests,true);
+    assert.equal(navigationPermissionsForView(permissions,false).desktopManagerCreateRequest,true);
+    assert.equal(navigationPermissionsForView(permissions,true).desktopManagerCreateRequest,true);
+  }
 });
 
 test('manager creation enforces current permission and site scope before writing',()=>{

@@ -104,10 +104,11 @@ test('only the Maintenance Manager workload exposes Close request and opens the 
 
 for (const managerRole of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${managerRole}: create action follows privilege and supplies site-scoped form data`, () => {
   const app=managerHarness(equipment);
+  const createLabel=managerRole==="Maintenance Manager"?"Open request":"Create request";
   const props={managerRole,requests:[open,{...open,ref:'OTHER',site:'Jayant OB'}],canCreateRequest:false,onCreateRequest:()=>{}};
-  assert.equal(button(app.render(props),'Create request'),undefined);
+  assert.equal(button(app.render(props),createLabel),undefined);
   props.canCreateRequest=true;
-  button(app.render(props),'Create request').props.onClick();
+  button(app.render(props),createLabel).props.onClick();
   const form=all(app.render(props),node=>node.type===ManagerCreateRequestForm)[0];
   assert.equal(form.props.onCreate,props.onCreateRequest);
   assert.equal(form.props.assignedLocation,'Sasti OB');
@@ -396,4 +397,25 @@ test("request refresh integration keeps session isolation, fresh data validation
   const route = server.slice(server.indexOf("app.get('/api/requests'"), server.indexOf("app.post('/api/requests'"));
   assert.match(route, /res\.set\('Cache-Control','no-store'\)/);
   assert.match(route, /requestsVisibleToSession/);
+});
+
+test('Maintenance Manager Open and Close request tabs use the existing scoped forms',()=>{
+  const app=managerHarness(equipment);
+  const props={managerRole:'Maintenance Manager',canCreateRequest:true,onCreateRequest:async()=>{},onUpdateRequest:async()=>{},requests:[open,idle,closed,{...open,ref:'OTHER-SITE',site:'Jayant OB'}]};
+  let tree=app.render(props);
+  assert.ok(button(tree,'Open request'));assert.ok(button(tree,'Close request'));assert.equal(button(tree,'Create request'),undefined);
+  button(tree,'Open request').props.onClick();tree=app.render(props);
+  const form=all(tree,node=>node.type===ManagerCreateRequestForm)[0];assert.equal(form.props.assignedLocation,'Sasti OB');assert.equal(form.props.onCreate,props.onCreateRequest);
+  assert.ok(!form.props.requests.some(row=>row.ref==='OTHER-SITE'));
+  form.props.close();tree=app.render(props);assert.equal(all(tree,node=>node.type===ManagerCreateRequestForm).length,0);
+  button(tree,'Closed history').props.onClick();tree=app.render(props);assert.deepEqual(table(tree).props.rows.map(row=>row.ref),['CLOSED']);
+  button(tree,'Close request').props.onClick();tree=app.render(props);assert.deepEqual(table(tree).props.rows.map(row=>row.ref),['OPEN']);
+  table(tree).props.onClose(open);tree=app.render(props);
+  assert.equal(all(tree,node=>node.props.update?.kind==='close')[0].props.request.ref,'OPEN');
+  assert.ok(button(tree,'Idle approvals (1)'));assert.ok(button(tree,'Closed history'));assert.ok(button(tree,'Reopen Breakdown'));
+});
+test('Maintenance Manager Open request waits for loaded data and reconnection recovery',()=>{
+  const app=managerHarness(equipment,{loadError:'Connection interrupted'});
+  const tree=app.render({managerRole:'Maintenance Manager',canCreateRequest:true,onCreateRequest:async()=>{},requests:[open]});
+  assert.equal(button(tree,'Open request').props.disabled,true);
 });

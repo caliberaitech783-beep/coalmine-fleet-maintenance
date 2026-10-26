@@ -115,8 +115,9 @@ export function adminAccessPermissions(user = {}) {
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
   const enabled=value=>value===true||/^(true|yes|1|on)$/i.test(String(value||'').trim());
-  const desktopManagerCreateRequest=adminLevel==='Manager'&&enabled(user.desktopManagerCreateRequest);
-  const mobileManagerCreateRequest=adminLevel==='Manager'&&enabled(user.mobileManagerCreateRequest);
+  const maintenanceManagerCreateRequest=adminLevel==='Manager'&&managerRoles.includes('Maintenance Manager');
+  const desktopManagerCreateRequest=adminLevel==='Manager'&&(maintenanceManagerCreateRequest||enabled(user.desktopManagerCreateRequest));
+  const mobileManagerCreateRequest=adminLevel==='Manager'&&(maintenanceManagerCreateRequest||enabled(user.mobileManagerCreateRequest));
   // Either view may authorize creation; each responsive view exposes only its own grant.
   return {
     createRequests: adminLevel!=='Manager'||desktopManagerCreateRequest||mobileManagerCreateRequest,
