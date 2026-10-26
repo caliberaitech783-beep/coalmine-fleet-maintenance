@@ -9,6 +9,36 @@ import {BREAKDOWN_SUB_CATEGORY_MAPPINGS,subCategoriesForRepairType,validateReque
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const mappings=BREAKDOWN_SUB_CATEGORY_MAPPINGS;
+test('existing repair type labels fetch every corresponding Excel sub-category',()=>{
+  const aliases={
+    SUSPENSION:'SUSPENSION SYSTEM',
+    'UNDER CARRIAGE/TRACK':'UNDERCARRIAGE / TRACK SYSTEM',
+    'GROUND ENGAGING TOOLS (GET)':'GET',
+    OTHERS:'other',
+    'DRIVE LINE':'DRIVELINE',
+    BRAKE:'BRAKING SYSTEM',
+    STEERING:'STEERING SYSTEM',
+    'AIR CONDITIONING':'AC SYSTEM',
+    FUEL:'FUEL SYSTEM',
+    COOLING:'COOLING SYSTEM',
+    HYDRAULIC:'HYDRAULIC SYSTEM',
+    LUBRICATION:'LUBRICATION SYSTEM',
+    DRILLING:'DRILLING SYSTEM',
+  };
+  for(const [alias,canonical] of Object.entries(aliases)){
+    const expected=mappings.filter(row=>row.repairType===canonical).map(row=>row.subCategory);
+    assert.ok(expected.length,canonical);
+    assert.deepEqual(subCategoriesForRepairType(alias,mappings),expected,alias);
+    for(const name of expected)assert.equal(validateRequestSubCategory(alias,name,mappings,{required:true}),name);
+  }
+  assert.equal(subCategoriesForRepairType('SUSPENSION',mappings).length,9);
+  assert.equal(subCategoriesForRepairType('UNDER CARRIAGE/TRACK',mappings).length,5);
+  assert.equal(subCategoriesForRepairType('GROUND ENGAGING TOOLS (GET)',mappings).length,4);
+  assert.throws(()=>validateRequestSubCategory('SUSPENSION','Engine',mappings,{required:true}),/belonging/);
+  // Alias resolution also works for administrator-created rows using the old label.
+  assert.deepEqual(subCategoriesForRepairType('SUSPENSION SYSTEM',[{repairType:'SUSPENSION',subCategory:'Leaf Spring'}]),['Leaf Spring']);
+  assert.deepEqual(subCategoriesForRepairType('Hydraulic custom',mappings),[]);
+});
 test('all 122 spreadsheet mappings are present and restricted to their repair type',()=>{
   assert.equal(mappings.length,122);
   assert.equal(new Set(mappings.map(row=>row.repairType)).size,20);

@@ -7,7 +7,31 @@ export const BREAKDOWN_SUB_CATEGORY_FIELD='subCategory';
 // Imported from sub-category.xlsx, final!C2:D123. Administrators own subsequent edits.
 export const BREAKDOWN_SUB_CATEGORY_MAPPINGS=Object.freeze(sourceMappings.map(row=>Object.freeze(row)));
 export const BREAKDOWN_SUB_CATEGORY_DEFAULTS=Object.freeze(BREAKDOWN_SUB_CATEGORY_MAPPINGS.map(row=>row.subCategory));
-const normalizeType=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
+const typeToken=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
+// Existing Repair Type master labels predate the Excel labels. Resolve both
+// sides through explicit aliases; unrelated repair types must never share options.
+const repairTypeAliases=new Map([
+  ['DRIVELINE','DRIVE LINE','DRIVE TRAIN','DRIVETRAIN'],
+  ['ENGINE','ENGINE SYSTEM'],
+  ['FUEL SYSTEM','FUEL'],
+  ['HYDRAULIC SYSTEM','HYDRAULIC','HYDRAULICS'],
+  ['ELECTRICAL','ELECTRICAL SYSTEM'],
+  ['COOLING SYSTEM','COOLING'],
+  ['EXHAUST SYSTEM','EXHAUST'],
+  ['UNDERCARRIAGE / TRACK SYSTEM','UNDER CARRIAGE/TRACK','UNDERCARRIAGE','UNDER CARRIAGE','TRACK SYSTEM','UNDERCARRIAGE / TRACK'],
+  ['ATTACHMENT','ATTACHMENTS'],
+  ['GET','GROUND ENGAGING TOOLS (GET)','GROUND ENGAGING TOOLS'],
+  ['SUPER STRUCTURE','SUPERSTRUCTURE'],
+  ['STEERING SYSTEM','STEERING'],
+  ['BRAKING SYSTEM','BRAKING','BRAKE SYSTEM','BRAKE','BRAKES'],
+  ['SUSPENSION SYSTEM','SUSPENSION'],
+  ['TYRE SYSTEM','TYRE','TYRES','TIRE SYSTEM','TIRES','TIRE'],
+  ['AC SYSTEM','AC','AIR CONDITIONING','AIR CONDITIONING SYSTEM','AIR CONDITIONER'],
+  ['LUBRICATION SYSTEM','LUBRICATION'],
+  ['DRILLING SYSTEM','DRILLING'],
+  ['other','OTHERS'],
+].flatMap(group=>group.map(label=>[typeToken(label),typeToken(group[0])])));
+const normalizeType=value=>repairTypeAliases.get(typeToken(value))||typeToken(value);
 export function subCategoriesForRepairType(repairType,records=[]){
   const key=normalizeType(repairType);
   if(!key)return [];
