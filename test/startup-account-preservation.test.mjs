@@ -1,4 +1,5 @@
 import {seedLmvDemoRecords} from '../lmv-fleet.mjs';
+import {BREAKDOWN_SUB_CATEGORY_MAPPINGS} from '../breakdown-sub-category.mjs';
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
 import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 import assert from 'node:assert/strict';
@@ -27,7 +28,7 @@ async function runStartup({users=[],initialized=true}={}){
       if(sql.startsWith('SELECT id,record_data FROM master_records'))return {rows:structuredClone(stored)};
       if(sql.startsWith('SELECT id,master_name,record_data FROM master_records'))return {rows:stored.map(user=>({...structuredClone(user),master_name:'Users & employees'}))};
       if(sql.startsWith('INSERT INTO master_records')){
-        const target=sql.includes("SELECT 'Delayed Reason'")
+        const target=sql.includes("VALUES('Breakdown Sub-Category'") ? 'Breakdown Sub-Category' : sql.includes("SELECT 'Repair type master'") ? 'Repair type master' : sql.includes("SELECT 'Delayed Reason'")
           ?'Delayed Reason'
           :sql.includes("VALUES ('LMV master'") ? 'LMV master'
           :sql.includes("VALUES ('Shift Master'")
@@ -39,13 +40,14 @@ async function runStartup({users=[],initialized=true}={}){
       const delayedReasonTypeSeed=sql.startsWith("UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)")&&sql.includes("WHERE master_name='Delayed Reason'");
       // The only permitted master delete trims the Delayed Reason master to the approved reasons.
       const delayedReasonCleanup=sql.startsWith("DELETE FROM master_records WHERE master_name='Delayed Reason'");
-      if(!delayedReasonTypeSeed&&!delayedReasonCleanup)assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
+      const subCategoryReplacement=sql==="DELETE FROM master_records WHERE master_name='Breakdown Sub-Category'";
+      if(!delayedReasonTypeSeed&&!delayedReasonCleanup&&!subCategoryReplacement)assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
       return {rows:[],rowCount:0};
     },
     release(){released=true;},
   };
   const context={
-    seedLmvDemoRecords,
+    seedLmvDemoRecords,BREAKDOWN_SUB_CATEGORY_MAPPINGS,
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],BREAKDOWN_SUB_CATEGORY_DEFAULTS:['Tyre puncture'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
     SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,CDIR_DELETION_SCHEMA,CDIR_CHANGE_SCHEMA,

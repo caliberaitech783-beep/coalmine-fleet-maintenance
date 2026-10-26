@@ -49,6 +49,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
         if(notificationFailure==='recipients')throw new Error('Notification recipient lookup unavailable');
         return {rows:[]};
       }
+      if(sql.startsWith('UPDATE maintenance_requests SET sub_category=')){assert.ok(inTransaction);saved.subCategory=values[1];return {rows:[],rowCount:1};}
       if(sql.startsWith('UPDATE maintenance_requests')){
         assert.ok(inTransaction,'every maintenance write is inside its request lock transaction');
         if(sql.includes('SET breakdown_reason_history='))return {rows:[],rowCount:1};
@@ -66,7 +67,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
     release(){released=true;},
   };
   const register=(_path,...handlers)=>{chain=handlers;};
-  const context={
+  const context={ requestSubCategory: async (_client,_category,value)=>String(value||""),
     ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,

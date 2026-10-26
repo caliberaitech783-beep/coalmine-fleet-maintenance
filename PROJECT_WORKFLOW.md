@@ -26,6 +26,11 @@ Verify a downloaded ZIP with `node scripts/verify-selective-media-backup.mjs <fi
 ## MIS shared sign-in
 
 Pulse authorizes the separate application at `https://pulseii.cmll.in` through `mis-shared-signin.mjs`. MIS users, MIS managers and eligible administrators reuse their Pulse identity without copying passwords into the MIS database. Short-lived, single-use codes use S256 PKCE and browser-bound state; MIS creates its own session and rechecks the linked Pulse session on authenticated requests. HR, Accounts and Tender identities are excluded. `MIS_SSO_MODE=off` disables this handoff; Pulse defaults to issuer mode. MIS owns a separate repository, App Service and `caliber_mis` database.
+## Repair type and breakdown sub-category
+
+Masters → Breakdown Sub-Category manages repair type/sub-category pairs. The approved `sub-category.xlsx` mapping contains 122 rows across 20 repair types and is stored in `breakdown-sub-category-data.json`. Startup applies `breakdown_sub_category_excel_v2` once: it snapshots the old flat master in app metadata, replaces that master, and adds missing repair types without changing historical request values. Subsequent administrator edits and deletions survive restarts.
+
+Create request shows an optional Sub-Category dropdown for production users. Only sub-categories mapped to the selected Type of breakdown appear; changing the type clears the previous selection. Maintenance acceptance/editing, daily updates and closure require a matching sub-category, with server validation inside the request transaction. Existing requests with a blank or outdated sub-category must be classified during the next maintenance update. Linked closure validates each request's own classification; classify missing linked requests through Edit before closing them together.
 
 ## Image and voice storage limits
 

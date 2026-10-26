@@ -18,7 +18,7 @@ const deferred = () => {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const evaluate = (source, dependencies) => new Function(...Object.keys(dependencies), source)(...Object.values(dependencies));
+const evaluate = (source, dependencies) => new Function("BreakdownSubCategorySelect", "requestSubCategory", ...Object.keys(dependencies), source )(()=>null, async (_client,_category,value)=>String(value||""), ...Object.values(dependencies));
 
 function createRoute({ conflict = null, insertError, reports = async () => {}, notify = async () => {} } = {}) {
   let handler, status, body, inserts = 0;

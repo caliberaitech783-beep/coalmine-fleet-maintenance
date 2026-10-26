@@ -42,7 +42,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { BreakdownSubCategorySelect: Null, AUDIO_MAX_BYTES: 1024 * 1024, compressImageDataUrl: async file => file.data || "data:image/png;base64,dGVzdA==", useRequestShiftData:()=>({shifts:[],loading:false}),requestShiftLabel,isIdleVehicleRequest, ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   scope.siteUpdateSafety = createSiteUpdateSafety();
   const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
@@ -137,7 +137,7 @@ test('successful creation closes only after save and never opens a blocking succ
   assert.deepEqual(alerts, ['Save failed.']);
 });
 
-test('the create request form does not show or submit a breakdown sub-category', async () => {
+test('the create request form submits an optional breakdown sub-category', async () => {
   const EquipmentCombobox = () => null;
   const saved = [];
   const app = harness(formCode, 'MaintenanceForm', {
@@ -149,7 +149,7 @@ test('the create request form does not show or submit a breakdown sub-category',
   const repairTypeRecords = [{id: 1, repairType: 'WGM'}, {id: 2, repairType: 'Breakdown'}, {id: 3, repairType: 'Accidental'}];
   const props = {equipmentRecords: records, equipmentLoaded: true, repairTypeRecords, repairTypesLoaded: true, assignedLocation: 'Sasti OB', close() {}, onSubmit: async (request) => { saved.push(request); return {ref: 'REQ-SAVED'}; }};
   let tree = app.render(props);
-  assert.equal(all(tree, node => node.props.name === 'subCategory').length, 0, 'the removed field is never rendered');
+  assert.equal(all(tree, node => node.props.name === 'subCategory').length, 0, 'the dropdown is rendered by the dedicated component');
   all(tree, node => node.props.name === 'equipmentGroup')[0].props.onChange({target: {value: 'EXCAVATOR'}});
   tree = app.render(props);
   byType(tree, EquipmentCombobox).props.onSelect(records[0]);
@@ -157,7 +157,7 @@ test('the create request form does not show or submit a breakdown sub-category',
   await byType(tree, 'form').props.onSubmit({preventDefault() {}, currentTarget: {door: 'EX-17', category: 'Breakdown', subCategory: 'Tyre puncture', complaint: 'Front tyre flat', date: '2026-09-18', time: '10:00:00'}});
   assert.equal(saved.length, 1);
   assert.equal(saved[0].category, 'Breakdown');
-  assert.equal(Object.hasOwn(saved[0], 'subCategory'), false, 'even a stale client field is not copied into the request payload');
+  assert.equal(saved[0].subCategory, 'Tyre puncture');
 });
 
 function speechHarness({ supported = true, permission } = {}) {

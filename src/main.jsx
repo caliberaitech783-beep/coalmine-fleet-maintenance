@@ -3,6 +3,7 @@ import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage}
 import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
 import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
 import {HR_APPLICATION_URL,HR_PERMISSION_OPTIONS,HR_ALL_PERMISSIONS,normalizedHrSelection,hrAccessEnabled} from '../hr-permissions.mjs';
+import {subCategoriesForRepairType} from "../breakdown-sub-category.mjs";
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
@@ -3239,6 +3240,7 @@ const masterFields = {
     ["repairType", "Repair type"],
   ],
   "Breakdown Sub-Category": [
+    ["repairType", "Repair Type"],
     ["subCategory", "Sub-Category"],
   ],
   "Delayed Reason": [
@@ -5101,7 +5103,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
-                cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} required={key === fields[0][0]} /> :
+                cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} required={key === fields[0][0] || name === "Breakdown Sub-Category"} /> :
                 name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
                   <MultiTextField key={key} name={key} label={label} />
                 ) : type === "multi-checkbox" ? (
@@ -5187,7 +5189,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
                   ) : ["Equipment master", "LMV master"].includes(name) && key === "status" ? (
                     <>{label} *
                     <select name={key} required defaultValue="Operational"><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select></>
-                  ) : key === "level" ? (
+                  ) : name === "Breakdown Sub-Category" && key === "repairType" ? (<>{label} *<SubCategoryRepairTypeSelect /></>) : key === "level" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
                       <option value="" disabled>
@@ -5201,11 +5203,11 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
                     </select>
                     </>
                   ) : (
-                    <>{label}{key === fields[0][0] ? " *" : ""}
+                    <>{label}{key === fields[0][0] || name === "Breakdown Sub-Category" ? " *" : ""}
                     <input
                       className={name === "Users & employees" && ["login", "employee"].includes(key) ? "uppercase-user-field" : ""}
                       name={key}
-                      required={key === fields[0][0]}
+                      required={key === fields[0][0] || name === "Breakdown Sub-Category"}
                       placeholder={"Enter " + label.toLowerCase()}
                     />
                     </>
@@ -6035,7 +6037,33 @@ function readMeterEvidence(file) {
     reader.readAsDataURL(file);
   });
 }
+function SubCategoryRepairTypeSelect({initialValue=""}) {
+  const [records,,loaded]=useMasterRecords("Repair type master");
+  const options=[...new Set(records.map(row=>String(row.repairType||"").trim()).filter(Boolean))];
+  return <select name="repairType" required defaultValue={initialValue} aria-busy={!loaded}>
+    <option value="">{loaded?"Select repair type":"Loading repair types…"}</option>
+    {options.map(name=><option key={name} value={name}>{name}</option>)}
+    {initialValue && !options.includes(initialValue) && <option value={initialValue}>{initialValue}</option>}
+  </select>;
+}
+
+function BreakdownSubCategorySelect({category,initialValue="",required=false}) {
+  const [records,,loaded,,,,loadError,retryLoad]=useMasterRecords("Breakdown Sub-Category");
+  const [selection,setSelection]=useState(initialValue);
+  const options=subCategoriesForRepairType(category,records);
+  const value=options.includes(selection)?selection:"";
+  return <label>Sub-Category{required?" *":" (optional)"}
+    <select name="subCategory" required={required} value={value} onChange={event=>setSelection(event.target.value)} disabled={!category || (!required && !loaded)} aria-busy={!loaded}>
+      <option value="">{!category?"Select repair type first":!loaded?"Loading sub-categories…":options.length?"Select sub-category":"No sub-categories configured for this repair type"}</option>
+      {options.map(name=><option key={name} value={name}>{name}</option>)}
+    </select>
+    {loadError && <small role="alert">Could not load sub-categories. <button type="button" onClick={retryLoad}>Retry</button></small>}
+    {required && loaded && !options.length && <small>Ask an administrator to map sub-categories to this repair type in Breakdown Sub-Category.</small>}
+  </label>;
+}
+
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+  const [selectedCategory,setSelectedCategory]=useState("");
   const shiftData=useRequestShiftData();
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
@@ -6178,6 +6206,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         door: equipmentDetails.door,
         site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
+        subCategory: String(fd.get("subCategory") || "").trim(),
         complaint: fd.get("complaint"),
         complaintAudio: fd.get("complaintAudio"),
         complaintLanguage: fd.get("complaintLanguage"),
@@ -6260,7 +6289,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <select
               name="category"
               required
-              defaultValue=""
+              value={selectedCategory}
+              onChange={event=>setSelectedCategory(event.target.value)}
               disabled={!repairTypesLoaded || !repairTypeRecords.length}
               aria-busy={!repairTypesLoaded}
             >
@@ -6281,6 +6311,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               {!repairTypeRecords.some(record => /^others?$/i.test(String(record.repairType || "").trim())) && <option value="Other">Other</option>}
             </select>
           </label>
+          <BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} />
           <div>
             <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
               group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
@@ -8599,7 +8630,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
-              cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} defaultValue={editing[key]} required={key === fields[0][0]} /> :
+              cdirFieldKind(type) ? <CDirFieldInput key={key} name={key} label={label} type={type} defaultValue={editing[key]} required={key === fields[0][0] || name === "Breakdown Sub-Category"} /> :
               name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
                 <MultiTextField key={key} name={key} label={label} value={editing[key]} />
               ) : type === "multi-checkbox" ? (
@@ -8642,7 +8673,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   ]}
                   placeholder="Search employee name, login, site, or mobile" emptyText="No matching user found." />
               ) : (
-              <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
+              <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || name === "Breakdown Sub-Category" || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
                     <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
@@ -8665,7 +8696,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     {persistedUserTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     {editing[key] && !persistedUserTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
                   </select>
-                ) : <input className={name === "Users & employees" && ["login","employee"].includes(key) ? "uppercase-user-field" : ""} name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
+                ) : name === "Breakdown Sub-Category" && key === "repairType" ? <SubCategoryRepairTypeSelect initialValue={editing.repairType || ""} /> : <input className={name === "Users & employees" && ["login","employee"].includes(key) ? "uppercase-user-field" : ""} name={key} defaultValue={editing[key] || ""} required={key === fields[0][0] || name === "Breakdown Sub-Category"} />}
               </label>)
             )}
             {name === "Users & employees" && <UserTypeAccessFields record={editing} siteOptions={siteOptions} canCreateSuperAdmin={canCreateSuperAdmin} />}
@@ -9996,7 +10027,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   const delayedReasonOptions=typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
     {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header><DailyUpdatesPanel remarks={history} category={request.category} formatDateTime={formatTwelveHourDateTime} missingLabel="Not recorded" /></section>}
-    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
+    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({subCategory:String(form.get("subCategory")||"").trim(),remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required /><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
 
@@ -10358,7 +10389,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: editCategory, ...(form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility, responsibilityChangeReason: String(form.get("responsibilityChangeReason") || "").trim()} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: editCategory, subCategory: String(form.get("subCategory") || "").trim(), ...(form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility, responsibilityChangeReason: String(form.get("responsibilityChangeReason") || "").trim()} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
         finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
@@ -10378,6 +10409,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
               ))}
           </select>
         </label>
+        <BreakdownSubCategorySelect key={editCategory} category={editCategory} initialValue={editCategory===request.category ? request.subCategory : ""} required />
         <label>Door number<input value={request.door || ""} readOnly aria-readonly="true" /></label>
         <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
@@ -10456,11 +10488,12 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({subCategory: String(form.get("subCategory") || "").trim(), closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
         finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
+      <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>

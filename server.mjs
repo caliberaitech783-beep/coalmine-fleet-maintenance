@@ -149,7 +149,7 @@ import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.m
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,approvedDelayedReason,delayedReasonRequired} from './delayed-reason.mjs';
-import {BREAKDOWN_SUB_CATEGORY_DEFAULTS} from './breakdown-sub-category.mjs';
+import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_MAPPINGS,validateRequestSubCategory} from './breakdown-sub-category.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {archiveSchemaSql,previewRequestArchive,archiveRequests,restoreRequestArchive} from './request-archive.mjs';
@@ -1158,22 +1158,22 @@ async function migrate(){
         VALUES ('repair_type_defaults_seeded','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
-    // One-time seed of the Breakdown Sub-Category master with the owner's list.
-    // After this the Masters page owns the list: deleted rows stay deleted.
-    const {rows:subCategorySeed}=await client.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_defaults_seeded_v1' FOR UPDATE");
+    // Replace the legacy flat master once, preserving its snapshot and all request history.
+    const {rows:subCategorySeed}=await client.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_excel_v2' FOR UPDATE");
     if(!subCategorySeed.length){
-      for(const subCategory of BREAKDOWN_SUB_CATEGORY_DEFAULTS){
-        await client.query(`INSERT INTO master_records (master_name,record_data)
-          SELECT $1,$2::jsonb
-          WHERE NOT EXISTS (
-            SELECT 1 FROM master_records
-            WHERE master_name=$1
-              AND lower(trim(record_data->>'subCategory'))=lower(trim($3))
-          )`,['Breakdown Sub-Category',JSON.stringify({subCategory}),subCategory]);
+      await client.query(`INSERT INTO app_metadata(key,value,updated_at)
+        SELECT 'breakdown_sub_category_before_excel_v2',COALESCE(jsonb_agg(record_data),'[]'::jsonb)::text,NOW()
+        FROM master_records WHERE master_name='Breakdown Sub-Category' ON CONFLICT(key) DO NOTHING`);
+      await client.query("DELETE FROM master_records WHERE master_name='Breakdown Sub-Category'");
+      for(const mapping of BREAKDOWN_SUB_CATEGORY_MAPPINGS){
+        await client.query("INSERT INTO master_records(master_name,record_data) VALUES('Breakdown Sub-Category',$1::jsonb)",[JSON.stringify(mapping)]);
       }
-      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
-        VALUES ('breakdown_sub_category_defaults_seeded_v1','true',NOW())
-        ON CONFLICT (key) DO NOTHING`);
+      for(const repairType of new Set(BREAKDOWN_SUB_CATEGORY_MAPPINGS.map(row=>row.repairType))){
+        await client.query(`INSERT INTO master_records(master_name,record_data)
+          SELECT 'Repair type master',$1::jsonb WHERE NOT EXISTS(SELECT 1 FROM master_records
+          WHERE master_name='Repair type master' AND regexp_replace(lower(record_data->>'repairType'),'[^a-z0-9]','','g')=regexp_replace(lower($2),'[^a-z0-9]','','g'))`,[JSON.stringify({repairType}),repairType]);
+      }
+      await client.query("INSERT INTO app_metadata(key,value,updated_at) VALUES('breakdown_sub_category_excel_v2','true',NOW()) ON CONFLICT(key) DO NOTHING");
     }
     for(const delayedReason of DELAYED_REASON_DEFAULTS){
       await client.query(`INSERT INTO master_records (master_name,record_data)
@@ -7086,6 +7086,9 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
       const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
+      const storedSubCategory=await requestSubCategory(client,eligible.rows[0].category,req.body?.subCategory ?? eligible.rows[0].subCategory,true);
+      await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
+      eligible.rows[0].subCategory=storedSubCategory;
       if(oemResponsibility!==undefined&&!eligible.rows[0].acceptedAt)throw Object.assign(new Error('Accept the vehicle before assigning OEM responsibility.'),{status:400});
       if(oemResponsibility!==undefined&&eligible.rows[0].oemResponsibility&&eligible.rows[0].oemResponsibility!==oemResponsibility)throw Object.assign(new Error('Breakdown responsibility is locked and cannot be changed.'),{status:409});
       const existingToday=await client.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
@@ -7208,6 +7211,11 @@ app.get('/api/request-shifts',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+async function requestSubCategory(client,category,value,required=false){
+  const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Breakdown Sub-Category'");
+  return validateRequestSubCategory(category,value,rows.map(row=>row.record_data),{required});
+}
+
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
@@ -7236,12 +7244,13 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const {rows}=await createRequestWithVehicleLock({door,chassis,existingReference:req.body?.existingReference,existingReason:req.body?.existingReason},async(client,duplicate)=>{
     if(duplicate && displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
+    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory,req.session.assignedRole==='Maintenance User');
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory]);
     await client.query('UPDATE maintenance_requests SET request_shift=$2 WHERE reference=$1',[ref,requestShift]);
     result.rows[0].requestShift=requestShift;
     if(complaintMedia.length){
@@ -7355,6 +7364,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card (images up to 100 KB, PDF up to 5 MB).`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory ?? before.subCategory,true);
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(maintenanceMetersRequired(req.session)&&req.body?.openingMeterReading===undefined){
       normalizedOpeningMeterReading=String(openingMeterReadings[normalizedMeterType] ?? before.openingMeterReadings?.[normalizedMeterType] ?? (before.meterType===normalizedMeterType?before.openingMeterReading:'') ?? '').trim();
@@ -7376,10 +7386,10 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb,
       delayed_reason=CASE WHEN $12<>'' THEN $12 ELSE delayed_reason END,
-      oem_responsibility=COALESCE($14::text,oem_responsibility)
+      oem_responsibility=COALESCE($14::text,oem_responsibility),sub_category=$15
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}
         AND (NOT $13::boolean OR expected_completion_changed_at IS NULL)
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,oemResponsibility??null]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,oemResponsibility??null,storedSubCategory]);
     if(!result.rows.length&&revisingEtc)throw etcChangeLimitError();
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
@@ -7426,6 +7436,9 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
+    const storedSubCategory=await requestSubCategory(client,before.category,reference===primaryReference ? (req.body?.subCategory ?? before.subCategory) : before.subCategory,true);
+
+    before={...before,subCategory:storedSubCategory};
     // Each visit keeps its own opening evidence; only the on-road evidence is shared.
     const openingMeterReadings=reference===primaryReference ? (req.body?.openingMeterReadings??{}) : (before.openingMeterReadings||{});
     const openingMeterReading=reference===primaryReference ? String(req.body?.openingMeterReading||'').trim() : '';
@@ -7485,6 +7498,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
+    await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
+    rows[0].subCategory=storedSubCategory;
     if(rows.length && (status==='Running BD'||before.issues?.length)){
       const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2::timestamptz ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
       rows[0]=saved.rows[0];
@@ -7996,13 +8011,14 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
-        const maintenanceManagerList=maintenanceManager&&['Repair type master','Delayed Reason'].includes(row.master_name);
+        const maintenanceManagerList=maintenanceManager&&['Repair type master','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name);
         if(!maintenanceManagerList&&!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
+        if(row.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes&&!canViewDelayedReasons)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
+        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):['Equipment master','LMV master'].includes(row.master_name)?equipmentMasterWithDoor(row.record_data):row.record_data;
       if(managerRecord&&['Equipment master','LMV master'].includes(row.master_name)){
@@ -8040,6 +8056,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR access.'});
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
+    if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Repair type and sub-category are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
       return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
     let prepared;
@@ -8227,6 +8244,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
       return res.status(400).json({error:'A valid master record is required.'});
+    if(master==='Breakdown Sub-Category'&&(!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Repair type and sub-category are required.'});
     const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;

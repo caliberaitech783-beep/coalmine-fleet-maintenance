@@ -45,7 +45,7 @@ function render(name, componentName) {
       : typeof initial === "function" ? initial() : initial;
     return [value, () => {}];
   };
-  const scope = {
+  const scope = { SubCategoryRepairTypeSelect: () => null,
     React, useState, useEffect: () => {}, useRef: value => ({current: value}), masterFields,
     userPrivilegeFields: [], userSubmenuFields: [], userAccessOptions: {},
     privilegeAccessOptions: ["Super User", "Mobile User"], mobileUserRoleOptions: ["Maintenance User"],

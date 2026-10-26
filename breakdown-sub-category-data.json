@@ -1,0 +1,490 @@
+[
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Engine"
+  },
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Transmission / Gearbox"
+  },
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Differential"
+  },
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Axle"
+  },
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Clutch"
+  },
+  {
+    "repairType": "DRIVELINE",
+    "subCategory": "Flywheel"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Oil Pump"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Turbocharger"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "EGR System"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Engine ECU/ECM"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Engine Sensors"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Fuel Tank"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Fuel Pump"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Fuel Injection Pump"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Injector"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Fuel Lines Pipe"
+  },
+  {
+    "repairType": "FUEL SYSTEM",
+    "subCategory": "Fuel Hoses"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Pump"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Travel Unit"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Swing Unit"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Fan Motor"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Cylinder"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Control Valve"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Oil Tank"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Oil Cooler"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Hose/Pipe"
+  },
+  {
+    "repairType": "HYDRAULIC SYSTEM",
+    "subCategory": "Hydraulic Joystick"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Battery"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Alternator"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Starter Motor"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Wiring Harness"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "ECU/ECM/VECU"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Display Monitor"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Instrument Cluster"
+  },
+  {
+    "repairType": "ELECTRICAL",
+    "subCategory": "Sensors"
+  },
+  {
+    "repairType": "COOLING SYSTEM",
+    "subCategory": "Radiator"
+  },
+  {
+    "repairType": "COOLING SYSTEM",
+    "subCategory": "Oil Cooler"
+  },
+  {
+    "repairType": "COOLING SYSTEM",
+    "subCategory": "Charge Air Cooler"
+  },
+  {
+    "repairType": "COOLING SYSTEM",
+    "subCategory": "Intercooler"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Water Pump"
+  },
+  {
+    "repairType": "ENGINE",
+    "subCategory": "Thermostat"
+  },
+  {
+    "repairType": "COOLING SYSTEM",
+    "subCategory": "Coolant / Expansion Tank"
+  },
+  {
+    "repairType": "EXHAUST SYSTEM",
+    "subCategory": "Air Cleaner"
+  },
+  {
+    "repairType": "EXHAUST SYSTEM",
+    "subCategory": "Air Filter"
+  },
+  {
+    "repairType": "UNDERCARRIAGE / TRACK SYSTEM",
+    "subCategory": "Track Chain"
+  },
+  {
+    "repairType": "UNDERCARRIAGE / TRACK SYSTEM",
+    "subCategory": "Track Roller"
+  },
+  {
+    "repairType": "UNDERCARRIAGE / TRACK SYSTEM",
+    "subCategory": "IDLER"
+  },
+  {
+    "repairType": "UNDERCARRIAGE / TRACK SYSTEM",
+    "subCategory": "Sprocket Segments"
+  },
+  {
+    "repairType": "UNDERCARRIAGE / TRACK SYSTEM",
+    "subCategory": "Track Adjuster/Recoil Spring"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Boom"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Arm/Stick"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Bucket"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "H Link"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Bucket Link Pin"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Bush"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Pin"
+  },
+  {
+    "repairType": "ATTACHMENT",
+    "subCategory": "Rock Breaker"
+  },
+  {
+    "repairType": "GET",
+    "subCategory": "Bucket Tooth"
+  },
+  {
+    "repairType": "GET",
+    "subCategory": "Tooth Adapter"
+  },
+  {
+    "repairType": "GET",
+    "subCategory": "Side Cutter"
+  },
+  {
+    "repairType": "GET",
+    "subCategory": "Blade"
+  },
+  {
+    "repairType": "SUPER STRUCTURE",
+    "subCategory": "Chassis"
+  },
+  {
+    "repairType": "SUPER STRUCTURE",
+    "subCategory": "Frame"
+  },
+  {
+    "repairType": "SUPER STRUCTURE",
+    "subCategory": "Sub Frame"
+  },
+  {
+    "repairType": "SUPER STRUCTURE",
+    "subCategory": "Structural Damage"
+  },
+  {
+    "repairType": "SUPER STRUCTURE",
+    "subCategory": "Dump Body"
+  },
+  {
+    "repairType": "STEERING SYSTEM",
+    "subCategory": "Steering Pump"
+  },
+  {
+    "repairType": "STEERING SYSTEM",
+    "subCategory": "Steering Cylinder"
+  },
+  {
+    "repairType": "STEERING SYSTEM",
+    "subCategory": "Steering Gearbox"
+  },
+  {
+    "repairType": "STEERING SYSTEM",
+    "subCategory": "Steering Column"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Service & Parking Brake"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Brake Booster"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Brake Shoe/Pad/Disc"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Brake Drum"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Brake Caliper"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Brake Hose/Pipe"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Air Compressor"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Air Dryer"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "Air Tank/Drain Valve"
+  },
+  {
+    "repairType": "BRAKING SYSTEM",
+    "subCategory": "ABS / EBS"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Leaf Spring"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Hollow Spring"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Suspension Pin/Bush/Bracket"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Shackle"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "U-Bolt"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Torque Rod / V Rod"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Stabilizer Bar"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Shock Absorber"
+  },
+  {
+    "repairType": "SUSPENSION SYSTEM",
+    "subCategory": "Cradel Bearing"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Tyre"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Rim"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Disc"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Stud"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Nut"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Hub"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Tyre Valve"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Tyre Pressure"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Tyre Puncture"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Tyre Cut"
+  },
+  {
+    "repairType": "TYRE SYSTEM",
+    "subCategory": "Wheel Alignment"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Compressor"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Condenser"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Evaporator"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Blower Motor"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Fan"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Expansion Valve"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Receiver Drier"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Hose/Pipe"
+  },
+  {
+    "repairType": "AC SYSTEM",
+    "subCategory": "AC Gas"
+  },
+  {
+    "repairType": "LUBRICATION SYSTEM",
+    "subCategory": "Centralized Lubrication"
+  },
+  {
+    "repairType": "LUBRICATION SYSTEM",
+    "subCategory": "Auto Greasing System"
+  },
+  {
+    "repairType": "LUBRICATION SYSTEM",
+    "subCategory": "Lubrication Pump"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Drill Motor"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Drill Head"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Rotary Head"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Feed System"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Drill Rod/Drill Bit/Hammer"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Dust Collector"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Air End"
+  },
+  {
+    "repairType": "DRILLING SYSTEM",
+    "subCategory": "Water Injection System"
+  },
+  {
+    "repairType": "WGM",
+    "subCategory": "WGM"
+  },
+  {
+    "repairType": "other",
+    "subCategory": "custom"
+  }
+]

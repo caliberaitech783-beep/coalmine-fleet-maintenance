@@ -19,7 +19,7 @@ const production={role:'normal',assignedRole:'Production User',name:'Stupal Moon
 async function create({user={site:'Sasti OC'},session=production,body={}}={}){
   let handlers;
   const calls=[],followups=[];
-  const context={
+  const context={ requestSubCategory: async (_client,_category,value)=>String(value||""),
     requestShiftLabel,setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},readSession:async req=>req.testSession,
