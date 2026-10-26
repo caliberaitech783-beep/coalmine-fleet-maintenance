@@ -55,6 +55,7 @@ function fixture(name, overrides = {}) {
     arrivalRedFlagRequired: () => false, onRequireArrivalFlag: undefined, etcChanged: false, etcDelayed: false,
     canEditResponsibility: false, meterType: "HMR", openingMeterFile: image, tripCardFile: image,
     meterReadingsFromForm: () => ({HMR: "100"}), firstTripDone: true,
+    addonEligible:false,addonDraft:{current:null},addonDecision:{current:false},setAddonEditing(){},setAddonPrompt(){},targetReferences:[request.ref],
     linkedTickets: [request], ticketDecision: {current: true}, idleDecision: {current: true},
     status: "Closed", ideal: false, idleReason: "", turnaroundTime: "1h", storedDelayedReason: "",
     requestStartParts: () => ({date: "2026-10-19", time: "10:00:00"}),

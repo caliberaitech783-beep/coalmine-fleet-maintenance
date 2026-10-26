@@ -307,7 +307,7 @@ test('Hindi audio-only fallback does not insert English into a required field', 
 });
 
 const textContent = node => Array.isArray(node) ? node.map(textContent).join('') : React.isValidElement(node) ? textContent(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
-function closeHarness(request = {}) {
+function closeHarness(request = {}, extraProps = {}) {
   const saved = [], alerts = [];
   const app = harness(closeCode, 'CloseRequestForm', {
     ...equipment,
@@ -319,7 +319,7 @@ function closeHarness(request = {}) {
   });
   return {
     saved, alerts,
-    render() { return app.render({ request: { oemResponsibility: 'OEM', ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value) }); },
+    render() { return app.render({ request: { oemResponsibility: 'OEM', ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value), ...extraProps }); },
     async submit(tree) {
       all(tree, node => node.type === 'button' && /^Close request/.test(textContent(node)))[0]?.props.onClick();
       await byType(tree, 'form').props.onSubmit({ preventDefault() {}, currentTarget: { maintenanceWork: 'Repair completed', closingDate: '2026-09-08', closingTime: '18:00:00' } });
@@ -384,4 +384,50 @@ test('Running BD returns the vehicle to MIS without closing or asking for Idle',
  assert.equal(app.saved[0].status,'Running BD');
  assert.equal(app.saved[0].ideal,false);
  assert.equal(idleRadio(app.render(),'yes'),undefined);
+});
+
+
+for(const category of ['WGM','Schedule Service','Scheduled Service'])test(category+': Maintenance add-on prompt excludes the original repair type and saves with closure',async()=>{
+  const app=closeHarness({category,door:'D17',site:'Mine'}, {allowAddon:true,repairTypesLoaded:true,repairTypeRecords:[{repairType:'WGM'},{repairType:'Schedule Service'},{repairType:'Scheduled Service'},{repairType:'Engine'}]});
+  await app.submit(app.render());
+  let tree=app.render();
+  assert.match(textContent(tree),/Create another maintenance request for this vehicle/);
+  assert.equal(app.saved.length,0);
+  const button=(label)=>all(tree,node=>node.type==='button' && textContent(node)===label)[0];
+  button('Yes — add-on request').props.onClick();tree=app.render();
+  const select=all(tree,node=>node.type==='select' && node.props.name==='category')[0];
+  const options=all(select,node=>node.type==='option').map(node=>node.props.value);
+  const key=value=>String(value).replace(/[^a-z]/gi,'').toLowerCase().replace('scheduledservice','scheduleservice');
+  assert.ok(!options.some(value=>key(value)===key(category)));
+  assert.ok(options.includes('Engine'));
+  select.props.onChange({target:{value:'Engine'}});tree=app.render();
+  const forms=all(tree,node=>node.type==='form');
+  await forms.at(-1).props.onSubmit({preventDefault(){},stopPropagation(){},currentTarget:{category:'Engine',subCategory:'Water Pump',complaint:'Coolant leak'}});
+  await app.submit(app.render());
+  assert.equal(app.saved.length,1);assert.equal(app.saved[0].addonRequest.category,'Engine');assert.equal(app.saved[0].addonRequest.complaint,'Coolant leak');assert.equal(app.saved[0].ideal,false);
+});
+test('cancelling an add-on keeps the original unsaved; No retains the normal Idle decision',async()=>{
+  const app=closeHarness({category:'WGM'},{allowAddon:true});await app.submit(app.render());let tree=app.render();
+  all(tree,node=>node.type==='button'&&textContent(node)==='Yes — add-on request')[0].props.onClick();tree=app.render();
+  all(tree,node=>node.type==='button'&&textContent(node)==='Cancel add-on')[0].props.onClick();
+  assert.equal(app.saved.length,0);await app.submit(app.render());tree=app.render();
+  all(tree,node=>node.type==='button'&&textContent(node)==='No — close normally')[0].props.onClick();
+  await app.submit(app.render());tree=app.render();assert.match(textContent(tree),/Choose whether the vehicle should now be Idle/);assert.equal(app.saved.length,0);
+});
+test('other repairs and users keep the existing closing flow',async()=>{
+  for(const [category,allowAddon] of [['Engine',true],['WGM',false]]){
+    const app=closeHarness({category},{allowAddon});await app.submit(app.render());const tree=app.render();
+    assert.doesNotMatch(textContent(tree),/Do you want to create an add-on/);assert.match(textContent(tree),/Choose whether the vehicle should now be Idle/);
+  }
+});
+
+test('failed combined save retains the add-on draft and leaves the original unsaved',async()=>{
+  const app=closeHarness({category:'WGM'}, {allowAddon:true,repairTypesLoaded:true,repairTypeRecords:[{repairType:'Engine'}],onSave:async()=>{throw Error('Save failed; retry');}});
+  await app.submit(app.render());let tree=app.render();
+  all(tree,node=>node.type==='button'&&textContent(node)==='Yes — add-on request')[0].props.onClick();tree=app.render();
+  all(tree,node=>node.type==='select'&&node.props.name==='category')[0].props.onChange({target:{value:'Engine'}});tree=app.render();
+  await all(tree,node=>node.type==='form').at(-1).props.onSubmit({preventDefault(){},stopPropagation(){},currentTarget:{category:'Engine',subCategory:'Water Pump',complaint:'Coolant leak'}});
+  await app.submit(app.render());tree=app.render();
+  assert.match(textContent(tree),/Save failed; retry/);assert.equal(app.saved.length,0);
+  assert.equal(all(tree,node=>node.type==='textarea'&&node.props.name==='complaint')[0].props.defaultValue,'Coolant leak');
 });

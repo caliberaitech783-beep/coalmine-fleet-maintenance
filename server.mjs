@@ -149,6 +149,7 @@ import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.m
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,approvedDelayedReason,delayedReasonRequired} from './delayed-reason.mjs';
+import {createMaintenanceAddon} from './maintenance-addon.mjs';
 import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_MAPPINGS,validateRequestSubCategory,requestRequiresSubCategory,validateExistingRequestSubCategory} from './breakdown-sub-category.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
@@ -7010,7 +7011,7 @@ async function withMaintenanceArrivalGuard(req,reference,write,sharedClient=null
     if(!sharedClient)await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,complaint,oem_responsibility AS "oemResponsibility",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
+    const {rows}=await client.query(`SELECT site,complaint,oem_responsibility AS "oemResponsibility",category,sub_category AS "subCategory",created_at AS "createdAt",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -7048,8 +7049,12 @@ async function withMaintenanceArrivalGuard(req,reference,write,sharedClient=null
   finally{if(!sharedClient)client.release()}
 }
 
-async function withLinkedMaintenanceSelection(req,reference,write){
-  if(req.body?.targetReferences===undefined)return withMaintenanceArrivalGuard(req,reference,write);
+async function withLinkedMaintenanceSelection(req,reference,write,afterWrite=null){
+  if(req.body?.targetReferences===undefined)return withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    const result=await write(client,before,reference);
+    if(afterWrite)result.addonRequest=await afterWrite(client,result.rows);
+    return result;
+  });
   const selected=req.body.targetReferences;
   if(!Array.isArray(selected)||!selected.length||selected.some(value=>typeof value!=='string')||selected.length>100)throw Object.assign(new Error('Select at least one linked ticket.'),{status:400});
   const client=await pool.connect();
@@ -7062,8 +7067,10 @@ async function withLinkedMaintenanceSelection(req,reference,write){
     if(references.some(value=>!allowed.has(value)))throw Object.assign(new Error('Select only tickets linked to this request.'),{status:400});
     const results=[];
     for(const target of references)results.push(await withMaintenanceArrivalGuard(req,target,write,client));
+    const rows=results.flatMap(result=>result.rows);
+    const addonRequest=afterWrite?await afterWrite(client,rows):undefined;
     await client.query('COMMIT');
-    return {rows:results.flatMap(result=>result.rows),delayedClosure:results.some(result=>result.delayedClosure)};
+    return {rows,addonRequest,delayedClosure:results.some(result=>result.delayedClosure)};
   }catch(error){await client.query('ROLLBACK');throw error}
   finally{client.release()}
 }
@@ -7435,9 +7442,14 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
       if(!reportScopeIncludesSite(assignedScope,existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
     if(maintenanceManagerSession(req.session)&&!userManagesSite(await currentUserRecord(req.session),existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance sites.'});
+    if(req.body?.addonRequest && existingRows[0].status==='Closed'){
+      const addon=(await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1`,[req.body.addonRequest.ref])).rows[0];
+      if(addon && (addon.linkedRequestReferences||[]).includes(reference) && (existingRows[0].linkedRequestReferences||[]).includes(addon.ref))return res.json({...existingRows[0],addonRequest:addon});
+      return res.status(409).json({error:'The original request is already closed. Refresh before creating another request.'});
+    }
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
-    const {rows,delayedClosure}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
+    const {rows,delayedClosure,addonRequest}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
     const storedSubCategory=await requestSubCategory(client,before.category,reference===primaryReference ? (req.body?.subCategory ?? before.subCategory) : before.subCategory,true,before);
 
     before={...before,subCategory:storedSubCategory};
@@ -7509,7 +7521,24 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
     }
     const timelineEvents=ideal?['closedAt','idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
     return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:ideal||status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:ideal||status==='Closed'?['closedAt']:[]};
-    });
+    },req.body?.addonRequest ? async(client,closedRows)=>{
+      const original=closedRows.find(row=>row.ref===primaryReference);
+      if(!original)throw Object.assign(new Error('Select the original request before creating its add-on.'),{status:400});
+      return createMaintenanceAddon(client,req,original,req.body.addonRequest,{requestSubCategory,activeRequestConflict,requestShiftLabel,requestProjection,recordRequestTimeline,parseRequestTimelineTimestamp});
+    } : null);
+    if(addonRequest){
+      setImmediate(async()=>{
+        try{
+          await sendRequestEventReports('opened',addonRequest);
+          const recipients=await requestStakeholderLogins(pool,{site:addonRequest.site,requesterLogin:addonRequest.requesterLogin});
+          const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'opened',site:addonRequest.site});
+          const openedAt=requestNotificationTime(parseRequestTimelineTimestamp(addonRequest.start)),openedBy=req.session.name||'Maintenance User';
+          await addTicketNotificationsBestEffort(pool,recipients,addonRequest.ref,`Add-on request ${addonRequest.ref} opened for ${requestEquipmentNotificationDetails(addonRequest)} after closing ${primaryReference}. Breakdown: ${addonRequest.category}. Date & time: ${openedAt}. Location: ${addonRequest.site}. User: ${openedBy}.`,
+            {templateKey:'requestOpened',parameters:[addonRequest.ref,addonRequest.site,addonRequest.equipmentGroup||addonRequest.equipment||'Not available',addonRequest.door||'Not available',addonRequest.category,openedBy,openedAt,'Not set',workflowRequestLink(addonRequest.ref,publicBaseUrl())],context:{request:addonRequest}},
+            {whatsapp:true,whatsappRecipients,workflowType:'opened',site:addonRequest.site});
+        }catch(error){console.error('Add-on opening notifications failed',error);}
+      });
+    }
     for(const savedRow of rows){
     const rows=[savedRow];
     if(ideal){
@@ -7552,7 +7581,7 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
       }
     }
     }
-    res.json(req.body?.targetReferences ? {updatedRequests:rows} : rows[0]);
+    res.json(req.body?.targetReferences ? {updatedRequests:rows,...(addonRequest?{addonRequest}:{})} : {...rows[0],...(addonRequest?{addonRequest}:{})});
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 

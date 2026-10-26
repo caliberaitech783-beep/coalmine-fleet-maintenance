@@ -10439,7 +10439,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   </Modal>;
 }
 
-function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [], close, onSave, requireMeters = false }) {
+function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [], close, onSave, requireMeters = false, allowAddon = false, repairTypeRecords = [], repairTypesLoaded = false }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const displayDateTime = (value) => {
     if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
@@ -10471,12 +10471,22 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
   const [idlePrompt,setIdlePrompt] = useState(false);
   const idleDecision = useRef(false);
   const closeForm = useRef(null);
+  const [addonPrompt,setAddonPrompt]=useState(false),[addonEditing,setAddonEditing]=useState(false),[addonCategory,setAddonCategory]=useState('');
+  const addonDecision=useRef(false),addonDraft=useRef(null);
+  const repairTypeKey=value=>{const key=String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();return ['scheduleservice','scheduledservice'].includes(key)?'scheduledservice':key;};
+  const addonEligible=allowAddon && ['wgm','scheduledservice'].includes(repairTypeKey(request.category));
+  const addonOptions=[...new Set(repairTypeRecords.map(row=>String(row.repairType||'').trim()).filter(value=>value && repairTypeKey(value)!==repairTypeKey(request.category)))];
+  const cancelAddon=()=>{if(!submitLock.current){setAddonPrompt(false);setAddonEditing(false);setAddonCategory('');addonDecision.current=false;addonDraft.current=null;}};
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
     <form ref={closeForm} className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
       if(linkedTickets.length>1 && !ticketDecision.current){setTicketPrompt(true);return;}
-      if (!idleDecision.current && status === "Closed") {
+      if(addonEligible && status==='Closed' && targetReferences.includes(request.ref) && !addonDecision.current){
+        const closingNow=requestStartParts('');setClosingDate(closingNow.date);setTime(closingNow.time);
+        setAddonPrompt(true);return;
+      }
+      if (!addonDraft.current && !idleDecision.current && status === "Closed") {
         const onRoadTime = requestStartParts("");
         setClosingDate(onRoadTime.date);
         setTime(onRoadTime.time);
@@ -10496,9 +10506,9 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({subCategory: String(form.get("subCategory") || "").trim(), closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({...(addonDraft.current?{addonRequest:addonDraft.current}:{}),subCategory: String(form.get("subCategory") || "").trim(), closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal: addonDraft.current?false:ideal, idleReason: !addonDraft.current && ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
         finishSubmission({ok: true});
-      } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
+      } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); if(addonDraft.current){setAddonEditing(true);setAddonPrompt(true);} }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
@@ -10580,6 +10590,29 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       <footer><button type="button" disabled={submitting} onClick={() => { setIdlePrompt(false); idleDecision.current=false; }}>Back</button><button type="button" className="primary" disabled={submitting} onClick={() => { idleDecision.current=true; closeForm.current?.requestSubmit(); }}>{submitting ? "Saving…" : ideal ? "Close request and mark vehicle Idle" : "Close request — On road"}</button></footer>
   </Modal>}
     </form>
+    {addonPrompt && <Modal title={addonEditing?'Create add-on request':'Do you want to create an add-on request?'} close={cancelAddon}>
+      <p>{request.category} · {request.ref} · Vehicle {request.door || request.chassis}</p>
+      {!addonEditing ? <>
+        <p>Create another maintenance request for this vehicle, or continue closing this request.</p>
+        <footer><button type="button" onClick={cancelAddon}>Back</button><button type="button" onClick={()=>{addonDraft.current=null;addonDecision.current=true;setAddonPrompt(false);closeForm.current?.requestSubmit();}}>No — close normally</button><button type="button" className="primary" onClick={()=>{setIdeal(false);setAddonEditing(true);}}>Yes — add-on request</button></footer>
+      </> : <form className="form" onSubmit={event=>{
+        event.preventDefault();event.stopPropagation();
+        if(submitLock.current)return;
+        const form=new FormData(event.currentTarget),category=String(form.get('category')||'').trim(),subCategory=String(form.get('subCategory')||'').trim(),complaint=String(form.get('complaint')||'').trim();
+        if(!addonOptions.includes(category)||!subCategory||!complaint){setFormError('Select a different repair type, its sub-category and describe the new complaint.');return;}
+        addonDraft.current={ref:addonDraft.current?.ref || ('REQ-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)),category,subCategory,complaint};
+        addonDecision.current=true;setAddonPrompt(false);setFormError('');closeForm.current?.requestSubmit();
+      }}>
+        <label>Vehicle<input value={request.door || request.chassis || ''} readOnly /></label>
+        <label>Site<input value={request.site || ''} readOnly /></label>
+        <label>Repair type *<select name="category" required value={addonCategory} disabled={!repairTypesLoaded || submitting} onChange={event=>setAddonCategory(event.target.value)}><option value="">{repairTypesLoaded?'Select repair type':'Loading repair types…'}</option>{addonOptions.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+        <BreakdownSubCategorySelect key={addonCategory} category={addonCategory} initialValue={addonDraft.current?.subCategory || ''} required />
+        <label>New complaint *<textarea name="complaint" required defaultValue={addonDraft.current?.complaint || ''} disabled={submitting} /></label>
+        <p>The original request closes only when the add-on is saved. The vehicle will remain under maintenance.</p>
+        {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+        <footer><button type="button" disabled={submitting} onClick={cancelAddon}>Cancel add-on</button><button className="primary" disabled={submitting || !repairTypesLoaded || !addonOptions.length}>{submitting?'Saving…':'Create add-on and close request'}</button></footer>
+      </form>}
+    </Modal>}
   </Modal>;
 }
 
@@ -11605,7 +11638,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const closeRequest = async (payload) => {
     const selected=payload.targetReferences ? requestRows.filter(row=>payload.targetReferences.includes(row.ref)) : [closing];
     if(selected.some(row=>requireArrivalReason(row)))return;
-    try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); setCreatedRequestRef("Vehicle Has Been On road"); }
+    try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); setCreatedRequestRef(payload.addonRequest?"Add-on request created; previous request closed":"Vehicle Has Been On road"); }
     catch (error) { if (!requireArrivalReason(closing, error)) throw error; }
   };
   const saveDailyRemark = async (payload) => {
@@ -11718,7 +11751,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm requireMeters={maintenanceMetersRequired(session)} onAddDailyRemark={onAddDailyRemark} request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
-    {closing && <CloseRequestForm requireMeters={maintenanceMetersRequired(session)} request={closing} linkedRequests={requestRows} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
+    {closing && <CloseRequestForm allowAddon={isMaintenance} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} requireMeters={maintenanceMetersRequired(session)} request={closing} linkedRequests={requestRows} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} equipmentRecords={equipmentRecords} close={() => setVerifying(null)} onSave={verifyRequest} />}
     {productionFirstTrip && <ProductionFirstTripForm request={productionFirstTripSourceRows.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}
     {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
@@ -12085,12 +12118,14 @@ function App() {
       const confirmUncertainWrite = async () => {
         try {
           const refreshed = await loadRequests();
+          const addon=payload.addonRequest?refreshed.find(row=>row.ref===payload.addonRequest.ref && (row.linkedRequestReferences||[]).includes(reference)):null;
+          if(payload.addonRequest&&!addon)return null;
           if(Array.isArray(payload.targetReferences)){
             const updated=payload.targetReferences.map(ref=>refreshed.find(row=>row.ref===ref));
-            return updated.every((row,index)=>requestWriteOutcomeConfirmed(requests.find(before=>before.ref===payload.targetReferences[index])||{ref:payload.targetReferences[index]},row,action,payload)) ? {updatedRequests:updated} : null;
+            return updated.every((row,index)=>requestWriteOutcomeConfirmed(requests.find(before=>before.ref===payload.targetReferences[index])||{ref:payload.targetReferences[index]},row,action,payload)) ? {updatedRequests:updated,...(addon?{addonRequest:addon}:{})} : null;
           }
           const saved = refreshed.find((row) => row.ref === reference);
-          return requestWriteOutcomeConfirmed(before, saved, action, payload) ? saved : null;
+          return requestWriteOutcomeConfirmed(before, saved, action, payload) ? {...saved,...(addon?{addonRequest:addon}:{})} : null;
         } catch { return null; }
       };
       const acceptConfirmedWrite = (saved) => {
@@ -12129,7 +12164,10 @@ function App() {
         throw error;
       }
       requestLoadSequence.current += 1;
-      setRequests((current) => current.map((row) => Array.isArray(saved.updatedRequests) ? saved.updatedRequests.find(updated=>updated.ref===row.ref)||row : row.ref === reference ? saved : row));
+      setRequests((current) => {
+        const updated=current.map((row) => Array.isArray(saved.updatedRequests) ? saved.updatedRequests.find(updated=>updated.ref===row.ref)||row : row.ref === reference ? saved : row);
+        return saved.addonRequest && !updated.some(row=>row.ref===saved.addonRequest.ref)?[saved.addonRequest,...updated]:updated;
+      });
       notifyRequestChange(window);
       return saved;
     }),

@@ -104,6 +104,6 @@ test("rapid ticket filters and request refreshes cannot apply stale responses", 
   assert.match(app, /watchRequestRefresh\(loadRequests, \{ win: window, doc: document, initial: true \}\)/);
   const mutations = app.slice(app.indexOf("addRequest = async"), app.indexOf("const completeLogin"));
   assert.ok((mutations.match(/requestLoadSequence\.current \+= 1;/g) || []).length >= 6);
-  assert.match(mutations, /requestLoadSequence\.current \+= 1;\s*setRequests\(\(current\) => current\.map/);
+  assert.match(mutations, /requestLoadSequence\.current \+= 1;\s*setRequests\(\(current\) => \{\s*const updated=current\.map/);
   assert.match(mutations, /requestLoadSequence\.current \+= 1;\s*setRequests\(\(current\) => current\.filter/);
 });

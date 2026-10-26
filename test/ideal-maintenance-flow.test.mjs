@@ -29,7 +29,7 @@ test("Idle requests require a reason and assigned-site manager approval before M
   assert.match(client,/onUpdateRequest\(row.ref, \{\}, "ideal-onroad"\)/);
   assert.match(client,/an assigned manager or Maintenance User approves Make on road/);
   assert.match(client,/name="idealChoice"/);
-  assert.match(client,/status, ideal, idleReason:/);
+  assert.match(client,/status, ideal: addonDraft\.current\?false:ideal, idleReason:/);
   assert.match(client,/Idle reason \*/);
   assert.match(client,/<option>No driver<\/option><option>No work<\/option>/);
   assert.match(client,/row\.idleReason \|\| "—"/);

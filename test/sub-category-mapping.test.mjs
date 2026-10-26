@@ -146,3 +146,8 @@ test('legacy requests preserve missing and obsolete sub-categories through closu
   const linked=[{createdAt:'2026-10-25 17:00:00',subCategory:'Old fault'},current];
   assert.deepEqual(linked.map(row=>validateExistingRequestSubCategory(row,'DRIVELINE',row.subCategory||'Engine',mappings)),['Old fault','Engine']);
 });
+
+test('Schedule Service and Scheduled Service share the approved component options',()=>{
+  assert.deepEqual(subCategoriesForRepairType('Schedule Service',mappings),subCategoriesForRepairType('Scheduled Service',mappings));
+  assert.ok(subCategoriesForRepairType('Schedule Service',mappings).length>0);
+});

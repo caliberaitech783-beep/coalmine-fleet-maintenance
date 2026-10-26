@@ -164,8 +164,8 @@ test('provider suspension, timeouts and a pause during migration never trigger a
 test('saved records are attached at every event call site including reminders and daily updates',()=>{
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const eventCalls=source.split('\n').filter(line=>line.includes("{templateKey:'request")&&line.includes('parameters:'));
-  assert.equal(eventCalls.length,7);
-  for(const line of eventCalls)assert.match(line,/context:\{request(?::rows\[0\])?\}/);
+  assert.equal(eventCalls.length,8);
+  for(const line of eventCalls)assert.match(line,/context:\{request(?::rows\[0\]|:addonRequest)?\}/);
   assert.match(source,/templateKey:'dailyUpdate'[^\n]*context:\{request:eligible.rows\[0\],remark,delayReason/);
   assert.match(source,/recipient:usersByLogin.get\(login\)/);
   assert.match(source,/site:siteAccess\|\|'All permitted sites'/);

@@ -88,7 +88,8 @@ test("edit and close submissions send both readings and keep the legacy primary 
   for (const [name, stage] of [["RequestEditForm", "opening"], ["CloseRequestForm", "closing"]]) {
     let saved;
     const element = forms[name]({request: tipper, onSave: value => { saved = value; }});
-    await element.props.children.props.onSubmit({preventDefault() {}, currentTarget: {oemResponsibility: "OEM", [`${stage}HMRReading`]: "12.25", [`${stage}KMRReading`]: "1001"}});
+    const form=React.Children.toArray(element.props.children).find(child=>child.type==='form');
+    await form.props.onSubmit({preventDefault() {}, currentTarget: {oemResponsibility: "OEM", [`${stage}HMRReading`]: "12.25", [`${stage}KMRReading`]: "1001"}});
     assert.deepEqual(saved[`${stage}MeterReadings`], {HMR: "12.25", KMR: "1001"});
     assert.equal(saved[`${stage}MeterReading`], "1001");
     assert.equal(saved[`${stage}MeterFile`], "", "an existing file does not require another upload");

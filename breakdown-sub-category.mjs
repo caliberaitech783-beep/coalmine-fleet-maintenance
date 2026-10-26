@@ -29,6 +29,7 @@ const repairTypeAliases=new Map([
   ['AC SYSTEM','AC','AIR CONDITIONING','AIR CONDITIONING SYSTEM','AIR CONDITIONER'],
   ['LUBRICATION SYSTEM','LUBRICATION'],
   ['DRILLING SYSTEM','DRILLING'],
+  ['SCHEDULED SERVICE','SCHEDULE SERVICE'],
   ['other','OTHERS'],
 ].flatMap(group=>group.map(label=>[typeToken(label),typeToken(group[0])])));
 const normalizeType=value=>repairTypeAliases.get(typeToken(value))||typeToken(value);
