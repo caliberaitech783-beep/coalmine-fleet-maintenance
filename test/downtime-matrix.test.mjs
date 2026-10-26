@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {downtimeMatrix} from '../src/downtime-matrix.mjs';
-import {downtimeMatrixRange} from '../src/downtime-matrix.mjs';
+import {downtimeMatrixRange,customBreakdownRange,downtimeMatrixDetails} from '../src/downtime-matrix.mjs';
+test('custom report includes only openings in the selected overnight window',()=>{
+  const records=[
+    {ref:'old-open',door:'S1',site:'Sasti OC',start:'2026-10-24T21:59:59'},
+    {ref:'old-closed',door:'S1',site:'Sasti OC',start:'2026-10-24T20:00',closedAt:'2026-10-24T23:00'},
+    {ref:'at-start',door:'S1',site:'Sasti OC',start:'2026-10-24T22:00',closedAt:'2026-10-24T22:30'},
+    {ref:'new-open',door:'S1',site:'Sasti OC',start:'2026-10-24T23:00'},
+    {ref:'at-end',door:'S1',site:'Sasti OC',start:'2026-10-25T00:00'},
+    {ref:'after',door:'S1',site:'Sasti OC',start:'2026-10-25T01:00'},
+  ];
+  const rows=customBreakdownRange(records,[],'2026-10-24T22:00','2026-10-25T00:00',Date.parse('2026-10-25T02:00+05:30'));
+  const details=downtimeMatrixDetails(rows);
+  assert.deepEqual(details.map(row=>row.ref),['at-start','new-open']);
+  assert.deepEqual(details.map(row=>row.eventHours),[0.5,1]);
+  assert.equal(rows[0].available,0.5);
+  assert.deepEqual(customBreakdownRange(records.slice(0,2),[],'2026-10-24T22:00','2026-10-25T00:00',Date.parse('2026-10-25T02:00+05:30')),[]);
+});
 test('range counts overlapping events once and clips to custom multi-day period',()=>{
   const now=Date.parse('2026-10-15T00:00:00+05:30');
   const records=[

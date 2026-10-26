@@ -47,6 +47,16 @@ export function downtimeMatrixRange(requests,equipment,fromValue,toValue,now=Dat
   }).sort((a,b)=>a.site.localeCompare(b.site)||a.door.localeCompare(b.door,undefined,{numeric:true}));
 }
 
+// Custom reports list occurrences, rather than carrying earlier downtime forward.
+export function customBreakdownRange(requests,equipment,fromValue,toValue,now=Date.now()) {
+  const start=epoch(fromValue),end=epoch(toValue);
+  const occurrences=requests.filter(row=>{
+    const opened=epoch(row.start || row.startedAt || row.createdAt);
+    return Number.isFinite(opened) && opened>=start && opened<end;
+  });
+  return downtimeMatrixRange(occurrences,equipment,fromValue,toValue,now);
+}
+
 export function downtimeMatrixDetails(rows) {
   return rows.flatMap(row => (row.events.length ? row.events : [null]).map((event,index)=>({
     ...row, ref:event?.ref || '—', occurrence:event ? index+1 : '—',

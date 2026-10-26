@@ -1,7 +1,7 @@
 import React, {useMemo,useState} from 'react';
 import {REGION_DATA} from '../region-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
-import {downtimeMatrixRange,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes} from './downtime-matrix.mjs';
+import {customBreakdownRange,downtimeToday,downtimeMatrixDetails,downtimeHoursMinutes} from './downtime-matrix.mjs';
 import {parseRequestTimelineTimestamp} from '../request-timeline.mjs';
 import {formatDisplayDateTime} from '../date-time-format.mjs';
 import {TwelveHourTimeInput} from './twelve-hour-input.jsx';
@@ -40,8 +40,8 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
   };
   const [site,setSite] = useState('');
   const [zone,setZone] = useState('all');
-  const rows = useMemo(()=>downtimeMatrixRange(requests,equipment,from,end),[requests,equipment,from,end]);
-  const sites = [...new Set(rows.map(row=>row.site))].filter(name=>zone==='all'||REGION_DATA.find(region=>region.code===zone)?.sites.some(value=>canonicalSiteName(value)===canonicalSiteName(name))).sort();
+  const rows = useMemo(()=>customBreakdownRange(requests,equipment,from,end),[requests,equipment,from,end]);
+  const sites = [...new Set([...equipment,...requests].map(row=>row.reportSite || row.site || row.currentLocation || row.location).filter(Boolean))].filter(name=>zone==='all'||REGION_DATA.find(region=>region.code===zone)?.sites.some(value=>canonicalSiteName(value)===canonicalSiteName(name))).sort();
   const selectedSite = sites.includes(site) ? site : sites[0] || '';
   const visible = rows.filter(row=>row.site===selectedSite);
   const details = downtimeMatrixDetails(visible);
@@ -60,7 +60,7 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
     <div className="downtime-site-tabs" role="group" aria-label="Downtime matrix site">
       {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><span>{value}</span></button>)}
     </div>
-    <p>Breakdowns are clipped to the selected period, including the To minute. Overlaps count once in available hours. Available hours repeat for each breakdown of the same machine and are provisional when the period includes future time.</p>
+    <p>Only breakdowns that started within the selected period are shown, including the To minute. Earlier breakdowns are excluded even if still ongoing or closed during this period. Durations are clipped to the selected period. Overlaps count once in available hours. Available hours repeat for each breakdown of the same machine and are provisional when the period includes future time.</p>
     <ReportSection title="Custom Breakdown Report" exportTransform={view=>downtimeMatrixExport(view,{site:selectedSite,rangeLabel})} description={`${rangeLabel} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected period and site." />
   </section>;
 }
