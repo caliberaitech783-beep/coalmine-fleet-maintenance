@@ -8764,6 +8764,12 @@ app.use((req,res,next)=>{
   next();
 });
 app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutable:true,maxAge:'1y'}));
+// Missing fingerprinted files must not fall through to the HTML app shell.
+// An old tab can request an asset from a previous release; never cache its miss.
+app.use('/app-assets',(_req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.status(404).type('text/plain').send('Application asset not found. Refresh the application.');
+});
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
 app.use((error,req,res,next)=>{

@@ -1,1 +1,41 @@
-<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>Caliber Pulse — Breakdown Management System</title><meta name="description" content="Fleet maintenance, equipment records, transfers and breakdown workflows in one operational dashboard."/><meta name="theme-color" content="#522e90"/><link rel="icon" type="image/png" sizes="64x64" href="/pulse-favicon-64.png"/><link rel="apple-touch-icon" sizes="180x180" href="/pulse-apple-touch-icon.png"/><link rel="manifest" href="/site.webmanifest"/><meta property="og:title" content="Caliber Pulse"/><meta property="og:description" content="Maintenance operations. One clear view."/><meta property="og:image" content="/pulse-icon-512.png"/><meta name="twitter:card" content="summary_large_image"/><style>.boot-status{min-height:100vh;min-height:100dvh;display:grid;place-items:center;box-sizing:border-box;padding:1.5rem;background:#faf7fb;color:#39205f;font:700 1rem/1.5 system-ui,sans-serif;text-align:center}.boot-card{padding:1.5rem 2rem;border:1px solid #ded3ea;border-radius:1rem;background:#fff;box-shadow:0 1rem 3rem rgba(45,24,76,.12)}.boot-card button{display:block;margin:1rem auto 0;border:0;border-radius:.65rem;padding:.7rem 1rem;background:#522e90;color:#fff;font:inherit;font-weight:800;cursor:pointer}</style></head><body><div id="root"><main id="boot-status" class="boot-status" role="status"><div class="boot-card">Loading Caliber Pulse…</div></main></div><script>(()=>{const pattern=/chunkloaderror|loading chunk|dynamically imported module|module script/i;const showFailure=()=>{const root=document.getElementById("root");if(!root)return;root.innerHTML='<main class="boot-status" role="alert"><div class="boot-card"><b>Caliber Pulse could not finish loading.</b><p>Your data is safe. Refresh to load the current application files.</p><button type="button">Refresh application</button></div></main>';root.querySelector("button")?.addEventListener("click",()=>window.location.reload())};window.addEventListener("error",event=>{if(pattern.test(String(event.message||""))||event.target?.tagName==="SCRIPT")showFailure()},true);window.addEventListener("unhandledrejection",event=>{if(pattern.test(String(event.reason?.message||event.reason||"")))showFailure()})})();</script><script type="module" src="/src/main.jsx"></script></body></html>
+<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><title>Caliber Pulse — Breakdown Management System</title><meta name="description" content="Fleet maintenance, equipment records, transfers and breakdown workflows in one operational dashboard."/><meta name="theme-color" content="#522e90"/><link rel="icon" type="image/png" sizes="64x64" href="/pulse-favicon-64.png"/><link rel="apple-touch-icon" sizes="180x180" href="/pulse-apple-touch-icon.png"/><link rel="manifest" href="/site.webmanifest"/><meta property="og:title" content="Caliber Pulse"/><meta property="og:description" content="Maintenance operations. One clear view."/><meta property="og:image" content="/pulse-icon-512.png"/><meta name="twitter:card" content="summary_large_image"/><style>.boot-status{min-height:100vh;min-height:100dvh;display:grid;place-items:center;box-sizing:border-box;padding:1.5rem;background:#faf7fb;color:#39205f;font:700 1rem/1.5 system-ui,sans-serif;text-align:center}.boot-card{padding:1.5rem 2rem;border:1px solid #ded3ea;border-radius:1rem;background:#fff;box-shadow:0 1rem 3rem rgba(45,24,76,.12)}.boot-card button{display:block;margin:1rem auto 0;border:0;border-radius:.65rem;padding:.7rem 1rem;background:#522e90;color:#fff;font:inherit;font-weight:800;cursor:pointer}</style></head><body><div id="root"><main id="boot-status" class="boot-status" role="status"><div class="boot-card">Loading Caliber Pulse…</div></main></div><script>
+(() => {
+  const pattern = /chunkloaderror|loading chunk|dynamically imported module|module script/i;
+  const recoveryKey = "bdms:lazy-chunk-recovery-at";
+  let failed = false;
+  const refresh = () => {
+    const nextUrl = new URL(window.location.href);
+    const at = Date.now();
+    nextUrl.searchParams.set("asset-recovery", String(at));
+    try { window.sessionStorage.setItem(recoveryKey, String(at)); } catch {}
+    window.location.replace(nextUrl.toString());
+  };
+  const showFailure = () => {
+    const root = document.getElementById("root");
+    // React removes the startup placeholder on mount. Later screen errors belong
+    // to its error boundary and must never replace a working application.
+    if (failed || !root?.querySelector("#boot-status")) return;
+    failed = true;
+    root.innerHTML = '<main id="boot-status" class="boot-status" role="alert"><div class="boot-card"><b>Caliber Pulse could not finish loading.</b><p>Your data is safe. Refresh to load the current application files.</p><button type="button">Refresh application</button></div></main>';
+    root.querySelector("button")?.addEventListener("click", refresh);
+    let lastAttempt = 0;
+    try { lastAttempt = Number(window.sessionStorage.getItem(recoveryKey) || 0); } catch {}
+    // The URL guard also bounds recovery when browser storage is unavailable.
+    const alreadyRecovered = new URL(window.location.href).searchParams.has("asset-recovery");
+    if (!alreadyRecovered && (!lastAttempt || Date.now() - lastAttempt >= 60_000)) refresh();
+  };
+  window.addEventListener("error", event => {
+    const script = event.target;
+    if (script?.tagName === "SCRIPT") {
+      if (script.type !== "module" || !script.src) return;
+      let url;
+      try { url = new URL(script.src, window.location.href); } catch { return; }
+      if (url.origin !== window.location.origin || !/^\/(?:app-assets\/|src\/main\.jsx$)/.test(url.pathname)) return;
+      showFailure();
+    } else if (pattern.test(String(event.message || ""))) showFailure();
+  }, true);
+  window.addEventListener("unhandledrejection", event => {
+    if (pattern.test(String(event.reason?.message || event.reason || ""))) showFailure();
+  });
+})();
+</script><script type="module" src="/src/main.jsx"></script></body></html>
