@@ -3,8 +3,8 @@ import {createHash} from 'node:crypto';
 import {installPulseApplicationIdentity,pulseApplicationProfile} from '../pulse-application-identity.mjs';
 import {hrProfilePermissions} from '../hr-permissions.mjs';
 const routes=new Map();let queries=0;let revoked=false;
-const user={login:'directory-test',passwordHash:'not-a-real-password-hash',hrAccess:true};
-const credential_version=createHash('sha256').update(`${user.login}:${user.passwordHash}`).digest('hex');
+const user={login:'directory-test',passwordHash:'not-a-real-password-hash',hrAccess:true,hrDesktopAccess:['Employee Master']};
+const credential_version=createHash('sha256').update(`${user.login}:${user.passwordHash}:${JSON.stringify(hrProfilePermissions(user))}`).digest('hex');
 const pool={async query(sql,args){queries++;if(sql.includes('FROM application_identity_grants'))return {rows:revoked?[]:[{id:1,record_data:user,credential_version,session_token:'fixture'}]};return {rows:[]};}};
 installPulseApplicationIdentity({post:(path,handler)=>routes.set(path,handler),options(){}},{pool,sessionStore:{}});
 async function call(grant,origin){let value,code=200;const res={set(){return this;},status(status){code=status;return this;},json(body){value=body;return this;}};await routes.get('/api/integrations/hr/directory')({body:{grant},headers:origin?{origin}:{},method:'POST'},res,error=>{throw error;});return {code,value};}
