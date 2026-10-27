@@ -68,7 +68,7 @@ test("live feeds keep their cadence and reminders stay off the notification requ
   assert.match(route,/scheduleMaintenanceReminderNotifications\(\);/);
   assert.doesNotMatch(route,/await createMaintenanceReminderNotifications/);
   assert.match(server,/SELECT \* FROM unnest\(\$1::text\[\],\$2::text\[\],\$3::text\[\],\$4::text\[\]\)/);
-  assert.match(server,/app\.use\('\/app-assets',express\.static\(path\.join\(staticRoot,'app-assets'\),\{immutable:true,maxAge:'1y'\}\)\);\r?\napp\.use\(express\.static\(staticRoot\)\);/);
+  assert.match(server,/app\.use\('\/app-assets',express\.static\(path\.join\(staticRoot,'app-assets'\),\{immutable:true,maxAge:'1y'\}\)\);[\s\S]*?app\.use\('\/app-assets',[\s\S]*?res\.set\('Cache-Control','no-store'\);[\s\S]*?res\.status\(404\)[\s\S]*?app\.use\(express\.static\(staticRoot\)\);/);
 });
 
 test('mobile suspension cancels a pending poll and resumes once without overlap', async () => {
