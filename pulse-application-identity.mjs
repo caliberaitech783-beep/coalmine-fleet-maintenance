@@ -1,3 +1,7 @@
+import {loadHrDirectory} from './hr-directory-bridge.mjs';
+import {CDIR_MASTER_NAMES,cdirDirectoryFromMasters} from './cdir-masters.mjs';
+import {cdirViewerContext,cdirDirectoryForViewer} from './cdir-access.mjs';
+import {mergeCdirReportingSuperiors} from './cdir-organisation.mjs';
 import {hrAccessEnabled,hrProfilePermissions,HR_ALL_PERMISSIONS} from './hr-permissions.mjs';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
@@ -72,6 +76,14 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    if(!profile||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
    res.json({profile});
+  });
+  if(application==='HR')route('directory',async(req,res)=>{
+   const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '7 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
+   const row=rows[0],profile=pulseApplicationProfile(row,application);
+   if(!profile||row.credential_version!==version(row.record_data))return res.status(401).json({error:'Pulse sign-in expired or account access changed. Sign in again.'});
+   await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
+   res.json(await loadHrDirectory({pool,profile,user:row.record_data,masterNames:CDIR_MASTER_NAMES,buildDirectory:cdirDirectoryFromMasters,mergeSuperiors:mergeCdirReportingSuperiors,viewerContext:cdirViewerContext,forViewer:cdirDirectoryForViewer}));
   });
   route('logout',async(req,res)=>{
    if(valid(req.body?.grant))await pool.query('WITH revoked AS (DELETE FROM application_identity_grants WHERE grant_hash=$1 AND application=$2 RETURNING session_token) DELETE FROM auth_sessions WHERE token IN (SELECT session_token FROM revoked)',[digest(req.body.grant),application]);
