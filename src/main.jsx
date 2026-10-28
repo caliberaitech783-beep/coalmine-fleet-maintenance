@@ -4686,7 +4686,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       </label>)}</div>}
     </fieldset>
     <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} /></div>
-    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record}/></div>
+    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record} onEnabled={(enabled) => setAccountRole(current => enabled ? current || "HR Application User" : current === "HR Application User" ? "" : current)}/></div>
     {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
@@ -4746,6 +4746,9 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
 }
 
 function applyUserRoleDefaults(record) {
+  // HR-only accounts have no team role; enabling HR is itself a valid role selection.
+  // Preserve existing Admin/team accounts when HR is an additional workspace.
+  if(!record.userType && !record.userGroup && !String(record.userRoles || "").trim() && hrAccessEnabled(record))record.userType="HR Application User";
   if(record.userType==="HR Application User"){record.userGroup="HR Application User";record.userRoles="";return;}
   if(record.userType==="MIS Application User"){record.userGroup="MIS Application User";record.userRoles="";return;}
   if(Object.hasOwn(record,'userRoles')){
