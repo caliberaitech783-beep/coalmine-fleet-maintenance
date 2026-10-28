@@ -102,7 +102,7 @@ test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(source, /const fleetBreakdownDrilldownTitle = .*\}BD Balance`/);
   assert.match(source, /openFleetChartList\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
   // BD (%) is the site BD balance share of its total fleet, one decimal like the day-wise table.
-  assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><button type="button" className="lmv-site-metric"/);
+  assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><\/small>/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-entry \{ grid-template-rows: minmax\(0, 1fr\) 104px; \}/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend \{[^}]*font-size: 14px !important;[^}]*font-weight: 800;/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend i \{ width: 14px; height: 14px;/);
