@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {PGlite} from '@electric-sql/pglite';
+import {installPulseApplicationIdentity} from '../pulse-application-identity.mjs';
+import {installMisPulseBridge} from '../mis-pulse-bridge.mjs';
+import {initializeSingleLogin} from '../single-login.mjs';
+import {createSessionStore} from '../auth-session.mjs';
+import {hashPassword} from '../password-auth.mjs';
+
+test('Pulse bridge reuses the normal MIS login grant, checks current menus and revokes access after password changes',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text);`);
+ const pool={query:(sql,args)=>sql.split(';').filter(x=>x.trim()).length>1?db.exec(sql):db.query(sql,args)};
+ await initializeSingleLogin(pool);
+ const routes=new Map(),app={post:(url,fn)=>routes.set(url,fn),options(){}};
+ const identity=installPulseApplicationIdentity(app,{pool,sessionStore:createSessionStore(pool)});await identity.initialize();
+ const user={login:'mis-tester',employee:'MIS tester',passwordHash:hashPassword('synthetic-login-only'),misAccess:true,misDesktopAccess:['Vehicle Log Book'],site:'Sasti OC'};
+ await db.query("INSERT INTO master_records(master_name,record_data) VALUES('Users & employees',$1)",[JSON.stringify(user)]);
+ let writes=0;
+ installMisPulseBridge(app,{identity,readRequests:async profile=>({login:profile.login}),readMasters:async()=>{throw Error('not allowed')},verifyRequest:async(req,res)=>{writes++;assert.equal(req.session.login,user.login);assert.equal(req.session.permissions.separateMisCredentials,false);assert.equal(req.params.reference,'BD101');res.json({verified:true});}});
+ const call=async(url,body)=>{let value;const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(body){value=body;return this}};await routes.get(url)({body,headers:{},ip:'127.0.0.1'},res,error=>{throw error});return {status:res.statusCode,value}};
+ const login=await call('/api/integrations/mis/authenticate',{username:user.login,password:'synthetic-login-only'});assert.equal(login.status,200);
+ const grant=login.value.grant,bridge=body=>call('/api/integrations/mis/pulse',{grant,...body});
+ assert.deepEqual((await bridge({action:'requests'})).value,{login:user.login});
+ assert.equal((await bridge({action:'masters'})).status,403);
+ assert.equal((await bridge({action:'verify',reference:'BD101',payload:{}})).status,400);
+ assert.equal((await bridge({action:'verify',reference:'BD101',payload:{firstTripRemark:'Pulse II automatic MIS verification | VLB101 | card 101'}})).status,200);assert.equal(writes,1);
+ assert.equal((await call('/api/integrations/mis/pulse',{grant:'x'.repeat(43),action:'requests'})).status,401);
+ user.misDesktopAccess=['Equipment Log Book'];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
+ assert.equal((await bridge({action:'verify',reference:'BD101',payload:{firstTripRemark:'Pulse II automatic MIS verification | VLB101'}})).status,403);assert.equal(writes,1);
+ user.passwordHash=hashPassword('changed-synthetic-password');await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
+ assert.equal((await bridge({action:'requests'})).status,401);
+});

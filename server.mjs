@@ -13,6 +13,7 @@ import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
+import {installMisPulseBridge} from './mis-pulse-bridge.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
@@ -1504,6 +1505,12 @@ const deletionApproval=installDeletionApproval(app,{
   }),
 });
 const misCredentialIdentity=installPulseApplicationIdentity(app,{pool,sessionStore});
+let verifyMisTripCard;
+installMisPulseBridge(app,{identity:misCredentialIdentity,
+ readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
+ readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
+ verifyRequest:(...args)=>verifyMisTripCard(...args),
+});
 const misLoginHandoff=installMisLoginHandoff(app,{pool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 
@@ -7856,7 +7863,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
   }finally{client.release()}
 });
 
-app.patch('/api/requests/:reference/verify',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{
+app.patch('/api/requests/:reference/verify',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),verifyMisTripCard=async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
