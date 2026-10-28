@@ -1188,7 +1188,7 @@ test("each dashboard section offers its own Export menu with the figures it show
   assert.match(fleet.props.title, / · Live fleet$/);
   assert.deepEqual(fleet.props.rows.map((row) => row.name), ["Sasti OB", "WCL total", "All sites"]);
   const [site] = fleet.props.rows;
-  assert.equal(text(byClass(tree, "mine-fleet-site-summary")), `${cell(fleet, site, "Site name")}BD Balance ${cell(fleet, site, "BD balance")}Total Fleet ${cell(fleet, site, "Total fleet")}BD (%) ${cell(fleet, site, "BD (%)")}LMV BD ${cell(fleet, site, "LMV BD")}Total LMV ${cell(fleet, site, "Other vehicles / Total LMV")}LMV BD (%) ${cell(fleet, site, "LMV BD (%)")}`);
+  assert.equal(text(byClass(tree, "mine-fleet-site-summary")), `${cell(fleet, site, "Site name")}BD Balance ${cell(fleet, site, "BD balance")}Total Fleet ${cell(fleet, site, "Total fleet")}BD (%) ${cell(fleet, site, "BD (%)")}`);
   // Tracking Vehicle Throughput follows its open tab and period, matching the site row on screen.
   let throughput = menu("Tracking Vehicle Throughput");
   assert.match(throughput.props.title, /^Tracking Vehicle Throughput · Site-wise BD Movement · /);
@@ -1266,21 +1266,22 @@ test('LMV controls switch the dedicated chart and open scoped reports without ch
   assert.equal(dialog.props.records.length,5);
 });
 
-test('main Total Fleet and each site count include LMVs and open exactly their matching assets',()=>{
+test('main Total Fleet, OEM and each site logbook exclude LMVs while dedicated LMV records remain available',()=>{
   const view=harness({lmvRecords:lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5))});
   let tree=view.render();
   const plotted=findAll(tree,node=>node.props.site?.otherVehicles!==undefined&&node.props.axisMax);
   assert.ok(plotted.length>0);
+  assert.ok(plotted.every(node=>node.props.columns.length===2));
   assert.ok(plotted.every(node=>node.props.axisMax===plotted[0].props.axisMax&&!node.props.lmvAxisMax), "all categories and sites share one linear scale");
   const list=()=>findAll(tree,node=>node.props.rowsAreScoped && / · \d+ assets$/.test(node.props.title || '') && node.props.bdBalanceColumns !== undefined)[0];
-  assert.equal(text(fleetCount(tree,'Total')),'8');
-  assert.equal(text(fleetCount(tree,'Breakdown')),'3');
-  assert.equal(text(byLabel(tree,'View BD Balance list')),'2');
+  assert.equal(text(fleetCount(tree,'Total')),'3');
+  assert.equal(text(fleetCount(tree,'Breakdown')),'1');
+  assert.equal(text(byLabel(tree,'View BD Balance list')),'1');
   fleetCount(tree,'Total').props.onClick();tree=view.render();
-  assert.equal(list().props.rows.length,8);
-  assert.equal(list().props.rows.filter(row=>row.fleetCategory==='otherVehicles').length,5);
-  fleetCount(tree,'Breakdown').props.onClick();tree=view.render();
   assert.equal(list().props.rows.length,3);
+  assert.equal(list().props.rows.filter(row=>row.fleetCategory==='otherVehicles').length,0);
+  fleetCount(tree,'Breakdown').props.onClick();tree=view.render();
+  assert.equal(list().props.rows.length,1);
   assert.equal(list().props.bdBalanceColumns,true);
   assert.equal(typeof list().props.Remarks,'function');
   assert.ok(list().props.RequestTimelineButton);
@@ -1290,15 +1291,15 @@ test('main Total Fleet and each site count include LMVs and open exactly their m
   assert.ok(Array.isArray(tree.props.requests));
   assert.ok(tree.props.sites.length);
   tree.props.onBack();tree=view.render();
-  assert.equal(list().props.rows.length,3,'Back returns to the same breakdown asset report');
+  assert.equal(list().props.rows.length,1,'Back returns to the same breakdown asset report');
   byLabel(tree,'View BD Balance list').props.onClick();tree=view.render();
-  assert.equal(list().props.rows.length,2);
+  assert.equal(list().props.rows.length,1);
   assert.ok(list().props.rows.every(row=>!row.fleetOem));
-  button(tree,'BD Balance 2').props.onClick();tree=view.render();assert.equal(list().props.rows.length,2);
-  button(tree,'Total Fleet 8').props.onClick();tree=view.render();assert.equal(list().props.rows.length,8);
-  button(tree,'BD (%) 37.5').props.onClick();tree=view.render();assert.equal(list().props.rows.length,3);
-  fleetCount(tree,'OEM BD').props.onClick();tree=view.render();assert.equal(list().props.rows.length,1);
-  assert.equal(oemChart(tree).props.chart.rows.length,1);
+  button(tree,'BD Balance 1').props.onClick();tree=view.render();assert.equal(list().props.rows.length,1);
+  button(tree,'Total Fleet 3').props.onClick();tree=view.render();assert.equal(list().props.rows.length,3);
+  button(tree,'BD (%) 33.3').props.onClick();tree=view.render();assert.equal(list().props.rows.length,1);
+  fleetCount(tree,'OEM BD').props.onClick();tree=view.render();assert.equal(list().props.rows.length,0);
+  assert.equal(oemChart(tree).props.chart.rows.length,0);
 });
 
 test('LMV today badge excludes demo statuses, deduplicates requests, and opens exactly the off-road vehicles',()=>{

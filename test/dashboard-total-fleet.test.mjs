@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {totalFleetRecords,totalFleetCounts,totalFleetSelectionRows,totalFleetDetailRows,totalFleetOemChartRows} from '../src/total-fleet-model.mjs';
+import {equipmentVehicleFleetRecords,totalFleetRecords,totalFleetCounts,totalFleetSelectionRows,totalFleetDetailRows,totalFleetOemChartRows} from '../src/total-fleet-model.mjs';
 import {lmvDemoRecords,lmvFleetSnapshot} from '../lmv-fleet.mjs';
 import {fleetSectionExport} from '../src/dashboard-section-export.mjs';
 import {readFileSync} from 'node:fs';
 
-test('main fleet total, breakdown, OEM and non-OEM balances include all forty LMVs',()=>{
+test('explicit combined registry utility can still represent both registries independently of the main dashboard',()=>{
   const equipment=Array.from({length:1574},(_,index)=>({id:index,door:`E-${index}`,category:index%2?'Vehicle':'Equipment',currentLocation:'Sasti OC',dashboardRoadStatus:index<67?'offroad':'onroad'}));
   const rows=totalFleetRecords(equipment,lmvFleetSnapshot(lmvDemoRecords()),[],equipment.slice(0,8));
   const counts=totalFleetCounts(rows);
@@ -14,6 +14,52 @@ test('main fleet total, breakdown, OEM and non-OEM balances include all forty LM
   assert.equal(counts.bdPercent,83/1614*100);
   for(const [mode,count] of [['total',1614],['breakdown',83],['oem',16],['balance',67]])assert.equal(totalFleetSelectionRows(rows,{mode}).length,count);
   assert.equal(new Set(rows.map(row=>row.fleetKey)).size,1614,'master IDs cannot collide across the two registries');
+});
+
+test('equipment/vehicle site totals, breakdown logbooks and OEM lists exclude the separate LMV registry',()=>{
+  const equipment=Array.from({length:204},(_,index)=>({id:index,door:`ASSET-${index}`,category:index<51?'Equipment':'Vehicle',currentLocation:'Sasti OC',dashboardRoadStatus:index<25?'offroad':'onroad'}));
+  const lmvs=lmvFleetSnapshot(lmvDemoRecords().slice(0,5));
+  const unchanged=structuredClone(lmvs);
+  const combined=totalFleetCounts(totalFleetRecords(equipment,lmvs,[],equipment.slice(0,3)));
+  assert.equal(combined.total,209);
+  assert.equal(combined.breakdown.total,27);
+  const rows=equipmentVehicleFleetRecords(equipment,[],equipment.slice(0,3));
+  const counts=totalFleetCounts(rows);
+  assert.equal(counts.total,204);
+  assert.equal(counts.equipment,51);
+  assert.equal(counts.vehicles,153);
+  assert.equal(counts.breakdown.total,25);
+  assert.equal(counts.oem,3);
+  assert.equal(counts.balance,22);
+  assert.equal(counts.bdPercent,25/204*100);
+  for(const [mode,count] of [['total',204],['breakdown',25],['oem',3],['balance',22]]){
+    const selected=totalFleetSelectionRows(rows,{site:'Sasti OC',mode});
+    assert.equal(selected.length,count);
+    assert.ok(totalFleetDetailRows(selected,[]).every(row=>row.fleetSource==='Equipment master'&&!row.demo));
+  }
+  assert.ok(totalFleetOemChartRows(rows).every(row=>row.record.fleetSource==='Equipment master'));
+  assert.deepEqual(lmvs,unchanged,'the dedicated LMV records are preserved');
+  assert.equal(totalFleetCounts(totalFleetRecords([],lmvs)).breakdown.total,2);
+
+  const table=fleetSectionExport({includeLmv:false,regions:[{...counts,code:'WCL',lmv:combined.lmv,sites:[{name:'Sasti OC',...counts,lmv:combined.lmv}]}],totals:counts});
+  assert.ok(table.columns.every(column=>!/LMV|combined fleet/i.test(column.label)));
+  const total=table.rows.at(-1);
+  const value=label=>table.columns.find(column=>column.label===label).value(total);
+  assert.equal(value('Total fleet'),204);
+  assert.equal(value('BD balance'),22);
+  assert.equal(value('BD (%)'),'12.3');
+});
+
+test('main dashboard wiring isolates LMV counts, loading state, summaries and exports',()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const dashboard=source.slice(source.indexOf('function Dashboard('),source.indexOf('\nfunction ',source.indexOf('function Dashboard(')+1));
+  assert.match(dashboard,/equipmentVehicleFleetRecords\(visibleEquipment,liveBreakdowns,combinedFleetOemRecords\)/);
+  assert.match(dashboard,/const combinedFleetReady = equipmentLoaded;/);
+  assert.doesNotMatch(dashboard,/disabled=\{!equipmentLoaded \|\| !lmvFleet.loaded\}/);
+  assert.match(dashboard,/fleetSectionExport\(\{ includeLmv:false/);
+  assert.match(dashboard,/columns=\{\[\["equipment","Equipment"\],\["vehicles","Vehicles"\]\]\}/);
+  assert.doesNotMatch(dashboard,/including LMV|Equipment, vehicles and LMV|className="lmv-site-metric"/);
+  for(const component of ['<LmvFleetControls','<LmvFleetView','<LmvFleetDialog'])assert.ok(dashboard.includes(component));
 });
 
 test('site and region counts use precisely the same scoped registry as their lists',()=>{

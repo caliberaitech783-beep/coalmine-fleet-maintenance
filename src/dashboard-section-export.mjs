@@ -67,7 +67,7 @@ function oemSectionExport({place, chart, oemLabel, period, stale}) {
 // Fleet whose location matches no chart site counts in that total but in no bar, so it gets its own
 // row and the columns still add up. OEM BD mode exports the OEM chart instead. While the dashboard is
 // reconnecting the title says the figures are the last checked data, not live.
-export function fleetSectionExport({mode = 'total', place = 'All regions', regions = [], totals = null, oemChart = null, oemLabel = 'All OEMs', period = '', stale = false} = {}) {
+export function fleetSectionExport({mode = 'total', place = 'All regions', regions = [], totals = null, oemChart = null, oemLabel = 'All OEMs', period = '', stale = false, includeLmv = true} = {}) {
   if (mode === 'oem') return oemSectionExport({place, chart: oemChart, oemLabel, period, stale});
   const rows = regions.flatMap(region => [
     ...(region.sites || []).map(site => fleetRow(region.code, site.name, site)),
@@ -84,7 +84,7 @@ export function fleetSectionExport({mode = 'total', place = 'All regions', regio
     if (other.total || other.bdTotal || other.lmvTotal) rows.push(other);
     rows.push(fleetRow('Total', 'All sites', totals));
   }
-  const hasLmv = totals?.lmv !== undefined || regions.some(region => region.lmv !== undefined);
+  const hasLmv = includeLmv && (totals?.lmv !== undefined || regions.some(region => region.lmv !== undefined));
   if (hasLmv && totals && !totals.lmv) {
     const totalRow=rows[rows.length-1];
     for (const key of ['lmvTotal','lmvBd','lmvOnroad','lmvIdle','lmvOem']) totalRow[key]=rows.filter(row=>row.name.endsWith(' total')).reduce((sum,row)=>sum+row[key],0);

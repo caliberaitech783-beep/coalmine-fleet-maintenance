@@ -4,6 +4,10 @@ import {lmvCounts,LMV_DETAIL_COLUMNS} from '../lmv-fleet.mjs';
 import {equipmentGroupValue} from '../equipment-group.mjs';
 
 const normalized=value=>String(value||'').trim().toLowerCase();
+// Equipment/vehicle reports use only their own registry. LMV has its own views.
+export function equipmentVehicleFleetRecords(equipment=[],requests=[],oemRecords=[]) {
+  return totalFleetRecords(equipment,[],requests,oemRecords);
+}
 export function totalFleetRecords(equipment=[],lmvs=[],requests=[],oemRecords=[]) {
   const statuses=liveEquipmentRoadStatuses(equipment,requests);
   const oemSet=new Set(oemRecords);
