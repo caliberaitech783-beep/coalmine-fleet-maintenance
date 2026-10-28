@@ -9,12 +9,12 @@ test('first slot follows two full hours and last slot stops at midnight IST',()=
  assert.equal(hourlyTelegramSlots([shift()],'2026-10-26T01:00:00+05:30').length,0);
  assert.equal(hourlyTelegramSlots([shift('Jayant OC','04:00:00')],'2026-10-26T00:00:00+05:30')[0].cutoff.toISOString(),'2026-10-25T18:30:00.000Z');
 });
-test('ten minute grace, effective dates, duplicate shifts and closed site fail safely',()=>{
+test('ten minute grace, effective dates and duplicate shifts fail safely; Lalpeth participates',()=>{
  assert.equal(hourlyTelegramSlots([shift()],'2026-10-25T07:09:59+05:30').length,1);
  assert.equal(hourlyTelegramSlots([shift()],'2026-10-25T07:10:00+05:30').length,0);
  assert.equal(hourlyTelegramSlots([shift(),shift()],'2026-10-25T07:00:00+05:30').length,0);
  assert.equal(hourlyTelegramSlots([{...shift(),effectiveFrom:'2026-10-26'}],'2026-10-25T07:00:00+05:30').length,0);
- assert.equal(hourlyTelegramSlots([shift('Lalpeth OC')],'2026-10-25T07:00:00+05:30').length,0);
+ assert.equal(hourlyTelegramSlots([shift('Lalpeth OC')],'2026-10-25T07:00:00+05:30').length,1);
 });
 function harness(sendDocument=async()=>({sent:true}),groups=[{site:'Majri OC',chatId:'-123'},{site:'Majri OC',chatId:'-123'},{site:'Sasti OC',chatId:'-456'},{site:'Majri OC',chatId:'789'}]){
  const claims=new Set(),updates=[],sent=[];

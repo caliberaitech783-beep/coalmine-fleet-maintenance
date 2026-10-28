@@ -1,5 +1,6 @@
 import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
+import {createSiteFleetTelegramDelivery,siteFleetPlans} from './telegram-site-fleet-delivery.mjs';
 import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback} from './deletion-approval.mjs';
 import {createDeletionWhatsApp} from './deletion-sms.mjs';
 import {seedLmvDemoRecords} from './lmv-fleet.mjs';
@@ -120,7 +121,7 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {telegramConfiguration,telegramStatus,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
+import {telegramConfiguration,telegramStatus,telegramPurposeEnabled,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {telegramChatMember} from './telegram.mjs';
 import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS,requiredTelegramSites} from './telegram-membership.mjs';
@@ -8961,6 +8962,25 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Hourly Telegram delivery failed',error.message));
   },60*1000,40_000);
   hourlyTelegramTimer.unref?.();
+  const siteFleetDelivery=createSiteFleetTelegramDelivery({pool,
+    loadSettings:storedWhatsAppReportSettings,allowed:telegramPurposeEnabled,
+    loadGroups:telegramSiteGroups,checkGroup:telegramSiteGroupDetails,
+    loadSource:directorReportSourceData,sendText:sendTelegramText,
+    publish:plan=>publishDirectorReportFiles({...plan,siteAccess:plan.site,baseUrl:publicBaseUrl()}),
+    loadPlans:async now=>{
+      const [{rows:users},{rows:hierarchyRecords},scheduleSettings,userScheduleOverrides]=await Promise.all([
+        pool.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'"),
+        pool.query("SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC"),
+        storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
+      ]);
+      return siteFleetPlans({users:users.map(row=>row.record_data),hierarchyRecords,scheduleSettings,userScheduleOverrides,now});
+    },
+  });
+  const siteFleetTimer=setStaggeredInterval(()=>{
+    if(databaseReady)void runAuditedBackendProcess({module:'Scheduled reports',action:'Send site fleet Telegram bundles'},()=>siteFleetDelivery())
+      .catch(error=>console.error('Site fleet Telegram report failed.',error.message));
+  },60*1000,47_000);
+  siteFleetTimer.unref?.();
   const consolidatedWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})

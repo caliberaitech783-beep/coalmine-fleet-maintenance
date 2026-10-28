@@ -16,10 +16,14 @@ export function telegramConfiguration(env=process.env){
 
 // Telegram follows the per-event choices in Report settings, but not the global
 // WhatsApp switch, so WhatsApp can be turned off while Telegram keeps running.
-export function telegramPurposeEnabled(settings,purpose='',now=new Date()){
-  // Owner-requested pause for every site's scheduled fleet bundle. Keep this
-  // independent of saved settings and WhatsApp until the replacement is agreed.
+export function telegramPurposeEnabled(settings,purpose='',now=new Date(),chatId=''){
+  // Keep the legacy personal fleet flow paused; site groups use their own purpose.
   if(purpose==='consolidatedRequestReport')return false;
+  // The approved replacement is site-group delivery only, never personal copies.
+  if(purpose==='siteFleetReport'){
+    if(!/^-[1-9]\d*$/.test(clean(chatId)))return false;
+    return !settings||whatsappPurposeEnabled({...normalizeWhatsAppReportSettings(settings),enabled:true},'consolidatedRequestReport',now);
+  }
   if(PRIVATE_PURPOSES.has(purpose))return false;
   if(!settings)return true;
   return whatsappPurposeEnabled({...normalizeWhatsAppReportSettings(settings),enabled:true},purpose,now);
@@ -47,11 +51,11 @@ async function telegramRequest(method,{env,fetchImpl,json,form}){
   return details.result;
 }
 
-function assertReady(config,purpose,settings,privateChatId=''){
+function assertReady(config,purpose,settings,privateChatId='',targetChatId=config.chatId){
   if(!config.configured){const error=new Error('Telegram is not configured.');error.code='TELEGRAM_NOT_CONFIGURED';throw error}
   // Personal messages such as OTPs may only go to one person's own chat, whose id is positive.
   const allowedPrivate=PRIVATE_PURPOSES.has(purpose)&&/^\d+$/.test(privateChatId);
-  if(config.paused||!(allowedPrivate||telegramPurposeEnabled(settings,purpose))){const error=new Error('Telegram delivery is paused for this message type.');error.code='TELEGRAM_POLICY_PAUSED';throw error}
+  if(config.paused||!(allowedPrivate||telegramPurposeEnabled(settings,purpose,new Date(),targetChatId))){const error=new Error('Telegram delivery is paused for this message type.');error.code='TELEGRAM_POLICY_PAUSED';throw error}
 }
 
 export async function sendTelegramText({message,purpose='',settings,chatId,privateChat=false,replyMarkup},{env=process.env,fetchImpl=fetch}={}){
@@ -66,7 +70,7 @@ export async function sendTelegramText({message,purpose='',settings,chatId,priva
 
 export async function sendTelegramDocument({buffer,filename='caliber-pulse-report.pdf',caption='',purpose='',settings,chatId},{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(env);
-  assertReady(config,purpose,settings);
+  assertReady(config,purpose,settings,'',clean(chatId)||config.chatId);
   const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
   if(!documentBuffer.length)throw new Error('A PDF document is required.');
   if(documentBuffer.length>50*1024*1024)throw new Error('Telegram documents cannot exceed 50 MB.');

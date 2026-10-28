@@ -12,7 +12,7 @@ export function hourlyTelegramSlots(shifts,now=new Date()){
     const date=new Date(timestamp+OFFSET+dayOffset).toISOString().slice(0,10);
     const active=normalized.filter(s=>s.status==='Active'&&['A','1'].includes(s.shiftCode)&&(!s.effectiveFrom||s.effectiveFrom<=date)&&(!s.effectiveTo||s.effectiveTo>=date));
     for(const site of new Set(active.map(s=>canonicalSiteName(s.site)))){
-      if(!site||site===canonicalSiteName('Lalpeth OC'))continue;
+      if(!site)continue;
       const matches=active.filter(s=>canonicalSiteName(s.site)===site);
       if(matches.length!==1)continue;
       const [h,m,s]=matches[0].startTime.split(':').map(Number);
