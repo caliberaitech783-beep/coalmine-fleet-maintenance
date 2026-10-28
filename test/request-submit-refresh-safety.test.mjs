@@ -44,7 +44,7 @@ function fixture(name, overrides = {}) {
   const bindings = {
     siteUpdateSafety: safety, submitMaintenanceRequest,
     submitting: false, submittingRef: {current: false}, submitLock: {current: false},
-    checkingConflict: false, duplicateConflict: null, existingReason: "", v: {},
+    checkingConflict: false, duplicateConflict: null, existingReason: "", v: {}, hierarchyEnabled:false,
     requestEquipmentMeterType: () => "HMR", equipmentDetails: {...request, equipment: "Test vehicle"},
     equipmentGroup: "TIPPER", currentLocation: "Sasti OB", driverLookup: {name: ""},
     FormData: class {

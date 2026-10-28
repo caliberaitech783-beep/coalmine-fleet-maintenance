@@ -23,7 +23,7 @@ const snippet = source.slice(source.indexOf("function MeterReadingFields"), sour
 // Meter payload tests begin after the separately tested On road/Idle decision.
 const transformed = await transformWithOxc(snippet.replace('const idleDecision = useRef(false);','const idleDecision = useRef(true);'), "request-forms.jsx", {jsx: {runtime: "classic"}});
 const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseRequestForm};", {
-  siteUpdateSafety: createSiteUpdateSafety(),
+  classificationActive:()=>false, saveRequestClassification:async(_client,_req,before)=>before, siteUpdateSafety: createSiteUpdateSafety(),
   React, ...equipment,
   useState: value => [typeof value === "function" ? value() : value, () => {}],
   useRef: value => ({current: value}),
@@ -104,7 +104,7 @@ async function runRoute(action, body) {
   const route = server.slice(server.indexOf(start), server.indexOf("\napp.", server.indexOf(start) + start.length));
   const linkedSelection=server.slice(server.indexOf('async function withLinkedMaintenanceSelection('),server.indexOf("app.post('/api/requests/:reference/daily-remarks'"));
   evaluate(linkedSelection+route, {
-    ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,maintenanceManagerSession:()=>false,
+    saveRequestClassification:async(_client,_req,before)=>before, ...workflow,maintenanceMetersRequired,requireMaintenanceMeters,maintenanceManagerSession:()=>false,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
     requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {

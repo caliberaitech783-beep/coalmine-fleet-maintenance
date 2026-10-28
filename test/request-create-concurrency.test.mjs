@@ -1,3 +1,4 @@
+import {newClassification,classificationError} from '../repair-classification.mjs';
 import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestShiftLabel} from '../request-shift.mjs';
@@ -64,7 +65,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
       query:(sql,values)=>query(sql,values,client),release(){assert.equal(this.inTransaction,false);this.released=true;}};
     clients.push(client);return client;
   }};
-  const context={ requestRequiresSubCategory, requestSubCategory: async (_client,_category,value)=>String(value||""),
+  const context={ newClassification:input=>newClassification(input,'2026-10-28T16:59:59+05:30'),classificationError, requestRequiresSubCategory, requestSubCategory: async (_client,_category,value)=>String(value||""),
     setImmediate:callback=>followups.push(callback),
     requestShiftLabel,...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>({site:'Sasti OB'}),
