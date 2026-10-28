@@ -1,0 +1,175 @@
+{
+  "DRIVELINE/AGGREGATE": [
+    "Engine",
+    "Transmission / Gearbox",
+    "Differential",
+    "Axle",
+    "Clutch",
+    "Flywheel"
+  ],
+  "ENGINE": [
+    "Oil Pump",
+    "Turbocharger",
+    "EGR System",
+    "Engine ECU/ECM",
+    "Engine Sensors",
+    "Water Pump",
+    "Thermostat"
+  ],
+  "FUEL SYSTEM": [
+    "Fuel Tank",
+    "Fuel Pump",
+    "Fuel Injection Pump",
+    "Injector",
+    "Fuel Lines Pipe",
+    "Fuel Hoses"
+  ],
+  "HYDRAULIC SYSTEM": [
+    "Hydraulic Pump",
+    "Travel Unit",
+    "Swing Unit",
+    "Fan Motor",
+    "Hydraulic Cylinder",
+    "Control Valve",
+    "Hydraulic Oil Tank",
+    "Hydraulic Oil Cooler",
+    "Hydraulic Hose/Pipe",
+    "Hydraulic Joystick"
+  ],
+  "ELECTRICAL": [
+    "Battery",
+    "Alternator",
+    "Starter Motor",
+    "Wiring Harness",
+    "ECU/ECM/VECU",
+    "Display Monitor",
+    "Instrument Cluster",
+    "Sensors"
+  ],
+  "COOLING SYSTEM": [
+    "Radiator",
+    "Oil Cooler",
+    "Charge Air Cooler",
+    "Intercooler",
+    "Coolant / Expansion Tank"
+  ],
+  "EXHAUST SYSTEM": [
+    "Air Cleaner",
+    "Air Filter"
+  ],
+  "UNDERCARRIAGE / TRACK SYSTEM": [
+    "Track Chain",
+    "Track Roller",
+    "IDLER",
+    "Sprocket Segments",
+    "Track Adjuster/Recoil Spring"
+  ],
+  "ATTACHMENT": [
+    "Boom",
+    "Arm/Stick",
+    "Bucket",
+    "H Link",
+    "Bucket Link Pin",
+    "Bush",
+    "Pin",
+    "Rock Breaker"
+  ],
+  "GET": [
+    "Bucket Tooth",
+    "Tooth Adapter",
+    "Side Cutter",
+    "Blade"
+  ],
+  "SUPER STRUCTURE": [
+    "Chassis",
+    "Frame",
+    "Sub Frame",
+    "Structural Damage",
+    "Dump Body"
+  ],
+  "STEERING SYSTEM": [
+    "Steering Pump",
+    "Steering Cylinder",
+    "Steering Gearbox",
+    "Steering Column"
+  ],
+  "BRAKING SYSTEM": [
+    "Service & Parking Brake",
+    "Brake Booster",
+    "Brake Shoe/Pad/Disc",
+    "Brake Drum",
+    "Brake Caliper",
+    "Brake Hose/Pipe",
+    "Air Compressor",
+    "Air Dryer",
+    "Air Tank/Drain Valve",
+    "ABS / EBS"
+  ],
+  "SUSPENSION SYSTEM": [
+    "Leaf Spring",
+    "Hollow Spring",
+    "Suspension Pin/Bush/Bracket",
+    "Shackle",
+    "U-Bolt",
+    "Torque Rod / V Rod",
+    "Stabilizer Bar",
+    "Shock Absorber",
+    "Cradel Bearing"
+  ],
+  "TYRE SYSTEM": [
+    "Tyre",
+    "Wheel Rim",
+    "Wheel Disc",
+    "Wheel Stud",
+    "Wheel Nut",
+    "Wheel Hub",
+    "Tyre Valve",
+    "Tyre Pressure",
+    "Tyre Puncture",
+    "Tyre Cut",
+    "Wheel Alignment"
+  ],
+  "AC SYSTEM": [
+    "AC Compressor",
+    "AC Condenser",
+    "AC Evaporator",
+    "AC Blower Motor",
+    "AC Fan",
+    "AC Expansion Valve",
+    "AC Receiver Drier",
+    "AC Hose/Pipe",
+    "AC Gas"
+  ],
+  "LUBRICATION SYSTEM": [
+    "Centralized Lubrication",
+    "Auto Greasing System",
+    "Lubrication Pump"
+  ],
+  "DRILLING SYSTEM": [
+    "Drill Motor",
+    "Drill Head",
+    "Rotary Head",
+    "Feed System",
+    "Drill Rod/Drill Bit/Hammer",
+    "Dust Collector",
+    "Air End",
+    "Water Injection System"
+  ],
+  "WGM": [
+    "WGM"
+  ],
+  "SCHEDULED SERVICE": [
+    "HOUR SERVICE 250",
+    "HOUR SERVICE 500",
+    "HOUR SERVICE 1000",
+    "HOUR SERVICE 1500",
+    "HOUR SERVICE 2000",
+    "HOUR SERVICE 800",
+    "HOUR SERVICE 1600",
+    "HOUR SERVICE 2400",
+    "HOUR SERVICE 3200",
+    "HOUR SERVICE 4000",
+    "ENGINE OIL SERVICE",
+    "HYDRAULIC OIL SERVICE"
+  ]
+}

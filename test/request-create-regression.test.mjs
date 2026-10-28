@@ -1,4 +1,5 @@
 import {requestRequiresSubCategory} from '../breakdown-sub-category.mjs';
+import {newClassification,classificationError} from '../repair-classification.mjs';
 import * as siteAccess from '../region-scope.mjs';
 import {requestShiftLabel} from '../request-shift.mjs';
 import test from "node:test";
@@ -36,6 +37,7 @@ function createRoute({ conflict = null, insertError, reports = async () => {}, n
     app: { post: (_path, ...handlers) => { handler = handlers.at(-1); } },
     requireSession: () => {}, requirePermission: () => () => {},
     validRequestAudioDataUrl: () => true,
+    newClassification:input=>newClassification(input,'2026-10-28T16:59:59+05:30'),classificationError,
     ...siteAccess,currentUserRecord: async () => ({ site: request.site }),
     canonicalSiteName: value => value,
     createRequestWithVehicleLock: async (_identity, write) => {
@@ -201,7 +203,7 @@ test("without a chassis, two submit events still save once and close after persi
   const end = client.indexOf("  return (", start);
   const submit = evaluate(`${client.slice(start, end)} return submit;`, {
     siteUpdateSafety: createSiteUpdateSafety(),
-    submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null, existingReason:"",
+    submitting: false, submittingRef, checkingConflict: false, duplicateConflict: null, existingReason:"", hierarchyEnabled:false,
     FormData: class { get(name) { return request[name] || ""; } },
     requestEquipmentMeterType: () => "HMR", v: {}, equipmentDetails: {...request, chassis: ""},
     equipmentGroup: "", currentLocation: request.site, driverLookup: { name: "" },

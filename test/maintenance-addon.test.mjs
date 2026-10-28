@@ -19,14 +19,14 @@ test('add-on creation and linked closure commit together and roll back together'
       registration_number text,chassis_number text,driver_name text,driver_name_source text,
       superior_name text,site text,category text,sub_category text,complaint text,started_at timestamptz,
       acceptance_required boolean,status text,owner_name text,requester_login text,requester_role text,
-      meter_type text,request_shift text,linked_request_references jsonb DEFAULT '[]',archived_at timestamptz);
+      meter_type text,request_shift text,linked_request_references jsonb DEFAULT '[]',archived_at timestamptz,classification jsonb);
       CREATE TABLE master_records(master_name text,record_data jsonb);
       INSERT INTO master_records VALUES ('Repair type master','{"repairType":"Engine"}'),('Repair type master','{"repairType":"WGM"}'),('Repair type master','{"repairType":"Scheduled Service"}');
       INSERT INTO maintenance_requests(reference,status,linked_request_references) VALUES ('REQ-OLD','Open','["REQ-LINKED"]'),('REQ-LINKED','Open','["REQ-OLD"]');`);
     const projection='reference AS ref,status,door_number AS door,chassis_number AS chassis,site,category,complaint,sub_category AS "subCategory",started_at AS start,linked_request_references AS "linkedRequestReferences"';
     const original={ref:'REQ-OLD',category:'WGM',door:'D17',chassis:'CH17',equipment:'Truck',equipmentGroup:'TIPPER',site:'Mine',meterType:'KMR',closedAt:'2026-10-26T18:00:00+05:30'};
     let failTimeline=false,conflict=null;
-    const dependencies={requestProjection:projection,parseRequestTimelineTimestamp:value=>new Date(value),requestShiftLabel:()=> 'Day',
+    const dependencies={now:()=>Date.parse('2026-10-28T16:59:59+05:30'),requestProjection:projection,parseRequestTimelineTimestamp:value=>new Date(value),requestShiftLabel:()=> 'Day',
       requestSubCategory:async(_client,category,value)=>{if(category!=='Engine'||value!=='Water Pump')throw Error('Invalid sub-category');return value;},
       activeRequestConflict:async()=>conflict,recordRequestTimeline:async()=>{if(failTimeline)throw Error('Timeline failed');}};
     const req={session:{role:'normal',assignedRole:'Maintenance User',login:'maintenance',name:'Mechanic'},body:{status:'Closed'}};

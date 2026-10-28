@@ -134,7 +134,7 @@ test('creation SQL persists the validated sub-category and permits an empty prod
     const columns=insert.match(/\((reference,[^)]+)\)/)[1].split(',');
     await db.exec(`CREATE TABLE maintenance_requests(${columns.map(name=>`${name} ${name==='acceptance_required'?'boolean':name==='started_at'?'timestamptz':'text'}`).join(',')});`);
     const context={client:db,requestProjection:'reference AS ref,sub_category AS "subCategory"',ref:'REQ-SUB',equipment:'Truck',equipmentGroup:'TIPPER',door:'D1',reg:'R1',chassis:'CH1',storedDriverName:'',storedDriverSource:'',superior:'',storedSite:'Site',category:'DRIVELINE',complaint:'Noise',complaintAudio:'',startedAt:new Date(),req:{session:{name:'Operator',login:'production',assignedRole:'Production User'}},normalizedMeterType:'KMR',storedComplaintLanguage:'en',storedSubCategory:validateRequestSubCategory('DRIVELINE','Engine',mappings)};
-    const save=new Function(...Object.keys(context),`return (async()=>{${insert};return result;})()`);
+    const save=new Function(...Object.keys(context),`const storedCategory=category,classification=null;return (async()=>{${insert};return result;})()`);
     let result=await save(...Object.values(context));
     assert.deepEqual(result.rows,[{ref:'REQ-SUB',subCategory:'Engine'}]);
     context.ref='REQ-OPTIONAL';context.storedSubCategory=validateRequestSubCategory('DRIVELINE','',mappings);

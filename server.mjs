@@ -1,3 +1,4 @@
+import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
 import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback} from './deletion-approval.mjs';
 import {createDeletionWhatsApp} from './deletion-sms.mjs';
@@ -624,6 +625,7 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS first_trip_remark TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS classification JSONB;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS issues JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS workflow_history JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS running_bd_at TIMESTAMPTZ;
@@ -6305,7 +6307,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 const requestProjection=`archived_at AS "archivedAt", linked_request_references AS "linkedRequestReferences", issues, to_char(running_bd_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "runningBdAt", reference AS ref, request_shift AS "requestShift", equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
-  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
+  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, classification, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
   (complaint_media <> '[]'::jsonb) AS "complaintMediaAvailable",
   vehicle_idle AS "vehicleIdle",to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
@@ -7131,6 +7133,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintena
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
       const eligible=await client.query(`SELECT ${requestProjection},requester_login FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}`,[reference]);
       if(!eligible.rows.length)throw arrivalRedFlagError();
+      eligible.rows[0]=await saveRequestClassification(client,req,eligible.rows[0]);
       const storedSubCategory=await requestSubCategory(client,eligible.rows[0].category,req.body?.subCategory ?? eligible.rows[0].subCategory,true,eligible.rows[0]);
       await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
       eligible.rows[0].subCategory=storedSubCategory;
@@ -7256,7 +7259,21 @@ app.get('/api/request-shifts',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+async function saveRequestClassification(client,req,before,input=req.body?.classification){
+  if(before.classification?.version!==1)return before;
+  const classification=updateClassification(before.classification,input);
+  const problem=classificationError(classification,req.session.assignedRole==='Maintenance User');
+  if(problem)throw Object.assign(new Error(`${before.ref}: ${problem}`),{status:400});
+  const category=classification.breakdownCategory || before.category;
+  const subCategory=classification.breakdownSubCategory;
+  await client.query('UPDATE maintenance_requests SET classification=$2::jsonb,category=$3,sub_category=$4 WHERE reference=$1',[before.ref,JSON.stringify(classification),category,subCategory]);
+  return {...before,classification,category,subCategory};
+}
+
 async function requestSubCategory(client,category,value,required=false,existingRequest=null){
+  // Rollout never changes or backfills the saved fields on an existing ticket.
+  // New tickets validate the full hierarchy under the same transaction lock.
+  if(existingRequest && (classificationActive() || existingRequest.classification?.version===1))return existingRequest.subCategory || '';
   const {rows}=await client.query("SELECT record_data FROM master_records WHERE master_name='Breakdown Sub-Category'");
   if(existingRequest)return validateExistingRequestSubCategory(existingRequest,category,value,rows.map(row=>row.record_data));
   return validateRequestSubCategory(category,value,rows.map(row=>row.record_data),{required});
@@ -7290,13 +7307,17 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const {rows}=await createRequestWithVehicleLock({door,chassis,existingReference:req.body?.existingReference,existingReason:req.body?.existingReason},async(client,duplicate)=>{
     if(duplicate && displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
-    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory,requestRequiresSubCategory());
+    const classification=newClassification(req.body?.classification);
+    const classificationProblem=classification && classificationError(classification,req.session.assignedRole==='Maintenance User');
+    if(classificationProblem)throw Object.assign(new Error(classificationProblem),{status:400});
+    const storedCategory=classification ? classification.breakdownCategory || 'Maintenance request' : category;
+    const storedSubCategory=classification ? classification.breakdownSubCategory : await requestSubCategory(client,category,req.body?.subCategory,requestRequiresSubCategory());
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name,classification)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21,$24::jsonb)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,storedCategory,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory,JSON.stringify(classification)]);
     await client.query('UPDATE maintenance_requests SET request_shift=$2 WHERE reference=$1',[ref,requestShift]);
     result.rows[0].requestShift=requestShift;
     if(complaintMedia.length){
@@ -7410,7 +7431,9 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card (images up to 100 KB, PDF up to 5 MB).`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
-    const storedSubCategory=await requestSubCategory(client,category,req.body?.subCategory ?? before.subCategory,true,before);
+    before=await saveRequestClassification(client,req,before);
+    const storedCategory=before.classification?.version===1 ? before.category : category;
+    const storedSubCategory=await requestSubCategory(client,storedCategory,req.body?.subCategory ?? before.subCategory,true,before);
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     if(maintenanceMetersRequired(req.session)&&req.body?.openingMeterReading===undefined){
       normalizedOpeningMeterReading=String(openingMeterReadings[normalizedMeterType] ?? before.openingMeterReadings?.[normalizedMeterType] ?? (before.meterType===normalizedMeterType?before.openingMeterReading:'') ?? '').trim();
@@ -7435,7 +7458,7 @@ app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePerm
       oem_responsibility=COALESCE($14::text,oem_responsibility),sub_category=$15
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') AND ${arrivalFlagReadySql}
         AND (NOT $13::boolean OR expected_completion_changed_at IS NULL)
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,oemResponsibility??null,storedSubCategory]);
+      RETURNING ${requestProjection}`,[storedCategory,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason,revisingEtc,oemResponsibility??null,storedSubCategory]);
     if(!result.rows.length&&revisingEtc)throw etcChangeLimitError();
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
@@ -7488,6 +7511,7 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
     if(!req.body?.targetReferences&&(ideal||status==='Closed')&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt&&(!ideal||isIdleVehicleRequest(existingRows[0])))return res.json(existingRows[0]);
     const primaryReference=reference;
     const {rows,delayedClosure,addonRequest}=await withLinkedMaintenanceSelection(req,reference,async(client,before,reference=primaryReference)=>{
+    before=await saveRequestClassification(client,req,before,reference===primaryReference ? req.body?.classification : before.classification);
     const storedSubCategory=await requestSubCategory(client,before.category,reference===primaryReference ? (req.body?.subCategory ?? before.subCategory) : before.subCategory,true,before);
 
     before={...before,subCategory:storedSubCategory};

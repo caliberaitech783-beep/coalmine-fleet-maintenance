@@ -1,3 +1,5 @@
+import RepairClassificationFields,{classificationFromForm} from './repair-classification-fields.jsx';
+import {classificationActive,classificationError} from '../repair-classification.mjs';
 import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
 import {fetchWithDeletionApproval} from './deletion-approval.jsx';
 import {totalFleetRecords,totalFleetCounts,totalFleetSelectionRows,totalFleetDetailRows,totalFleetOemChartRows,TOTAL_FLEET_DETAIL_COLUMNS} from "./total-fleet-model.mjs";
@@ -6072,7 +6074,7 @@ function BreakdownSubCategorySelect({category,initialValue="",required=false}) {
   </label>;
 }
 
-function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const [selectedCategory,setSelectedCategory]=useState("");
   const shiftData=useRequestShiftData();
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
@@ -6080,6 +6082,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     [equipmentId, setEquipmentId] = useState(""),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [openedAt] = useState(() => new Date());
+  const hierarchyEnabled=classificationActive();
   const {date: systemDate, time: systemTime} = indiaWorkflowDateTimeParts(openedAt);
   const locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
@@ -6215,7 +6218,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         equipmentGroup: equipmentDetails.group || equipmentGroup,
         door: equipmentDetails.door,
         site: currentLocation || "Not assigned",
-        category: String(fd.get("category") || "").trim(),
+        category: String(fd.get("breakdownCategory") || fd.get("category") || "").trim(),
+        classification: hierarchyEnabled ? classificationFromForm(fd) : undefined,
         subCategory: String(fd.get("subCategory") || "").trim(),
         complaint: fd.get("complaint"),
         complaintAudio: fd.get("complaintAudio"),
@@ -6294,6 +6298,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               ))}
             </select>
           </label>
+          {hierarchyEnabled ? <RepairClassificationFields required={maintenanceUser} /> : <>
           <label>
             Type of breakdown *
             <select
@@ -6322,6 +6327,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </select>
           </label>
           <BreakdownSubCategorySelect key={selectedCategory} category={selectedCategory} required={requestRequiresSubCategory()} />
+          </>}
           <div>
             <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
               group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
@@ -10072,7 +10078,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   const delayedReasonOptions=typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
     {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header><DailyUpdatesPanel remarks={history} category={request.category} formatDateTime={formatTwelveHourDateTime} missingLabel="Not recorded" /></section>}
-    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({subCategory:String(form.get("subCategory")||"").trim(),remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label>{requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}<label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
+    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({classification:request.classification?.version===1 ? classificationFromForm(form) : undefined,subCategory:String(form.get("subCategory")||"").trim(),remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label>{!classificationActive() && requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}{request.classification?.version===1 && <RepairClassificationFields initial={request.classification} required />}<label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
 
@@ -10425,7 +10431,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       const form = new FormData(event.currentTarget);
       const correctionReason = String(form.get("correctionReason") || "").trim();
       if (acceptingRequest && !["OEM", "NON OEM"].includes(form.get("oemResponsibility"))) return setFormError("Select OEM or NON OEM before accepting the vehicle.");
-      if (!editCategory) return setFormError("Choose a breakdown type before accepting or saving this request.");
+      if (!editCategory && request.classification?.version!==1) return setFormError("Choose a breakdown type before accepting or saving this request.");
       if (etcChanged && !correctionReason) return setFormError("Explain why the expected completion time is being changed.");
       setFormError("");
       submitLock.current = true;
@@ -10434,13 +10440,14 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: editCategory, subCategory: String(form.get("subCategory") || "").trim(), ...(form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility, responsibilityChangeReason: String(form.get("responsibilityChangeReason") || "").trim()} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: String(form.get("breakdownCategory")||editCategory), classification: request.classification?.version===1 ? classificationFromForm(form) : undefined, subCategory: String(form.get("subCategory") || "").trim(), ...(form.get("oemResponsibility") ? {oemResponsibility: form.get("oemResponsibility"), ...(canEditResponsibility ? {previousResponsibility, responsibilityChangeReason: String(form.get("responsibilityChangeReason") || "").trim()} : {})} : {}), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
         finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="formgrid">
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
+        {request.classification?.version===1 ? <RepairClassificationFields initial={request.classification} required={requireMeters} onCategoryChange={setEditCategory} /> : <>
         <label>
           Type of breakdown *
           <select name="category" required value={editCategory} onChange={(event) => setEditCategory(event.target.value)} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
@@ -10454,7 +10461,8 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
               ))}
           </select>
         </label>
-        {requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect key={editCategory} category={editCategory} initialValue={editCategory===request.category ? request.subCategory : ""} required />}
+        {!classificationActive() && requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect key={editCategory} category={editCategory} initialValue={editCategory===request.category ? request.subCategory : ""} required />}
+        </>}
         <label>Door number<input value={request.door || ""} readOnly aria-readonly="true" /></label>
         <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
@@ -10543,7 +10551,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({...(addonDraft.current?{addonRequest:addonDraft.current}:{}),subCategory: String(form.get("subCategory") || "").trim(), closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal: addonDraft.current?false:ideal, idleReason: !addonDraft.current && ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({classification: request.classification?.version===1 ? classificationFromForm(form) : undefined,...(addonDraft.current?{addonRequest:addonDraft.current}:{}),subCategory: String(form.get("subCategory") || "").trim(), closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), resolvedIssues:(form.getAll?.("resolvedIssues") || []).map(Number), ...(linkedTickets.length>1 ? {targetReferences,resolvedIssuesByReference:Object.fromEntries(linkedTickets.filter(row=>targetReferences.includes(row.ref)).map(row=>[row.ref,status==="Closed" ? (row.issues||[]).map((_,index)=>index) : row.ref===request.ref ? (form.getAll?.("resolvedIssues")||[]).map(Number) : (row.issues||[]).flatMap((issue,index)=>issue.resolved?[index]:[])]))} : {}), status, ideal: addonDraft.current?false:ideal, idleReason: !addonDraft.current && ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
         finishSubmission({ok: true});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); if(addonDraft.current){setAddonEditing(true);setAddonPrompt(true);} }
       finally { finishSubmission(); submitLock.current = false; setSubmitting(false); }
@@ -10563,7 +10571,8 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(request.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
-        <div className="full">{requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}</div>
+        {request.classification?.version===1 && <RepairClassificationFields initial={request.classification} required={requireMeters} />}
+        <div className="full">{!classificationActive() && requestRequiresSubCategory(request.createdAt ?? null) && <BreakdownSubCategorySelect category={request.category} initialValue={request.subCategory} required />}</div>
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly required={requireMeters} />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} required={requireMeters} />
         <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "Images compressed to 100 KB maximum · PDF maximum 5 MB"}</small></label>
@@ -10635,15 +10644,17 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
       </> : <form className="form" onSubmit={event=>{
         event.preventDefault();event.stopPropagation();
         if(submitLock.current)return;
-        const form=new FormData(event.currentTarget),category=String(form.get('category')||'').trim(),subCategory=String(form.get('subCategory')||'').trim(),complaint=String(form.get('complaint')||'').trim();
-        if(!addonOptions.includes(category)||!subCategory||!complaint){setFormError('Select a different repair type, its sub-category and describe the new complaint.');return;}
-        addonDraft.current={ref:addonDraft.current?.ref || ('REQ-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)),category,subCategory,complaint};
+        const form=new FormData(event.currentTarget),classification=classificationActive()?classificationFromForm(form):undefined,category=String(form.get('breakdownCategory')||form.get('category')||'').trim(),subCategory=String(form.get('breakdownSubCategory')||form.get('subCategory')||'').trim(),complaint=String(form.get('complaint')||'').trim();
+        if((classification ? classificationError(classification,true) || category===request.category : !addonOptions.includes(category))||!subCategory||!complaint){setFormError('Select a different repair type, its sub-category and describe the new complaint.');return;}
+        addonDraft.current={ref:addonDraft.current?.ref || ('REQ-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)),category,subCategory,complaint,classification};
         addonDecision.current=true;setAddonPrompt(false);setFormError('');closeForm.current?.requestSubmit();
       }}>
         <label>Vehicle<input value={request.door || request.chassis || ''} readOnly /></label>
         <label>Site<input value={request.site || ''} readOnly /></label>
+        {classificationActive() ? <RepairClassificationFields initial={addonDraft.current?.classification} required /> : <>
         <label>Repair type *<select name="category" required value={addonCategory} disabled={!repairTypesLoaded || submitting} onChange={event=>setAddonCategory(event.target.value)}><option value="">{repairTypesLoaded?'Select repair type':'Loading repair types…'}</option>{addonOptions.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
         <BreakdownSubCategorySelect key={addonCategory} category={addonCategory} initialValue={addonDraft.current?.subCategory || ''} required />
+        </>}
         <label>New complaint *<textarea name="complaint" required defaultValue={addonDraft.current?.complaint || ''} disabled={submitting} /></label>
         <p>The original request closes only when the add-on is saved. The vehicle will remain under maintenance.</p>
         {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
@@ -11785,7 +11796,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
       </div>}
     </main>
     {deletionReview && <RequestDeleteReview records={deletionReview} onDelete={onDeleteRequests} onClose={() => setDeletionReview(null)} Modal={Modal} formatDateTime={formatTwelveHourDateTime} />}
-    {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
+    {canCreate && show && <MaintenanceForm normal maintenanceUser={isMaintenance} onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm requireMeters={maintenanceMetersRequired(session)} onAddDailyRemark={onAddDailyRemark} request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm allowAddon={isMaintenance} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} requireMeters={maintenanceMetersRequired(session)} request={closing} linkedRequests={requestRows} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}

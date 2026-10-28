@@ -68,7 +68,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
     release(){released=true;},
   };
   const register=(_path,...handlers)=>{chain=handlers;};
-  const context={ requestSubCategory: async (_client,_category,value)=>String(value||""),
+  const context={ saveRequestClassification:async(_client,_req,before)=>before, requestSubCategory: async (_client,_category,value)=>String(value||""),
     managerRoleSelection,userManagesSite:(user,site)=>siteAccess.reportScopeIncludesSite(siteAccess.managerReportScope(user),site),
     ...timeline,maintenanceMetersRequired,requireMaintenanceMeters,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
