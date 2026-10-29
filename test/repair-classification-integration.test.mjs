@@ -27,6 +27,10 @@ test('locked maintenance writes persist the hierarchy and preserve every legacy 
     assert.deepEqual(rows.find(row=>row.reference==='NEW').classification,{version:1,...input});
     assert.deepEqual(rows.find(row=>row.reference==='OLD'),{reference:'OLD',category:'Obsolete category',sub_category:'Obsolete component',classification:null});
     await assert.rejects(()=>save(db,req,saved,{...input,breakdownCategory:'ENGINE'}),/allowed/);
+    const other={repairType:'Breakdown',breakdownCategory:'Other',breakdownSubCategory:'Other'};
+    await save(db,req,saved,other);
+    const otherRow=(await db.query("SELECT category,sub_category,classification FROM maintenance_requests WHERE reference='NEW'")).rows[0];
+    assert.deepEqual(otherRow,{category:'Other',sub_category:'Other',classification:{version:1,...other}});
     const production={session:{assignedRole:'Production User'},body:{}};
     assert.equal((await save(db,production,before,{})).classification.repairType,'');
   } finally {await db.close();}
@@ -69,10 +73,15 @@ test('selectors enforce order, optional production fields, and reset children af
   selects[0].props.onChange({target:{value:'Scheduled'}});
   selects=fields({required:true});
   assert.ok(selects.every(field=>field.props.required));
-  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['SCHEDULED SERVICE']);
+  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['SCHEDULED SERVICE','Other']);
   selects[1].props.onChange({target:{value:'SCHEDULED SERVICE'}});
   selects=fields();selects[2].props.onChange({target:{value:'HOUR SERVICE 250'}});
   selects=fields();selects[0].props.onChange({target:{value:'WGM'}});
   selects=fields();assert.equal(selects[1].props.value,'');assert.equal(selects[2].props.value,'');
-  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['WGM']);
+  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['WGM','Other']);
+  selects[1].props.onChange({target:{value:'Other'}});
+  selects=fields();
+  assert.deepEqual(React.Children.toArray(selects[2].props.children).slice(1).map(option=>option.props.children),['Other']);
+  selects[2].props.onChange({target:{value:'Other'}});
+  selects=fields();assert.equal(selects[2].props.value,'Other');
 });
