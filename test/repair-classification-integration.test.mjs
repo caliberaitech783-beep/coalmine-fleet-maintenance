@@ -73,12 +73,13 @@ test('selectors enforce order, optional production fields, and reset children af
   selects[0].props.onChange({target:{value:'Scheduled'}});
   selects=fields({required:true});
   assert.ok(selects.every(field=>field.props.required));
-  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['SCHEDULED SERVICE','Other']);
+  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['SCHEDULED SERVICE']);
   selects[1].props.onChange({target:{value:'SCHEDULED SERVICE'}});
   selects=fields();selects[2].props.onChange({target:{value:'HOUR SERVICE 250'}});
   selects=fields();selects[0].props.onChange({target:{value:'WGM'}});
-  selects=fields();assert.equal(selects[1].props.value,'');assert.equal(selects[2].props.value,'');
-  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['WGM','Other']);
+  selects=fields();assert.equal(selects[1].props.value,'WGM');assert.equal(selects[2].props.value,'WGM');
+  assert.deepEqual(React.Children.toArray(selects[1].props.children).slice(1).map(option=>option.props.children),['WGM']);
+  selects[0].props.onChange({target:{value:'Breakdown'}});selects=fields();
   selects[1].props.onChange({target:{value:'Other'}});
   selects=fields();
   assert.deepEqual(React.Children.toArray(selects[2].props.children).slice(1).map(option=>option.props.children),['Other']);
