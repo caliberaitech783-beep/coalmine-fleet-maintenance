@@ -81,7 +81,7 @@ test("legacy timestamps and incomplete history do not fabricate dated requests",
 // section, so a disconnected date prop or a card using the old totals fails.
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const calculations = source.slice(source.indexOf("  const availabilityDate ="), source.indexOf("  const breakdownSummaryEndKey ="));
-const siteCalculation = source.match(/  const availabilityCountBySite = [\s\S]*?\n  \}\)\);/)[0];
+const siteCalculation = source.slice(source.indexOf('  const availabilityCountBySite ='),source.indexOf('  const roadAvailabilityBySiteName ='));
 const viewStart = source.indexOf('<div className="mine-site-road-view">');
 const view = source.slice(viewStart, source.indexOf(" : <FleetDataState", viewStart));
 const viewCode = (await transformWithOxc(`const tree = (${view});`, "AvailabilityView.jsx", { jsx: { runtime: "classic" } })).code;
@@ -107,7 +107,7 @@ const availabilityPercentFromCounts = (row = {}) => {
 function dashboardSection(date) {
   const scope = {
     dashboardReconnecting: false,
-    React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite, availabilityPercentFromCounts,
+    React, useMemo:fn=>fn(), availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite, availabilityPercentFromCounts,
     throughputRequests: requests, dashboardDate: "2026-01-01", breakdownSummaryFrom: date, breakdownSummaryTo: date, todayKey: "2026-09-10", throughputEquipment: assets,
     breakdownSummaryStartKey: "2026-09-01", breakdownSummaryEndKey: date || "2026-09-10", formatDisplayDate,
     throughputSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},

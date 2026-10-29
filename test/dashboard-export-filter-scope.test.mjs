@@ -8,7 +8,7 @@ const declaration=(name,next)=>source.slice(source.indexOf(`  const ${name} =`),
 const availableRegions=[{code:'WCL',sites:['Sasti OC','Majri OC']},{code:'NCL',sites:['Jayant OC']}];
 const recordBelongsToSite=(record,site)=>record.site===site;
 function scope({site='all',region=null,allowed=null}={}) {
-  const values={dashboardSite:site,selectedRegion:region,normalizedAllowedSites:allowed,availableRegions,recordBelongsToSite,
+  const values={useMemo:fn=>fn(),dashboardSite:site,selectedRegion:region,normalizedAllowedSites:allowed,availableRegions,recordBelongsToSite,
     activeSites:site==='all'?(region?.sites||availableRegions.flatMap(r=>r.sites)):[site]};
   return new Function(...Object.keys(values),declaration('trendAvailableSites','activeTrendSite')+declaration('requestLifecycleRegions','requestLifecycleRegion')+'return {sites:trendAvailableSites,lifecycle:requestLifecycleRegions.flatMap(r=>r.sites)};')(...Object.values(values));
 }

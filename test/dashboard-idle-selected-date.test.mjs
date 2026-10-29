@@ -8,6 +8,7 @@ import {breakdownMovementForRange} from '../dashboard-breakdown-movement.mjs';
 import {availabilityRequestsForDate} from '../src/dashboard-availability.mjs';
 import {dashboardFleetSnapshot} from '../dashboard-fleet-snapshot.mjs';
 import {fleetMovementLedger} from '../src/fleet-movement-ledger.mjs';
+import {indiaDateTimeEpoch} from '../report-date-range.mjs';
 
 const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const calculation=main.slice(main.indexOf('  const availabilityCountBySite ='),main.indexOf('  // Match the linked request list'));
@@ -23,6 +24,7 @@ test('site BD balance and idle match unique-fleet availability, including carryo
   const availableRequests=availabilityRequestsForDate(requests,date);
   const equipment=date?dashboardFleetSnapshot(assets,availableRequests):assets;
   const bindings={throughputSites:['Sasti OC','Jayant OC'],availabilityEquipment:equipment,availabilityRequests:availableRequests,throughputEquipment:assets,throughputRequests:requests,recordBelongsToSite,liveEquipmentMetrics,breakdownMovementForRange,fleetMovementLedger,availabilityRequestsForDate,dashboardFleetSnapshot,todayKey:'2026-10-29',dashboardShift:'all',breakdownSummaryStartKey:date||'2026-10-29',breakdownSummaryEndKey:date||'2026-10-29'};
+  Object.assign(bindings,{useMemo:fn=>fn(),indiaDateTimeEpoch});
   const result=new Function(...Object.keys(bindings),calculation+'return {breakdownSiteSummary,roadAvailabilityBySiteName};')(...Object.values(bindings));
   const totals=liveEquipmentMetrics(equipment,availableRequests);
   const report=throughputSectionExport({sites:result.breakdownSiteSummary,roadBySite:result.roadAvailabilityBySiteName,availabilityTotals:totals,openBalance:totals.offRoad,idleRequests:totals.idle});

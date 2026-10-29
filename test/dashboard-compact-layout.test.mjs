@@ -65,7 +65,7 @@ test("day-wise details use a larger table with fleet-impact BD percentage", () =
 });
 
 test("each site links breakdown movement with its current availability count", () => {
-  assert.match(client, /const roadAvailabilityBySiteName = new Map/);
+  assert.match(client, /const roadAvailabilityBySiteName = useMemo\(\(\)=>new Map/);
   assert.match(client, /className="mine-breakdown-road-impact"/);
   assert.match(client, /road\.onRoad.*On ·.*road\.offRoad.*Off ·.*road\.idle.*Idle/);
   assert.match(client, /className="dashboard-breakdown-road-shortcut"/);

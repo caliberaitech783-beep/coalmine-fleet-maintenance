@@ -2057,8 +2057,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const lmvTodayIndexes = new Set(todayBreakdownRows.map(request => resolveLmvToday(request, {allowTransferred:true}).assetIndex).filter(index => index !== null));
   const todayLmvBreakdownRecords = visibleLmv.filter((record,index) => record.lmvRoadStatus === "offroad" && lmvTodayIndexes.has(index));
   const todayBreakdownDirection = todayBreakdownRows.length ? "up" : "flat";
-  const trendAvailableSites = [...new Set((selectedRegion || dashboardSite !== "all" ? activeSites : availableRegions.flatMap((region) => region.sites))
-    .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
+  const trendAvailableSites = useMemo(()=>[...new Set((selectedRegion || dashboardSite !== "all" ? activeSites : availableRegions.flatMap((region) => region.sites))
+    .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))],[selectedRegion,dashboardSite,activeSites,availableRegions,normalizedAllowedSites]);
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
   const trendRequests = activeTrendSite === "all" ? locationBreakdowns : locationBreakdowns.filter((record) => recordBelongsToSite(record, activeTrendSite));
   const trendRequestsForShift = trendRequests.filter((record) => requestMatchesMovementShift(record, "incoming"));
@@ -2089,14 +2089,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendPeriodDays ? (breakdownTrendTotal / breakdownTrendPeriodDays).toFixed(1) : "0.0";
   const kpis = useMemo(() => liveEquipmentMetrics(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
-  const throughputRegions = availableRegions.filter((region) => !selectedRegion || region.code === selectedRegion.code);
+  const throughputRegions = useMemo(()=>availableRegions.filter((region) => !selectedRegion || region.code === selectedRegion.code),[availableRegions,selectedRegion]);
   const selectedThroughputRegion = throughputRegions.find((region) => region.code === throughputRegion);
-  const throughputSiteOptions = (selectedThroughputRegion?.sites || []).filter((site) => trendAvailableSites.includes(site));
+  const throughputSiteOptions = useMemo(()=>(selectedThroughputRegion?.sites || []).filter((site) => trendAvailableSites.includes(site)),[selectedThroughputRegion,trendAvailableSites]);
   const activeThroughputSite = selectedThroughputRegion && throughputSiteOptions.includes(throughputSite) ? throughputSite : "all";
-  const throughputSites = selectedThroughputRegion ? (activeThroughputSite === "all" ? throughputSiteOptions : [activeThroughputSite]) : trendAvailableSites;
+  const throughputSites = useMemo(()=>selectedThroughputRegion ? (activeThroughputSite === "all" ? throughputSiteOptions : [activeThroughputSite]) : trendAvailableSites,[selectedThroughputRegion,activeThroughputSite,throughputSiteOptions,trendAvailableSites]);
   const inThroughputScope = (record) => !selectedThroughputRegion || throughputSites.some((site) => recordBelongsToSite(record, site));
-  const throughputRequests = locationBreakdowns.filter(inThroughputScope);
-  const throughputEquipment = visibleEquipment.filter(inThroughputScope);
+  const throughputRequests = useMemo(()=>locationBreakdowns.filter(inThroughputScope),[locationBreakdowns,selectedThroughputRegion,throughputSites]);
+  const throughputEquipment = useMemo(()=>visibleEquipment.filter(inThroughputScope),[visibleEquipment,selectedThroughputRegion,throughputSites]);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
   const movementRequestRowsForShift = (records, start, end, metric = "all", type = "") => movementRequestRows(records, start, end, metric)
     .filter((record) => (!type || requestCategoryLabel(record) === type) && requestMatchesMovementShift(record, metric));
@@ -2119,10 +2119,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const availabilityDate = breakdownSummaryTo === todayKey ? "" : breakdownSummaryTo;
   const availabilityDateLabel = formatDisplayDate(availabilityDate || todayKey);
   const availabilityStatusLabel = availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : `Availability: live · ${availabilityDateLabel}`;
-  const availabilityRequests = availabilityRequestsForDate(throughputRequests, availabilityDate);
+  const availabilityRequests = useMemo(()=>availabilityRequestsForDate(throughputRequests, availabilityDate),[throughputRequests,availabilityDate]);
   // A selected historical day must not reuse today's server-derived status.
-  const availabilityEquipment = availabilityDate ? dashboardFleetSnapshot(throughputEquipment, availabilityRequests) : throughputEquipment;
-  const availabilityKpis = liveEquipmentMetrics(availabilityEquipment, availabilityRequests);
+  const availabilityEquipment = useMemo(()=>availabilityDate ? dashboardFleetSnapshot(throughputEquipment, availabilityRequests) : throughputEquipment,[availabilityDate,throughputEquipment,availabilityRequests]);
+  const availabilityKpis = useMemo(()=>liveEquipmentMetrics(availabilityEquipment, availabilityRequests),[availabilityEquipment,availabilityRequests]);
   const breakdownSummaryEndKey = breakdownSummaryTo;
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
@@ -2136,18 +2136,32 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setBreakdownSummaryFrom((from) => bound === "from" || !from || value < from ? value : from);
     setBreakdownSummaryTo((to) => bound === "to" || !to || value > to ? value : to);
   };
-  const availabilityCountBySite = throughputSites.map((site) => ({
+  const availabilityCountBySite = useMemo(()=>throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
-  }));
-  const roadAvailabilityBySiteName = new Map(availabilityCountBySite.map((site) => [site.site, site]));
-  const fleetMovementForRange = (site, start, end) => {
-    const records = throughputRequests.filter(record => !site || recordBelongsToSite(record, site));
-    const assets = throughputEquipment.filter(record => !site || recordBelongsToSite(record, site));
-    const date = end === todayKey ? '' : end;
-    const atEnd = date ? dashboardFleetSnapshot(assets, availabilityRequestsForDate(records, date)) : assets;
-    return fleetMovementLedger(assets, records, start, end, {endingEquipment:atEnd});
-  };
+  })),[throughputSites,availabilityEquipment,availabilityRequests]);
+  const roadAvailabilityBySiteName = useMemo(()=>new Map(availabilityCountBySite.map((site) => [site.site, site])),[availabilityCountBySite]);
+  const fleetMovementForRange = useMemo(()=>{
+    const scopes=new Map(),results=new Map();
+    return (site, start, end) => {
+      const now=Date.now();
+      let scope=scopes.get(site);
+      if(!scope){
+        const records = throughputRequests.filter(record => !site || recordBelongsToSite(record, site));
+        const assets = throughputEquipment.filter(record => !site || recordBelongsToSite(record, site));
+        const future=records.flatMap(record=>[record.start,record.startedAt,record.createdAt,record.closedAt,record.completedAt,record.idealRequestedAt,record.idleRequestedAt,record.runningBdAt].map(indiaDateTimeEpoch)).filter(at=>Number.isFinite(at)&&at>now).sort((a,b)=>a-b);
+        scope={records,assets,future};scopes.set(site,scope);
+      }
+      const key=JSON.stringify([site,start,end]),cached=results.get(key);
+      if(cached&&now<cached.expires)return cached.value;
+      const {records,assets}=scope,date = end === todayKey ? '' : end;
+      const atEnd = date ? dashboardFleetSnapshot(assets, availabilityRequestsForDate(records, date)) : assets;
+      const value=fleetMovementLedger(assets, records, start, end, {now,endingEquipment:atEnd});
+      if(results.size>=32)results.delete(results.keys().next().value);
+      results.set(key,{value,expires:date?Infinity:scope.future.find(at=>at>now)??Infinity});
+      return value;
+    };
+  },[throughputRequests,throughputEquipment,todayKey]);
   const breakdownSiteSummary = throughputSites.map((site) => {
     const road = roadAvailabilityBySiteName.get(site);
     const movement = fleetMovementForRange(site, breakdownSummaryStartKey, breakdownSummaryEndKey);
@@ -2177,7 +2191,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartDate = new Date(`${breakdownDetailEndKey}T12:00:00`);
   breakdownDetailStartDate.setDate(breakdownDetailStartDate.getDate() - (Math.max(1, breakdownDetailDays) - 1));
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
-  const breakdownDetailRows = breakdownDetailSite ? dailyBreakdownMovementForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey).map(day=>({date:day.date,...fleetMovementForRange(breakdownDetailSite,day.date,day.date)})) : [];
+  const breakdownDetailRows = useMemo(()=>{
+    if(!breakdownDetailSite||!breakdownDetailStartKey||!breakdownDetailEndKey||breakdownDetailStartKey>breakdownDetailEndKey)return [];
+    const rows=[],cursor=new Date(`${breakdownDetailStartKey}T12:00:00`),end=new Date(`${breakdownDetailEndKey}T12:00:00`);
+    while(cursor<=end){const date=localDateKey(cursor);rows.push({date,...fleetMovementForRange(breakdownDetailSite,date,date)});cursor.setDate(cursor.getDate()+1);}
+    return rows;
+  },[breakdownDetailSite,breakdownDetailStartKey,breakdownDetailEndKey,fleetMovementForRange]);
   const breakdownDetailTotals = breakdownDetailSite ? fleetMovementForRange(breakdownDetailSite, breakdownDetailStartKey, breakdownDetailEndKey) : {open:0,incoming:0,outgoing:0,balance:0,verified:true};
   const breakdownDetailTypeSummary = newBreakdownCategoryShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardCategories);
   const breakdownDetailCategoryRows = movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance");
@@ -8906,6 +8925,8 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
     if (!enabled) return undefined;
     let activeRequest = true;
     const controller = new AbortController();
+    let timedOut=false;
+    const loadTimeout=window.setTimeout(()=>{timedOut=true;controller.abort();if(activeRequest)setLoadError('Loading '+name+' timed out. Check your connection and use Retry.');},20_000);
     const loadStartedAt = performance.now();
     const sameScope = loadedMasterScope.current.name === name && loadedMasterScope.current.token === authToken;
     if (!sameScope) {
@@ -8926,7 +8947,7 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
         return {data, etag: response.headers?.get?.("etag") || ""};
       })
       .then(({data, etag, notModified}) => {
-        if (!activeRequest) return;
+        if (!activeRequest || timedOut) return;
         if (!notModified) {
           masterResponseCache.current = {name, token: authToken, etag};
           setRecords([...seed, ...(data[name] || [])]);
@@ -8935,9 +8956,10 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
         setLoaded(true);
       })
       .catch((error) => {
-        if (activeRequest && error.name !== "AbortError") setLoadError(error.message || "Could not load " + name + ".");
+        if (activeRequest && !timedOut && error.name !== "AbortError") setLoadError(error.message || "Could not load " + name + ".");
       })
       .finally(() => {
+        window.clearTimeout(loadTimeout);
         if (!activeRequest) return;
         window.dispatchEvent(new CustomEvent("menu-data-loaded", {
           detail: {name, seconds: (performance.now() - loadStartedAt) / 1000},
@@ -8945,6 +8967,7 @@ function useMasterRecords(name, seed = [], {enabled = true} = {}) {
       });
     return () => {
       activeRequest = false;
+      window.clearTimeout(loadTimeout);
       controller.abort();
     };
   }, [name, loadAttempt, authToken, enabled]);

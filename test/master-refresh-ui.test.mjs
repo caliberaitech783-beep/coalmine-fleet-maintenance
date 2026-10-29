@@ -83,6 +83,28 @@ test("refresh replaces a successful empty equipment result with newly added mast
   assert.equal(result[2], true);
 });
 
+test('stalled master loading exposes retry, ignores late responses, and recovers on a fresh request',async()=>{
+ const app=harness();app.render();app.effects();
+ const timeout=[...app.timeouts.values()].find(timer=>timer.duration===20_000);
+ assert.ok(timeout);timeout.fn();await settle();
+ assert.equal(app.requests[0].options.signal.aborted,true);
+ assert.match(app.render()[6],/timed out.*Retry/);
+ app.requests[0].respond({'Equipment master':oldEquipment});await settle();
+ assert.deepEqual(app.render()[0],[],'late data cannot override the timed-out request');
+ app.render()[7]();app.render();app.effects();
+ app.requests[1].respond({'Equipment master':newEquipment});await settle();
+ assert.deepEqual(app.render()[0],newEquipment);assert.equal(app.render()[6],'');
+ assert.equal(app.timeouts.size,0,'settled requests release their timers');
+});
+
+test('leaving a master cancels its pending timeout and cannot update the next page',async()=>{
+ const app=harness();app.render();app.effects();
+ app.unmount();assert.equal(app.timeouts.size,0);
+ assert.equal(app.requests[0].options.signal.aborted,true);
+ app.requests[0].respond({'Equipment master':oldEquipment});await settle();
+ assert.deepEqual(app.render()[0],[]);
+});
+
 test("master refreshes use an ETag and retain the confirmed snapshot after 304", async () => {
   const app = harness();
   app.render(); app.effects();
