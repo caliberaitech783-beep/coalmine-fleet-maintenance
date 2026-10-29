@@ -12,7 +12,7 @@ const source=readFileSync(new URL('../src/lmv-fleet.jsx',import.meta.url),'utf8'
 const extracted=source.slice(source.indexOf('export const LMV_MODES='),source.indexOf('export function LmvFleetControls')).replace('export ','')+source.slice(source.indexOf('const modeLabel='),source.indexOf('export function LmvReportsPage')).replaceAll('export ','');
 const compiled=(await transformWithOxc(extracted,'lmv-report.jsx',{jsx:{runtime:'classic'}})).code;
 function renderReport(props){
-  const Browser=({rows,regions,...rest})=>{assert.equal(rest.rowsAreScoped,true);assert.equal(regions[0].sites[0],'Sasti OC');return React.createElement('div',{'data-browser':true,'data-count':rows.length},rows.map(row=>React.createElement('span',{key:row.door},row.requestStatus)));};
+  const Browser=({rows,regions,...rest})=>{assert.equal(rest.rowsAreScoped,true);assert.deepEqual(rest.categoryLabels,{Unclassified:'LMV'});assert.equal(regions[0].sites[0],'Sasti OC');return React.createElement('div',{'data-browser':true,'data-count':rows.length},rows.map(row=>React.createElement('span',{key:row.door},row.requestStatus)));};
   const Component=new Function('React','useState','useMemo','lmvCounts','lmvRowsForMode','lmvSummaryRows','LMV_DETAIL_COLUMNS','LMV_SUMMARY_COLUMNS','totalFleetRecords','totalFleetDetailRows','REGION_DATA','DashboardRecordBrowser',`${compiled};return LmvReports;`)(React,React.useState,React.useMemo,lmvCounts,lmvRowsForMode,lmvSummaryRows,LMV_DETAIL_COLUMNS,LMV_SUMMARY_COLUMNS,totalFleetRecords,totalFleetDetailRows,REGION_DATA,Browser);
   return renderToStaticMarkup(React.createElement(Component,{records:lmvFleetSnapshot(lmvDemoRecords()),regions:REGION_DATA.map(region=>({...region,sites:region.sites.map(name=>({name}))})),browserProps:{},...props}));
 }

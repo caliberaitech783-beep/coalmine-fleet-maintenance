@@ -20,6 +20,23 @@ const {code} = await transformWithOxc(source, "record-browser.jsx", {jsx: {runti
 const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) => descendants(child, test))
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
+test('LMV report category override changes only displayed labels and preserves ordinary reports', () => {
+  const bindings = {requestCategoryLabel,BreakdownReasonHistory: () => null,React,...model,matchesSmartSearch,calculateBreakdownMinutes,formatBreakdownDaysHours,requestStatusSortRank,filterRecordsByDate,
+    useEffect:React.useEffect,useId:React.useId,useRef:React.useRef,useState:initial=>React.useState(initial && typeof initial==='object' && 'region' in initial ? {...initial,category:'Unclassified'} : initial),
+    useMemo:React.useMemo,useDeferredValue:React.useDeferredValue,createRowSearchIndex,ChevronLeft:()=>null,ChevronRight:()=>null,RotateCcw:()=>null,Eye:()=>null};
+  const Browser=new Function(...Object.keys(bindings),`${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
+  const row={id:'lmv-label',door:'LMV-1',group:'BOLERO',currentLocation:'Sasti OC',requestStatus:'On road'};
+  const props={rows:[row],regions:REGION_DATA,rowsAreScoped:true,initialRegion:'WCL',initialSite:'Sasti OC',Status:({children})=>children,formatDate:()=> '—',ActionsTable:({children})=>React.createElement('table',null,children)};
+  const ordinary=renderToStaticMarkup(React.createElement(Browser,props));
+  const lmv=renderToStaticMarkup(React.createElement(Browser,{...props,categoryLabels:{Unclassified:'LMV'}}));
+  assert.match(ordinary,/>Unclassified<\/span>/);
+  assert.doesNotMatch(lmv,/Unclassified/);
+  assert.match(lmv,/>LMV<\/span>/);
+  assert.match(lmv,/Sasti OC · LMV/);
+  assert.match(lmv,/>LMV<\/td>/);
+  assert.equal(model.equipmentCategoryLabel(row),'Unclassified');
+});
+
 test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
   const bindings = {requestCategoryLabel,BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
