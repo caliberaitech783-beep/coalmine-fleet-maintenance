@@ -155,7 +155,7 @@ const roadFigures = road => ({idle: road.idle, availability: availabilityPercent
 // and its availability count impact), the all-sites total, the four summary cards and the BD Type
 // Mix. The cards count requests, so their BD Balance leaves idle out and their Idle Vehicles counts
 // idle requests in the selected date range, as does the table. Availability Count remains live.
-export function throughputSectionExport({tab = 'breakdown', place = 'All regions', period = '', availabilityLabel = '', sites = [], roadBySite = new Map(), movementTotals = {}, openBalance = 0, idleRequests = 0, typeMix = [], availabilitySites = [], availabilityTotals = NO_ROAD} = {}) {
+export function throughputSectionExport({tab = 'breakdown', place = 'All regions', period = '', availabilityLabel = '', sites = [], roadBySite = new Map(), movementTotals = {}, openBalance = 0, idleRequests = 0, typeMix = [], categoryMixScope = '', categoryMixPending = 0, categoryMixEmpty = false, availabilitySites = [], availabilityTotals = NO_ROAD} = {}) {
   if (tab !== 'breakdown') return {
     title: heading('Tracking Vehicle Throughput', 'Availability Count', place, period, availabilityLabel),
     columns: AVAILABILITY_COLUMNS,
@@ -172,7 +172,9 @@ export function throughputSectionExport({tab = 'breakdown', place = 'All regions
       {name: 'Summary · BD Out', outgoing: totals.outgoing},
       {name: 'Summary · BD Balance (open, excluding idle)', balance: openBalance},
       {name: 'Summary · Idle Vehicles (idle requests)', idle: idleRequests},
-      ...typeMix.map(type => ({name: `Breakdown Category Mix · ${type.label}`, balance: type.count, share: type.percentage})),
+      ...(categoryMixEmpty ? [{name:`Breakdown Category Mix · No new requests yet · ${categoryMixScope}`,balance:0}] : []),
+      ...(categoryMixPending ? [{name:`Classification pending · ${categoryMixScope}`,balance:categoryMixPending}] : []),
+      ...typeMix.map(type => ({name: `Breakdown Category Mix · ${categoryMixScope ? categoryMixScope+" · " : ""}${type.label}`, balance: type.count, share: type.percentage})),
     ],
   };
 }

@@ -50,7 +50,7 @@ test("both maintenance type and road status open the site-scoped drilldown", asy
   const css = await readFile(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 
   // Maintenance type: the six BD Type Mix cards.
-  assert.match(source, /openSiteScopedDrilldown\(`site-repair:\$\{breakdownDetailSite\}\|\$\{type\.label\}`\)/);
+  assert.ok(source.includes('openSiteScopedDrilldown(movementKey("new-categories",breakdownDetailSite,type.label,breakdownDetailStartKey,breakdownDetailEndKey))'));
   // On-road type: the three road status cards beside them.
   assert.match(source, /openSiteScopedDrilldown\(`site-status:\$\{breakdownDetailSite\}\|\$\{item\.key\}`\)/);
   assert.match(source, /dashboard-breakdown-road-mix/);

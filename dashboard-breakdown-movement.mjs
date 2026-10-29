@@ -1,3 +1,4 @@
+import {parseRequestTimelineTimestamp} from './request-timeline.mjs';
 import {categoryLabel,requestCategoryLabel} from './repair-classification.mjs';
 import { isIdleVehicleRequest } from './request-idle.mjs';
 const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
@@ -108,4 +109,21 @@ export function breakdownCategoryShare(records=[],startDate="",endDate="",catego
   for(const request of requests){const label=requestCategoryLabel(request);counts.set(label,(counts.get(label)||0)+1);}
   const labels=[...new Set([...categories.map(row=>categoryLabel(typeof row==='string'?row:row.breakdownCategory)).filter(Boolean),...counts.keys()])];
   return labels.map(label=>({label,count:counts.get(label)||0,percentage:requests.length?Math.round((counts.get(label)||0)*100/requests.length):0}));
+}
+
+// Category reporting has its own creation-time rollout boundary. Never infer
+// eligibility from the editable breakdown start date or backfill old records.
+export const NEW_CATEGORY_MIX_FROM='2026-10-29T14:00:00+05:30';
+export const NEW_CATEGORY_MIX_LABEL='Created from 29 Oct 2026, 2:00 PM IST';
+export function newCategoryMixRequests(records=[],kind='classified'){
+  return records.filter(record=>{
+    const created=parseRequestTimelineTimestamp(record.createdAt);
+    if(!created||created.getTime()<Date.parse(NEW_CATEGORY_MIX_FROM))return false;
+    const classified=!['Unclassified','UNCLASSIFIED','UNCATEGORISED','UNCATEGORIZED','UNSPECIFIED'].includes(requestCategoryLabel(record));
+    return kind==='all'||(kind==='pending'?!classified:classified);
+  });
+}
+export function newBreakdownCategoryShare(records=[],startDate='',endDate='',categories=[]){
+  const names=categories.filter(row=>!['UNCLASSIFIED','UNCATEGORISED','UNCATEGORIZED','UNSPECIFIED'].includes(categoryLabel(typeof row==='string'?row:row.breakdownCategory)));
+  return breakdownCategoryShare(newCategoryMixRequests(records),startDate,endDate,names);
 }

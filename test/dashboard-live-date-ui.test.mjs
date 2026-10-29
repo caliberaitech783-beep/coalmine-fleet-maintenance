@@ -113,7 +113,7 @@ const setLifecycleFrom = (view, value, rows) => {
 
 test("BD Type Mix renders master categories with no requests as well as new request categories", () => {
   const view = harness({repairTypes:[{repairType:'TYRE SYSTEM'},{repairType:'AC SYSTEM'}]});
-  const tree = view.render([{ref:'TYRE-1',site:'Sasti OB',category:'TYRE SYSTEM',classification:{version:1,repairType:'Breakdown',breakdownCategory:'TYRE SYSTEM'},status:'Open',start:`${todayKey} 09:00`}]);
+  const tree = view.render([{ref:'TYRE-1',createdAt:'2026-10-29T08:30:00Z',site:'Sasti OB',category:'TYRE SYSTEM',classification:{version:1,repairType:'Breakdown',breakdownCategory:'TYRE SYSTEM'},status:'Open',start:`${todayKey} 09:00`}]);
   const mix = byLabel(tree,'Breakdown type percentage of open BD balance');
   assert.match(text(mix),/TYRE SYSTEM100%1 request/);
   assert.match(text(mix),/AC SYSTEM0%0 requests/);
@@ -938,7 +938,8 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     }
     const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
     assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
-    assert.ok(types.some(card => text(card).includes("Unclassified100%1 request")));
+    assert.ok(types.every(card => !text(card).includes("Unclassified")));
+    assert.match(text(byLabel(tree, "Breakdown type percentage of open BD balance")), /No new requests yet/);
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
   };
@@ -1319,4 +1320,25 @@ test('LMV today badge excludes demo statuses, deduplicates requests, and opens e
   assert.deepEqual(dialog.props.records.map(row=>row.door),[samples[3].door]);
   tree=harness({lmvRecords:samples}).render([]);
   assert.equal(findAll(tree,node=>node.props.onMode&&node.props.onReports)[0].props.todayCount,0);
+});
+test('new category tile and pending drilldowns match cutoff counts while BD Balance retains history',()=>{
+ const view=harness({repairTypes:[{breakdownCategory:'ENGINE'}]});
+ const rows=[
+  {ref:'HISTORY',createdAt:'2026-10-29T08:29:59Z',classification:{breakdownCategory:'ENGINE'}},
+  {ref:'NEW-ENGINE',createdAt:'2026-10-29T08:30:00Z',classification:{breakdownCategory:'ENGINE'}},
+  {ref:'PENDING',createdAt:'2026-10-29T09:00:00Z'},
+ ].map(r=>({...r,site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`,category:'Breakdown'}));
+ let tree=view.render(rows);
+ const mix=byLabel(tree,'Breakdown type percentage of open BD balance');
+ assert.match(text(mix),/ENGINE100%1 request/);
+ assert.match(text(mix),/Classification pending: 1/);
+ const tile=findAll(mix,n=>n.type==='article'&&text(n).includes('ENGINE'))[0];
+ activate(tile);tree=view.render(rows);
+ assert.deepEqual(detailView(tree).rows.map(r=>r.requestReference),['NEW-ENGINE']);
+ assert.match(byClass(tree,'dashboard-asset-modal').props.title,/Created from 29 Oct 2026, 2:00 PM IST/);
+ activate(button(tree,'Classification pending: 1'));tree=view.render(rows);
+ assert.deepEqual(detailView(tree).rows.map(r=>r.requestReference),['PENDING']);
+ const balance=findAll(byClass(tree,'mine-breakdown-movement-kpis'),n=>n.props.className==='balance')[0];
+ activate(balance);tree=view.render(rows);
+ assert.deepEqual(detailView(tree).rows.map(r=>r.requestReference).sort(),['HISTORY','NEW-ENGINE','PENDING']);
 });

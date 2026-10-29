@@ -150,7 +150,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
-import { breakdownMovementForRange, breakdownOpenedDate, breakdownCategoryShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
+import { breakdownMovementForRange, breakdownOpenedDate, newBreakdownCategoryShare, newCategoryMixRequests, NEW_CATEGORY_MIX_LABEL, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending, isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
@@ -2149,9 +2149,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // Match the linked request list, including authorized historical/unassigned sites.
   const breakdownMovementTotals = breakdownMovementForRangeForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
   // Match the open balance card: retain carryover, exclude closed and idle cases.
-  const breakdownTypeSummary = dashboardShift === "all"
-    ? breakdownCategoryShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardCategories)
-    : breakdownCategoryShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardCategories);
+  const breakdownCategoryMixRows = dashboardShift === "all"
+    ? movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance")
+    : movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance");
+  const breakdownTypeSummary = newBreakdownCategoryShare(breakdownCategoryMixRows, "", "", dashboardCategories);
+  const breakdownCategoryPending = newCategoryMixRequests(breakdownCategoryMixRows, "pending").length;
+  const breakdownCategoryNewCount = newCategoryMixRequests(breakdownCategoryMixRows, "all").length;
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
@@ -2167,7 +2170,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
   const breakdownDetailRows = dailyBreakdownMovementForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTotals = breakdownMovementForRangeForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTypeSummary = breakdownCategoryShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardCategories);
+  const breakdownDetailTypeSummary = newBreakdownCategoryShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardCategories);
+  const breakdownDetailCategoryRows = movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance");
+  const breakdownDetailCategoryPending = newCategoryMixRequests(breakdownDetailCategoryRows, "pending").length;
+  const breakdownDetailCategoryNewCount = newCategoryMixRequests(breakdownDetailCategoryRows, "all").length;
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
@@ -2549,7 +2555,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     // Site is already known from the panel that opened this, so these keys carry it.
     if (key.startsWith("site-repair:")) {
       const [site, type] = key.slice(12).split("|");
-      return requestAssetRows(movementRequestRowsForShift(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance").filter((record) => recordBelongsToSite(record, site)
+      return requestAssetRows(newCategoryMixRequests(movementRequestRowsForShift(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance")).filter((record) => recordBelongsToSite(record, site)
         && requestCategoryLabel(record) === type));
     }
     if (key.startsWith("site-status:")) {
@@ -2563,6 +2569,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("movement:")) {
       const [metric, start, end, site, type] = key.slice(9).split("|");
       const records = throughputRequests;
+      if(["new-categories","classification-pending"].includes(metric)){
+        const rows=movementRequestRowsForShift(records,start,end,"active-balance").filter(record=>!site||recordBelongsToSite(record,site));
+        return requestAssetRows(newCategoryMixRequests(rows,metric==="classification-pending"?"pending":"classified").filter(record=>!type||requestCategoryLabel(record)===type));
+      }
       return requestAssetRows(movementRequestRowsForShift(records, start, end, metric, type));
     }
     if (key.startsWith("trend:")) {
@@ -2627,9 +2637,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestAssetDrilldown = assetDrilldown.startsWith("entered-today:") || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("balance:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "mis" ? "Open in MIS" : lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
-  const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance", "active-balance": "BD Balance", idle: "Idle Vehicles", runningbd: "Running with BD", undated: "Requests needing date correction" };
+  const movementLabels = { "new-categories":"New Breakdown Category Mix", "classification-pending":"Classification pending", all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance", "active-balance": "BD Balance", idle: "Idle Vehicles", runningbd: "Running with BD", undated: "Requests needing date correction" };
   const movementScopeLabel = initialDrilldownSite || (initialDrilldownRegion && initialDrilldownRegion !== "all" ? initialDrilldownRegion === "unmapped" ? "Other / unassigned" : initialDrilldownRegion : "All sites in dashboard scope");
-  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementScopeLabel} · ${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}` : "";
+  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementScopeLabel} · ${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}${["new-categories","classification-pending"].includes(movementDrilldownParts[0]) ? ` · ${NEW_CATEGORY_MIX_LABEL}` : ""}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
@@ -2653,7 +2663,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
     { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
     { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
-    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown Category", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance${dashboardShiftDetail}` })),
+    ...(breakdownCategoryPending ? [{section:"Breakdown Category",metric:"Classification pending",value:breakdownCategoryPending,scope:NEW_CATEGORY_MIX_LABEL}] : []),
+    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown Category", metric: type.label, value: type.count, scope: `${NEW_CATEGORY_MIX_LABEL} · ${dashboardPeriodLabel}`, details: `${type.percentage}% of classified new open BD requests${dashboardShiftDetail}` })),
     ...breakdownSiteSummary.map((site) => {
       const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
       return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${availabilityPercentFromCounts(road)}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
@@ -2723,7 +2734,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const combinedListRows = totalFleetSelection ? totalFleetSelectionRows(combinedFleetRecords,totalFleetSelection) : [];
   const combinedListTitle = totalFleetSelection ? [totalFleetSelection.site||totalFleetSelection.region||dashboardScopeLabel,{total:'Total Fleet',breakdown:'Breakdown',balance:'BD Balance',oem:'OEM BD'}[totalFleetSelection.mode]||'Fleet',combinedListRows.length+' assets'].join(' · ') : '';
   const fleetSectionTable = () => lmvMode ? {title:`Other vehicles / LMV · ${lmvMode} · Current status`,columns:LMV_DETAIL_COLUMNS,rows:lmvRowsForMode(visibleLmv,lmvMode)} : fleetSectionExport({ includeLmv:false, mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: hasLmvFleet ? combinedFleetCounts : {...liveFleetCounts,lmv:lmvCounts(visibleLmv)}, oemChart:mainFleetOemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : mainFleetOemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: hasLmvFleet ? "Current equipment and vehicle breakdowns" : oemLive ? "Current breakdowns" : filteredDateLabel });
-  const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
+  const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, categoryMixScope: NEW_CATEGORY_MIX_LABEL, categoryMixPending: breakdownCategoryPending, categoryMixEmpty: !breakdownCategoryNewCount, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
   const lifecycleSectionTable = () => requestLifecycleExport({ trend: requestLifecycleTrend, readings: requestLifecycleReadings, place: `${requestLifecycleSite || requestLifecycleRegion?.code || dashboardScopeLabel}${dashboardShiftDetail}`, rangeLabel: requestLifecycleRangeLabel });
   const trendSectionTable = () => breakdownTrendExport({ trend: breakdownTrend, place: `${activeTrendSite === "all" ? dashboardScopeLabel : activeTrendSite}${dashboardShiftDetail}`, from: breakdownTrendStartKey, to: breakdownTrendAnchorKey, total: breakdownTrendTotal, average: breakdownTrendAverage });
   const dashboardExcelSheets = () => [
@@ -2814,9 +2825,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-breakdown-movement-kpis">
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Running with BD", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "runningbd").length, className: "runningbd" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
-            <section {...cardAction(movementKey("active-balance"), "All open BD balance types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
-              <header><div><b>Breakdown Category Mix</b><small>Open BD balance · all maintenance types</small></div><span>Percentage share of open BD balance</span></header>
-              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("active-balance", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+            <section {...cardAction(movementKey("new-categories"), "New breakdown category requests")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
+              <header><div><b>New Breakdown Category Mix</b><small>{NEW_CATEGORY_MIX_LABEL}</small></div><span>Share of classified new open BD requests</span></header>
+              {!breakdownCategoryNewCount && <p role="status">No new requests yet.</p>}
+              {breakdownCategoryPending > 0 && <button type="button" {...listAction(movementKey("classification-pending"), "Classification pending")}>Classification pending: {breakdownCategoryPending}</button>}
+              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("new-categories", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
               <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
@@ -2959,9 +2972,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="dashboard-breakdown-detail-kpis">
           {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
         </div>
-        <section {...cardAction(movementKey("active-balance", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} open BD balance types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of open BD balance`}>
-          <header><div><b>Breakdown Category Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of open BD balance</span></header>
-          <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(`site-repair:${breakdownDetailSite}|${type.label}`)} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
+        <section {...cardAction(movementKey("new-categories", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} new breakdown category requests`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of open BD balance`}>
+          <header><div><b>New Breakdown Category Mix</b><small>{breakdownDetailSite} · {NEW_CATEGORY_MIX_LABEL}</small></div><span>Share of classified new open BD requests</span></header>
+          {!breakdownDetailCategoryNewCount && <p role="status">No new requests yet.</p>}
+          {breakdownDetailCategoryPending > 0 && <button type="button" onClick={()=>openSiteScopedDrilldown(movementKey("classification-pending",breakdownDetailSite,"",breakdownDetailStartKey,breakdownDetailEndKey))}>Classification pending: {breakdownDetailCategoryPending}</button>}
+          <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(movementKey("new-categories",breakdownDetailSite,type.label,breakdownDetailStartKey,breakdownDetailEndKey))} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
         </section>
         <section {...cardAction(`site-status:${breakdownDetailSite}|all`, `${breakdownDetailSite} fleet`)} className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
           <header><div><b>Road Status</b><small>{breakdownDetailSite}</small></div><span>Drill into equipment and vehicles</span></header>

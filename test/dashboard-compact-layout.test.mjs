@@ -76,14 +76,13 @@ test("each site links breakdown movement with its current availability count", (
   assert.match(css, /\.dashboard-breakdown-road-shortcut\s*\{/);
 });
 
-test("the maintenance type mix counts open balance rather than new requests", () => {
-  assert.match(client, /breakdownCategoryShare\(movementRequestRows\(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"\), "", "", dashboardCategories\)/);
-  assert.match(client, /Breakdown Category Mix/);
-  assert.match(client, /Open BD balance · all maintenance types/);
-  assert.match(client, /Percentage share of open BD balance/);
-  assert.match(client, /cardAction\(movementKey\("active-balance"\), "All open BD balance types"\)/);
-  assert.match(client, /breakdownDetailTypeSummary\.map/);
-  assert.match(css, /\.mine-breakdown-type-mix > div\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6/);
+test("the category mix scopes open balance to newly created requests", () => {
+  assert.ok(client.includes('newBreakdownCategoryShare(breakdownCategoryMixRows'));
+  assert.ok(client.includes('New Breakdown Category Mix'));
+  assert.ok(client.includes('NEW_CATEGORY_MIX_LABEL'));
+  assert.ok(client.includes('Share of classified new open BD requests'));
+  assert.ok(client.includes('cardAction(movementKey("new-categories")'));
+  assert.ok(client.includes('breakdownDetailTypeSummary.map'));
 });
 
 test("Availability Count provides site-wise on-road, off-road and idle status", () => {
