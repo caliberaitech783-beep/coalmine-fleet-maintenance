@@ -31,6 +31,24 @@ test('LMV route and one-time demo seed are wired into the application',()=>{
   assert.match(server,/registerLmvFleet\(app,\{pool,requireSession,currentDashboardAuthorization\}\)/);
 });
 
+test('only the LMV header Breakdown count adds BD Balance and OEM BD',async()=>{
+  const React=(await import('react')).default;
+  const {transformWithOxc}=await import('vite');
+  const source=readFileSync(new URL('../src/lmv-fleet.jsx',import.meta.url),'utf8');
+  const controls=source.slice(source.indexOf('export const LMV_MODES='),source.indexOf('const modeLabel=')).replaceAll('export ','');
+  const compiled=(await transformWithOxc(controls,'lmv-controls.jsx',{jsx:{runtime:'classic'}})).code;
+  const render=new Function('React','lmvCounts',`${compiled};return LmvFleetControls;`)(React,lmvCounts);
+  const records=Array.from({length:97},(_,id)=>({id,lmvRoadStatus:'offroad',lmvOemBreakdown:id<14}));
+  const before=structuredClone(records);
+  const tree=render({records,loaded:true});
+  const find=(node,label)=>Array.isArray(node)?node.map(child=>find(child,label)).find(Boolean):React.isValidElement(node)?node.props['aria-label']===label?node:find(node.props.children,label):null;
+  assert.equal(find(tree,'View BD Balance LMV records').props.children,97);
+  assert.equal(find(tree,'View OEM BD LMV records').props.children,14);
+  assert.equal(find(tree,'View Breakdown LMV records').props.children,111);
+  assert.equal(lmvCounts(records).breakdown,97,'site charts and reports retain their existing calculation');
+  assert.deepEqual(records,before);
+});
+
 test('real PostgreSQL-compatible SQL stores forty demos once and does not recreate deleted samples',async()=>{
   const db=new PGlite();
   try {
