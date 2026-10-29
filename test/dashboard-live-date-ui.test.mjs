@@ -310,6 +310,8 @@ test("OEM view retains today's shared filters and separate label and count actio
   assert.equal(button(byLabel(tree, "Fleet chart view"), "OEM BD").props["aria-pressed"], true);
   assert.equal(oemChart(tree).props.chart.rows.length, 5);
   assert.equal(text(fleetCount(tree, "OEM BD")), "5");
+  const headerBalance = Number(text(byLabel(tree, "View BD Balance list")));
+  assert.equal(Number(text(fleetCount(tree, "Breakdown"))), headerBalance + 5);
   assert.equal(text(fleetCount(tree, "Total")), "7");
   assert.equal(byClass(tree, "mine-panel mine-request-lifecycle"), undefined);
   assert.equal(byLabel(tree, "Tracking vehicle throughput"), undefined);
