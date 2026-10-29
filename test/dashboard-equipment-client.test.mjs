@@ -43,7 +43,7 @@ test("fleet panels distinguish loading and failure from a confirmed empty fleet"
   assert.match(state,/Fleet data is unavailable/);
   assert.match(state,/Loading fleet data/);
   assert.match(state,/onClick=\{retry\}/);
-  assert.match(dashboard,/combinedFleetReady \? \(mode === "oem" \? mainFleetOemChart\.rows\.length : mode === "total" \? mainFleetTotal : hasLmvFleet \? combinedFleetCounts\.breakdown\.total : accountBreakdownCount\)\.toLocaleString\(\) : "—"/);
+  assert.match(dashboard,/combinedFleetReady \? \(mode === "oem" \? mainFleetOemChart\.rows\.length : mode === "total" \? mainFleetTotal : fleetHeaderBreakdownCount\)\.toLocaleString\(\) : "—"/);
   assert.match(dashboard,/equipmentLoaded \? maintenanceAvailabilityTab === "breakdown"/);
   assert.match(dashboard,/equipmentLoaded\?kpis\.total\.toLocaleString\(\):"—"/);
   assert.ok((dashboard.match(/<FleetDataState /g)||[]).length>=4);
