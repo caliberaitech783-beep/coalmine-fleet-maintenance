@@ -2220,6 +2220,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: scopedEquipment, regions: fleetRegionInsights, oem: dashboardOem });
   const combinedFleetOemChart = buildOemBreakdownChart({rows:totalFleetOemChartRows(combinedFleetRecords),equipment:combinedFleetRecords,regions:fleetRegionInsights,oem:dashboardOem});
   const mainFleetOemChart = hasLmvFleet ? combinedFleetOemChart : oemChart;
+  // Only the header adds BD Balance and OEM BD; chart and report counts stay separate.
   const fleetHeaderBreakdownCount = (hasLmvFleet ? combinedFleetCounts.balance : accountBreakdownCount) + mainFleetOemChart.rows.length;
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
   const mainFleetTotal = hasLmvFleet ? totalFleetSelectionRows(combinedFleetRecords,{make:showOemBreakdowns?dashboardOem:''}).length : (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total);
