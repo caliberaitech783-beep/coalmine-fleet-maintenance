@@ -295,6 +295,19 @@ const oemRequests = [...oemEquipment.slice(0, 5).map(asset => Object.freeze({
 })), Object.freeze({ref: "HISTORICAL", delayedReason: "Parts OEM", door: "V7", chassis: "C7", site: "Sasti OB", category: "Breakdown", status: "Closed", start: "2026-09-08 09:00:00", closedAt: "2026-09-09 12:00:00"})];
 const oemHarnessOptions = {equipment: oemEquipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false, initialMode: "oem"};
 
+test('header BD Balance includes Non-OEM and Not Selected and excludes OEM from its own list only',()=>{
+  const mixed=oemRequests.slice(0,5).map((row,index)=>({...row,delayedReason:'',oemResponsibility:index<2?'OEM':index<4?'NON OEM':''}));
+  const view=harness({...oemHarnessOptions,initialMode:'breakdown',lmvRecords:lmvModel.lmvFleetSnapshot(lmvModel.lmvDemoRecords().slice(0,5))});
+  let tree=view.render(mixed);
+  assert.equal(text(byLabel(tree,'View BD Balance list')),'3');
+  assert.equal(text(fleetCount(tree,'OEM BD')),'2');
+  assert.equal(text(fleetCount(tree,'Breakdown')),'7');
+  byLabel(tree,'View BD Balance list').props.onClick();tree=view.render(mixed);
+  const list=findAll(tree,node=>node.props.rowsAreScoped && node.props.bdBalanceColumns && / · 3 assets$/.test(node.props.title||''))[0];
+  assert.equal(list.props.rows.length,3);
+  assert.ok(list.props.rows.every(row=>!row.fleetOem));
+});
+
 test("dashboard opens in Breakdown by default", () => {
   const view = harness({...oemHarnessOptions, initialMode: null});
   const tree = view.render(oemRequests);
@@ -311,7 +324,8 @@ test("OEM view retains today's shared filters and separate label and count actio
   assert.equal(oemChart(tree).props.chart.rows.length, 5);
   assert.equal(text(fleetCount(tree, "OEM BD")), "5");
   const headerBalance = Number(text(byLabel(tree, "View BD Balance list")));
-  assert.equal(Number(text(fleetCount(tree, "Breakdown"))), headerBalance + 5);
+  assert.equal(headerBalance, 0);
+  assert.equal(Number(text(fleetCount(tree, "Breakdown"))), 10, 'the existing Breakdown header count stays unchanged');
   assert.equal(text(fleetCount(tree, "Total")), "7");
   assert.equal(byClass(tree, "mine-panel mine-request-lifecycle"), undefined);
   assert.equal(byLabel(tree, "Tracking vehicle throughput"), undefined);

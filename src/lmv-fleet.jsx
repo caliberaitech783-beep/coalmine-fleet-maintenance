@@ -34,11 +34,11 @@ export function useLmvFleet(token) {
 export const LMV_MODES=[['total','Total LMV','total'],['balance','BD Balance','balance'],['oem','OEM BD','oem'],['breakdown','Breakdown','breakdown']];
 export function LmvFleetControls({records,mode,onMode,onInspect,loaded,error,retry,onReports,todayCount=0,onTodayInspect,legend}) {
   const fleetCounts=lmvCounts(records);
-  const counts={...fleetCounts,breakdown:fleetCounts.balance+fleetCounts.oem};
+  const counts={...fleetCounts,balance:fleetCounts.balance-fleetCounts.oem,breakdown:fleetCounts.balance+fleetCounts.oem};
   return <div className="lmv-fleet-controls">
     <h2>Other Vehicle (LMV)</h2>
     <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view" title={counts.demo>0 ? `${counts.demo} labelled demo LMVs · sample statuses` : 'Other vehicles / LMV'}>
-      {LMV_MODES.map(([key,label,count])=><div key={key} className={`mine-fleet-view-option ${mode===key||(!mode&&key==='breakdown')?'active':''} ${key==='breakdown'?'breakdown':''}`}><button type="button" disabled={!loaded} aria-pressed={mode===key} onClick={()=>onMode(key)}>{label}</button><button type="button" disabled={!loaded} className="mine-fleet-toggle-count" aria-label={`View ${label} LMV records`} onClick={()=>onInspect({mode:key})}>{loaded?counts[count]:'—'}</button>{key==='breakdown'&&<button type="button" disabled={!loaded} className={`mine-fleet-count-trend ${todayCount?'up':'flat'}`} title="Today’s LMV breakdown requests still off-road across selected sites" aria-label="View today’s active LMV breakdown vehicles" onClick={onTodayInspect}>{todayCount>0&&<span aria-hidden="true">↑</span>}<span>{todayCount>0?`+${todayCount}`:'0'}</span></button>}</div>)}
+      {LMV_MODES.map(([key,label,count])=><div key={key} className={`mine-fleet-view-option ${mode===key||(!mode&&key==='breakdown')?'active':''} ${key==='breakdown'?'breakdown':''}`}><button type="button" disabled={!loaded} aria-pressed={mode===key} onClick={()=>onMode(key)}>{label}</button><button type="button" disabled={!loaded} className="mine-fleet-toggle-count" aria-label={`View ${label} LMV records`} onClick={()=>onInspect({mode:key,...(key==='balance'?{excludeOem:true}:{})})}>{loaded?counts[count]:'—'}</button>{key==='breakdown'&&<button type="button" disabled={!loaded} className={`mine-fleet-count-trend ${todayCount?'up':'flat'}`} title="Today’s LMV breakdown requests still off-road across selected sites" aria-label="View today’s active LMV breakdown vehicles" onClick={onTodayInspect}>{todayCount>0&&<span aria-hidden="true">↑</span>}<span>{todayCount>0?`+${todayCount}`:'0'}</span></button>}</div>)}
     </div>
     <div className="lmv-fleet-row-side"><div className="mine-fleet-chart-legend">{legend}<span role="button" tabIndex={0} aria-label="View LMV breakdown vehicles" onClick={()=>onInspect({mode:'breakdown'})} onKeyDown={event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();onInspect({mode:'breakdown'});}}}><i className="breakdown" />Breakdown</span></div><div className="lmv-fleet-tools"><button type="button" className="secondary" onClick={()=>onMode('')} aria-pressed={!mode}>All fleet bars</button>
     <button type="button" className="secondary" disabled={!loaded} onClick={onReports}>LMV reports</button></div></div>
@@ -81,7 +81,7 @@ export function LmvFleetView({records,regions,mode,onInspect,ExportMenu,stale=fa
 
 export function LmvFleetDialog({selection,records,regions,close,Dialog,ReportSection,browserProps,requests=[]}) {
   if(!selection)return null;
-  const scoped=selection.site?records.filter(record=>recordBelongsToSite(record,selection.site)):records;
+  const scoped=records.filter(record=>(!selection.site||recordBelongsToSite(record,selection.site))&&(!selection.excludeOem||!record.lmvOemBreakdown));
   return <Dialog className="dashboard-asset-modal lmv-report-modal" overlayClassName="dashboard-asset-overlay" title={`${selection.site||'All regions'}${selection.today?' · Today’s requests still off-road':''} · Other vehicles / LMV · ${scoped.length} assets`} close={close}>
     <LmvReports records={scoped} regions={selection.site?regions.map(region=>({...region,sites:region.sites.filter(site=>(typeof site==='string'?site:site.name)===selection.site)})).filter(region=>region.sites.length):regions} ReportSection={ReportSection} browserProps={browserProps} requests={requests} initialMode={selection.mode||'total'} initialSummary={false} />
   </Dialog>;

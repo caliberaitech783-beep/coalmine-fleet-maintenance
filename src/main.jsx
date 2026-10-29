@@ -2247,6 +2247,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const combinedFleetOemChart = buildOemBreakdownChart({rows:totalFleetOemChartRows(combinedFleetRecords),equipment:combinedFleetRecords,regions:fleetRegionInsights,oem:dashboardOem});
   const mainFleetOemChart = hasLmvFleet ? combinedFleetOemChart : oemChart;
   // Only the header adds BD Balance and OEM BD; chart and report counts stay separate.
+  const fleetHeaderBalanceCount = Math.max(0, (hasLmvFleet ? combinedFleetCounts.balance - combinedFleetCounts.oem : accountBreakdownCount - oemChart.rows.length));
   const fleetHeaderBreakdownCount = (hasLmvFleet ? combinedFleetCounts.balance : accountBreakdownCount) + mainFleetOemChart.rows.length;
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
   const mainFleetTotal = hasLmvFleet ? totalFleetSelectionRows(combinedFleetRecords,{make:showOemBreakdowns?dashboardOem:''}).length : (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total);
@@ -2530,6 +2531,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance" || hierarchyBalance;
       const offroadCategory = key.startsWith("offroad-site:") ? key.slice(13).split("|")[1] || "" : "";
       return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
+        && (key !== "fleet-breakdown:balance" || !combinedFleetOemRecords.includes(record))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
         && ((key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles") || ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())));
     }
@@ -2713,6 +2715,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (!hasLmvFleet || key.startsWith("entered-today:")) { openAssetDrilldown(key); return; }
     let selection = {mode:'total'};
     if (key.startsWith('fleet-breakdown:')) selection.mode = key === 'fleet-breakdown:balance' ? 'balance' : 'breakdown';
+    if (key === 'fleet-breakdown:balance') selection.excludeOem = true;
     if (key.startsWith('site:')) selection.site = key.slice(5);
     if (key.startsWith('site-total:') || key.startsWith('offroad-site:')) {
       const [site,category] = key.slice(key.startsWith('site-total:')?11:13).split('|');
@@ -2731,7 +2734,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setDashboardRegion(filters.region);setDashboardSite(filters.site);setDashboardOem(filters.oem);
     setTotalFleetSelection({mode:'oem',site:selection.site||'',make:selection.oem||filters.oem,group:selection.equipmentGroup||''});
   };
-  const combinedListRows = totalFleetSelection ? totalFleetSelectionRows(combinedFleetRecords,totalFleetSelection) : [];
+  const combinedListRows = totalFleetSelection ? totalFleetSelectionRows(combinedFleetRecords,totalFleetSelection).filter(record => !totalFleetSelection.excludeOem || !record.fleetOem) : [];
   const combinedListTitle = totalFleetSelection ? [totalFleetSelection.site||totalFleetSelection.region||dashboardScopeLabel,{total:'Total Fleet',breakdown:'Breakdown',balance:'BD Balance',oem:'OEM BD'}[totalFleetSelection.mode]||'Fleet',combinedListRows.length+' assets'].join(' · ') : '';
   const fleetSectionTable = () => lmvMode ? {title:`Other vehicles / LMV · ${lmvMode} · Current status`,columns:LMV_DETAIL_COLUMNS,rows:lmvRowsForMode(visibleLmv,lmvMode)} : fleetSectionExport({ includeLmv:false, mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: hasLmvFleet ? combinedFleetCounts : {...liveFleetCounts,lmv:lmvCounts(visibleLmv)}, oemChart:mainFleetOemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : mainFleetOemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: hasLmvFleet ? "Current equipment and vehicle breakdowns" : oemLive ? "Current breakdowns" : filteredDateLabel });
   const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, categoryMixScope: NEW_CATEGORY_MIX_LABEL, categoryMixPending: breakdownCategoryPending, categoryMixEmpty: !breakdownCategoryNewCount, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
@@ -2764,7 +2767,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Vehicles & Equipments"}</h2>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="All breakdowns, including OEM BD"><button type="button" disabled={!equipmentLoaded} onClick={() => openFleetChartList("fleet-breakdown:balance")}>BD Balance</button><button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label="View BD Balance list" onClick={() => openFleetChartList("fleet-breakdown:balance")}>{combinedFleetReady ? (hasLmvFleet ? combinedFleetCounts.balance : accountBreakdownCount).toLocaleString() : "—"}</button></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${todayBreakdownDirection}` : mode}`}>
+                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Non-OEM and Not Selected breakdowns, excluding OEM BD"><button type="button" disabled={!equipmentLoaded} onClick={() => openFleetChartList("fleet-breakdown:balance")}>BD Balance</button><button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label="View BD Balance list" onClick={() => openFleetChartList("fleet-breakdown:balance")}>{combinedFleetReady ? fleetHeaderBalanceCount.toLocaleString() : "—"}</button></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${todayBreakdownDirection}` : mode}`}>
                   <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => {setLmvMode("");setFleetChartMode(mode);}}>{label}</button>
                   <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? mainFleetOemChart.rows.length : mode === "total" ? mainFleetTotal : fleetHeaderBreakdownCount} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); if(hasLmvFleet) inspectCombinedOem(); else openOemDrilldown(); }
