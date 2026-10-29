@@ -26,8 +26,8 @@ test("BD Balance places location, reasons and meter readings beside their reques
     useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
-  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
-  const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true,
+  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownCategory: "BRAKING SYSTEM", breakdownReason: "Brake repair"};
+  const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true, showBreakdownCategory:true,
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
   assert.match(html, /<th>Days of BD<\/th><th>Current location<\/th>/);
   assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
@@ -36,6 +36,10 @@ test("BD Balance places location, reasons and meter readings beside their reques
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
   assert.match(html, /Brake repair/);
+  assert.match(html, /<td>BRAKING SYSTEM<\/td>/);
+  const legacyHtml=renderToStaticMarkup(React.createElement(Browser,{rows:[row],regions:REGION_DATA,rowsAreScoped:true,bdBalanceColumns:true,Status:({children})=>children,formatDate:formatDisplayDateTime,ActionsTable:({children})=>React.createElement("table",null,children)}));
+  assert.match(legacyHtml,/<th>Type of BD<\/th>/);
+  assert.match(legacyHtml,/<td>Breakdown<\/td>/);
 });
 
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
