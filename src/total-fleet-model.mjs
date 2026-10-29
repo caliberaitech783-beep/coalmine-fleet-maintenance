@@ -17,7 +17,7 @@ export function totalFleetRecords(equipment=[],lmvs=[],requests=[],oemRecords=[]
   ];
 }
 export function totalFleetSelectionRows(records=[],{mode='total',site='',sites=null,category='',make='',group=''}={}) {
-  const matchesMode=record=>mode==='total'?true:mode==='oem'?record.fleetOem:mode==='balance'?record.fleetRoadStatus==='offroad'&&!record.fleetOem:mode==='breakdown'?record.fleetRoadStatus==='offroad':record.fleetRoadStatus===mode;
+  const matchesMode=record=>mode==='total'?true:mode==='oem'?record.fleetOem:mode==='balance'?record.fleetRoadStatus==='offroad':mode==='breakdown'?record.fleetRoadStatus==='offroad':record.fleetRoadStatus===mode;
   return records.filter(record=>(!site||recordBelongsToSite(record,site))
     &&(!sites||sites.some(name=>recordBelongsToSite(record,name)))
     &&(!category||record.fleetCategory===category)
@@ -32,7 +32,7 @@ export function totalFleetCounts(records=[]) {
   const lmvs=records.filter(record=>record.fleetCategory==='otherVehicles');
   return {includesLmv:true,total:records.length,equipment:categoryCount(records,'equipment'),vehicles:categoryCount(records,'vehicles'),otherVehicles:lmvs.length,
     breakdown:{total:breakdown.length,equipment:categoryCount(breakdown,'equipment'),vehicles:categoryCount(breakdown,'vehicles'),otherVehicles:categoryCount(breakdown,'otherVehicles')},
-    oem,balance:breakdown.length-oem,bdPercent:records.length?breakdown.length/records.length*100:0,lmv:lmvCounts(lmvs)};
+    oem,balance:breakdown.length,bdPercent:records.length?breakdown.length/records.length*100:0,lmv:lmvCounts(lmvs)};
 }
 export function totalFleetDetailRows(records=[],requests=[]) {
   return fleetAssetRequestDetails(records.map(record=>({...record,dashboardRoadStatus:record.fleetRoadStatus})),requests).map(record=>({...record,

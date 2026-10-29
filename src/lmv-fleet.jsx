@@ -63,14 +63,14 @@ export function LmvFleetView({records,regions,mode,onInspect,ExportMenu,stale=fa
               })}</div>:<FleetSiteBars site={{otherVehicles:site.total,breakdown:{otherVehicles:plotted}}} columns={[["otherVehicles","Other vehicles / LMV"]]} axisMax={max} showBreakdown={mode!=='total'} />}
             </button>
             <b>{site.name}</b>
-            <button type="button" onClick={()=>onInspect({site:site.name,mode:'breakdown'})}>LMV BD {site.breakdown}</button>
+            <button type="button" onClick={()=>onInspect({site:site.name,mode:'breakdown'})}>BD Balance {site.balance}</button>
             <button type="button" onClick={()=>onInspect({site:site.name,mode:'total'})}>Total LMV {site.total}</button>
             <button type="button" className="lmv-bd-percent" onClick={()=>onInspect({site:site.name,mode:'breakdown'})}>LMV BD (%) {site.bdPercent.toFixed(1)}</button>
             <button type="button" onClick={()=>onInspect({site:site.name,mode:'onroad'})}>On road {site.onroad}</button>
             <button type="button" onClick={()=>onInspect({site:site.name,mode:'idle'})}>Idle {site.idle}</button>
           </div>;
         })}</div>
-        <footer><b>{region.code}</b> · Total LMV {summaryRows.find(row=>row.name===`${region.code} total`)?.total||0} · LMV BD {summaryRows.find(row=>row.name===`${region.code} total`)?.breakdown||0}</footer>
+        <footer><b>{region.code}</b> · Total LMV {summaryRows.find(row=>row.name===`${region.code} total`)?.total||0} · BD Balance {summaryRows.find(row=>row.name===`${region.code} total`)?.balance||0}</footer>
       </section>)}
     </div>
   </section>;
@@ -91,7 +91,7 @@ export function LmvReports({records,regions=REGION_DATA,ReportSection,initialMod
   const counts=lmvCounts(filtered);
   const reportTabs=[['summary','Site-wise summary'],['total','LMV total'],['breakdown','LMV BD'],['balance','LMV BD Balance'],['oem','LMV OEM BD'],['onroad','LMV on road'],['idle','LMV idle'],['unknown','LMV needs review']];
   return <div className="lmv-reports">
-    <p>Current LMV status across the selected sites. BD Balance = LMV BD − LMV OEM BD. LMV BD % = LMV BD ÷ Total LMV × 100.</p>
+    <p>Current LMV status across the selected sites. BD Balance = LMV BD (including OEM BD). LMV BD % = LMV BD ÷ Total LMV × 100.</p>
     {counts.demo>0&&<p className="lmv-demo-notice">Includes {counts.demo} clearly labelled DEMO vehicles with sample statuses. No maintenance cases were created for these samples.</p>}
     <div className="lmv-report-controls"><label>Data source<select value={source} onChange={event=>setSource(event.target.value)}><option value="all">All LMVs (including demos)</option><option value="live">Live LMVs only</option><option value="demo">Demo LMVs only</option></select></label></div>
     <div className="tabs" role="group" aria-label="LMV report type">{reportTabs.map(([key,label])=><button type="button" key={key} className={mode===key?'active':''} aria-pressed={mode===key} onClick={()=>setMode(key)}>{label}</button>)}</div>

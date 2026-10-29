@@ -49,7 +49,7 @@ test('forty unique labelled demo LMVs cover every site with five varied sample s
   assert.equal(new Set(records.map(record=>record.door)).size,40);
   for(const site of REGION_DATA.flatMap(region=>region.sites)){
     const rows=lmvFleetSnapshot(records.filter(record=>recordBelongsToSite(record,site)));
-    assert.deepEqual(lmvCounts(rows),{total:5,onroad:2,idle:1,unknown:0,breakdown:2,oem:1,balance:1,bdPercent:40,demo:5});
+    assert.deepEqual(lmvCounts(rows),{total:5,onroad:2,idle:1,unknown:0,breakdown:2,oem:1,balance:2,bdPercent:40,demo:5});
     assert.ok(rows.every(record=>record.demo===true&&record.door.startsWith('DEMO-LMV-')));
   }
 });
@@ -89,7 +89,7 @@ test('each LMV mode reconciles and percentages use physical LMVs rather than cas
   assert.equal(lmvRowsForMode(rows,'total').length,40);
   assert.equal(lmvRowsForMode(rows,'breakdown').length,16);
   assert.equal(lmvRowsForMode(rows,'oem').length,8);
-  assert.equal(lmvRowsForMode(rows,'balance').length,8);
+  assert.equal(lmvRowsForMode(rows,'balance').length,16);
   assert.equal(lmvRowsForMode(rows,'onroad').length,16);
   assert.equal(lmvRowsForMode(rows,'idle').length,8);
   assert.equal(lmvCounts([]).bdPercent,0);

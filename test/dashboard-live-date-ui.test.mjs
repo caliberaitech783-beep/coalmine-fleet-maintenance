@@ -1258,7 +1258,7 @@ test('LMV controls switch the dedicated chart and open scoped reports without ch
   controls.props.onMode('breakdown');
   tree=view.render();
   const chart=findAll(tree,node=>node.props.mode==='breakdown'&&node.props.ExportMenu&&node.props.onInspect)[0];
-  assert.deepEqual(lmvModel.lmvCounts(chart.props.records),{total:5,onroad:2,idle:1,unknown:0,breakdown:2,oem:1,balance:1,bdPercent:40,demo:5});
+  assert.deepEqual(lmvModel.lmvCounts(chart.props.records),{total:5,onroad:2,idle:1,unknown:0,breakdown:2,oem:1,balance:2,bdPercent:40,demo:5});
   controls=findAll(tree,node=>node.props.onMode&&node.props.onReports)[0];
   controls.props.onReports();
   tree=view.render();
@@ -1277,6 +1277,8 @@ test('main Total Fleet, OEM and each site logbook exclude LMVs while dedicated L
   assert.equal(text(fleetCount(tree,'Total')),'3');
   assert.equal(text(fleetCount(tree,'Breakdown')),'1');
   assert.equal(text(byLabel(tree,'View BD Balance list')),'1');
+  assert.doesNotMatch(text(byClass(tree,'mine-fleet-site-summary')),/Breakdown/);
+  assert.doesNotMatch(text(byClass(tree,'combined-fleet-region-summary')),/Breakdown/);
   fleetCount(tree,'Total').props.onClick();tree=view.render();
   assert.equal(list().props.rows.length,3);
   assert.equal(list().props.rows.filter(row=>row.fleetCategory==='otherVehicles').length,0);

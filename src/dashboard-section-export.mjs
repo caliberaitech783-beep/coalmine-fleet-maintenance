@@ -95,7 +95,7 @@ export function fleetSectionExport({mode = 'total', place = 'All regions', regio
     {label:'LMV BD',value:row=>row.lmvBd},
     {label:'LMV BD (%)',value:row=>percent(row.lmvBd,row.lmvTotal)},
     {label:'LMV OEM BD',value:row=>row.lmvOem},
-    {label:'LMV BD Balance',value:row=>row.lmvBd-row.lmvOem},
+    {label:'LMV BD Balance',value:row=>row.lmvBd},
     {label:'LMV on road',value:row=>row.lmvOnroad},
     {label:'LMV idle',value:row=>row.lmvIdle},
     {label:'Combined fleet including LMV',value:row=>row.includesLmv?row.total:row.total+row.lmvTotal},

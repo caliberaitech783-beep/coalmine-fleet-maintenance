@@ -47,10 +47,10 @@ export function lmvFleetSnapshot(records=[],requests=[]) {
 export function lmvCounts(records=[]) {
   const count=status=>records.filter(record=>record.lmvRoadStatus===status).length;
   const breakdown=count('offroad'),oem=records.filter(record=>record.lmvRoadStatus==='offroad'&&record.lmvOemBreakdown).length;
-  return {total:records.length,onroad:count('onroad'),idle:count('idle'),unknown:count('unknown'),breakdown,oem,balance:breakdown-oem,bdPercent:records.length?breakdown/records.length*100:0,demo:records.filter(record=>record.demo===true).length};
+  return {total:records.length,onroad:count('onroad'),idle:count('idle'),unknown:count('unknown'),breakdown,oem,balance:breakdown,bdPercent:records.length?breakdown/records.length*100:0,demo:records.filter(record=>record.demo===true).length};
 }
 export function lmvRowsForMode(records=[],mode='total') {
-  if(mode==='balance')return records.filter(record=>record.lmvRoadStatus==='offroad'&&!record.lmvOemBreakdown);
+  if(mode==='balance')return records.filter(record=>record.lmvRoadStatus==='offroad');
   if(mode==='oem')return records.filter(record=>record.lmvRoadStatus==='offroad'&&record.lmvOemBreakdown);
   if(mode==='breakdown')return records.filter(record=>record.lmvRoadStatus==='offroad');
   if(['onroad','idle','unknown'].includes(mode))return records.filter(record=>record.lmvRoadStatus===mode);

@@ -10,9 +10,9 @@ test('explicit combined registry utility can still represent both registries ind
   const rows=totalFleetRecords(equipment,lmvFleetSnapshot(lmvDemoRecords()),[],equipment.slice(0,8));
   const counts=totalFleetCounts(rows);
   assert.equal(counts.total,1614);assert.equal(counts.breakdown.total,83);
-  assert.equal(counts.oem,16);assert.equal(counts.balance,67);
+  assert.equal(counts.oem,16);assert.equal(counts.balance,83);
   assert.equal(counts.bdPercent,83/1614*100);
-  for(const [mode,count] of [['total',1614],['breakdown',83],['oem',16],['balance',67]])assert.equal(totalFleetSelectionRows(rows,{mode}).length,count);
+  for(const [mode,count] of [['total',1614],['breakdown',83],['oem',16],['balance',83]])assert.equal(totalFleetSelectionRows(rows,{mode}).length,count);
   assert.equal(new Set(rows.map(row=>row.fleetKey)).size,1614,'master IDs cannot collide across the two registries');
 });
 
@@ -30,9 +30,9 @@ test('equipment/vehicle site totals, breakdown logbooks and OEM lists exclude th
   assert.equal(counts.vehicles,153);
   assert.equal(counts.breakdown.total,25);
   assert.equal(counts.oem,3);
-  assert.equal(counts.balance,22);
+  assert.equal(counts.balance,25);
   assert.equal(counts.bdPercent,25/204*100);
-  for(const [mode,count] of [['total',204],['breakdown',25],['oem',3],['balance',22]]){
+  for(const [mode,count] of [['total',204],['breakdown',25],['oem',3],['balance',25]]){
     const selected=totalFleetSelectionRows(rows,{site:'Sasti OC',mode});
     assert.equal(selected.length,count);
     assert.ok(totalFleetDetailRows(selected,[]).every(row=>row.fleetSource==='Equipment master'&&!row.demo));
@@ -46,7 +46,7 @@ test('equipment/vehicle site totals, breakdown logbooks and OEM lists exclude th
   const total=table.rows.at(-1);
   const value=label=>table.columns.find(column=>column.label===label).value(total);
   assert.equal(value('Total fleet'),204);
-  assert.equal(value('BD balance'),22);
+  assert.equal(value('BD balance'),25);
   assert.equal(value('BD (%)'),'12.3');
 });
 
@@ -67,14 +67,27 @@ test('site and region counts use precisely the same scoped registry as their lis
   const rows=totalFleetRecords(equipment,lmvFleetSnapshot(lmvDemoRecords()),[],[]);
   const sasti=totalFleetSelectionRows(rows,{site:'Sasti OB'});
   const counts=totalFleetCounts(sasti);
-  assert.equal(counts.total,6);assert.equal(counts.breakdown.total,3);assert.equal(counts.balance,2);assert.equal(counts.bdPercent,50);
-  assert.equal(totalFleetSelectionRows(rows,{site:'Sasti OC',mode:'balance'}).length,2);
+  assert.equal(counts.total,6);assert.equal(counts.breakdown.total,3);assert.equal(counts.balance,3);assert.equal(counts.bdPercent,50);
+  assert.equal(totalFleetSelectionRows(rows,{site:'Sasti OC',mode:'balance'}).length,3);
   assert.equal(totalFleetSelectionRows(rows,{site:'Sasti OC',category:'otherVehicles',mode:'breakdown'}).length,2);
   const ncl=totalFleetSelectionRows(rows,{sites:['Jayant OC','Dudhichua OC','Dudhichua East OC']});
   assert.equal(totalFleetCounts(ncl).total,16);
   assert.equal(totalFleetCounts(ncl).breakdown.total,6);
-  assert.equal(totalFleetCounts(ncl).balance,3);
+  assert.equal(totalFleetCounts(ncl).balance,6);
   assert.equal(totalFleetCounts([]).bdPercent,0);
+});
+
+test('every site balance includes OEM breakdowns and opens the identical breakdown list',()=>{
+  const sites=['Gauri Pauni OC (2nd)','Sasti OC','Jayant OC'];
+  const equipment=sites.flatMap(site=>Array.from({length:10},(_,index)=>({id:`${site}-${index}`,door:`D-${index}`,category:'Vehicle',currentLocation:site,dashboardRoadStatus:index<7?'offroad':index===7?'idle':'onroad'})));
+  const rows=equipmentVehicleFleetRecords(equipment,[],equipment.filter((_,index)=>index%10<2));
+  for(const site of sites){
+    const scoped=totalFleetSelectionRows(rows,{site});
+    assert.equal(totalFleetCounts(scoped).oem,2);
+    assert.equal(totalFleetCounts(scoped).balance,7);
+    assert.deepEqual(totalFleetSelectionRows(rows,{site,mode:'balance'}),totalFleetSelectionRows(rows,{site,mode:'breakdown'}));
+  }
+  assert.equal(totalFleetCounts(rows).balance,21);
 });
 
 test('OEM chart entries and make/category selections remain physical asset counts without synthetic cases',()=>{
@@ -89,13 +102,13 @@ test('OEM chart entries and make/category selections remain physical asset count
   assert.equal(details[0].demo,true);
 });
 
-test('combined fleet exports do not add LMV twice and reconcile BD Balance separately from Breakdown',()=>{
+test('combined fleet exports do not add LMV twice and reconcile BD Balance with Breakdown',()=>{
   const records=totalFleetRecords([],lmvFleetSnapshot(lmvDemoRecords().slice(0,5)));
   const counts=totalFleetCounts(records);
   const table=fleetSectionExport({regions:[{...counts,code:'WCL',sites:[{name:'Sasti OC',...counts}]}],totals:counts});
   const cell=label=>table.columns.find(column=>column.label===label).value(table.rows.at(-1));
   assert.equal(cell('Total fleet'),5);assert.equal(cell('Combined fleet including LMV'),5);
-  assert.equal(cell('BD balance'),1);assert.equal(cell('Breakdown (including OEM)'),2);assert.equal(cell('BD (%)'),'40.0');
+  assert.equal(cell('BD balance'),2);assert.equal(cell('Breakdown (including OEM)'),2);assert.equal(cell('BD (%)'),'40.0');
 });
 
 test('LMV fleets without a mapped chart site still reconcile their combined export totals',()=>{
