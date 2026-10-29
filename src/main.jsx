@@ -2248,7 +2248,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const mainFleetOemChart = hasLmvFleet ? combinedFleetOemChart : oemChart;
   // Only the header adds BD Balance and OEM BD; chart and report counts stay separate.
   const fleetHeaderBalanceCount = Math.max(0, (hasLmvFleet ? combinedFleetCounts.balance - combinedFleetCounts.oem : accountBreakdownCount - oemChart.rows.length));
-  const fleetHeaderBreakdownCount = (hasLmvFleet ? combinedFleetCounts.balance : accountBreakdownCount) + mainFleetOemChart.rows.length;
+  const fleetHeaderBreakdownCount = fleetHeaderBalanceCount + mainFleetOemChart.rows.length;
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
   const mainFleetTotal = hasLmvFleet ? totalFleetSelectionRows(combinedFleetRecords,{make:showOemBreakdowns?dashboardOem:''}).length : (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total);
   // Measure the space the OEM chart may use so the panel never needs a page scroll.

@@ -31,7 +31,7 @@ test('LMV route and one-time demo seed are wired into the application',()=>{
   assert.match(server,/registerLmvFleet\(app,\{pool,requireSession,currentDashboardAuthorization\}\)/);
 });
 
-test('LMV header balance excludes OEM without changing Breakdown or report counts',async()=>{
+test('LMV header Breakdown adds displayed non-OEM balance and OEM without changing report counts',async()=>{
   const React=(await import('react')).default;
   const {transformWithOxc}=await import('vite');
   const source=readFileSync(new URL('../src/lmv-fleet.jsx',import.meta.url),'utf8');
@@ -47,7 +47,7 @@ test('LMV header balance excludes OEM without changing Breakdown or report count
   find(tree,'View BD Balance LMV records').props.onClick();
   assert.deepEqual(selections,[{mode:'balance',excludeOem:true}]);
   assert.equal(find(tree,'View OEM BD LMV records').props.children,14);
-  assert.equal(find(tree,'View Breakdown LMV records').props.children,111);
+  assert.equal(find(tree,'View Breakdown LMV records').props.children,83+14);
   assert.equal(lmvCounts(records).breakdown,97,'site charts and reports retain their existing calculation');
   assert.deepEqual(records,before);
 });

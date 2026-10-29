@@ -301,7 +301,7 @@ test('header BD Balance includes Non-OEM and Not Selected and excludes OEM from 
   let tree=view.render(mixed);
   assert.equal(text(byLabel(tree,'View BD Balance list')),'3');
   assert.equal(text(fleetCount(tree,'OEM BD')),'2');
-  assert.equal(text(fleetCount(tree,'Breakdown')),'7');
+  assert.equal(text(fleetCount(tree,'Breakdown')),'5');
   byLabel(tree,'View BD Balance list').props.onClick();tree=view.render(mixed);
   const list=findAll(tree,node=>node.props.rowsAreScoped && node.props.bdBalanceColumns && / · 3 assets$/.test(node.props.title||''))[0];
   assert.equal(list.props.rows.length,3);
@@ -325,7 +325,7 @@ test("OEM view retains today's shared filters and separate label and count actio
   assert.equal(text(fleetCount(tree, "OEM BD")), "5");
   const headerBalance = Number(text(byLabel(tree, "View BD Balance list")));
   assert.equal(headerBalance, 0);
-  assert.equal(Number(text(fleetCount(tree, "Breakdown"))), 10, 'the existing Breakdown header count stays unchanged');
+  assert.equal(Number(text(fleetCount(tree, "Breakdown"))), headerBalance + Number(text(fleetCount(tree, "OEM BD"))), 'header Breakdown equals the two displayed counts');
   assert.equal(text(fleetCount(tree, "Total")), "7");
   assert.equal(byClass(tree, "mine-panel mine-request-lifecycle"), undefined);
   assert.equal(byLabel(tree, "Tracking vehicle throughput"), undefined);

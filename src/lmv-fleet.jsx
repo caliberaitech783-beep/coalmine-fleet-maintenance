@@ -34,7 +34,8 @@ export function useLmvFleet(token) {
 export const LMV_MODES=[['total','Total LMV','total'],['balance','BD Balance','balance'],['oem','OEM BD','oem'],['breakdown','Breakdown','breakdown']];
 export function LmvFleetControls({records,mode,onMode,onInspect,loaded,error,retry,onReports,todayCount=0,onTodayInspect,legend}) {
   const fleetCounts=lmvCounts(records);
-  const counts={...fleetCounts,balance:fleetCounts.balance-fleetCounts.oem,breakdown:fleetCounts.balance+fleetCounts.oem};
+  const headerBalance=fleetCounts.balance-fleetCounts.oem;
+  const counts={...fleetCounts,balance:headerBalance,breakdown:headerBalance+fleetCounts.oem};
   return <div className="lmv-fleet-controls">
     <h2>Other Vehicle (LMV)</h2>
     <div className="mine-fleet-chart-toggle" role="group" aria-label="Other vehicles LMV chart view" title={counts.demo>0 ? `${counts.demo} labelled demo LMVs · sample statuses` : 'Other vehicles / LMV'}>
