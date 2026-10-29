@@ -1,4 +1,5 @@
-import RepairClassificationFields,{classificationFromForm} from './repair-classification-fields.jsx';
+import {categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel} from '../repair-classification.mjs';
+import RepairClassificationFieldsView,{classificationFromForm} from './repair-classification-fields.jsx';
 import {classificationActive,classificationError} from '../repair-classification.mjs';
 import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
 import {fetchWithDeletionApproval} from './deletion-approval.jsx';
@@ -149,7 +150,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
-import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
+import { breakdownMovementForRange, breakdownOpenedDate, breakdownCategoryShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending, isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
@@ -522,6 +523,7 @@ const masterNav = [
   ["Equipment master", Truck, "equipment"],
   ["Breakdown master", Wrench, "breakdown"],
   ["Repair type master", Wrench, "repair"],
+  ["Breakdown Category", Wrench, "repair"],
   ["Breakdown Sub-Category", Wrench, "subcategory"],
   ["Region master", Building2, "region"],
   ["Shift Master", Clock, "shift"],
@@ -1174,8 +1176,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const correctionApprovalAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("Project Manager");
   const correctionRequestAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
-  const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
-  const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name));
+  const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name === "Breakdown Category" ? "Repair type master" : name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
+  const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name === "Breakdown Category" ? "Repair type master" : name));
   // Directory is a core account-scoped page. Keep it visible even for sessions
   // issued before the required-menu migration; the API enforces their scope.
   const canViewDirectory = true;
@@ -1752,7 +1754,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </button>)}</div>
     {managerDataReady&&managerDrilldownCard&&<Modal className="dashboard-asset-modal manager-kpi-modal" overlayClassName="dashboard-asset-overlay" title={`${managerDrilldownCard[0]} · ${managerDrilldownAction.kind==="fleet"?managerFleetDrilldownRows.length:managerRequestDrilldownRows.length} records`} close={()=>setManagerDrilldown("")}>
       {managerDrilldownAction.kind==="fleet"
-        ? <DashboardRecordBrowser key={managerDrilldown} rows={managerFleetDrilldownRows} regions={REGION_DATA} rowsAreScoped title={`${title} · ${managerDrilldownCard[0]}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} />
+        ? <DashboardRecordBrowser key={managerDrilldown} rows={managerFleetDrilldownRows} classificationRequests={requestRows} regions={REGION_DATA} rowsAreScoped title={`${title} · ${managerDrilldownCard[0]}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} />
         : activeManagerRole==="MIS Manager"
           ? <MobileWorkflowTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance Closing Time" showVerifiedBy showVerifiedAt showTripCard showMeterData showTurnaroundTime startedFirst closedTimeAfterStarted />
           : <BreakdownTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showClosedAt={managerDrilldownAction.key==="maintenance-completed"} showBreakdownDays={managerDrilldownAction.key!=="maintenance-completed"} />}
@@ -1835,7 +1837,7 @@ function DashboardCardSearch({ cards, onSelect, close }) {
 
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
-  const [dashboardRepairTypes] = useMasterRecords("Repair type master");
+  const [dashboardCategories] = useMasterRecords("Breakdown Category");
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
   useEffect(() => {
@@ -2077,8 +2079,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const throughputRequests = locationBreakdowns.filter(inThroughputScope);
   const throughputEquipment = visibleEquipment.filter(inThroughputScope);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
-  const movementRequestRowsForShift = (records, start, end, metric = "all", type = "") => movementRequestRows(records, start, end, metric, type)
-    .filter((record) => requestMatchesMovementShift(record, metric));
+  const movementRequestRowsForShift = (records, start, end, metric = "all", type = "") => movementRequestRows(records, start, end, metric)
+    .filter((record) => (!type || requestCategoryLabel(record) === type) && requestMatchesMovementShift(record, metric));
   const breakdownMovementForRangeForShift = (records, startDate = "", endDate = "") => Object.fromEntries(["open", "incoming", "outgoing", "balance"].map((metric) => [
     metric, movementRequestRowsForShift(records, startDate, endDate, metric).length,
   ]));
@@ -2130,8 +2132,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownMovementTotals = breakdownMovementForRangeForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
   // Match the open balance card: retain carryover, exclude closed and idle cases.
   const breakdownTypeSummary = dashboardShift === "all"
-    ? breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardRepairTypes)
-    : breakdownTypeShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardRepairTypes);
+    ? breakdownCategoryShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardCategories)
+    : breakdownCategoryShare(movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"), "", "", dashboardCategories);
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
@@ -2147,7 +2149,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
   const breakdownDetailRows = dailyBreakdownMovementForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTotals = breakdownMovementForRangeForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardRepairTypes);
+  const breakdownDetailTypeSummary = breakdownCategoryShare(movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"), "", "", dashboardCategories);
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
@@ -2458,6 +2460,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestReference: request.ref || request.reference || "—",
       requestStatus: requestStatusLabel(request),
       repairCategory: request.category || "—",
+      breakdownCategory: request.classification?.breakdownCategory || "",
       delayedReason: request.delayedReason || "—",
       breakdownReason: request.complaint || "—",
       idleReason: request.idleReason || "—",
@@ -2527,7 +2530,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("site-repair:")) {
       const [site, type] = key.slice(12).split("|");
       return requestAssetRows(movementRequestRowsForShift(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance").filter((record) => recordBelongsToSite(record, site)
-        && normalizedBreakdownType(record.category || record.repairType || record.type) === type));
+        && requestCategoryLabel(record) === type));
     }
     if (key.startsWith("site-status:")) {
       const [site, status] = key.slice(12).split("|");
@@ -2630,7 +2633,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
     { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
     { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: `${throughputScopeLabel}${dashboardShiftDetail}` },
-    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance${dashboardShiftDetail}` })),
+    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown Category", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance${dashboardShiftDetail}` })),
     ...breakdownSiteSummary.map((site) => {
       const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
       return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${availabilityPercentFromCounts(road)}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
@@ -2765,7 +2768,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        {totalFleetSelection && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={combinedListTitle} close={()=>setTotalFleetSelection(null)}><DashboardRecordBrowser key={JSON.stringify(totalFleetSelection)} rows={totalFleetDetailRows(combinedListRows,liveBreakdowns)} regions={assetDrilldownRegions} rowsAreScoped={true} title={combinedListTitle} initialSite={totalFleetSelection.site || ""} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} onHourlyReport={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode)} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} /></Modal>}
+        {totalFleetSelection && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={combinedListTitle} close={()=>setTotalFleetSelection(null)}><DashboardRecordBrowser key={JSON.stringify(totalFleetSelection)} rows={totalFleetDetailRows(combinedListRows,liveBreakdowns)} classificationRequests={liveBreakdowns} regions={assetDrilldownRegions} rowsAreScoped={true} title={combinedListTitle} initialSite={totalFleetSelection.site || ""} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} onHourlyReport={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode)} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} /></Modal>}
         {lmvSelection && <LmvFleetDialog key={JSON.stringify(lmvSelection)} selection={lmvSelection} records={lmvSelection.today ? todayLmvBreakdownRecords : visibleLmv} regions={fleetRegionInsights} close={()=>setLmvSelection(null)} Dialog={Modal} ReportSection={ReportSection} />}
         {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
         {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
@@ -2791,7 +2794,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Running with BD", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "runningbd").length, className: "runningbd" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
             <section {...cardAction(movementKey("active-balance"), "All open BD balance types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
-              <header><div><b>BD Type Mix</b><small>Open BD balance · all maintenance types</small></div><span>Percentage share of open BD balance</span></header>
+              <header><div><b>Breakdown Category Mix</b><small>Open BD balance · all maintenance types</small></div><span>Percentage share of open BD balance</span></header>
               <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("active-balance", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
@@ -2936,7 +2939,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }, { label: "Idle Vehicles", value: movementRequestRowsForShift(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
         </div>
         <section {...cardAction(movementKey("active-balance", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} open BD balance types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of open BD balance`}>
-          <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of open BD balance</span></header>
+          <header><div><b>Breakdown Category Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of open BD balance</span></header>
           <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(`site-repair:${breakdownDetailSite}|${type.label}`)} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
         </section>
         <section {...cardAction(`site-status:${breakdownDetailSite}|all`, `${breakdownDetailSite} fleet`)} className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
@@ -2955,7 +2958,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {assetDrilldown && <Modal className={`dashboard-asset-modal${showFleetSiteTabs ? " fleet-site-tabs-modal" : ""}`} overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} groupBySite={showFleetSiteTabs} hideHierarchyFilters={showFleetSiteTabs} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+        <DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} classificationRequests={liveBreakdowns} groupBySite={showFleetSiteTabs} hideHierarchyFilters={showFleetSiteTabs} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           includeEmptySites={movementDrilldown} onScopeChange={movementDrilldown ? updateMovementBrowseScope : null}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
@@ -3247,12 +3250,13 @@ const masterFields = {
     ["status", "Status"],
     ["owner", "Responsibility"],
   ],
+  "Breakdown Category": [["breakdownCategory", "Breakdown Category"]],
   "Repair type master": [
     ["repairType", "Repair type"],
   ],
   "Breakdown Sub-Category": [
-    ["repairType", "Repair Type"],
-    ["subCategory", "Sub-Category"],
+    ["repairType", "Breakdown Category"],
+    ["subCategory", "Breakdown Sub-Category"],
   ],
   "Delayed Reason": [
     ["delayedReason", "Delayed reason"],
@@ -6051,13 +6055,19 @@ function readMeterEvidence(file) {
     reader.readAsDataURL(file);
   });
 }
+function RepairClassificationFields(props) {
+  const [categories,,categoriesLoaded,,,,categoryError,retryCategories]=useMasterRecords("Breakdown Category");
+  const [mappings,,mappingsLoaded,,,,mappingError,retryMappings]=useMasterRecords("Breakdown Sub-Category");
+  return <><RepairClassificationFieldsView {...props} categoryRecords={categories} subCategoryRecords={mappings} loading={!categoriesLoaded||!mappingsLoaded}/>
+    {(categoryError||mappingError)&&<p role="alert">Could not load classification masters. <button type="button" onClick={()=>{retryCategories();retryMappings();}}>Retry</button></p>}</>;
+}
 function SubCategoryRepairTypeSelect({initialValue=""}) {
-  const [records,,loaded]=useMasterRecords("Repair type master");
-  const options=[...new Set(records.map(row=>String(row.repairType||"").trim()).filter(Boolean))];
-  return <select name="repairType" required defaultValue={initialValue} aria-busy={!loaded}>
-    <option value="">{loaded?"Select repair type":"Loading repair types…"}</option>
+  const [records,,loaded]=useMasterRecords("Breakdown Category");
+  const options=[...new Set(records.map(row=>categoryLabel(row.breakdownCategory)).filter(Boolean))];
+  return <select name="repairType" required defaultValue={categoryLabel(initialValue)} aria-busy={!loaded}>
+    <option value="">{loaded?"Select breakdown category":"Loading categories…"}</option>
     {options.map(name=><option key={name} value={name}>{name}</option>)}
-    {initialValue && !options.includes(initialValue) && <option value={initialValue}>{initialValue}</option>}
+    {initialValue&&!options.includes(categoryLabel(initialValue))&&<option value={categoryLabel(initialValue)}>{categoryLabel(initialValue)}</option>}
   </select>;
 }
 
@@ -6300,7 +6310,7 @@ function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSub
               ))}
             </select>
           </label>
-          {hierarchyEnabled ? <RepairClassificationFields required={maintenanceUser} /> : <>
+          {hierarchyEnabled ? <RepairClassificationFields required /> : <>
           <label>
             Type of breakdown *
             <select
@@ -6667,7 +6677,7 @@ function Generic({ name, requests = [] }) {
     <section className="panel pagepanel generic">
       <header>
         <div>
-          <h1>{name}</h1>
+          <h1>{name}</h1>{["Repair type master","Breakdown Category","Breakdown Sub-Category"].includes(name)&&<p>1. Repair Type → 2. Breakdown Category → 3. Breakdown Sub-Category</p>}
           <p>
             {isReport
               ? "Available reports for all application modules"
@@ -8385,14 +8395,14 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
-    canManageRows = isCdirMaster(name) || name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Breakdown Sub-Category" || name === "Delayed Reason" || name === "Shift Master",
+    canManageRows = isCdirMaster(name) || name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Breakdown Category" || name === "Breakdown Sub-Category" || name === "Delayed Reason" || name === "Shift Master",
     masterValue = (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
       if (name === "Users & employees" && key === "userType")
         return userMasterRole(record);
       if (name === "Users & employees" && ["login", "employee"].includes(key)) return String(record[key] || "").toUpperCase();
-      return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(formatMasterFieldValue(key, record[key]) ?? "").trim();
+      return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(formatMasterFieldValue(key, name === "Breakdown Sub-Category" && key === "repairType" ? categoryLabel(record[key]) : record[key]) ?? "").trim();
     },
     filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
     activeFilterColumn = openFilter ? filterColumns.find((column) => column.key === openFilter) : null,
@@ -11978,7 +11988,7 @@ function App() {
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if ([...masterNav, ...cdirMasterNavItems].some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
-      || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
+      || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name === "Breakdown Category" ? "Repair type master" : name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (["Employee Transfer","Directory Update Approvals","Record Deletion Approvals"].includes(name)) return true;
     if (name === "Employee Tenure Report") return accessAllows(activeNavigationPermissions.tabAccess, "CD");

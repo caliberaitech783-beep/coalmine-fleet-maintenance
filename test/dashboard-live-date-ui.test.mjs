@@ -1,3 +1,4 @@
+import {requestCategoryLabel} from '../repair-classification.mjs';
 import * as combinedFleetModel from '../src/total-fleet-model.mjs';
 import * as lmvModel from '../lmv-fleet.mjs';
 import assert from "node:assert/strict";
@@ -112,10 +113,10 @@ const setLifecycleFrom = (view, value, rows) => {
 
 test("BD Type Mix renders master categories with no requests as well as new request categories", () => {
   const view = harness({repairTypes:[{repairType:'TYRE SYSTEM'},{repairType:'AC SYSTEM'}]});
-  const tree = view.render([{ref:'TYRE-1',site:'Sasti OB',category:'TYRE SYSTEM',status:'Open',start:`${todayKey} 09:00`}]);
+  const tree = view.render([{ref:'TYRE-1',site:'Sasti OB',category:'TYRE SYSTEM',classification:{version:1,repairType:'Breakdown',breakdownCategory:'TYRE SYSTEM'},status:'Open',start:`${todayKey} 09:00`}]);
   const mix = byLabel(tree,'Breakdown type percentage of open BD balance');
-  assert.match(text(mix),/Tyre System100%1 request/);
-  assert.match(text(mix),/AC System0%0 requests/);
+  assert.match(text(mix),/TYRE SYSTEM100%1 request/);
+  assert.match(text(mix),/AC SYSTEM0%0 requests/);
   assert.doesNotMatch(text(mix),/all six/);
 });
 
@@ -199,7 +200,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.equal(button(tree, "Reset dates").props.disabled, true);
 });
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = [], lmvRecords = []} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown", repairTypes = [{breakdownCategory:"WGM"}], lmvRecords = []} = {}) {
   const slots = [];
   let cursor = 0;
   let initialized = false;
@@ -214,7 +215,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     LmvFleetControls: Null,LmvFleetView: Null,LmvFleetDialog: Null,ReportSection: Null,
     dashboardMisQueue, misQueueDate, lifecycleTimeMatches,
     activeTodayBreakdowns,
-    useMasterRecords: () => [repairTypes],
+    useMasterRecords: name => [name==="Breakdown Category"?repairTypes.map(row=>({breakdownCategory:row.breakdownCategory||row.repairType})):repairTypes],
     requestEquipmentDetails,
     requestsWithDoorNumbers,
     requestsVisibleToDashboard,
@@ -224,7 +225,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
-    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
+    ...metrics, requestCategoryLabel,...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
     availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useCallback: callback => callback, useRef: (initial) => useState(() => ({current: initial}))[0],
@@ -935,7 +936,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     }
     const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
     assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
-    assert.ok(types.some(card => text(card).includes("Breakdown100%1 request")));
+    assert.ok(types.some(card => text(card).includes("Unclassified100%1 request")));
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
   };

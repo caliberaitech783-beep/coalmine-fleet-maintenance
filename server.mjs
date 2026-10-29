@@ -1,3 +1,5 @@
+import {seedRepairClassificationMasters} from './repair-classification-seed.mjs';
+import {REPAIR_TYPES,isRepairType,repairTypeKey} from './repair-classification.mjs';
 import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
 import {createSiteFleetTelegramDelivery,siteFleetPlans} from './telegram-site-fleet-delivery.mjs';
@@ -1166,6 +1168,7 @@ async function migrate(){
         VALUES ('repair_type_defaults_seeded','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
+    await seedRepairClassificationMasters(client);
     // Replace the legacy flat master once, preserving its snapshot and all request history.
     const {rows:subCategorySeed}=await client.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_excel_v2' FOR UPDATE");
     const {rows:existingSubCategories}=await client.query("SELECT id FROM master_records WHERE master_name='Breakdown Sub-Category' LIMIT 1");
@@ -2672,7 +2675,8 @@ async function requireSuper(req,res,next){
     }
     if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
     const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
-    if(requestedMaster&&!masterAccessAllows(session.permissions,requestedMaster)&&!masterAccessAllows(session.permissions,requestedMaster,'mobileMasterAccess'))
+    const accessMaster=requestedMaster==='Breakdown Category'?'Repair type master':requestedMaster;
+    if(requestedMaster&&!masterAccessAllows(session.permissions,accessMaster)&&!masterAccessAllows(session.permissions,accessMaster,'mobileMasterAccess'))
       return res.status(403).json({error:'You do not have access to this master.'});
     if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration')&&!accessAllows(session.permissions?.mobileTabAccess,'WhatsApp Integration'))
       return res.status(403).json({error:'You do not have access to WhatsApp Integration.'});
@@ -7267,10 +7271,16 @@ app.get('/api/request-shifts',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+async function readClassificationMasters(client){
+  const {rows}=await client.query("SELECT master_name,record_data FROM master_records WHERE master_name IN ('Breakdown Category','Breakdown Sub-Category')");
+  return {categories:rows.filter(row=>row.master_name==='Breakdown Category').map(row=>row.record_data),mappings:rows.filter(row=>row.master_name==='Breakdown Sub-Category').map(row=>row.record_data)};
+}
+
 async function saveRequestClassification(client,req,before,input=req.body?.classification){
   if(before.classification?.version!==1)return before;
   const classification=updateClassification(before.classification,input);
-  const problem=classificationError(classification,req.session.assignedRole==='Maintenance User');
+  const unchanged=['repairType','breakdownCategory','breakdownSubCategory'].every(key=>classification[key]===before.classification[key]);
+  const problem=classificationError(classification,req.session.assignedRole==='Maintenance User',unchanged?undefined:await readClassificationMasters(client));
   if(problem)throw Object.assign(new Error(`${before.ref}: ${problem}`),{status:400});
   const category=classification.breakdownCategory || before.category;
   const subCategory=classification.breakdownSubCategory;
@@ -7316,7 +7326,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(duplicate && displaySiteName(duplicate.site)!==storedSite)throw Object.assign(new Error('The existing request belongs to a different location.'),{status:403});
     const shiftRows=await client.query("SELECT record_data FROM master_records WHERE master_name='Shift Master' ORDER BY created_at ASC");
     const classification=newClassification(req.body?.classification);
-    const classificationProblem=classification && classificationError(classification,req.session.assignedRole==='Maintenance User');
+    const classificationProblem=classification && classificationError(classification,true,await readClassificationMasters(client));
     if(classificationProblem)throw Object.assign(new Error(classificationProblem),{status:400});
     const storedCategory=classification ? classification.breakdownCategory || 'Maintenance request' : category;
     const storedSubCategory=classification ? classification.breakdownSubCategory : await requestSubCategory(client,category,req.body?.subCategory,requestRequiresSubCategory());
@@ -7595,7 +7605,7 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
     },req.body?.addonRequest ? async(client,closedRows)=>{
       const original=closedRows.find(row=>row.ref===primaryReference);
       if(!original)throw Object.assign(new Error('Select the original request before creating its add-on.'),{status:400});
-      return createMaintenanceAddon(client,req,original,req.body.addonRequest,{requestSubCategory,activeRequestConflict,requestShiftLabel,requestProjection,recordRequestTimeline,parseRequestTimelineTimestamp});
+      return createMaintenanceAddon(client,req,original,req.body.addonRequest,{requestSubCategory,readClassificationMasters,activeRequestConflict,requestShiftLabel,requestProjection,recordRequestTimeline,parseRequestTimelineTimestamp});
     } : null);
     if(addonRequest){
       setImmediate(async()=>{
@@ -8113,14 +8123,15 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
-        const maintenanceManagerList=maintenanceManager&&['Repair type master','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name);
-        if(!maintenanceManagerList&&!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
+        const maintenanceManagerList=maintenanceManager&&['Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name);
+        if(!maintenanceManagerList&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name,'mobileMasterAccess'))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
+        if(row.master_name==='Breakdown Category'&&!canViewRepairTypes&&!canViewDelayedReasons)continue;
         if(row.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes&&!canViewDelayedReasons)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
+        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):['Equipment master','LMV master'].includes(row.master_name)?equipmentMasterWithDoor(row.record_data):row.record_data;
       if(managerRecord&&['Equipment master','LMV master'].includes(row.master_name)){
@@ -8139,7 +8150,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         (grouped[row.master_name]??=[]).push(privilege);
         continue;
       }
-      (grouped[row.master_name]??=[]).push({id:row.id,...record});
+      if(row.master_name==='Repair type master'&&!isRepairType(record.repairType))continue;
+      (grouped[row.master_name]??=[]).push({id:row.id,...record,...(row.master_name==='Repair type master'?{repairType:REPAIR_TYPES.find(type=>repairTypeKey(type)===repairTypeKey(record.repairType))}:{})});
     }
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped,{etag});
     res.json(grouped);
@@ -8158,7 +8170,9 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(master==='Users & employees'&&records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can assign HR access.'});
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
-    if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Repair type and sub-category are required.'});
+    if(master==='Repair type master'&&records.some(record=>!isRepairType(record.repairType)))return res.status(400).json({error:'Use Preventive, Breakdown, Accidental, WGM or Scheduled.'});
+    if(master==='Breakdown Category'&&records.some(record=>!String(record.breakdownCategory||'').trim()))return res.status(400).json({error:'Breakdown Category is required.'});
+    if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Breakdown category and sub-category are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
       return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
     let prepared;
@@ -8346,7 +8360,9 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
       return res.status(400).json({error:'A valid master record is required.'});
-    if(master==='Breakdown Sub-Category'&&(!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Repair type and sub-category are required.'});
+    if(master==='Repair type master'&&!isRepairType(record.repairType))return res.status(400).json({error:'Use Preventive, Breakdown, Accidental, WGM or Scheduled.'});
+    if(master==='Breakdown Category'&&!String(record.breakdownCategory||'').trim())return res.status(400).json({error:'Breakdown Category is required.'});
+    if(master==='Breakdown Sub-Category'&&(!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Breakdown category and sub-category are required.'});
     const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;

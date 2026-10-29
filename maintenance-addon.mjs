@@ -1,6 +1,6 @@
 import {newClassification,classificationError} from './repair-classification.mjs';
 const token=value=>String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
-export const addonRepairTypeKey=value=>['scheduleservice','scheduledservice'].includes(token(value))?'scheduledservice':token(value);
+export const addonRepairTypeKey=value=>['scheduled','scheduleservice','scheduledservice'].includes(token(value))?'scheduledservice':token(value);
 export const supportsMaintenanceAddon=value=>['wgm','scheduledservice'].includes(addonRepairTypeKey(value));
 
 // The caller owns the closure transaction: an invalid add-on rolls it all back.
@@ -11,7 +11,7 @@ export async function createMaintenanceAddon(client,req,original,draft,dependenc
   if(req.body?.ideal || req.body?.status!=='Closed')fail('Close the original request without marking the vehicle Idle when creating an add-on.');
   if(!draft || typeof draft!=='object' || Array.isArray(draft))fail('Enter the add-on request details.');
   const classification=newClassification(draft.classification,dependencies.now?.() ?? Date.now());
-  const problem=classification && classificationError(classification,true);
+  const problem=classification && classificationError(classification,true,dependencies.readClassificationMasters?await dependencies.readClassificationMasters(client):undefined);
   if(problem)fail(problem);
   const ref=String(draft.ref||'').trim(),category=String(classification?.breakdownCategory||draft.category||'').trim(),complaint=String(draft.complaint||'').trim();
   if(!/^REQ-[a-zA-Z0-9-]{1,100}$/.test(ref)||!category||!complaint)fail('Repair type, complaint and a valid add-on reference are required.');

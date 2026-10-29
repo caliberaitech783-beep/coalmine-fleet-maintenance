@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import React from 'react';
 import {transformWithOxc} from 'vite';
-import {classificationError,newClassification,updateClassification,REPAIR_TYPES,breakdownCategories,breakdownSubCategories} from '../repair-classification.mjs';
+import {classificationError,newClassification,updateClassification,REPAIR_TYPES,breakdownCategories,breakdownSubCategories,categoriesForRepairType,subCategoriesForCategory,categoryLabel,repairTypeKey,CLASSIFICATION_MAPPINGS} from '../repair-classification.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 test('locked maintenance writes persist the hierarchy and preserve every legacy ticket',async()=>{
@@ -13,7 +13,7 @@ test('locked maintenance writes persist the hierarchy and preserve every legacy 
     await db.exec(`CREATE TABLE maintenance_requests(reference text PRIMARY KEY,category text,sub_category text,classification jsonb);
       INSERT INTO maintenance_requests VALUES('OLD','Obsolete category','Obsolete component',NULL),('NEW','Maintenance request','',NULL);`);
     const start=source.indexOf('async function saveRequestClassification('),end=source.indexOf('async function requestSubCategory(',start);
-    const save=new Function('updateClassification','classificationError',source.slice(start,end)+';return saveRequestClassification;')(updateClassification,classificationError);
+    const save=new Function('updateClassification','classificationError','readClassificationMasters',source.slice(start,end)+';return saveRequestClassification;')(updateClassification,classificationError,async()=>({categories:[...new Set([...CLASSIFICATION_MAPPINGS.map(row=>row.breakdownCategory),'Other'])].map(breakdownCategory=>({breakdownCategory})),mappings:[...CLASSIFICATION_MAPPINGS,{breakdownCategory:'Other',subCategory:'Other'}]}));
     const req={session:{assignedRole:'Maintenance User'},body:{}};
     const legacy={ref:'OLD',category:'Obsolete category',subCategory:'Obsolete component',classification:null};
     assert.equal(await save(db,req,legacy,{version:1}),legacy);
@@ -26,7 +26,7 @@ test('locked maintenance writes persist the hierarchy and preserve every legacy 
     const rows=(await db.query('SELECT * FROM maintenance_requests ORDER BY reference')).rows;
     assert.deepEqual(rows.find(row=>row.reference==='NEW').classification,{version:1,...input});
     assert.deepEqual(rows.find(row=>row.reference==='OLD'),{reference:'OLD',category:'Obsolete category',sub_category:'Obsolete component',classification:null});
-    await assert.rejects(()=>save(db,req,saved,{...input,breakdownCategory:'ENGINE'}),/allowed/);
+    await assert.rejects(()=>save(db,req,saved,{...input,breakdownCategory:'ENGINE'}),/belonging/);
     const other={repairType:'Breakdown',breakdownCategory:'Other',breakdownSubCategory:'Other'};
     await save(db,req,saved,other);
     const otherRow=(await db.query("SELECT category,sub_category,classification FROM maintenance_requests WHERE reference='NEW'")).rows[0];
@@ -64,7 +64,7 @@ test('selectors enforce order, optional production fields, and reset children af
   const {code}=await transformWithOxc(jsx.slice(start).replace('export default ',''),'fields.jsx',{jsx:{runtime:'classic'}});
   let states=[],index=0;
   const useState=initial=>{const position=index++;if(!(position in states))states[position]=initial;return [states[position],value=>{states[position]=value;}];};
-  const Component=new Function('React','useState','REPAIR_TYPES','breakdownCategories','breakdownSubCategories',code+';return RepairClassificationFields;')(React,useState,REPAIR_TYPES,breakdownCategories,breakdownSubCategories);
+  const Component=new Function('React','useState','REPAIR_TYPES','breakdownCategories','breakdownSubCategories','categoriesForRepairType','subCategoriesForCategory','categoryLabel','repairTypeKey',code+';return RepairClassificationFields;')(React,useState,REPAIR_TYPES,breakdownCategories,breakdownSubCategories,categoriesForRepairType,subCategoriesForCategory,categoryLabel,repairTypeKey);
   const fields=(props={})=>{index=0;return React.Children.toArray(Component(props).props.children).map(label=>React.Children.toArray(label.props.children).find(child=>child.type==='select'));};
   let selects=fields();
   assert.deepEqual(selects.map(field=>field.props.name),['repairType','breakdownCategory','breakdownSubCategory']);

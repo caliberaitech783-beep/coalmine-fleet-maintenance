@@ -21,7 +21,7 @@ test("all dashboard families expose Print, PDF, and Excel for their scoped KPI d
 test("fleet KPI exports retain active scope, period, movement, type and road availability data", () => {
   assert.match(source, /const dashboardScopeLabel = dashboardSite !== "all"/);
   assert.match(source, /section: "Breakdown movement"/);
-  assert.match(source, /section: "Breakdown type"/);
+  assert.match(source, /section: "Breakdown Category"/);
   assert.match(source, /section: "Site summary"/);
   assert.match(source, /Availability \$\{availabilityPercentFromCounts\(road\)\}%/);
   assert.match(source, /section: "Request lifecycle"/);

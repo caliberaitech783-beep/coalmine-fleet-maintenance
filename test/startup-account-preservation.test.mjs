@@ -1,3 +1,4 @@
+import {seedRepairClassificationMasters} from '../repair-classification-seed.mjs';
 import {seedLmvDemoRecords} from '../lmv-fleet.mjs';
 import {BREAKDOWN_SUB_CATEGORY_MAPPINGS} from '../breakdown-sub-category.mjs';
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
@@ -28,13 +29,13 @@ async function runStartup({users=[],initialized=true}={}){
       if(sql.startsWith('SELECT id,record_data FROM master_records'))return {rows:structuredClone(stored)};
       if(sql.startsWith('SELECT id,master_name,record_data FROM master_records'))return {rows:stored.map(user=>({...structuredClone(user),master_name:'Users & employees'}))};
       if(sql.startsWith('INSERT INTO master_records')){
-        const target=sql.includes("VALUES('Breakdown Sub-Category'") ? 'Breakdown Sub-Category' : sql.includes("SELECT 'Repair type master'") ? 'Repair type master' : sql.includes("SELECT 'Delayed Reason'")
+        const target=sql.includes("SELECT 'Breakdown Category'")?'Breakdown Category':sql.includes("VALUES('Repair type master'")?'Repair type master':sql.includes("VALUES('Breakdown Sub-Category'") ? 'Breakdown Sub-Category' : sql.includes("SELECT 'Repair type master'") ? 'Repair type master' : sql.includes("SELECT 'Delayed Reason'")
           ?'Delayed Reason'
           :sql.includes("VALUES ('LMV master'") ? 'LMV master'
           :sql.includes("VALUES ('Shift Master'")
             ?'Shift Master'
             :values?.[0];
-        assert.ok(['Repair type master','Breakdown Sub-Category','Delayed Reason','Shift Master','LMV master'].includes(target),'startup must not insert a user account');
+        assert.ok(['Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason','Shift Master','LMV master'].includes(target),'startup must not insert a user account');
       }
       // The only permitted master update tags breakdown types on Delayed Reason records; it can never touch accounts.
       const delayedReasonTypeSeed=sql.startsWith("UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)")&&sql.includes("WHERE master_name='Delayed Reason'");
@@ -47,7 +48,7 @@ async function runStartup({users=[],initialized=true}={}){
     release(){released=true;},
   };
   const context={
-    seedLmvDemoRecords,BREAKDOWN_SUB_CATEGORY_MAPPINGS,
+    seedRepairClassificationMasters,seedLmvDemoRecords,BREAKDOWN_SUB_CATEGORY_MAPPINGS,
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],BREAKDOWN_SUB_CATEGORY_DEFAULTS:['Tyre puncture'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
     SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,archiveSchemaSql,applySchemaMigration,EMPLOYEE_TRANSFER_SCHEMA,CDIR_DELETION_SCHEMA,CDIR_CHANGE_SCHEMA,

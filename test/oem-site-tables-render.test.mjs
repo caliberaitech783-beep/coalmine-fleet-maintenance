@@ -1,3 +1,4 @@
+import {requestCategoryLabel} from '../repair-classification.mjs';
 import {createRowSearchIndex} from "../src/indexed-smart-search.mjs";
 import { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, siteReportHtml } from "../src/site-report.mjs";
 import { orderOemDetailColumns } from "../src/oem-detail-columns.mjs";
@@ -33,7 +34,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { createRowSearchIndex, useDeferredValue: value => value, ...mobileWindow, mobileTablePageSize: () => 0, BreakdownReasonHistory: ({reason}) => reason || "—", orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
+const bindings = {requestCategoryLabel, createRowSearchIndex, useDeferredValue: value => value, ...mobileWindow, mobileTablePageSize: () => 0, BreakdownReasonHistory: ({reason}) => reason || "—", orderOemDetailColumns, pulseDelayReason, groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch, dailyUpdatesExportText, breakdownMeterColumns,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };

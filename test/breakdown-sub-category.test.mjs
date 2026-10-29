@@ -29,9 +29,9 @@ test('sub-category names are trimmed, de-duplicated and sorted, and Others is al
 });
 
 test('it is a Masters sub menu that administrators can add to, edit and delete, controlled from Privilege',()=>{
-  assert.match(client,/\["Repair type master", Wrench, "repair"\],\n  \["Breakdown Sub-Category", Wrench, "subcategory"\],\n  \["Region master", Building2, "region"\],/,'listed in the Masters menu after Repair type master');
-  assert.match(client,/"Breakdown Sub-Category": \[\n    \["repairType", "Repair Type"\],\n    \["subCategory", "Sub-Category"\],\n  \],/);
-  assert.match(client,/name === "Repair type master" \|\| name === "Breakdown Sub-Category" \|\| name === "Delayed Reason"/,'rows can be added, edited and deleted');
+  assert.match(client,/\["Repair type master", Wrench, "repair"\],\n  \["Breakdown Category", Wrench, "repair"\],\n  \["Breakdown Sub-Category", Wrench, "subcategory"\],\n  \["Region master", Building2, "region"\],/,'listed in the Masters menu after Repair type master');
+  assert.match(client,/"Breakdown Sub-Category": \[\n    \["repairType", "Breakdown Category"\],\n    \["subCategory", "Breakdown Sub-Category"\],\n  \],/);
+  assert.match(client,/name === "Repair type master" \|\| name === "Breakdown Category" \|\| name === "Breakdown Sub-Category" \|\| name === "Delayed Reason"/,'rows can be added, edited and deleted');
   assert.ok(ADMIN_MASTER_OPTIONS.includes('Breakdown Sub-Category'),'it can be ticked under Visible masters in Privilege');
   assert.equal(ADMIN_MASTER_OPTIONS[ADMIN_MASTER_OPTIONS.indexOf('Repair type master')+1],'Breakdown Sub-Category');
   assert.equal(masterAccessAllows({adminLevel:'Admin'},'Breakdown Sub-Category'),true);
@@ -51,6 +51,6 @@ test('request forms load the mapped master and new requests require selection fr
 });
 
 test('request roles can read sub-categories without gaining master write permissions',()=>{
-  assert.match(server,/\['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row.master_name\)/);
-  assert.match(server,/masterAccessAllows\(req.session.permissions,row.master_name\)/);
+  assert.match(server,/\['Equipment master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row.master_name\)/);
+  assert.match(server,/masterAccessAllows\(req.session.permissions,row.master_name==='Breakdown Category'\?'Repair type master':row.master_name\)/);
 });

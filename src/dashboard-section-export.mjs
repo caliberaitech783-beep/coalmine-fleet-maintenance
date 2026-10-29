@@ -172,7 +172,7 @@ export function throughputSectionExport({tab = 'breakdown', place = 'All regions
       {name: 'Summary · BD Out', outgoing: totals.outgoing},
       {name: 'Summary · BD Balance (open, excluding idle)', balance: openBalance},
       {name: 'Summary · Idle Vehicles (idle requests)', idle: idleRequests},
-      ...typeMix.map(type => ({name: `BD Type Mix · ${type.label}`, balance: type.count, share: type.percentage})),
+      ...typeMix.map(type => ({name: `Breakdown Category Mix · ${type.label}`, balance: type.count, share: type.percentage})),
     ],
   };
 }

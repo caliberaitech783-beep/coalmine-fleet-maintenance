@@ -8,7 +8,7 @@ test('Dashboard navigation scrolls back to its banner after clearing detail view
 });
 test('fleet header drilldowns use the shared site and equipment grouping without losing records', () => {
   assert.match(source,/\["all", "fleet-breakdown:account", "fleet-breakdown:balance", "fleet-breakdown:all"\].includes\(assetDrilldown\) \|\| assetDrilldown.startsWith\("entered-today:"\)/);
-  assert.match(source,/rows=\{fleetSiteTabRows\} groupBySite=\{showFleetSiteTabs\}/);
+  assert.match(source,/rows=\{fleetSiteTabRows\} classificationRequests=\{liveBreakdowns\} groupBySite=\{showFleetSiteTabs\}/);
   const rows=[{id:'a',requestSite:'Sasti OC',make:'Volvo',group:'Tippers'}, {id:'b',requestSite:'Sasti OC',make:'LiuGong',group:'Dozers'}];
   const grouped=oemDetailReportRows(groupOemRecordsBySite(rows,[{code:'WCL',sites:['Sasti OC']}]),true);
   assert.equal(grouped.length,2);

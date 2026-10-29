@@ -78,7 +78,8 @@ test('API preserves continuation exemption and validates maintenance create/edit
   const server = fs.readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
   const create = server.slice(server.indexOf("app.post('/api/requests',"), server.indexOf("app.patch('/api/requests/:reference',"));
   assert.ok(create.indexOf('createRequestWithVehicleLock(') < create.indexOf('newClassification('));
-  assert.equal((server.match(/classificationError\(classification,req.session.assignedRole==='Maintenance User'\)/g) || []).length, 2);
+  assert.match(server,/classificationError\(classification,true,await readClassificationMasters\(client\)\)/);
+  assert.match(server,/classificationError\(classification,req.session.assignedRole==='Maintenance User',unchanged\?undefined:await readClassificationMasters\(client\)\)/);
   assert.equal((server.match(/await saveRequestClassification\(/g) || []).length, 3);
   assert.match(server, /ADD COLUMN IF NOT EXISTS classification JSONB;/);
   assert.doesNotMatch(server, /UPDATE maintenance_requests SET classification=.*version/);

@@ -114,8 +114,8 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
     ['Summary · BD Out', '', '', 1, '', '', '', '', '', '', ''],
     ['Summary · BD Balance (open, excluding idle)', '', '', '', 1, '', '', '', '', '', ''],
     ['Summary · Idle Vehicles (idle requests)', '', '', '', '', 1, '', '', '', '', ''],
-    ['BD Type Mix · Mechanical', '', '', '', 1, '', '', '', '', '', 50],
-    ['BD Type Mix · Electrical', '', '', '', 1, '', '', '', '', '', 50],
+    ['Breakdown Category Mix · Mechanical', '', '', '', 1, '', '', '', '', '', 50],
+    ['Breakdown Category Mix · Electrical', '', '', '', 1, '', '', '', '', '', 50],
   ]);
   assertPlainExport(movement);
   const availability = throughputSectionExport({...common, tab: 'road', availabilitySites: [

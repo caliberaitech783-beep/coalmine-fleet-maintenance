@@ -1,3 +1,4 @@
+import {requestCategoryLabel} from '../repair-classification.mjs';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync} from "node:fs";
@@ -20,7 +21,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
 test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
-  const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+  const bindings = {requestCategoryLabel,BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
     useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
@@ -31,14 +32,14 @@ test("BD Balance places location, reasons and meter readings beside their reques
   assert.match(html, /<th>Days of BD<\/th><th>Current location<\/th>/);
   assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
   assert.match(html, /10-09-26 10:00:00 AM<\/td><td[^>]*>10-09-26 06:00:00 PM<\/td>/);
-  assert.match(html, /<th>Equipment category<\/th><th>Type of BD<\/th><th>Reason of BD<\/th>/);
+  assert.match(html, /<th>Equipment category<\/th><th>Breakdown Category<\/th><th>Reason of BD<\/th>/);
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
   assert.match(html, /Brake repair/);
 });
 
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
-  const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+  const bindings = {requestCategoryLabel,BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
     useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
@@ -89,7 +90,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
 test("BD Out closing times, table order, counts and exports stay consistent through region filtering and reset", () => {
   const slots = [];
   let cursor = 0;
-  const bindings = {BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
+  const bindings = {requestCategoryLabel,BreakdownReasonHistory: ({reason}) => reason || "—",React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
     useMemo: fn => fn(), useDeferredValue: value => value, createRowSearchIndex,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};

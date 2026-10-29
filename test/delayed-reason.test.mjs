@@ -127,8 +127,8 @@ test('Delayed Reason master, close form, and server validation are connected',()
   assert.match(access,/"Region master",\s*"Shift Master",\s*"Delayed Reason",\s*"Vehicle transfers"/);
   assert.match(client,/\["Region master", Building2, "region"\],\s*\["Shift Master", Clock, "shift"\],\s*\["Delayed Reason", Clock, "delayed"\],\s*\["Vehicle transfers", ArrowRightLeft, "transfers"\]/);
   assert.match(client,/useMasterRecords\("Delayed Reason"\)/);
-  assert.match(client,/masterAccessAllows\(viewPermissions, name\)/);
-  assert.match(server,/masterAccessAllows\(session\.permissions,requestedMaster\)/);
+  assert.match(client,/masterAccessAllows\(viewPermissions, name === "Breakdown Category" \? "Repair type master" : name\)/);
+  assert.match(server,/masterAccessAllows\(session\.permissions,accessMaster\)/);
   assert.match(server,/delayed_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/delayedReasonRequired\(meterRows\[0\]\.expected_completion_at,closedAt\)/);
   assert.match(server,/INSERT INTO master_records \(master_name,record_data\)[\s\S]*SELECT 'Delayed Reason'/);

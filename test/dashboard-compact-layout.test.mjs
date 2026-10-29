@@ -77,8 +77,8 @@ test("each site links breakdown movement with its current availability count", (
 });
 
 test("the maintenance type mix counts open balance rather than new requests", () => {
-  assert.match(client, /breakdownTypeShare\(movementRequestRows\(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"\), "", "", dashboardRepairTypes\)/);
-  assert.match(client, /BD Type Mix/);
+  assert.match(client, /breakdownCategoryShare\(movementRequestRows\(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"\), "", "", dashboardCategories\)/);
+  assert.match(client, /Breakdown Category Mix/);
   assert.match(client, /Open BD balance · all maintenance types/);
   assert.match(client, /Percentage share of open BD balance/);
   assert.match(client, /cardAction\(movementKey\("active-balance"\), "All open BD balance types"\)/);

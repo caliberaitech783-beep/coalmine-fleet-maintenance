@@ -44,7 +44,7 @@ test("manager profile and navigation honor assigned role, location, and parent m
   assert.match(source, /profileHeaderDesignation\(\{name:session\?\.name,permissions\}\)/);
   assert.match(source, /session\?\.name[\s\S]*profileLocation[\s\S]*\.join\(" · "\)/);
   assert.match(source, /accessAllows\(viewPermissions\.tabAccess, "Masters"\)[\s\S]*visibleMasterNav\.length > 0/);
-  assert.match(source, /accessAllows\(activeNavigationPermissions\.tabAccess, "Masters"\) && masterAccessAllows\(activeNavigationPermissions, name\)/);
+  assert.match(source, /accessAllows\(activeNavigationPermissions\.tabAccess, "Masters"\) && masterAccessAllows\(activeNavigationPermissions, name === "Breakdown Category" \? "Repair type master" : name\)/);
 });
 
 test("director profiles use the Director header designation without changing manager permissions", () => {

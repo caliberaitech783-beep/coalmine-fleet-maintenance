@@ -1,3 +1,4 @@
+import {categoryLabel,requestCategoryLabel} from './repair-classification.mjs';
 import { isIdleVehicleRequest } from './request-idle.mjs';
 const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
 
@@ -99,4 +100,12 @@ export function breakdownTypeShare(records = [], startDate = "", endDate = "", r
     count: counts[label] || 0,
     percentage: total ? Math.round(((counts[label] || 0) / total) * 100) : 0,
   }));
+}
+
+export function breakdownCategoryShare(records=[],startDate="",endDate="",categories=[]) {
+  const requests=records.filter(record=>matchesBreakdownMovement(record,startDate,endDate,"incoming"));
+  const counts=new Map();
+  for(const request of requests){const label=requestCategoryLabel(request);counts.set(label,(counts.get(label)||0)+1);}
+  const labels=[...new Set([...categories.map(row=>categoryLabel(typeof row==='string'?row:row.breakdownCategory)).filter(Boolean),...counts.keys()])];
+  return labels.map(label=>({label,count:counts.get(label)||0,percentage:requests.length?Math.round((counts.get(label)||0)*100/requests.length):0}));
 }

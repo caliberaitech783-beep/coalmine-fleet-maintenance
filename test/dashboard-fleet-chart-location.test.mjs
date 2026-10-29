@@ -1,3 +1,4 @@
+import {requestCategoryLabel} from '../repair-classification.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -19,7 +20,7 @@ const hideCategoryFor = new Function("assetDrilldown", `return ${categoryExpress
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
-const bindings = { BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+const bindings = {requestCategoryLabel, BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
   useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null };
