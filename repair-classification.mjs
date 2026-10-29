@@ -7,11 +7,11 @@ export const REPAIR_TYPES = ['Preventive', 'Breakdown', 'Accidental', 'Scheduled
 export const classificationActive = (now = Date.now()) => new Date(now).getTime() >= Date.parse(REPAIR_CLASSIFICATION_START);
 export function breakdownCategories(repairType) {
   if (!REPAIR_TYPES.includes(repairType)) return [];
-  if (repairType === 'Scheduled') return ['SCHEDULED SERVICE'];
-  if (repairType === 'WGM') return ['WGM'];
-  return Object.keys(mappings).filter((category) => !['SCHEDULED SERVICE', 'WGM'].includes(category));
+  if (repairType === 'Scheduled') return ['SCHEDULED SERVICE', 'Other'];
+  if (repairType === 'WGM') return ['WGM', 'Other'];
+  return [...Object.keys(mappings).filter((category) => !['SCHEDULED SERVICE', 'WGM'].includes(category)), 'Other'];
 }
-export const breakdownSubCategories = (category) => mappings[category] || [];
+export const breakdownSubCategories = (category) => category === 'Other' ? ['Other'] : mappings[category] ? [...mappings[category], 'Other'] : [];
 export function normalizeClassification(input = {}) {
   return Object.fromEntries(['repairType', 'breakdownCategory', 'breakdownSubCategory'].map((key) => [key, String(input?.[key] || '').trim()]));
 }

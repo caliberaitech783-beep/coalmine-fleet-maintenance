@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
+import mappings from '../repair-classification-data.json' with {type: 'json'};
 import {classificationActive, newClassification, updateClassification, classificationError, breakdownCategories, breakdownSubCategories} from '../repair-classification.mjs';
 
 test('rollout starts at 5 PM IST on October 28, independent of host timezone', () => {
@@ -10,16 +11,17 @@ test('rollout starts at 5 PM IST on October 28, independent of host timezone', (
   assert.equal(newClassification({}, '2026-10-28T17:00:00+05:30').version, 1);
 });
 
-test('ordinary repair types expose all 18 non-service categories', () => {
+test('ordinary repair types expose all 18 non-service categories plus Other', () => {
   for (const type of ['Preventive', 'Breakdown', 'Accidental']) {
     const categories = breakdownCategories(type);
-    assert.equal(categories.length, 18);
+    assert.equal(categories.length, 19);
+    assert.equal(categories.at(-1), 'Other');
     assert.ok(categories.includes('ENGINE'));
     assert.ok(!categories.includes('SCHEDULED SERVICE'));
     assert.ok(!categories.includes('WGM'));
   }
-  assert.deepEqual(breakdownCategories('Scheduled'), ['SCHEDULED SERVICE']);
-  assert.deepEqual(breakdownCategories('WGM'), ['WGM']);
+  assert.deepEqual(breakdownCategories('Scheduled'), ['SCHEDULED SERVICE', 'Other']);
+  assert.deepEqual(breakdownCategories('WGM'), ['WGM', 'Other']);
   assert.deepEqual(breakdownCategories(''), []);
 });
 
@@ -27,15 +29,31 @@ test('all 133 supplied subcategories validate under their permitted repair types
   let count = 0;
   for (const type of ['Breakdown', 'Scheduled', 'WGM']) {
     for (const category of breakdownCategories(type)) {
-      for (const subCategory of breakdownSubCategories(category)) {
+      for (const subCategory of mappings[category] || []) {
         assert.equal(classificationError({repairType:type, breakdownCategory:category, breakdownSubCategory:subCategory}, true), '');
         count++;
       }
     }
   }
   assert.equal(count, 133);
-  assert.deepEqual(breakdownSubCategories('WGM'), ['WGM']);
+  assert.deepEqual(breakdownSubCategories('WGM'), ['WGM', 'Other']);
   assert.ok(breakdownSubCategories('SCHEDULED SERVICE').includes('HOUR SERVICE 250'));
+});
+
+test('Other is selectable and accepted for every repair type and category', () => {
+  for (const repairType of ['Preventive', 'Breakdown', 'Accidental', 'Scheduled', 'WGM']) {
+    assert.ok(breakdownCategories(repairType).includes('Other'));
+    for (const breakdownCategory of breakdownCategories(repairType)) {
+      const options = breakdownSubCategories(breakdownCategory);
+      assert.equal(options.filter((option) => option === 'Other').length, 1);
+      assert.equal(classificationError({repairType, breakdownCategory, breakdownSubCategory:'Other'}, true), '');
+    }
+    const input = {repairType, breakdownCategory:'Other', breakdownSubCategory:'Other'};
+    assert.deepEqual(newClassification(input, '2026-10-29T00:00:00+05:30'), {version:1, ...input});
+  }
+  assert.deepEqual(breakdownSubCategories(''), []);
+  assert.deepEqual(breakdownSubCategories('unknown category'), []);
+  assert.ok(classificationError({repairType:'Breakdown', breakdownCategory:'Other', breakdownSubCategory:'Oil Pump'}, true));
 });
 
 test('maintenance requires all fields; production can omit any downstream field', () => {
