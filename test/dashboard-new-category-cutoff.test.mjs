@@ -25,7 +25,7 @@ test('pending classification is separate from percentages and overall BD totals 
  assert.equal(newCategoryMixRequests(rows,'all').length,3);
  assert.deepEqual(breakdownMovementForRange(rows,'2026-10-29','2026-10-29'),before);
  const result=throughputSectionExport({openBalance:4,categoryMixScope:'Created from 29 Oct 2026, 2:00 PM IST',categoryMixPending:1,typeMix:mix});
- assert.equal(result.rows.find(r=>r.name==='Summary · BD Balance (open, excluding idle)').balance,4);
+ assert.equal(result.rows.find(r=>r.name==='Summary · BD Balance (off-road vehicles)').balance,4);
  assert.equal(result.rows.find(r=>r.name.startsWith('Classification pending')).balance,1);
  assert.match(result.rows.find(r=>r.share===50).name,/Created from 29 Oct 2026/);
 });

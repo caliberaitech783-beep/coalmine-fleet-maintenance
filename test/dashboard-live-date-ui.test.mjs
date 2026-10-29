@@ -872,7 +872,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
   tree = view.render();
   const site = byClass(tree, "mine-breakdown-site-row");
-  assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 1 balance/);
+  assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
   assert.ok(!text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of"), "redundant filter note is removed; table caption retains the date");
   assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-26To: 08-09-26Availability as of 08-09-26");
@@ -905,7 +905,7 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-01");
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 2 in, 0 out, 1 balance/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
@@ -948,7 +948,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     for (const card of cards) {
       activate(card); tree = view.render(rows);
       assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
-      assert.match(byClass(tree, "dashboard-asset-modal").props.title, /All time/);
+      assert.match(byClass(tree, "dashboard-asset-modal").props.title, ['balance','idle'].includes(card.props.className) ? /Off road|Idle/ : /All time/);
     }
     const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
     assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
@@ -1341,7 +1341,7 @@ test('new category tile and pending drilldowns match cutoff counts while BD Bala
   {ref:'HISTORY',createdAt:'2026-10-29T08:29:59Z',classification:{breakdownCategory:'ENGINE'}},
   {ref:'NEW-ENGINE',createdAt:'2026-10-29T08:30:00Z',classification:{breakdownCategory:'ENGINE'}},
   {ref:'PENDING',createdAt:'2026-10-29T09:00:00Z'},
- ].map(r=>({...r,site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`,category:'Breakdown'}));
+ ].map((r,index)=>({...r,door:`V${index+1}`,chassis:`C${index+1}`,site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`,category:'Breakdown'}));
  let tree=view.render(rows);
  const mix=byLabel(tree,'Breakdown type percentage of open BD balance');
  assert.match(text(mix),/ENGINE100%1 request/);

@@ -102,7 +102,7 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
   const movement = throughputSectionExport({...common, tab: 'breakdown',
     sites: [{site: 'Sasti OB', open: 2, incoming: 1, outgoing: 1, balance: 2, idle: 1}, {site: 'Majri OB', open: 0, incoming: 0, outgoing: 0, balance: 0, idle: 0}],
     roadBySite: new Map([['Sasti OB', {total: 10, onRoad: 7, offRoad: 2, idle: 1, availability: 70}]]),
-    movementTotals: {open: 2, incoming: 1, outgoing: 1, balance: 2}, openBalance: 1, idleRequests: 1,
+    movementTotals: {open: 2, incoming: 1, outgoing: 1, balance: 2}, openBalance: 2, idleRequests: 1,
     typeMix: [{label: 'Mechanical', count: 1, percentage: 50}, {label: 'Electrical', count: 1, percentage: 50}]});
   assert.equal(movement.title, 'Tracking Vehicle Throughput · Site-wise BD Movement · WCL · 19-09-26 to 19-09-26 · Availability: live · 19-09-26');
   assert.deepEqual(labels(movement), ['Site name', 'BD Open', 'BD In', 'BD Out', 'BD Balance', 'Idle Vehicles', 'Availability count (%)', 'On road', 'Off road', 'Total fleet', 'Share of open BD balance (%)']);
@@ -112,8 +112,8 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
     ['All sites total', 2, 1, 1, 2, 1, 83, 9, 2, 12, ''],
     ['Summary · BD In (opening + new)', '', 3, '', '', '', '', '', '', '', ''],
     ['Summary · BD Out', '', '', 1, '', '', '', '', '', '', ''],
-    ['Summary · BD Balance (open, excluding idle)', '', '', '', 1, '', '', '', '', '', ''],
-    ['Summary · Idle Vehicles (idle requests)', '', '', '', '', 1, '', '', '', '', ''],
+    ['Summary · BD Balance (off-road vehicles)', '', '', '', 2, '', '', '', '', '', ''],
+    ['Summary · Idle Vehicles (fleet snapshot)', '', '', '', '', 1, '', '', '', '', ''],
     ['Breakdown Category Mix · Mechanical', '', '', '', 1, '', '', '', '', '', 50],
     ['Breakdown Category Mix · Electrical', '', '', '', 1, '', '', '', '', '', 50],
   ]);

@@ -1,5 +1,16 @@
 # Caliber Pulse project workflow
 
+## Site-wise BD and availability count consistency
+
+Tracking Vehicle Throughput's site BD Balance and Idle Vehicles columns, summary
+cards, site detail cards and exports use the same unique Equipment Master asset
+snapshot as Availability Count: balance equals Off road, and idle includes vehicles
+still idle from earlier days. Today uses live availability; a past To date uses
+the existing historical availability snapshot. The linked balance/idle cards open
+the matching fleet-status lists. BD Open/In/Out and separate day-wise movement
+reports retain their request-event definitions; those event totals need not
+reconcile arithmetically to the unique-fleet snapshot. Stored requests are unchanged.
+
 ## Site fleet Telegram delivery
 
 The approved site fleet scheduler (`telegram-site-fleet-delivery.mjs`) uses saved hierarchy schedules, recipient eligibility, personal overrides, report access and site scope. Due titles are combined per site/window and published only to the corresponding registered group, including Lalpeth OC. Each title/window/group has an atomic durable claim; completed and uncertain attempts are not automatically resent. Published PDF/Excel reports remain site-scoped and historical reports are retained. The `siteFleetReport` purpose accepts negative group IDs only and follows the saved fleet-channel switch; the global Telegram pause still applies. Legacy `consolidatedRequestReport` Telegram sends remain paused, so enabling site bundles never resumes private fleet copies. WhatsApp delivery is unchanged.

@@ -153,8 +153,8 @@ const roadFigures = road => ({idle: road.idle, availability: availabilityPercent
 
 // Tracking Vehicle Throughput follows its open tab. Site-wise BD Movement: the site table (movement
 // and its availability count impact), the all-sites total, the four summary cards and the BD Type
-// Mix. The cards count requests, so their BD Balance leaves idle out and their Idle Vehicles counts
-// idle requests in the selected date range, as does the table. Availability Count remains live.
+// Mix. Balance and idle use the same unique-fleet snapshot as availability; Open/In/Out remain
+// request movement events for the selected range.
 export function throughputSectionExport({tab = 'breakdown', place = 'All regions', period = '', availabilityLabel = '', sites = [], roadBySite = new Map(), movementTotals = {}, openBalance = 0, idleRequests = 0, typeMix = [], categoryMixScope = '', categoryMixPending = 0, categoryMixEmpty = false, availabilitySites = [], availabilityTotals = NO_ROAD} = {}) {
   if (tab !== 'breakdown') return {
     title: heading('Tracking Vehicle Throughput', 'Availability Count', place, period, availabilityLabel),
@@ -167,11 +167,11 @@ export function throughputSectionExport({tab = 'breakdown', place = 'All regions
     columns: MOVEMENT_COLUMNS,
     rows: [
       ...sites.map(site => ({name: site.site, open: site.open, incoming: site.incoming, outgoing: site.outgoing, balance: site.balance, ...roadFigures(roadBySite.get(site.site) || NO_ROAD), idle: site.idle ?? 0})),
-      {name: 'All sites total', open: totals.open, incoming: totals.incoming, outgoing: totals.outgoing, balance: totals.balance, ...roadFigures(availabilityTotals), idle: sites.reduce((sum, site) => sum + (site.idle ?? 0), 0)},
+      {name: 'All sites total', open: totals.open, incoming: totals.incoming, outgoing: totals.outgoing, balance: sites.reduce((sum, site) => sum + (site.balance ?? 0), 0), ...roadFigures(availabilityTotals), idle: sites.reduce((sum, site) => sum + (site.idle ?? 0), 0)},
       {name: 'Summary · BD In (opening + new)', incoming: totals.open + totals.incoming},
       {name: 'Summary · BD Out', outgoing: totals.outgoing},
-      {name: 'Summary · BD Balance (open, excluding idle)', balance: openBalance},
-      {name: 'Summary · Idle Vehicles (idle requests)', idle: idleRequests},
+      {name: 'Summary · BD Balance (off-road vehicles)', balance: openBalance},
+      {name: 'Summary · Idle Vehicles (fleet snapshot)', idle: idleRequests},
       ...(categoryMixEmpty ? [{name:`Breakdown Category Mix · No new requests yet · ${categoryMixScope}`,balance:0}] : []),
       ...(categoryMixPending ? [{name:`Classification pending · ${categoryMixScope}`,balance:categoryMixPending}] : []),
       ...typeMix.map(type => ({name: `Breakdown Category Mix · ${categoryMixScope ? categoryMixScope+" · " : ""}${type.label}`, balance: type.count, share: type.percentage})),
