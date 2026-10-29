@@ -121,3 +121,17 @@
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .mine-fleet-chart-heading > h2,
   .mine-dashboard .mine-fleet-region-chart.has-lmv-bars .lmv-fleet-controls > h2 { font-size:14px !important; padding:6px 4px; }
 }
+
+/* LMV detail reports share the vehicle/equipment browser and full-screen shell. */
+.lmv-reports-browser { display:flex; flex:1; min-height:0; flex-direction:column; overflow:hidden; }
+.lmv-reports-browser > .lmv-report-controls { flex-shrink:0; padding:8px 16px; margin:0; border-bottom:1px solid var(--line,#dce4ef); }
+.lmv-reports-browser > .lmv-report-controls label { display:flex; align-items:center; gap:12px; }
+.lmv-reports-browser > .lmv-report-controls select { width:auto; min-height:36px; padding:6px 10px; }
+.lmv-reports-browser > .tabs { flex-shrink:0; display:flex; flex-wrap:nowrap; overflow-x:auto; margin:0; padding:8px 16px; gap:6px; border-bottom:1px solid var(--line,#dce4ef); }
+.lmv-reports-browser > .tabs button { flex-shrink:0; padding:8px 12px; }
+.lmv-reports-browser > .lmv-demo-notice { flex-shrink:0; margin:0; padding:6px 16px; }
+.lmv-reports-browser > .reports-section { overflow:auto; min-height:0; }
+.pagepanel:has(> .lmv-reports-browser) { display:flex; flex-direction:column; min-height:70vh; }
+.pagepanel > .lmv-reports-browser { min-height:65vh; }
+
+.lmv-reports-page { height:calc(100dvh - 180px); min-height:560px; }

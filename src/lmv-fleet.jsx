@@ -4,6 +4,8 @@ import {recordBelongsToSite} from '../site-location.mjs';
 import {REGION_DATA} from '../region-scope.mjs';
 import {LMV_DETAIL_COLUMNS,LMV_SUMMARY_COLUMNS,lmvCounts,lmvRowsForMode,lmvSiteSummary,lmvSummaryRows} from '../lmv-fleet.mjs';
 import FleetSiteBars from './fleet-site-bars.jsx';
+import DashboardRecordBrowser from './dashboard-record-browser.jsx';
+import {totalFleetRecords,totalFleetDetailRows} from './total-fleet-model.mjs';
 
 export function useLmvFleet(token) {
   const [state,setState]=useState({token,records:[],scope:null,loaded:false,error:'',generatedAt:''});
@@ -76,39 +78,41 @@ export function LmvFleetView({records,regions,mode,onInspect,ExportMenu,stale=fa
   </section>;
 }
 
-export function LmvFleetDialog({selection,records,regions,close,Dialog,ReportSection}) {
+export function LmvFleetDialog({selection,records,regions,close,Dialog,ReportSection,browserProps,requests=[]}) {
   if(!selection)return null;
   const scoped=selection.site?records.filter(record=>recordBelongsToSite(record,selection.site)):records;
-  return <Dialog title={`${selection.site||'All selected sites'}${selection.today?' · Today’s requests still off-road':''} · LMV ${selection.reports?'reports':modeLabel(selection.mode)}`} close={close}>
-    <LmvReports records={scoped} regions={selection.site?regions.map(region=>({...region,sites:region.sites.filter(site=>(typeof site==='string'?site:site.name)===selection.site)})).filter(region=>region.sites.length):regions} ReportSection={ReportSection} initialMode={selection.mode||'total'} initialSummary={selection.reports} />
+  return <Dialog className="dashboard-asset-modal lmv-report-modal" overlayClassName="dashboard-asset-overlay" title={`${selection.site||'All regions'}${selection.today?' · Today’s requests still off-road':''} · Other vehicles / LMV · ${scoped.length} assets`} close={close}>
+    <LmvReports records={scoped} regions={selection.site?regions.map(region=>({...region,sites:region.sites.filter(site=>(typeof site==='string'?site:site.name)===selection.site)})).filter(region=>region.sites.length):regions} ReportSection={ReportSection} browserProps={browserProps} requests={requests} initialMode={selection.mode||'total'} initialSummary={false} />
   </Dialog>;
 }
 
-export function LmvReports({records,regions=REGION_DATA,ReportSection,initialMode='total',initialSummary=false}) {
+export function LmvReports({records,regions=REGION_DATA,ReportSection,initialMode='total',initialSummary=false,browserProps,requests=[]}) {
   const [mode,setMode]=useState(initialSummary?'summary':initialMode);
   const [source,setSource]=useState('all');
-  const filtered=records.filter(record=>source==='all'||(source==='demo'?record.demo===true:record.demo!==true));
+  const filtered=useMemo(()=>records.filter(record=>source==='all'||(source==='demo'?record.demo===true:record.demo!==true)),[records,source]);
   const counts=lmvCounts(filtered);
   const reportTabs=[['summary','Site-wise summary'],['total','LMV total'],['breakdown','LMV BD'],['balance','LMV BD Balance'],['oem','LMV OEM BD'],['onroad','LMV on road'],['idle','LMV idle'],['unknown','LMV needs review']];
-  return <div className="lmv-reports">
-    <p>Current LMV status across the selected sites. BD Balance = LMV BD (including OEM BD). LMV BD % = LMV BD ÷ Total LMV × 100.</p>
+  const detailRows=useMemo(()=>totalFleetDetailRows(totalFleetRecords([],lmvRowsForMode(filtered,mode)),requests),[filtered,mode,requests]);
+  const browserRegions=regions.map(region=>({...region,sites:region.sites.map(site=>typeof site==='string'?site:site.name)}));
+  return <div className={`lmv-reports${browserProps?' lmv-reports-browser':''}`}>
+    {!browserProps&&<p>Current LMV status across the selected sites. BD Balance = LMV BD (including OEM BD). LMV BD % = LMV BD ÷ Total LMV × 100.</p>}
     {counts.demo>0&&<p className="lmv-demo-notice">Includes {counts.demo} clearly labelled DEMO vehicles with sample statuses. No maintenance cases were created for these samples.</p>}
     <div className="lmv-report-controls"><label>Data source<select value={source} onChange={event=>setSource(event.target.value)}><option value="all">All LMVs (including demos)</option><option value="live">Live LMVs only</option><option value="demo">Demo LMVs only</option></select></label></div>
     <div className="tabs" role="group" aria-label="LMV report type">{reportTabs.map(([key,label])=><button type="button" key={key} className={mode===key?'active':''} aria-pressed={mode===key} onClick={()=>setMode(key)}>{label}</button>)}</div>
-    <ReportSection key={mode} title={reportTabs.find(([key])=>key===mode)?.[1]||'LMV report'} description="Current snapshot · labelled demos can be excluded using Data source" columns={mode==='summary'?LMV_SUMMARY_COLUMNS:LMV_DETAIL_COLUMNS} rows={mode==='summary'?lmvSummaryRows(filtered,regions):lmvRowsForMode(filtered,mode)} emptyMessage="No matching LMV records" rowKey={(row,index)=>row.id||`${row.region}-${row.name}-${index}`} />
+    {browserProps&&mode!=='summary'?<DashboardRecordBrowser key={`${mode}-${source}`} {...browserProps} rows={detailRows} regions={browserRegions} rowsAreScoped title={mode==='total'?'LMV total':`LMV ${modeLabel(mode)}`} bdBalanceColumns={['breakdown','balance','oem'].includes(mode)} extraColumns={LMV_DETAIL_COLUMNS.filter(column=>['make','oem','source'].includes(column.key)).map(column=>({...column,render:column.value}))} />:<ReportSection key={mode} title={reportTabs.find(([key])=>key===mode)?.[1]||'LMV report'} description="Current snapshot · labelled demos can be excluded using Data source" columns={mode==='summary'?LMV_SUMMARY_COLUMNS:LMV_DETAIL_COLUMNS} rows={mode==='summary'?lmvSummaryRows(filtered,regions):lmvRowsForMode(filtered,mode)} emptyMessage="No matching LMV records" rowKey={(row,index)=>row.id||`${row.region}-${row.name}-${index}`} />}
   </div>;
 }
 
-export function LmvReportsPage({token,ReportSection,onBack}) {
+export function LmvReportsPage({token,ReportSection,onBack,browserProps,requests=[]}) {
   const data=useLmvFleet(token);
   const [site,setSite]=useState('all');
   const allowedRegions=useMemo(()=>REGION_DATA.map(region=>({...region,sites:region.sites.filter(name=>!data.scope?.restrictToScope||data.scope.allowedSites?.some(allowed=>recordBelongsToSite({site:allowed},name)))})).filter(region=>region.sites.length),[data.scope]);
   const sites=allowedRegions.flatMap(region=>region.sites);
   const regions=allowedRegions.map(region=>({...region,sites:region.sites.filter(name=>site==='all'||site===name)})).filter(region=>region.sites.length);
   const records=data.records.filter(record=>site==='all'||recordBelongsToSite(record,site));
-  return <section className="panel pagepanel"><header><h1>Other vehicles / LMV reports</h1><button type="button" className="secondary" onClick={onBack}>Back to reports</button><button type="button" className="secondary" onClick={data.retry}>Refresh</button></header>
+  return <section className="panel pagepanel dashboard-asset-modal lmv-reports-page"><header><h1>Other vehicles / LMV reports</h1><button type="button" className="secondary" onClick={onBack}>Back to reports</button><button type="button" className="secondary" onClick={data.retry}>Refresh</button></header>
     <label>Site<select value={site} onChange={event=>setSite(event.target.value)}><option value="all">All assigned sites</option>{sites.map(name=><option key={name}>{name}</option>)}</select></label>
     {data.error&&<p role="alert">{data.error}</p>}
-    {data.loaded?<LmvReports records={records} regions={regions} ReportSection={ReportSection} initialSummary />:<p role="status">Loading LMV reports…</p>}
+    {data.loaded?<LmvReports records={records} regions={regions} ReportSection={ReportSection} browserProps={browserProps} requests={requests} />:<p role="status">Loading LMV reports…</p>}
   </section>;
 }
