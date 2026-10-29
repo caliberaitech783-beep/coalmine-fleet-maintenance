@@ -1241,3 +1241,15 @@
   color: #fff;
   border-radius: 12px;
 }
+
+/* The classification steps share one parent in the Masters menu. */
+.repair-master-group { margin: 4px 0; }
+.app > aside nav .repair-master-group > summary.workspace-menu-item { display:flex; align-items:center; gap:12px; padding:8px; border:1px solid transparent; border-radius:12px; color:#fff; cursor:pointer; list-style:none; }
+.repair-master-group > summary::-webkit-details-marker { display:none; }
+.repair-master-group > summary:hover, .repair-master-group > summary:focus-visible, .repair-master-group > summary.active { background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.24); }
+.repair-master-chevron { width:16px; height:16px; margin-left:auto; flex-shrink:0; }
+.repair-master-group[open] .repair-master-chevron { transform:rotate(180deg); }
+.repair-master-submenu { margin:4px 0 8px 16px; padding-left:8px; border-left:2px solid rgba(255,255,255,.28); }
+.app > aside nav .repair-master-submenu button.workspace-menu-item { gap:8px; padding:6px; }
+.repair-master-submenu .workspace-icon { width:30px; height:30px; flex:0 0 30px; border-radius:9px; }
+.app > aside nav .repair-master-submenu button.workspace-menu-item .nav-label { white-space:normal; text-align:left; }

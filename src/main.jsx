@@ -1177,6 +1177,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const correctionRequestAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name === "Breakdown Category" ? "Repair type master" : name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
+  const repairMasterNames = ["Repair type master", "Breakdown Category", "Breakdown Sub-Category"];
+  const repairMasterItems = visibleMasterNav.filter(([name]) => repairMasterNames.includes(name));
+  const topLevelMasterNav = visibleMasterNav.filter(([name]) => !repairMasterNames.includes(name) || name === repairMasterItems[0]?.[0]);
   const cdirMasterNav = cdirMasterNavItems.filter(([name]) => standardMastersAccess && masterAccessAllows(viewPermissions, name === "Breakdown Category" ? "Repair type master" : name));
   // Directory is a core account-scoped page. Keep it visible even for sessions
   // issued before the required-menu migration; the API enforces their scope.
@@ -1231,7 +1234,22 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown" role="menu">
-            {visibleMasterNav.map(([name, Icon, menuKey]) => (
+            {topLevelMasterNav.map(([name, Icon, menuKey]) => repairMasterNames.includes(name) ? (
+              <details className="repair-master-group" key="repair-master-group">
+                <summary role="menuitem" aria-haspopup="menu" className={`workspace-menu-item${repairMasterNames.includes(active) ? " active" : ""}`} data-workspace="repair">
+                  <span className="workspace-icon" aria-hidden="true"><Wrench /><i className="workspace-icon-glow" /></span>
+                  <span className="nav-label">Repair type master</span><ChevronDown className="repair-master-chevron" aria-hidden="true" />
+                </summary>
+                <div className="repair-master-submenu" role="menu" aria-label="Repair type master steps">
+                  {repairMasterItems.map(([page, StepIcon, stepKey]) => <div className="nav-config-row" key={page}><button type="button" role="menuitem"
+                    className={`workspace-menu-item${active === page ? " active" : ""}`} data-workspace={stepKey}
+                    onClick={(event) => selectMaster(page, event)}>
+                    <span className="workspace-icon" aria-hidden="true"><StepIcon /><i className="workspace-icon-glow" /></span>
+                    <span className="nav-label">{({"Repair type master":"1. Repair Type","Breakdown Category":"2. Breakdown Category","Breakdown Sub-Category":"3. Breakdown Sub-Category"})[page]}</span>
+                  </button></div>)}
+                </div>
+              </details>
+            ) : (
               <div className="nav-config-row" key={name}><button
                 role="menuitem"
                 className={`workspace-menu-item${active === name ? " active" : ""}`}

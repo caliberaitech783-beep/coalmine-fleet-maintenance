@@ -41,7 +41,7 @@ test('the Masters menu carries its badge key inside the nav tuple and uses the s
   const nav=source.match(/const masterNav = \[[\s\S]*?\];/)[0];
   const keys=[...nav.matchAll(/\["[^"]+", [A-Za-z0-9]+, "([a-z]+)"\]/g)].map(m=>m[1]);
   assert.deepEqual(keys,['users','equipment','breakdown','repair','repair','subcategory','region','shift','delayed','transfers','hierarchy','oem']);
-  assert.match(source,/visibleMasterNav\.map\(\(\[name, Icon, menuKey\]\) => \(\s*<div className="nav-config-row" key=\{name\}><button\s*role="menuitem"\s*className=\{`workspace-menu-item\$\{active === name \? " active" : ""\}`\}\s*data-workspace=\{menuKey \|\| "master"\}/);
+  assert.match(source,/topLevelMasterNav\.map\(\(\[name, Icon, menuKey\]\) =>[\s\S]*?<div className="nav-config-row" key=\{name\}><button\s*role="menuitem"\s*className=\{`workspace-menu-item\$\{active === name \? " active" : ""\}`\}\s*data-workspace=\{menuKey \|\| "master"\}/);
   assert.match(source,/onClick=\{\(event\) => selectMaster\(name, event\)\}\s*>\s*<span className="workspace-icon" aria-hidden="true"><Icon \/><i className="workspace-icon-glow" \/><\/span>\s*<span className="nav-label">\{name\}<\/span>/);
   for(const key of keys.filter(key=>key!=='oem'))assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
   assert.match(styles,/\[data-workspace="equipment"\]:hover \.workspace-icon svg[\s\S]*animation: ws-drive/);
