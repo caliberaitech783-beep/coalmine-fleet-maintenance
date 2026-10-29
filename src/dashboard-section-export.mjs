@@ -155,7 +155,7 @@ const roadFigures = road => ({idle: road.idle, availability: availabilityPercent
 // and its availability count impact), the all-sites total, the four summary cards and the BD Type
 // Mix. Balance and idle use the same unique-fleet snapshot as availability; Open/In/Out remain
 // request movement events for the selected range.
-export function throughputSectionExport({tab = 'breakdown', place = 'All regions', period = '', availabilityLabel = '', sites = [], roadBySite = new Map(), movementTotals = {}, openBalance = 0, idleRequests = 0, typeMix = [], categoryMixScope = '', categoryMixPending = 0, categoryMixEmpty = false, availabilitySites = [], availabilityTotals = NO_ROAD} = {}) {
+export function throughputSectionExport({tab = 'breakdown', place = 'All regions', period = '', availabilityLabel = '', sites = [], roadBySite = new Map(), movementTotals = {}, movementVerified = true, openBalance = 0, idleRequests = 0, typeMix = [], categoryMixScope = '', categoryMixPending = 0, categoryMixEmpty = false, availabilitySites = [], availabilityTotals = NO_ROAD} = {}) {
   if (tab !== 'breakdown') return {
     title: heading('Tracking Vehicle Throughput', 'Availability Count', place, period, availabilityLabel),
     columns: AVAILABILITY_COLUMNS,
@@ -166,9 +166,9 @@ export function throughputSectionExport({tab = 'breakdown', place = 'All regions
     title: heading('Tracking Vehicle Throughput', 'Site-wise BD Movement', place, period, availabilityLabel),
     columns: MOVEMENT_COLUMNS,
     rows: [
-      ...sites.map(site => ({name: site.site, open: site.open, incoming: site.incoming, outgoing: site.outgoing, balance: site.balance, ...roadFigures(roadBySite.get(site.site) || NO_ROAD), idle: site.idle ?? 0})),
-      {name: 'All sites total', open: totals.open, incoming: totals.incoming, outgoing: totals.outgoing, balance: sites.reduce((sum, site) => sum + (site.balance ?? 0), 0), ...roadFigures(availabilityTotals), idle: sites.reduce((sum, site) => sum + (site.idle ?? 0), 0)},
-      {name: 'Summary · BD In (opening + new)', incoming: totals.open + totals.incoming},
+      ...sites.map(site => ({name: site.site, open: site.verified===false?'Needs review':site.open, incoming: site.verified===false?'Needs review':site.incoming, outgoing: site.verified===false?'Needs review':site.outgoing, balance: site.balance, ...roadFigures(roadBySite.get(site.site) || NO_ROAD), idle: site.idle ?? 0})),
+      {name: 'All sites total', open: movementVerified?totals.open:'Needs review', incoming: movementVerified?totals.incoming:'Needs review', outgoing: movementVerified?totals.outgoing:'Needs review', balance: sites.reduce((sum, site) => sum + (site.balance ?? 0), 0), ...roadFigures(availabilityTotals), idle: sites.reduce((sum, site) => sum + (site.idle ?? 0), 0)},
+      {name: 'Summary · BD In (opening + new)', incoming: movementVerified?totals.open + totals.incoming:'Needs review'},
       {name: 'Summary · BD Out', outgoing: totals.outgoing},
       {name: 'Summary · BD Balance (off-road vehicles)', balance: openBalance},
       {name: 'Summary · Idle Vehicles (fleet snapshot)', idle: idleRequests},

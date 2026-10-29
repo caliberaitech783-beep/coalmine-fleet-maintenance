@@ -15,7 +15,7 @@ test("every authenticated dashboard can read repair types without master managem
 test("site breakdown movement includes every request category in the selected scope", () => {
   assert.match(client, /const locationBreakdowns = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedBreakdowns\.filter/);
   assert.match(client, /const throughputRequests = locationBreakdowns\.filter\(inThroughputScope\)/);
-  assert.match(client, /const siteRequests = throughputRequests\.filter/);
-  assert.match(client, /breakdownMovementForRange\(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
+  assert.match(client, /const records = throughputRequests\.filter\(record => !site \|\| recordBelongsToSite\(record, site\)\)/);
+  assert.match(client, /fleetMovementLedger\(assets, records, start, end/);
   assert.doesNotMatch(client, /locationBreakdowns\.filter\(.*category/);
 });

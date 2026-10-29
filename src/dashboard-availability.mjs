@@ -33,7 +33,9 @@ export function availabilityRequestsForDate(requests = [], date = "") {
     };
     const acceptedAt = recordedByCutoff(request.acceptedAt);
     const inProgressAt = recordedByCutoff(request.inProgressAt);
-    const statusAtCutoff = idle ? "Idle" : requestStatusLabel({ status: "Open", acceptedAt, inProgressAt });
+    const runningBdAt = indiaDateTimeEpoch(request.runningBdAt);
+    const running = Number.isFinite(runningBdAt) && runningBdAt <= cutoff;
+    const statusAtCutoff = idle ? "Idle" : running ? "Running BD" : requestStatusLabel({ status: "Open", acceptedAt, inProgressAt });
     return [{ ...request, acceptedAt, inProgressAt, status: statusAtCutoff }];
   });
 }

@@ -2,14 +2,18 @@
 
 ## Site-wise BD and availability count consistency
 
-Tracking Vehicle Throughput's site BD Balance and Idle Vehicles columns, summary
-cards, site detail cards and exports use the same unique Equipment Master asset
-snapshot as Availability Count: balance equals Off road, and idle includes vehicles
-still idle from earlier days. Today uses live availability; a past To date uses
-the existing historical availability snapshot. The linked balance/idle cards open
-the matching fleet-status lists. BD Open/In/Out and separate day-wise movement
-reports retain their request-event definitions; those event totals need not
-reconcile arithmetically to the unique-fleet snapshot. Stored requests are unchanged.
+Tracking Vehicle Throughput uses a vehicle-level off-road ledger. Overlapping
+requests for one Equipment Master asset merge into one off-road period; genuine
+repairs separated by a return to service remain separate movements. Opening,
+BD In and BD Out come from the recorded start/closure/idle/Running BD transitions
+and reconcile to availability's off-road fleet count. Carryover idle is included.
+Today uses live availability; past dates use the historical snapshot. Cards,
+site rows, day-wise details, linked lists and exports share these calculations.
+The fleet ledger spans all shifts like availability, rather than omitting an
+opening state from another shift. Unmatched identity, missing/inverted timestamps
+or disagreement with the end snapshot is flagged; unverified movement totals are
+hidden/marked Needs review instead of inventing balancing events. Nothing is
+backfilled or changed in stored requests.
 
 ## Site fleet Telegram delivery
 

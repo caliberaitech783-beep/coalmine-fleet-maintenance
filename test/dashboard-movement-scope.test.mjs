@@ -4,6 +4,7 @@ import test from "node:test";
 import { movementRequestRows } from "../src/dashboard-card-actions.mjs";
 import { dailyBdRecordsForMetric } from "../src/daily-bd-balance.mjs";
 import { drilldownView } from "../src/dashboard-drilldown-model.mjs";
+import {fleetMovementLedger} from '../src/fleet-movement-ledger.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const pickerSource = source.slice(source.indexOf('  const rowsForAssetDrilldown ='), source.indexOf('  // Drilldown keys whose rows'));
@@ -13,9 +14,9 @@ const requests = [
   ...Array.from({ length: 7 }, (_, id) => ({ id: 100 + id, site: "Nigahi OC", status: "Open", start: "2026-10-18 09:00:00" })),
   { id: 200, site: "Majri OC", status: "Open", start: "2026-10-18 09:00:00" },
   { id: 300, site: "Jayant OC", status: "Closed", start: "2026-10-17 09:00:00", closedAt: "2026-10-18 10:00:00" },
-];
-const picker = records => new Function("throughputRequests", "locationBreakdowns", "requestAssetRows", "movementRequestRowsForShift", "dailyBdRecordsForMetric", "requestMatchesMovementShift", "requestDateKey",
-  `${pickerSource}; return rowsForAssetDrilldown;`)(records, records, rows => rows.map(row => ({ ...row, requestSite: row.site })), movementRequestRows, dailyBdRecordsForMetric, () => true, value => String(value || "").slice(0, 10));
+].map(row=>({...row,door:`V${row.id}`}));
+const picker = records => new Function("throughputRequests", "locationBreakdowns", "requestAssetRows", "movementRequestRowsForShift", "dailyBdRecordsForMetric", "requestMatchesMovementShift", "requestDateKey", "fleetMovementForRange", "requestCategoryLabel",
+  `${pickerSource}; return rowsForAssetDrilldown;`)(records, records, rows => rows.map(row => ({ ...row, requestSite: row.site })), movementRequestRows, dailyBdRecordsForMetric, () => true, value => String(value || "").slice(0, 10), (site,start,end)=>fleetMovementLedger(records.map(row=>({door:row.door,currentLocation:row.site})),records,start,end),()=> '');
 
 test("clicked Jayant movement and daily balance retain 24 rows, NCL includes its other sites", () => {
   for (const prefix of ["movement", "balance"]) {

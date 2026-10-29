@@ -31,6 +31,7 @@ import {recordBelongsToSite} from "../site-location.mjs";
 import {requestStatusLabel} from "../src/request-status.mjs";
 import {isIdleVehicleRequest} from "../request-idle.mjs";
 import {availabilityRequestsForDate} from "../src/dashboard-availability.mjs";
+import {fleetMovementLedger} from '../src/fleet-movement-ledger.mjs';
 import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
 import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
@@ -122,8 +123,8 @@ test("BD Type Mix renders master categories with no requests as well as new requ
 
 test("BD In components appear only for default today and return on reset", () => {
   const rows = [
-    {ref: "OPENING", site: "Sasti OB", status: "Open", start: "2020-01-01 09:00", category: "Breakdown"},
-    {ref: "NEW", site: "Sasti OB", status: "Open", start: `${todayKey} 09:00`, category: "Breakdown"},
+    {ref: "OPENING", door:'V1', chassis:'C1', site: "Sasti OB", status: "Open", start: "2020-01-01 09:00", category: "Breakdown"},
+    {ref: "NEW", door:'V2', chassis:'C2', site: "Sasti OB", status: "Open", start: `${todayKey} 09:00`, category: "Breakdown"},
   ];
   const view = harness();
   let tree = view.render(rows);
@@ -137,6 +138,16 @@ test("BD In components appear only for default today and return on reset", () =>
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: todayKey}});
   tree = view.render(rows);
   assert.equal(byLabel(tree, "BD In opening and new counts"), undefined);
+});
+
+test('unreconciled or ambiguous movement is visibly flagged instead of showing a fabricated balance adjustment',()=>{
+ const view=harness();
+ const tree=view.render([{ref:'UNMATCHED',door:'NOT-IN-MASTER',site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`}]);
+ assert.match(text(tree),/Movement history needs review at Sasti OB/);
+ const row=byClass(tree,'mine-breakdown-site-row');
+ assert.match(text(row),/—/);
+ const exported=findAll(tree,node=>node.props.className==='mine-section-export'&&node.props.title?.startsWith('Tracking Vehicle Throughput'))[0].props;
+ assert.equal(exported.rows.find(row=>row.name==='Sasti OB').incoming,'Needs review');
 });
 
 test("dashboard From/To default to today as the live view and only an earlier range filters", () => {
@@ -182,7 +193,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes(`Availability count impact${todayLabel}`));
   assert.ok(!findAll(tree, (node) => node.props["aria-label"] === "Availability count date").length, "no separate availability date input");
   assert.equal(button(tree, "Reset dates").props.disabled, true);
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 1 balance; .*1 on road, 1 off road and 1 idle/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /1 open, 0 in, 0 out, 1 balance; .*1 on road, 1 off road and 1 idle/);
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-08");
@@ -226,7 +237,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
     ...metrics, requestCategoryLabel,...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
-    availabilityRequestsForDate, dashboardFleetSnapshot, ...meterColumns,
+    availabilityRequestsForDate, dashboardFleetSnapshot, fleetMovementLedger, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useCallback: callback => callback, useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel, isIdleVehicleRequest,
@@ -659,8 +670,9 @@ test("every day-wise date, metric and percentage opens its exact site/day entrie
     {ref: "PREVIOUS", site: "Sasti OB", start: "2026-09-01", closedAt: "2026-09-05", status: "Closed"},
     {ref: "NEXT-DAY", site: "Sasti OB", start: "2026-09-07", closedAt: "2026-09-08", status: "Closed"},
     {ref: "OTHER-SITE", site: "Majri OB", start: "2026-09-06", status: "Open"},
-  ].map(Object.freeze);
-  const view = harness();
+  ].map(row=>Object.freeze({...row,door:row.ref}));
+  const equipment=rows.map((row,index)=>({id:index+10,door:row.door,currentLocation:row.site,category:'Vehicle'}));
+  const view = harness({equipment});
   let tree = view.render(rows);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-06"}});
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
@@ -696,8 +708,8 @@ test("day movement headings and Actions sort dates chronologically and all metri
   const rows = [
     ...Array.from({length: 10}, (_, i) => ({ref: `A-${i}`, site: "Sasti OB", start: "2026-08-30", closedAt: "2026-09-01", status: "Closed"})),
     ...Array.from({length: 2}, (_, i) => ({ref: `B-${i}`, site: "Sasti OB", start: "2026-08-31", closedAt: "2026-09-02", status: "Closed"})),
-  ];
-  const view = harness();
+  ].map(row=>({...row,door:row.ref}));
+  const view = harness({equipment:rows.map((row,index)=>({id:index+10,door:row.door,currentLocation:row.site,category:'Vehicle'}))});
   let tree = view.render(rows);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-08-30"}});
   tree = view.render(rows);
@@ -900,7 +912,7 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   tree = setDashboardDate(view, "2026-09-09");
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 1 balance/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 2 out, 1 balance/);
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
@@ -925,7 +937,7 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
 });
 
 test("throughput defaults to today, clearing either date shows all time and Reset restores today", () => {
-  const rows = [...requests, {ref: "OLD-CLOSED", site: "Sasti OB", start: "2024-01-01", closedAt: "2024-02-01", category: "WGM", status: "Closed"}];
+  const rows = [...requests, {ref: "OLD-CLOSED", door:'V3', chassis:'C3', site: "Sasti OB", start: "2024-01-01", closedAt: "2024-02-01", category: "WGM", status: "Closed"}];
   const view = harness();
   let tree = view.render(rows);
   const assertToday = () => {
@@ -933,7 +945,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(byLabel(tree, "Site-wise BD to date").props.value, todayKey);
     assert.equal(text(byLabel(tree, "Site-wise BD table period")), todayCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, true);
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 1 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /1 open, 0 in, 0 out, 1 balance/);
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, displayDates.formatDisplayDateRange(todayKey, todayKey));
   };
@@ -942,9 +954,9 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
     assert.equal(text(byLabel(tree, "Site-wise BD table period")), liveAvailabilityCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, false);
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 1 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 3 out, 1 balance/);
     const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
-    assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 2, 1, 0, 1]);
+    assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 3, 1, 0, 1]);
     for (const card of cards) {
       activate(card); tree = view.render(rows);
       assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
@@ -964,7 +976,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-09"}});
     tree = view.render(rows);
     assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-09");
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 1 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 2 out, 1 balance/);
     byLabel(tree, `Site-wise BD ${clear} date`).props.onChange({target: {value: ""}});
     tree = view.render(rows);
     assertAllTime();
@@ -1004,9 +1016,9 @@ test("throughput region and dependent site filters scope cards, types, tables, e
     const selectedAssets = equipment.filter(row => site === "all" ? row.currentLocation !== "Jayant OB" : row.currentLocation === site);
     for (const day of ["", "2026-09-09"]) {
       change("Site-wise BD from date", day);
-      const totals = movement.breakdownMovementForRange(selectedRows, day, day);
+      const totals = fleetMovementLedger(selectedAssets, selectedRows, day, day, {endingEquipment:day?dashboardFleetSnapshot(selectedAssets,availabilityRequestsForDate(selectedRows,day)):selectedAssets});
       const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
-      const idle = selectedRows.filter(row => movement.matchesBreakdownMovement(row, day, day, "idle")).length;
+      const idle = totals.idle;
       assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance, 0, idle]);
       for (const card of cards) {
         activate(card); tree = view.render(rows);
