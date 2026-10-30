@@ -220,9 +220,10 @@ test("The login gate requires actual site membership for every user", () => {
   assert.match(gate, /onClick=\{logout\}/);
   assert.equal((source.match(/<TelegramGate token=\{token\} logout=\{logout\} \/>/g) || []).length, 1);
   assert.equal((source.match(/<AppBackgroundServices session=\{session\} logout=\{logout\} \/>/g) || []).length, 3);
-  assert.ok(server.includes("required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available})"));
   assert.ok(server.includes("app.put('/api/telegram/settings',requireSuper,requireWhatsAppAdministrator"));
   assert.ok(server.includes("action:'Save Telegram login requirement'"));
+  assert.match(server, /telegramServiceAccount\?false:telegramRequiredFor/);
+  assert.match(server, /\{required:false,linked:false,groups:\[\],allowed:true,assignmentRequired:false\}/);
   assert.match(source, /Require Telegram at login/);
   assert.match(source, /Mandatory site group membership/);
 });

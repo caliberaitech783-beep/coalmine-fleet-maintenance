@@ -3956,13 +3956,18 @@ app.get('/join/bdms',async(_req,res)=>{
 app.get('/api/telegram/me',requireSession,async(req,res,next)=>{
   try{
     req.audit=false;
+    const login=sessionLogin(req);
+    const telegramServiceAccount=String(login||'').trim().toLowerCase()==='mis_sync_service';
     const [{rows},requirement]=await Promise.all([
-      pool.query(`SELECT telegram_username AS "username",linked_at AS "linkedAt" FROM telegram_user_links WHERE login=$1`,[sessionLogin(req)]),
+      pool.query(`SELECT telegram_username AS "username",linked_at AS "linkedAt" FROM telegram_user_links WHERE login=$1`,[login]),
       storedTelegramRequirement(),
     ]);
     const available=Boolean(telegramConfiguration().botToken);
+    const membership=telegramServiceAccount
+      ?{required:false,linked:false,groups:[],allowed:true,assignmentRequired:false}
+      :await telegramMembershipFor(login,req.query.verify==='1');
     res.set('Cache-Control','no-store');
-    res.json({available,linked:Boolean(rows[0]),required:telegramRequiredFor(requirement,sessionLogin(req),{botConfigured:available}),...(rows[0]||{}),...await telegramMembershipFor(sessionLogin(req),req.query.verify==='1'),adminSetupAllowed:req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager'});
+    res.json({available,linked:Boolean(rows[0]),required:telegramServiceAccount?false:telegramRequiredFor(requirement,login,{botConfigured:available}),...(rows[0]||{}),...membership,adminSetupAllowed:req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager'});
   }catch(error){next(error)}
 });
 
