@@ -1,6 +1,7 @@
 // Source: sub-category.xlsx, sheet "final", D2:E134. Repair types in C46:C50
 // form a separate option list; they are not row-level category restrictions.
 import mappings from './repair-classification-data.json' with {type: 'json'};
+import {indiaDateTimeEpoch} from './report-date-range.mjs';
 
 export const REPAIR_CLASSIFICATION_START = '2026-10-28T17:00:00+05:30';
 export const REPAIR_TYPES = ['Preventive', 'Breakdown', 'Accidental', 'Scheduled', 'WGM'];
@@ -69,4 +70,16 @@ export function validateClassification(repairType, category, subCategory, catego
   if (!name) fail('Select a breakdown sub-category belonging to the selected breakdown category.');
   return {breakdownCategory: label, subCategory: name};
 }
-export const requestCategoryLabel = request => categoryLabel(request.breakdownCategory || request.classification?.breakdownCategory) || 'Unclassified';
+export const requestCategoryLabel = (request = {}, {preserveLegacy = false, legacyCategory = ''} = {}) => {
+  if (preserveLegacy) {
+    // The creation/rollout boundary, not an editable breakdown start date,
+    // decides the display. Explicit classification metadata covers old feeds
+    // that do not expose createdAt; never infer a category from the BD reason.
+    const created = indiaDateTimeEpoch(request.createdAt);
+    const usesNewClassification = Number.isFinite(created)
+      ? created >= Date.parse(REPAIR_CLASSIFICATION_START)
+      : request.classification?.version === 1 || Boolean(request.breakdownCategory || request.classification?.breakdownCategory);
+    if (!usesNewClassification) return String(request.category || legacyCategory || '').trim() || 'Unclassified';
+  }
+  return categoryLabel(request.breakdownCategory || request.classification?.breakdownCategory) || 'Unclassified';
+};

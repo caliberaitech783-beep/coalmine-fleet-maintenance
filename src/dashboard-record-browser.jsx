@@ -82,7 +82,10 @@ export default function DashboardRecordBrowser({ rows, classificationRequests = 
   // Idle drilldowns display vehicle state; other lists retain maintenance request status.
   const idleDateFilter = lifecycleEvent === "idle" || /\bidle\b/i.test(title);
   const classificationByReference = useMemo(()=>new Map(classificationRequests.map(request=>[request.ref||request.reference,request])),[classificationRequests]);
-  const breakdownCategoryText = record => requestCategoryLabel(record.breakdownCategory ? record : record.requestDetails || classificationByReference.get(record.requestReference) || {});
+  const breakdownCategoryText = record => {
+    const request = record.requestDetails || classificationByReference.get(record.requestReference) || (record.ref || record.reference ? record : {});
+    return requestCategoryLabel({...request, breakdownCategory:request.breakdownCategory || record.breakdownCategory, classification:request.classification || record.classification}, {preserveLegacy:true, legacyCategory:record.repairCategory});
+  };
   const datedRows = useMemo(() => movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => idleDateFilter ? record.requestIdleAt : record.requestStart) : rows, [rows, movementDateControl, showDateFilter, recordDateRange, idleDateFilter]);
   const searchIndex = useMemo(() => createRowSearchIndex(), [rows]);
   const deferredSearch = useDeferredValue(searchQuery);

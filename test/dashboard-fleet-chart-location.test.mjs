@@ -33,6 +33,25 @@ const render = (props = {}) => renderToStaticMarkup(React.createElement(Browser,
   ...props,
 }));
 
+test('BD balance tables and their export table preserve old categories and use new categories only after rollout', () => {
+  const rows = [
+    {...row,id:'old',requestReference:'OLD',repairCategory:'Aggregate Repair',breakdownCategory:'ENGINE'},
+    {...row,id:'new',requestReference:'NEW',repairCategory:'Breakdown'},
+  ];
+  const classificationRequests = [
+    {ref:'OLD',createdAt:'2026-10-28T16:59:59+05:30',category:'Aggregate Repair'},
+    {ref:'NEW',createdAt:'2026-10-29T09:00:00+05:30',start:'2026-10-04T09:00:00+05:30',category:'Breakdown',classification:{version:1,breakdownCategory:'ENGINE'}},
+  ];
+  for (const props of [{bdBalanceColumns:true},{requestRecords:true}]) {
+    const html = render({...props,rows,classificationRequests,showBreakdownCategory:true});
+    assert.ok(html.includes('<td>Aggregate Repair</td>'));
+    assert.ok(html.includes('<td>ENGINE</td>'));
+    assert.ok(!html.includes('<td>Unclassified</td>'));
+    const original = render({...props,rows,classificationRequests});
+    assert.ok(original.includes('<td>Breakdown</td>'),'other report category displays stay unchanged');
+  }
+});
+
 test("only Total Fleet site bar drilldowns opt out of Current location", () => {
   for (const key of ["site-total:Majri OB|vehicles", "site-total:Sasti OB|equipment", "site:Majri OB", "offroad-site:Sasti OB", "offroad-site:Majri OB|vehicles"]) {
     assert.equal(hideLocationFor(key), true, key);
