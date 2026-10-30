@@ -2582,11 +2582,12 @@ async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   const session=await sessionStore.get(token);
   if(session&&!membershipOnboardingPath(req.path)){
+    const telegramServiceAccount=String(session.login||'').trim().toLowerCase()==='mis_sync_service';
     // These existing administrator-authorized routes remain available solely
     // to inspect membership and repair Telegram group configuration.
     const remediation=session.role==='super'&&session.permissions?.adminLevel!=='Manager'&&
       (req.path.startsWith('/api/telegram/site-groups')||req.path==='/api/telegram/settings');
-    if(!remediation){
+    if(!remediation&&!telegramServiceAccount){
       const status=await telegramMembershipFor(session.login);
       if(!status.allowed){const error=new Error('Join and verify all assigned site Telegram groups to continue.');error.status=403;error.code='TELEGRAM_MEMBERSHIP_REQUIRED';throw error;}
     }

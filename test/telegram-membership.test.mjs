@@ -71,6 +71,9 @@ test('real shared session reader blocks normal and privileged APIs while allowin
     if(session.permissions?.adminLevel==='Super Admin')assert.equal(await read({headers:{},path:'/api/telegram/site-groups/membership'}),session);
     else await assert.rejects(read({headers:{},path:'/api/telegram/site-groups/membership'}));
   }
+  const serviceSession={login:'MIS_SYNC_SERVICE',role:'super',permissions:{adminLevel:'Super Admin'}};
+  const serviceRead=new Function('sessionStore','membershipOnboardingPath','telegramMembershipFor',`${snippet};return readSession;`)({get:async()=>serviceSession},membershipOnboardingPath,async()=>({allowed:false}));
+  assert.equal(await serviceRead({headers:{},path:'/api/masters'}),serviceSession);
 });
 test('expected membership denials return onboarding status without generating repeated error audits',()=>{
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
