@@ -11,6 +11,7 @@ import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdow
 import { requestStatusSortRank } from "../src/request-status.mjs";
 import { filterRecordsByDate } from "../src/record-date-range.mjs";
 import { createRowSearchIndex } from "../src/indexed-smart-search.mjs";
+import { dailyUpdatesExportText } from "../src/daily-updates-order.mjs";
 
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const expression = main.match(/const hideFleetChartLocation = (.+);/)[1];
@@ -20,7 +21,7 @@ const hideCategoryFor = new Function("assetDrilldown", `return ${categoryExpress
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
-const bindings = {requestCategoryLabel, BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+const bindings = {requestCategoryLabel, dailyUpdatesExportText, BreakdownReasonHistory: ({reason}) => reason || "—", React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
   useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null };
@@ -60,6 +61,25 @@ test("only Total Fleet site bar drilldowns opt out of Current location", () => {
     assert.equal(hideLocationFor(key), false, key);
   }
   assert.match(main, /hideCurrentLocation=\{hideFleetChartLocation\}/);
+});
+
+test('availability off-road reports share the full Breakdown columns and export data without changing other availability views', () => {
+  const expression = main.match(/const availabilityBreakdownDrilldown = (.+);/)[1];
+  const fullColumnsFor = new Function('assetDrilldown', `return ${expression};`);
+  assert.match(main,/bdBalanceColumns=\{fleetBreakdownDrilldown \|\| availabilityBreakdownDrilldown\}/);
+  const props = {showBreakdownCategory:true, Remarks:()=> 'Latest daily update', rows:[{...row,repairCategory:'Aggregate Repair',breakdownReason:'Brake repair',dailyRemarks:[{text:'Latest daily update',createdAt:'2026-10-30 09:00'}]}]};
+  const breakdown = render({...props,bdBalanceColumns:true});
+  for (const key of ['offroad', ...REGION_DATA.flatMap(region=>region.sites.map(site=>`site-status:${site}|offroad`))]) {
+    assert.equal(fullColumnsFor(key),true,key);
+    assert.equal(render({...props,bdBalanceColumns:fullColumnsFor(key)}),breakdown,key);
+  }
+  for (const heading of ['Breakdown Category','Reason of BD','Daily updates','Opening HMR','Opening KMR']) assert.ok(breakdown.includes(`<th>${heading}</th>`),heading);
+  assert.ok(breakdown.includes('data-export-value="Brake repair"'));
+  assert.ok(breakdown.includes('<td>Aggregate Repair</td>'));
+  for (const key of ['all','road-availability','onroad','idle','unknown','site-status:Sasti OC|all','site-status:Sasti OC|onroad','site-status:Sasti OC|idle']) {
+    assert.equal(fullColumnsFor(key),false,key);
+    assert.equal(render({...props,bdBalanceColumns:fullColumnsFor(key)}),render(props),key);
+  }
 });
 
 test("site fleet tables omit only the redundant column and retain counts, record data and export site title", () => {
