@@ -53,6 +53,18 @@ test('BD balance tables and their export table preserve old categories and use n
   }
 });
 
+test('every dashboard reason link receives the selected vehicle door, make and model',()=>{
+  const contextBindings={...bindings,BreakdownReasonHistory:({vehicle})=>React.createElement('span',{'data-door':vehicle?.door,'data-make':vehicle?.make,'data-model':vehicle?.model})};
+  const ContextBrowser=new Function(...Object.keys(contextBindings),`${code}; return DashboardRecordBrowser;`)(...Object.values(contextBindings));
+  for(const props of [{bdBalanceColumns:true},{requestRecords:true}]){
+    const html=renderToStaticMarkup(React.createElement(ContextBrowser,{
+      ...props,rows:[{...row,make:'SCANIA',model:'G500XT',requestReference:'REQ-1',breakdownReason:'Repair'}],regions:REGION_DATA,rowsAreScoped:true,
+      Status:({children})=>children,formatDate:value=>value||'—',ActionsTable:({children})=>React.createElement('table',null,children),
+    }));
+    assert.ok(html.includes('data-door="E08-MH34BZ2407" data-make="SCANIA" data-model="G500XT"'));
+  }
+});
+
 test("only Total Fleet site bar drilldowns opt out of Current location", () => {
   for (const key of ["site-total:Majri OB|vehicles", "site-total:Sasti OB|equipment", "site:Majri OB", "offroad-site:Sasti OB", "offroad-site:Majri OB|vehicles"]) {
     assert.equal(hideLocationFor(key), true, key);

@@ -27,6 +27,14 @@
   resize: none;
 }
 .breakdown-reason-history-modal > header { flex-shrink: 0; }
+.breakdown-reason-history-modal .breakdown-reason-vehicle-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.breakdown-reason-vehicle-details dt { font-weight: 600; }
+.breakdown-reason-vehicle-details dd { margin: 4px 0 0; overflow-wrap: anywhere; }
 .breakdown-reason-history-modal > .breakdown-reason-history-content {
   padding: 20px 24px;
   min-height: 0;

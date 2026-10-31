@@ -8,13 +8,23 @@ import {formatDisplayDateTime} from '../date-time-format.mjs';
 
 const source=readFileSync(new URL('../src/breakdown-reason-history.jsx',import.meta.url),'utf8');
 const {code}=await transformWithOxc(source.replace(/^import .*;\r?\n/gm,'').replace('export default function','function'),'reason.jsx',{jsx:{runtime:'classic'}});
-function render(state,reference='REQ-1'){
+function render(state,reference='REQ-1',vehicle){
   let index=0;
   const values=[true,state,0];
   const Component=new Function('React','useEffect','useState','DailyUpdatesPanel','formatDisplayDateTime',code+';return BreakdownReasonHistory;')(
     React,()=>{},()=>[values[index++],()=>{}],({remarks})=>React.createElement('p',null,remarks.map(item=>item.remark).join(' · ')),formatDisplayDateTime);
-  return renderToStaticMarkup(React.createElement(Component,{reference,reason:'Current reason',token:'test',Dialog:({children,...props})=>React.createElement('section',{'data-overlay':props.overlayClassName},children)}));
+  return renderToStaticMarkup(React.createElement(Component,{reference,vehicle,reason:'Current reason',token:'test',Dialog:({children,...props})=>React.createElement('section',{'data-overlay':props.overlayClassName},children)}));
 }
+
+test('reason panel shows the selected master vehicle details in its printable content, even while history loads',()=>{
+  const vehicle={door:'S55 - MH34BZ0560',make:'SCANIA',model:'G500XT <test>'};
+  for(const state of [null,{data:{request:{door:'UNWANTED-ID',make:'Wrong make',model:'Wrong model'},reasonHistory:[]}}]){
+    const html=render(state,'REQ-1',vehicle);
+    for(const text of ['<dt>Door No</dt>','S55 - MH34BZ0560','<dt>Make</dt>','SCANIA','<dt>Model</dt>','G500XT &lt;test&gt;'])assert.ok(html.includes(text),text);
+    assert.doesNotMatch(html,/UNWANTED-ID|Wrong make|Wrong model|<test>/);
+  }
+  assert.equal((render({data:{request:{}}}).match(/<dd>Not recorded<\/dd>/g)||[]).length,3);
+});
 test('drilldown displays old/new reasons, actor, timestamp and daily remarks as safe text',()=>{
   const html=render({data:{request:{complaint:'Changed <script>text</script>',dailyRemarks:[{remark:'Waiting for parts'}]},reasonHistory:[{from:'Original',to:'Changed',changedBy:'Manager',changedAt:'2026-10-05T08:00:00Z'}]}});
   for(const expected of ['Original','Changed','Manager','05-10-26','Waiting for parts','breakdown-reason-history-overlay','request-timeline-content'])assert.ok(html.includes(expected));

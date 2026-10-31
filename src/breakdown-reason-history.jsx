@@ -3,7 +3,7 @@ import {DailyUpdatesPanel} from './daily-updates-list.jsx';
 import {formatDisplayDateTime} from '../date-time-format.mjs';
 import './breakdown-reason-history.css';
 
-export default function BreakdownReasonHistory({reference,reason,token,Dialog}) {
+export default function BreakdownReasonHistory({reference,reason,token,Dialog,vehicle={}}) {
   const [open,setOpen]=useState(false),[state,setState]=useState(null),[retry,setRetry]=useState(0);
   useEffect(()=>{
     if(!open)return;
@@ -20,6 +20,11 @@ export default function BreakdownReasonHistory({reference,reason,token,Dialog}) 
   return <><button type="button" className="request-timeline-link breakdown-reason-history-link" onClick={()=>setOpen(true)} title="View breakdown reason history and daily remarks">{reason||'View reason and daily remarks'}</button>
     {open&&<Dialog title={`Breakdown reason history · ${reference}`} className="request-timeline-modal breakdown-reason-history-modal" overlayClassName="breakdown-reason-history-overlay" close={()=>setOpen(false)}>
       <div className="request-timeline-content breakdown-reason-history-content">
+      <dl className="breakdown-reason-vehicle-details" aria-label="Vehicle details">
+        <div><dt>Door No</dt><dd>{vehicle.door||'Not recorded'}</dd></div>
+        <div><dt>Make</dt><dd>{vehicle.make||'Not recorded'}</dd></div>
+        <div><dt>Model</dt><dd>{vehicle.model||'Not recorded'}</dd></div>
+      </dl>
       {!state?<p role="status">Loading reasons and daily remarks…</p>:state.error?<div><p role="alert">{state.error}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>Retry</button></div>:<>
         <h3>Current reason of BD</h3><p style={{whiteSpace:'pre-wrap'}}>{request.complaint||reason||'—'}</p>
         <h3>Saved reason changes</h3>
