@@ -6,11 +6,11 @@ import {classificationError,normalizeClassification,validateClassification} from
 const categories=[{breakdownCategory:'ENGINE'},{breakdownCategory:'WGM'},{breakdownCategory:'SCHEDULED SERVICE'}];
 const mappings=[{breakdownCategory:'ENGINE',subCategory:'FUEL PUMP'},{breakdownCategory:'WGM',subCategory:'WGM'},{breakdownCategory:'SCHEDULED SERVICE',subCategory:'HOUR SERVICE 250'}];
 
-test('Preventive, Breakdown and Accidental accept a typed Other sub-category',()=>{
+test('Preventive, Breakdown and Accidental accept the Other sub-category',()=>{
   for(const repairType of ['Preventive','Breakdown','Accidental']){
-    const input={repairType,breakdownCategory:'ENGINE',breakdownSubCategory:'Custom repair detail',customSubCategory:true};
+    const input={repairType,breakdownCategory:'ENGINE',breakdownSubCategory:'Other'};
     assert.equal(classificationError(input,true,{categories,mappings}),'');
-    assert.deepEqual(validateClassification(repairType,'ENGINE','Custom repair detail',categories,mappings,true),{breakdownCategory:'ENGINE',subCategory:'Custom repair detail'});
+    assert.deepEqual(validateClassification(repairType,'ENGINE','Other',categories,mappings),{breakdownCategory:'ENGINE',subCategory:'Other'});
     assert.deepEqual(normalizeClassification(input),input);
   }
 });
@@ -21,11 +21,11 @@ test('custom sub-categories stay blocked for WGM and Scheduled',()=>{
   }
 });
 
-test('Create Request shows Other and a required blank custom field only after selection',()=>{
+test('Create Request shows Other without adding another reason field',()=>{
   const source=readFileSync(new URL('../src/repair-classification-fields.jsx',import.meta.url),'utf8');
   assert.match(source,/\['preventive','breakdown','accidental'\]\.includes\(repairTypeKey\(repairType\)\)/);
   assert.match(source,/customAllowed&&selectedCategory\?\[\.\.\.mappedOptions,'Other'\]/);
-  assert.match(source,/selectedSubCategory==='Other'&&<label>Other Breakdown Sub-category/);
-  assert.match(source,/placeholder="Enter breakdown sub-category"/);
-  assert.match(source,/name="breakdownSubCategoryCustom" value="true"/);
+  assert.doesNotMatch(source,/Other Breakdown Sub-category/);
+  assert.doesNotMatch(source,/placeholder="Enter breakdown sub-category"/);
+  assert.match(source,/<select name="breakdownSubCategory"/);
 });

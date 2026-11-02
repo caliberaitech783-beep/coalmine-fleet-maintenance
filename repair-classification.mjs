@@ -68,6 +68,7 @@ export function validateClassification(repairType, category, subCategory, catego
   if (!isRepairType(repairType)) fail('Select a valid repair type.');
   const label = categoriesForRepairType(repairType, categories).find(value => value === categoryLabel(category));
   if (!label) fail('Select a breakdown category belonging to the selected repair type.');
+  if(/^others?$/i.test(String(subCategory||'').trim())&&['preventive','breakdown','accidental'].includes(repairTypeKey(repairType)))return {breakdownCategory:label,subCategory:'Other'};
   if(customSubCategory){
     if(!['preventive','breakdown','accidental'].includes(repairTypeKey(repairType)))fail('A custom breakdown sub-category is allowed only for Preventive, Breakdown or Accidental repair types.');
     const custom=String(subCategory||'').trim();
