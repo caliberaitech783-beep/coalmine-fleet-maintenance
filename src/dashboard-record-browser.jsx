@@ -147,6 +147,7 @@ export default function DashboardRecordBrowser({ rows, classificationRequests = 
   const showClosingMeters = showClosedColumn || showBdClosingTime;
   // Daily updates posted on the linked request open inline, the same way as in the workflow tables.
   const showUpdatesColumn = Boolean(Remarks) && (requestRecords || bdBalanceColumns);
+  // Breakdown, OEM BD and BD Balance share this detail layout, including Make before Model.
   const columnCount = 10 + (requestRecords && idleDateFilter ? 2 : 0) + (showIdleDate ? 1 : 0) + (requestRecords ? 4 : 0) + (showUpdatesColumn ? 1 : 0) + (showClosedColumn ? 1 : 0) + (showVerificationColumns ? 2 : 0) + (showBdClosingTime ? 1 : 0) - (showLocationColumn ? 0 : 1) - (showCategoryColumn ? 0 : 1) + (bdBalanceColumns ? 3 : 0) + 2 + (showClosingMeters ? 2 : 0) + extraColumns.length;
   // Open requests keep counting: refresh the days-of-breakdown clock every minute.
   const [now, setNow] = useState(() => new Date());
