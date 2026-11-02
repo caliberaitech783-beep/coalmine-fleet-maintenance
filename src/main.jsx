@@ -5874,6 +5874,7 @@ function TranslatedText({ text, language = "", as: Tag = "span", className = "",
 }
 function EnhancedSpeechComplaint({
   initialText = "",
+  suggestedText,
   label = "Reason / complaint *",
   name = "complaint",
   audioName = "complaintAudio",
@@ -5887,6 +5888,7 @@ function EnhancedSpeechComplaint({
     [working, setWorking] = useState(false),
     [note, setNote] = useState(""),
     [audioData, setAudioData] = useState("");
+  useEffect(()=>{if(suggestedText!==undefined)setText(String(suggestedText||''));},[suggestedText]);
   const recognition = useRef(null),
     starting = useRef(false),
     mounted = useRef(true),
@@ -6167,6 +6169,7 @@ function BreakdownSubCategorySelect({category,initialValue="",required=false}) {
 
 function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const [selectedCategory,setSelectedCategory]=useState("");
+  const [complaintSuggestion,setComplaintSuggestion]=useState("");
   const shiftData=useRequestShiftData();
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
@@ -6389,7 +6392,7 @@ function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSub
               ))}
             </select>
           </label>
-          {hierarchyEnabled ? <RepairClassificationFields required /> : <>
+          {hierarchyEnabled ? <RepairClassificationFields required onSubCategoryChange={setComplaintSuggestion} /> : <>
           <label>
             Type of breakdown *
             <select
@@ -6472,7 +6475,7 @@ function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSub
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
             {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
-          <SpeechComplaint />
+          <SpeechComplaint suggestedText={complaintSuggestion} />
           <ComplaintMediaInputs />
         </div>
         {v && (
