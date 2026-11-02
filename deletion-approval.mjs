@@ -80,6 +80,11 @@ async function checkDeletionSelection(client, sql, values) {
 
 function guardedUnapprovedQuery(target,args) {
   const sql=typeof args[0]==='string'?args[0]:args[0]?.text;
+  const workflowReset=context.getStore()?.workflowFirstTripReset;
+  const values=args[1] || args[0]?.values || [];
+  if(workflowReset
+    && /^\s*DELETE\s+FROM\s+production_first_trip_acceptances\s+WHERE\s+request_reference\s*=\s*\$1\s*;?\s*$/i.test(sql || '')
+    && values.length===1 && String(values[0])===workflowReset.reference) return target.query(...args);
   try {assertDeletionSql(sql);return target.query(...args);}
   catch(error) {
     // Legacy workflows issue unconditional DELETEs even when nothing exists.
@@ -89,6 +94,14 @@ function guardedUnapprovedQuery(target,args) {
     const select=String(sql).replace(/^\s*DELETE\s+FROM\b/i,'SELECT 1 FROM').replace(/\s+RETURNING\b[\s\S]*$/i,'').replace(/;\s*$/,'')+' LIMIT 1';
     return target.query(select,args[1] || args[0]?.values || []).then(result=>{if(result.rows.length)throw error;return {rows:[],rowCount:0,command:'DELETE'};});
   }
+}
+
+export function resetProductionFirstTripAcceptance(client,reference) {
+  const normalized=String(reference||'').trim();
+  if(!normalized)fail(400,'A request reference is required to reset first-trip acceptance.');
+  return context.run({workflowFirstTripReset:{reference:normalized}},()=>client.query(
+    'DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[normalized]
+  ));
 }
 
 export const deletionApproved = () => Boolean(context.getStore()?.client);
@@ -141,7 +154,6 @@ export function protectDeletionPool(rawPool) {
 
 export function deletionOperation(method, route, req = {}) {
   if (method === 'delete') return true;
-  if (method === 'patch' && route === '/api/requests/:reference/close') return true;
   if (method === 'patch' && route === '/api/cdir/deletion-requests/:id/:action') return req.params?.action === 'approve';
   return method === 'post' && ['/api/requests/bulk-delete','/api/data-housekeeping/purge',
     '/api/log-retention/run','/api/backups/import/restore','/api/oracle/equipment/sync',
@@ -159,10 +171,7 @@ export async function resolveDeletionSelection(req, route, client, {
     const related=`request_reference IN (SELECT reference FROM maintenance_requests ${where?`WHERE ${where}`:''})`;
     for(const table of ['maintenance_daily_remarks','production_first_trip_acceptances','request_corrections','whatsapp_workflow_dispatches'])add(table,related,values);
   };
-  if(route==='/api/requests/:reference/close'){
-    add('maintenance_requests','reference=$1',[req.params.reference]);
-    add('production_first_trip_acceptances','request_reference=$1',[req.params.reference]);
-  }else if(route==='/api/requests/:reference')requests('reference=$1',[req.params.reference]);
+  if(route==='/api/requests/:reference')requests('reference=$1',[req.params.reference]);
   else if(route==='/api/requests/bulk-delete'){
     const references=Array.isArray(req.body?.references)?req.body.references:[];
     if(!references.length || references.length>200)fail(400,'Select between 1 and 200 requests.');
@@ -225,7 +234,7 @@ export async function resolveDeletionSelection(req, route, client, {
     if(!restoreTables)fail(403,'Inspect the restore archive before approval.');
     for(const table of await restoreTables(req,client))if(!['deletion_approvals','backup_runs','full_backup_runs'].includes(table))add(table);
   }else fail(403,'This deletion has no exact preview adapter and is blocked.');
-  return {queries,extraItems,executionTime,impact:route.endsWith('/:reference/close')?'This workflow resets first-trip evidence and removes its acceptance entry. The maintenance request is retained.':route.includes('restore')?'Restore replaces the listed current records with the inspected backup. Approval history and live backup registries are retained. A pre-restore safety backup will be created as part of this approved operation.':undefined};
+  return {queries,extraItems,executionTime,impact:route.includes('restore')?'Restore replaces the listed current records with the inspected backup. Approval history and live backup registries are retained. A pre-restore safety backup will be created as part of this approved operation.':undefined};
 }
 
 function requestHash(req) {

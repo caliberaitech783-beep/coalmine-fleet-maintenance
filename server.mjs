@@ -3,7 +3,7 @@ import {REPAIR_TYPES,isRepairType,repairTypeKey} from './repair-classification.m
 import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
 import {createSiteFleetTelegramDelivery,siteFleetPlans} from './telegram-site-fleet-delivery.mjs';
-import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback} from './deletion-approval.mjs';
+import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback,resetProductionFirstTripAcceptance} from './deletion-approval.mjs';
 import {createDeletionWhatsApp} from './deletion-sms.mjs';
 import {seedLmvDemoRecords} from './lmv-fleet.mjs';
 import {registerLmvFleet} from './lmv-fleet-api.mjs';
@@ -1471,13 +1471,6 @@ const deletionApproval=installDeletionApproval(app,{
   sms:createDeletionWhatsApp({readSettings:storedWhatsAppSettings}),
   skipApproval:async(req,route)=>{
     if(route==='/api/masters/:master/:id'&&deletionProtectedMaster(req.params.master))return true;
-    if(route==='/api/requests/:reference/close'){
-      const {rows:[row]}=await pool.query(`SELECT issues,first_trip_card_image,
-        EXISTS(SELECT 1 FROM production_first_trip_acceptances WHERE request_reference=$1) AS acceptance
-        FROM maintenance_requests WHERE reference=$1`,[req.params.reference]);
-      const resets=row&&(req.body?.status==='Running BD'||row.issues?.length);
-      return !resets||(!row.acceptance&&!row.first_trip_card_image);
-    }
     return false;
   },
   resolveSelection:(req,route,client)=>resolveDeletionSelection(req,route,client,{
@@ -7601,10 +7594,9 @@ app.patch('/api/requests/:reference/close',requireSession,requireMaintenanceUpda
     await client.query('UPDATE maintenance_requests SET sub_category=$2 WHERE reference=$1',[reference,storedSubCategory]);
     rows[0].subCategory=storedSubCategory;
     if(rows.length && (status==='Running BD'||before.issues?.length)){
-      if((before.firstTripCardImage||before.productionFirstTripAt)&&!deletionApproved())throw Object.assign(new Error('First-trip evidence changed. Review this action again and approve its removal by WhatsApp OTP.'),{status:409});
       const saved=await client.query(`UPDATE maintenance_requests SET issues=$1::jsonb,running_bd_at=CASE WHEN status='Running BD' THEN $2::timestamptz ELSE NULL END,verified_at=NULL,verified_by='',verification_status='',first_trip_at=NULL,first_trip_done=FALSE,first_trip_by='',first_trip_card_image='' WHERE reference=$3 RETURNING ${requestProjection}`,[JSON.stringify(status==='Running BD'||before.issues?.length?issues:[]),closedAt,reference]);
       rows[0]=saved.rows[0];
-      await client.query('DELETE FROM production_first_trip_acceptances WHERE request_reference=$1',[reference]);
+      await resetProductionFirstTripAcceptance(client,reference);
     }
     const timelineEvents=ideal?['closedAt','idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
     return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:ideal||status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:ideal||status==='Closed'?['closedAt']:[]};
