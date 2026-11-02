@@ -20,7 +20,7 @@ const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && N
 const DESKTOP_TABLE_PAGE_SIZE = 100;
 const sharedTablePageSize = () => (typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0) || DESKTOP_TABLE_PAGE_SIZE;
 
-export default function SharedActionsTable({ onFilteredRows = null, toolbarAfterDate = null, toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, defaultDateToday = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
+export default function SharedActionsTable({ recordCountOverride = null, onFilteredRows = null, toolbarAfterDate = null, toolbarAfterCount = null, columnTransform = null, closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, defaultDateToday = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -62,10 +62,10 @@ export default function SharedActionsTable({ onFilteredRows = null, toolbarAfter
   const responsibilityColumn=columns.find(column=>column.key==='oemResponsibility');
   if(responsibilityColumn){columns.splice(columns.indexOf(responsibilityColumn),1);columns.splice(shiftColumn?1:0,0,responsibilityColumn);}
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, recordCountOverride, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
 
-function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
+function TableView({ sections, columns, recordCountOverride, onFilteredRows, toolbarAfterCount, toolbarAfterDate, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, defaultDateToday, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember applied columns per account/schema, independent of changing report titles.
   const allColumnKeys = useMemo(() => {
     const allColumnKeys = columns.map((column) => column.key);
@@ -283,7 +283,7 @@ function TableView({ sections, columns, onFilteredRows, toolbarAfterCount, toolb
   };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
-      <span className="shared-table-record-count" role="status">{groupBySite ? reportCount(new Set(selectedRows.map(reportAsset)).size, selectedRows.length) : `${selectedRows.length} of ${dataRows.length} records`}</span>
+      <span className="shared-table-record-count" role="status">{groupBySite ? reportCount(new Set(selectedRows.map(reportAsset)).size, selectedRows.length) : recordCountOverride ? `${recordCountOverride.selected} of ${recordCountOverride.total} records` : `${selectedRows.length} of ${dataRows.length} records`}</span>
       {toolbarAfterCount}
       {dateRangeControl}
       {toolbarAfterDate}
