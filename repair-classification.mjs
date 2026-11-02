@@ -14,13 +14,15 @@ export function breakdownCategories(repairType) {
 }
 export const breakdownSubCategories = (category) => category === 'Other' ? ['Other'] : mappings[category] ? [...mappings[category], 'Other'] : [];
 export function normalizeClassification(input = {}) {
-  return Object.fromEntries(['repairType', 'breakdownCategory', 'breakdownSubCategory'].map((key) => [key, String(input?.[key] || '').trim()]));
+  const classification=Object.fromEntries(['repairType', 'breakdownCategory', 'breakdownSubCategory'].map((key) => [key, String(input?.[key] || '').trim()]));
+  if(input?.customSubCategory===true)classification.customSubCategory=true;
+  return classification;
 }
 export function classificationError(input, required = false, masters) {
   const {repairType, breakdownCategory, breakdownSubCategory} = normalizeClassification(input);
   if (required && (!repairType || !breakdownCategory || !breakdownSubCategory)) return 'Select Repair type, Breakdown Category and Breakdown Sub-category.';
   if (!repairType && !breakdownCategory && !breakdownSubCategory) return '';
-  if(masters){try{validateClassification(repairType,breakdownCategory,breakdownSubCategory,masters.categories,masters.mappings);return '';}catch(error){return error.message;}}
+  if(masters){try{validateClassification(repairType,breakdownCategory,breakdownSubCategory,masters.categories,masters.mappings,input?.customSubCategory===true);return '';}catch(error){return error.message;}}
   if (!REPAIR_TYPES.includes(repairType)) return 'Select a valid Repair type.';
   if (breakdownCategory && !breakdownCategories(repairType).includes(breakdownCategory)) return 'Select a Breakdown Category allowed for this Repair type.';
   if (breakdownSubCategory && (!breakdownCategory || !breakdownSubCategories(breakdownCategory).includes(breakdownSubCategory))) return 'Select a Breakdown Sub-category mapped to this Breakdown Category.';
@@ -61,11 +63,17 @@ export function categoriesForRepairType(repairType, records = []) {
 export function subCategoriesForCategory(category, records = []) {
   return [...new Set(records.filter(row => categoryOfMapping(row) === categoryLabel(category)).map(row => String(row.subCategory || '').trim()).filter(Boolean))];
 }
-export function validateClassification(repairType, category, subCategory, categories, mappings) {
+export function validateClassification(repairType, category, subCategory, categories, mappings, customSubCategory = false) {
   const fail = message => { throw Object.assign(new Error(message), {status: 400}); };
   if (!isRepairType(repairType)) fail('Select a valid repair type.');
   const label = categoriesForRepairType(repairType, categories).find(value => value === categoryLabel(category));
   if (!label) fail('Select a breakdown category belonging to the selected repair type.');
+  if(customSubCategory){
+    if(!['preventive','breakdown','accidental'].includes(repairTypeKey(repairType)))fail('A custom breakdown sub-category is allowed only for Preventive, Breakdown or Accidental repair types.');
+    const custom=String(subCategory||'').trim();
+    if(!custom)fail('Enter the Other breakdown sub-category.');
+    return {breakdownCategory:label,subCategory:custom};
+  }
   const name = subCategoriesForCategory(label, mappings).find(value => value.toLowerCase() === String(subCategory || '').trim().toLowerCase());
   if (!name) fail('Select a breakdown sub-category belonging to the selected breakdown category.');
   return {breakdownCategory: label, subCategory: name};
