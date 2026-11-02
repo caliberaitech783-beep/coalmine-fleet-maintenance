@@ -8,4 +8,7 @@ test("Maintenance Closed History gives Closing Time the Days of BD sort menu", (
   assert.match(source, /function MobileWorkflowTable\(\{ closedTimeAfterStarted = false, closingTimeSortMenu = false,/);
   assert.match(source, /durationSortOnly=\{key === "closedAt" && closingTimeSortMenu \? true : undefined\}/);
   assert.match(source, /tab === "history"[\s\S]*closingTimeSortMenu=\{isMaintenance\}/);
+  const filterMenu = source.slice(source.indexOf("dateSortOnly ? <div"), source.indexOf("className=\"column-filter-search\""));
+  assert.ok(filterMenu.indexOf("durationSortOnly ? <div") < filterMenu.indexOf("dateColumn ? <div"), "explicit duration sorting must take precedence over a date-range filter");
+  assert.match(filterMenu, /Lowest to highest time taken[\s\S]*Highest to lowest time taken[\s\S]*Clear sort/);
 });

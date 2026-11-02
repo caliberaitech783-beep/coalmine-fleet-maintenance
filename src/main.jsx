@@ -3694,13 +3694,13 @@ function FilterableHeader({
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} aria-pressed={active && sort.direction === "asc"} onClick={() => chooseDurationSort("asc")}><ArrowUp /><span>Oldest to latest</span></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} aria-pressed={active && sort.direction === "desc"} onClick={() => chooseDurationSort("desc")}><ArrowDown /><span>Latest to oldest</span></button>
             <button type="button" onClick={() => chooseDurationSort("")}><X /><span>Clear sort</span></button>
-          </div> : dateColumn ? <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
-            <label><span>From</span><DateInput autoFocus value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
-            <label><span>To</span><DateInput value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
           </div> : durationSortOnly ? <div className="column-filter-sort duration-sort-options" aria-label={`Sort ${label}`}>
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} aria-pressed={active && sort.direction === "asc"} onClick={() => chooseDurationSort("asc")}><ArrowUp /><span>Lowest to highest time taken</span></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} aria-pressed={active && sort.direction === "desc"} onClick={() => chooseDurationSort("desc")}><ArrowDown /><span>Highest to lowest time taken</span></button>
             <button type="button" onClick={() => chooseDurationSort("")}><X /><span>Clear sort</span></button>
+          </div> : dateColumn ? <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
+            <label><span>From</span><DateInput autoFocus value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
+            <label><span>To</span><DateInput value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
           </div> : <><div className="column-filter-sort" aria-label={`Sort ${label}`}>
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} onClick={() => onSort(sortKey, "asc")} title="Sort ascending"><ArrowUp /></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} onClick={() => onSort(sortKey, "desc")} title="Sort descending"><ArrowDown /></button>
