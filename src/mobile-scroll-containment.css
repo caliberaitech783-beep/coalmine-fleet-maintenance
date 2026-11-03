@@ -13,6 +13,24 @@
     overscroll-behavior-y: auto !important;
   }
 
+  /* Operational request tables scroll sideways, but the surrounding page is
+     the only vertical scroll owner. Android Chrome otherwise keeps a vertical
+     swipe inside the generic `.scroll { overflow:auto }` table wrapper. */
+  .mobile-workspace :is(.mobile-workflow-table, .mobile-breakdown-table) {
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    touch-action: pan-x pan-y;
+  }
+
+  .normal:not(.embedded-workspace):has(.mobile-workspace[data-operational="true"]),
+  .normal:not(.embedded-workspace) > main:has(> .mobile-workspace[data-operational="true"]) {
+    height: auto !important;
+    min-height: 100dvh;
+    overflow-y: visible !important;
+  }
+
   /* These viewers already own vertical scrolling above the table. Remove the
      inner height constraint as well as containment. overflow-y: hidden avoids
      visible computing to auto beside overflow-x: auto; the full-height table

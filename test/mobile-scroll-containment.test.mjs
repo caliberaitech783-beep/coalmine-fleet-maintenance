@@ -8,6 +8,8 @@ test('touch table handoff covers shared lists while preserving dialog containmen
   for (const selector of ['.scroll', '.master-table-scroll', '.mobile-workflow-table', '.mobile-breakdown-table', '.reports-detail-table', '.ticket-table-wrap', '.dashboard-asset-list', '.hierarchy-matrix-scroll', '.audit-table-wrap', '.login-activity-scroll']) assert.ok(correction.includes(selector));
   assert.match(correction, /@media screen and \(max-width: 700px\), screen and \(hover: none\) and \(pointer: coarse\)/);
   assert.match(correction, /overscroll-behavior-y: auto !important/);
+  assert.match(correction, /\.mobile-workspace :is\(\.mobile-workflow-table, \.mobile-breakdown-table\) \{[\s\S]*overflow-y: hidden !important;[\s\S]*touch-action: pan-x pan-y/);
+  assert.match(correction, /\.normal:not\(\.embedded-workspace\):has\(\.mobile-workspace\[data-operational="true"\]\)[\s\S]*height: auto !important;[\s\S]*min-height: 100dvh/);
   assert.match(correction, /\.dashboard-asset-modal \.dashboard-record-browser \{\s*overscroll-behavior-y: contain/);
 });
 
