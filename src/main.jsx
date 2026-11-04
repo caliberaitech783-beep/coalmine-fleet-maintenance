@@ -1203,6 +1203,17 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
       <CaliberBrand className="logo" />
       <nav onPointerOver={warmNavigationFeature} onPointerDownCapture={warmNavigationFeature} onFocusCapture={warmNavigationFeature}>
+        {visibleNav.some(([name]) => name === "Dashboard") && <div className="nav-config-row"><button
+          type="button"
+          className="header-nav-item header-home-button"
+          data-nav="home"
+          aria-label="Home — open main dashboard"
+          title="Home — open main dashboard"
+          onClick={() => selectPage("Dashboard")}
+        >
+          <span className="header-nav-icon header-home-glyph" aria-hidden="true">⌂</span>
+          <span className="nav-label">Home</span>
+        </button></div>}
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={`header-nav-item${active === n ? " active" : ""}`}

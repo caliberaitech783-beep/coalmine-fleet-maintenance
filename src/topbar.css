@@ -856,6 +856,8 @@
   box-shadow: 0 6px 14px var(--hn-glow, rgba(82, 46, 144, 0.45)), 0 0 0 3px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 /* Tints follow the header gradient from left (purple) to right (coral). */
+.header-nav-item[data-nav="home"] { --hn-a: #a78bfa; --hn-b: #6332a5; --hn-glow: rgba(99, 50, 165, 0.5); }
+.header-home-glyph { font-size: 20px; font-weight: 900; line-height: 1; }
 .header-nav-item[data-nav="dashboard"] { --hn-a: #8b5cf6; --hn-b: #522e90; --hn-glow: rgba(82, 46, 144, 0.5); }
 .header-nav-item[data-nav="cd"] { --hn-a: #7c3aed; --hn-b: #2563eb; --hn-glow: rgba(37, 99, 235, 0.45); }
 .header-nav-item[data-nav="manager"],
@@ -869,6 +871,7 @@
 .header-nav-item[data-nav="admin"] { --hn-a: #f97373; --hn-b: #f04e53; --hn-glow: rgba(240, 78, 83, 0.5); }
 .header-nav-item[data-nav="transfers"] { --hn-a: #fb923c; --hn-b: #ea580c; --hn-glow: rgba(234, 88, 12, 0.5); }
 /* Icon motion while hovered / focused / active. */
+.header-nav-item[data-nav="home"]:hover .header-nav-icon svg, .header-nav-item[data-nav="home"]:focus-visible .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
 .header-nav-item[data-nav="dashboard"]:hover .header-nav-icon svg, .header-nav-item[data-nav="dashboard"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="dashboard"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
 .header-nav-item[data-nav="cd"]:hover .header-nav-icon svg, .header-nav-item[data-nav="cd"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="cd"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
 .header-nav-item[data-nav="masters"]:hover .header-nav-icon svg, .header-nav-item[data-nav="masters"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="masters"].active .header-nav-icon svg { animation: ws-shuttle 1s ease-in-out infinite; }
