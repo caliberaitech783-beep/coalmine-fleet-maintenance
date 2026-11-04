@@ -888,6 +888,16 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-type-mix :is(article, button) > i { display: block; height: 5px; overflow: hidden; border-radius: 3px; background: var(--mine-line, var(--line)); }
 .mine-breakdown-type-mix :is(article, button) > i > b { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--type-color); }
 .mine-breakdown-type-mix :is(article, button) > small { color: var(--mine-muted, var(--muted)); }
+.repair-category-hierarchy > h3 { margin: 0; padding: 9px 10px; border-top: 1px solid var(--mine-line, var(--line)); border-bottom: 1px solid var(--mine-line, var(--line)); color: var(--mine-text, var(--ink)); background: color-mix(in srgb, #522e90 3%, var(--mine-panel, var(--surface))); font: 800 12px/1.3 Manrope; }
+.mine-breakdown-type-mix > .repair-type-card-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mine-breakdown-type-mix > .repair-type-card-grid > button.selected { background: color-mix(in srgb, var(--type-color, #315fd4) 14%, transparent); box-shadow: inset 0 -3px 0 var(--type-color, #315fd4); }
+.mine-breakdown-type-mix > .breakdown-category-card-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .mine-breakdown-type-mix > :is(.repair-type-card-grid, .breakdown-category-card-grid) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .mine-breakdown-type-mix > :is(.repair-type-card-grid, .breakdown-category-card-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .mine-breakdown-site-table,
 .mine-road-site-table { overflow: hidden; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); }
 .mine-breakdown-site-head,

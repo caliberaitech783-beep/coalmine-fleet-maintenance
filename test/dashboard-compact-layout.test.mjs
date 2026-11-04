@@ -85,6 +85,14 @@ test("the category mix scopes open balance to newly created requests", () => {
   assert.ok(client.includes('breakdownDetailTypeSummary.map'));
 });
 
+test("the category mix is grouped under the five repair type cards", () => {
+  assert.match(client, /REPAIR_TYPES\.map\(\(label\)/);
+  assert.match(client, /className="repair-type-card-grid"/);
+  assert.match(client, /setSelectedCategoryRepairType\(type\.label\)/);
+  assert.match(client, /className="breakdown-category-card-grid"/);
+  assert.match(client, /selectedCategoryRepairType\), `\$\{selectedCategoryRepairType\}/);
+});
+
 test("Availability Count provides site-wise on-road, off-road and idle status", () => {
   assert.match(client, /availabilityCountBySite\.length/);
   assert.match(client, /<span>Total fleet<\/span><span>On road<\/span><span>Off road<\/span><span>Idle<\/span><span>Availability<\/span>/);

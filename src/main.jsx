@@ -1,4 +1,4 @@
-import {categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel} from '../repair-classification.mjs';
+import {REPAIR_TYPES,categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel,repairTypeKey} from '../repair-classification.mjs';
 import RepairClassificationFieldsView,{classificationFromForm} from './repair-classification-fields.jsx';
 import {classificationActive,classificationError} from '../repair-classification.mjs';
 import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
@@ -1857,6 +1857,7 @@ function DashboardCardSearch({ cards, onSelect, close }) {
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
   const [dashboardCategories] = useMasterRecords("Breakdown Category");
+  const [selectedCategoryRepairType, setSelectedCategoryRepairType] = useState(REPAIR_TYPES[0]);
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
   useEffect(() => {
@@ -2181,6 +2182,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance")
     : movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance");
   const breakdownTypeSummary = newBreakdownCategoryShare(breakdownCategoryMixRows, "", "", dashboardCategories);
+  const classifiedCategoryMixRows = newCategoryMixRequests(breakdownCategoryMixRows);
+  const requestRepairType = (record) => REPAIR_TYPES.find((type) => repairTypeKey(type) === repairTypeKey(record.classification?.repairType || record.repairType || record.category)) || "";
+  const repairTypeSummary = REPAIR_TYPES.map((label) => {
+    const count = classifiedCategoryMixRows.filter((record) => requestRepairType(record) === label).length;
+    return { label, count, percentage: classifiedCategoryMixRows.length ? Math.round(count * 100 / classifiedCategoryMixRows.length) : 0 };
+  });
+  const selectedRepairTypeRows = classifiedCategoryMixRows.filter((record) => requestRepairType(record) === selectedCategoryRepairType);
+  const selectedRepairTypeCategories = newBreakdownCategoryShare(selectedRepairTypeRows, "", "", categoriesForRepairType(selectedCategoryRepairType, dashboardCategories));
   const breakdownCategoryPending = newCategoryMixRequests(breakdownCategoryMixRows, "pending").length;
   const breakdownCategoryNewCount = newCategoryMixRequests(breakdownCategoryMixRows, "all").length;
   const selectedBreakdownSiteRequests = breakdownDetailSite
@@ -2597,7 +2606,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => requestStatusLabel(record).toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("movement:")) {
-      const [metric, start, end, site, type] = key.slice(9).split("|");
+      const [metric, start, end, site, type, repairType] = key.slice(9).split("|");
       const records = throughputRequests;
       if(['open','incoming','outgoing','all'].includes(metric)){
         const ledger=fleetMovementForRange('',start,end);
@@ -2610,7 +2619,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       }
       if(["new-categories","classification-pending"].includes(metric)){
         const rows=movementRequestRowsForShift(records,start,end,"active-balance").filter(record=>!site||recordBelongsToSite(record,site));
-        return requestAssetRows(newCategoryMixRequests(rows,metric==="classification-pending"?"pending":"classified").filter(record=>!type||requestCategoryLabel(record)===type));
+        return requestAssetRows(newCategoryMixRequests(rows,metric==="classification-pending"?"pending":"classified").filter(record=>(!type||requestCategoryLabel(record)===type)&&(!repairType||requestRepairType(record)===repairType)));
       }
       return requestAssetRows(movementRequestRowsForShift(records, start, end, metric, type));
     }
@@ -2679,7 +2688,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "mis" ? "Open in MIS" : lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { "new-categories":"New Breakdown Category Mix", "classification-pending":"Classification pending", all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance", "active-balance": "BD Balance", idle: "Idle Vehicles", runningbd: "Running with BD", undated: "Requests needing date correction" };
   const movementScopeLabel = initialDrilldownSite || (initialDrilldownRegion && initialDrilldownRegion !== "all" ? initialDrilldownRegion === "unmapped" ? "Other / unassigned" : initialDrilldownRegion : "All sites in dashboard scope");
-  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementScopeLabel} · ${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}${["new-categories","classification-pending"].includes(movementDrilldownParts[0]) ? ` · ${NEW_CATEGORY_MIX_LABEL}` : ""}` : "";
+  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementScopeLabel} · ${movementDrilldownParts[5] ? `${movementDrilldownParts[5]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}${["new-categories","classification-pending"].includes(movementDrilldownParts[0]) ? ` · ${NEW_CATEGORY_MIX_LABEL}` : ""}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
@@ -2729,7 +2738,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setBreakdownDetailSite("");
     openAssetDrilldown(key);
   };
-  const movementKey = (metric = "all", site = "", type = "", start = breakdownSummaryStartKey, end = breakdownSummaryEndKey) => `movement:${metric}|${start}|${end}|${site}|${type}`;
+  const movementKey = (metric = "all", site = "", type = "", start = breakdownSummaryStartKey, end = breakdownSummaryEndKey, repairType = "") => `movement:${metric}|${start}|${end}|${site}|${type}|${repairType}`;
   const openBreakdownDay = (day, metric) => {
     setMovementBrowseScope(null);
     setBreakdownDayReturnSite(breakdownDetailSite);
@@ -2868,11 +2877,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-breakdown-movement-kpis">
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: availabilityKpis.offRoad, className: "active-balance", snapshotKey: "offroad" }, { label: "Running with BD", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "runningbd").length, className: "runningbd" }, { label: "Idle Vehicles", value: availabilityKpis.idle, className: "idle", snapshotKey: "idle" }].map(item=>({...item,value:!item.snapshotKey&&['all','outgoing'].includes(item.className)&&unverifiedMovementSites.length?'—':item.value})).map((item) => <div {...listAction(item.snapshotKey || movementKey(item.className), `${item.label} ${item.snapshotKey ? 'vehicles' : 'requests'}`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && !unverifiedMovementSites.length && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{item.snapshotKey ? availabilityStatusLabel : breakdownSummaryPeriodLabel}</small></div>)}
             </div>
-            <section {...cardAction(movementKey("new-categories"), "New breakdown category requests")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
-              <header><div><b>New Breakdown Category Mix</b><small>{NEW_CATEGORY_MIX_LABEL}</small></div><span>Share of classified new open BD requests</span></header>
+            <section {...cardAction(movementKey("new-categories"), "New breakdown category requests")} className="mine-breakdown-type-mix repair-category-hierarchy" aria-label="Repair type and breakdown category percentage of open BD balance">
+              <header><div><b>New Repair Type and Breakdown Category Mix</b><small>{NEW_CATEGORY_MIX_LABEL}</small></div><span>Select a repair type to view its breakdown categories</span></header>
               {!breakdownCategoryNewCount && <p role="status">No new requests yet.</p>}
               {breakdownCategoryPending > 0 && <button type="button" {...listAction(movementKey("classification-pending"), "Classification pending")}>Classification pending: {breakdownCategoryPending}</button>}
-              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("new-categories", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+              <div className="repair-type-card-grid" role="group" aria-label="Repair types">{repairTypeSummary.map((type) => <button type="button" aria-pressed={selectedCategoryRepairType === type.label} className={selectedCategoryRepairType === type.label ? "selected" : ""} onClick={(event) => { event.stopPropagation(); setSelectedCategoryRepairType(type.label); }} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
+              <h3>{selectedCategoryRepairType} · Breakdown Category</h3>
+              <div className="breakdown-category-card-grid">{selectedRepairTypeCategories.map((type) => <article {...listAction(movementKey("new-categories", "", type.label, breakdownSummaryStartKey, breakdownSummaryEndKey, selectedCategoryRepairType), `${selectedCategoryRepairType} · ${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
               <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
