@@ -86,7 +86,7 @@ test("the category mix scopes open balance to newly created requests", () => {
 });
 
 test("the category mix is grouped under the five repair type cards", () => {
-  assert.match(client, /REPAIR_TYPES\.map\(\(label\)/);
+  assert.match(client, /DASHBOARD_REPAIR_TYPES\.map\(\(label\)/);
   assert.match(client, /className="repair-type-card-grid"/);
   assert.match(client, /setSelectedCategoryRepairType\(type\.label\)/);
   assert.match(client, /className="breakdown-category-card-grid"/);

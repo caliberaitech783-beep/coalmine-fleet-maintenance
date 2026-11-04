@@ -115,7 +115,10 @@ const setLifecycleFrom = (view, value, rows) => {
 
 test("BD Type Mix renders master categories with no requests as well as new request categories", () => {
   const view = harness({repairTypes:[{repairType:'TYRE SYSTEM'},{repairType:'AC SYSTEM'}]});
-  const tree = view.render([{ref:'TYRE-1',createdAt:'2026-10-29T08:30:00Z',site:'Sasti OB',category:'TYRE SYSTEM',classification:{version:1,repairType:'Breakdown',breakdownCategory:'TYRE SYSTEM'},status:'Open',start:`${todayKey} 09:00`}]);
+  const rows=[{ref:'TYRE-1',createdAt:'2026-10-29T08:30:00Z',site:'Sasti OB',category:'TYRE SYSTEM',classification:{version:1,repairType:'Breakdown',breakdownCategory:'TYRE SYSTEM'},status:'Open',start:`${todayKey} 09:00`}];
+  let tree = view.render(rows);
+  findAll(byLabel(tree,'Breakdown type percentage of open BD balance'),node=>node.type==='button'&&text(node).startsWith('Breakdown'))[0].props.onClick({stopPropagation(){}});
+  tree=view.render(rows);
   const mix = byLabel(tree,'Breakdown type percentage of open BD balance');
   assert.match(text(mix),/TYRE SYSTEM100%1 request/);
   assert.match(text(mix),/AC SYSTEM0%0 requests/);
@@ -963,10 +966,10 @@ test("throughput defaults to today, clearing either date shows all time and Rese
       assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
       assert.match(byClass(tree, "dashboard-asset-modal").props.title, ['balance','idle'].includes(card.props.className) ? /Off road|Idle/ : /All time/);
     }
-    const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
-    assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
-    assert.ok(types.every(card => !text(card).includes("Unclassified")));
-    assert.match(text(byLabel(tree, "Breakdown type percentage of open BD balance")), /No new requests yet/);
+    const mix=byLabel(tree, "Breakdown type percentage of open BD balance");
+    assert.match(text(mix),/WGM0%0 requests/);
+    assert.doesNotMatch(text(mix),/Unclassified/);
+    assert.match(text(mix), /No new requests yet/);
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
   };
@@ -1356,6 +1359,8 @@ test('new category tile and pending drilldowns match cutoff counts while BD Bala
   {ref:'PENDING',createdAt:'2026-10-29T09:00:00Z'},
  ].map((r,index)=>({...r,door:`V${index+1}`,chassis:`C${index+1}`,site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`,category:'Breakdown'}));
  let tree=view.render(rows);
+ findAll(byLabel(tree,'Breakdown type percentage of open BD balance'),node=>node.type==='button'&&text(node).startsWith('Breakdown'))[0].props.onClick({stopPropagation(){}});
+ tree=view.render(rows);
  const mix=byLabel(tree,'Breakdown type percentage of open BD balance');
  assert.match(text(mix),/ENGINE100%1 request/);
  assert.match(text(mix),/Classification pending: 1/);

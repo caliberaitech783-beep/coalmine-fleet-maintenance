@@ -1,4 +1,4 @@
-import {REPAIR_TYPES,categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel,repairTypeKey} from '../repair-classification.mjs';
+import {categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel} from '../repair-classification.mjs';
 import RepairClassificationFieldsView,{classificationFromForm} from './repair-classification-fields.jsx';
 import {classificationActive,classificationError} from '../repair-classification.mjs';
 import {ANNOUNCEMENT_VIDEO_MAX_BYTES,announcementVideoError} from '../announcement.mjs';
@@ -151,7 +151,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
-import { breakdownMovementForRange, breakdownOpenedDate, newBreakdownCategoryShare, newCategoryMixRequests, NEW_CATEGORY_MIX_LABEL, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
+import { breakdownMovementForRange, breakdownOpenedDate, newBreakdownCategoryShare, newCategoryMixRequests, NEW_CATEGORY_MIX_LABEL, dailyBreakdownMovement, normalizedBreakdownType, DASHBOARD_REPAIR_TYPES, dashboardRepairTypeKey } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending, isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
@@ -1857,7 +1857,7 @@ function DashboardCardSearch({ cards, onSelect, close }) {
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
   const [dashboardCategories] = useMasterRecords("Breakdown Category");
-  const [selectedCategoryRepairType, setSelectedCategoryRepairType] = useState(REPAIR_TYPES[0]);
+  const [selectedCategoryRepairType, setSelectedCategoryRepairType] = useState(DASHBOARD_REPAIR_TYPES[0]);
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
   useEffect(() => {
@@ -2183,13 +2183,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance");
   const breakdownTypeSummary = newBreakdownCategoryShare(breakdownCategoryMixRows, "", "", dashboardCategories);
   const classifiedCategoryMixRows = newCategoryMixRequests(breakdownCategoryMixRows);
-  const requestRepairType = (record) => REPAIR_TYPES.find((type) => repairTypeKey(type) === repairTypeKey(record.classification?.repairType || record.repairType || record.category)) || "";
-  const repairTypeSummary = REPAIR_TYPES.map((label) => {
+  const requestRepairType = (record) => DASHBOARD_REPAIR_TYPES.find((type) => dashboardRepairTypeKey(type) === dashboardRepairTypeKey(record.classification?.repairType || record.repairType || record.category)) || "";
+  const repairTypeSummary = DASHBOARD_REPAIR_TYPES.map((label) => {
     const count = classifiedCategoryMixRows.filter((record) => requestRepairType(record) === label).length;
     return { label, count, percentage: classifiedCategoryMixRows.length ? Math.round(count * 100 / classifiedCategoryMixRows.length) : 0 };
   });
   const selectedRepairTypeRows = classifiedCategoryMixRows.filter((record) => requestRepairType(record) === selectedCategoryRepairType);
-  const selectedRepairTypeCategories = newBreakdownCategoryShare(selectedRepairTypeRows, "", "", categoriesForRepairType(selectedCategoryRepairType, dashboardCategories));
+  const selectedRepairTypeCategoryNames = dashboardCategories.map((record) => String(typeof record === "string" ? record : record.breakdownCategory || record.repairType || "").trim()).filter(Boolean).filter((label) => selectedCategoryRepairType === "WGM" ? /^wgm$/i.test(label) : selectedCategoryRepairType === "Scheduled" ? /^scheduled\s*service$/i.test(label) : !/^(?:wgm|scheduled\s*service)$/i.test(label));
+  const selectedRepairTypeCategories = newBreakdownCategoryShare(selectedRepairTypeRows, "", "", selectedRepairTypeCategoryNames);
   const breakdownCategoryPending = newCategoryMixRequests(breakdownCategoryMixRows, "pending").length;
   const breakdownCategoryNewCount = newCategoryMixRequests(breakdownCategoryMixRows, "all").length;
   const selectedBreakdownSiteRequests = breakdownDetailSite
@@ -2877,7 +2878,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-breakdown-movement-kpis">
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: availabilityKpis.offRoad, className: "active-balance", snapshotKey: "offroad" }, { label: "Running with BD", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "runningbd").length, className: "runningbd" }, { label: "Idle Vehicles", value: availabilityKpis.idle, className: "idle", snapshotKey: "idle" }].map(item=>({...item,value:!item.snapshotKey&&['all','outgoing'].includes(item.className)&&unverifiedMovementSites.length?'—':item.value})).map((item) => <div {...listAction(item.snapshotKey || movementKey(item.className), `${item.label} ${item.snapshotKey ? 'vehicles' : 'requests'}`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && !unverifiedMovementSites.length && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{item.snapshotKey ? availabilityStatusLabel : breakdownSummaryPeriodLabel}</small></div>)}
             </div>
-            <section {...cardAction(movementKey("new-categories"), "New breakdown category requests")} className="mine-breakdown-type-mix repair-category-hierarchy" aria-label="Repair type and breakdown category percentage of open BD balance">
+            <section {...cardAction(movementKey("new-categories"), "New breakdown category requests")} className="mine-breakdown-type-mix repair-category-hierarchy" aria-label="Breakdown type percentage of open BD balance">
               <header><div><b>New Repair Type and Breakdown Category Mix</b><small>{NEW_CATEGORY_MIX_LABEL}</small></div><span>Select a repair type to view its breakdown categories</span></header>
               {!breakdownCategoryNewCount && <p role="status">No new requests yet.</p>}
               {breakdownCategoryPending > 0 && <button type="button" {...listAction(movementKey("classification-pending"), "Classification pending")}>Classification pending: {breakdownCategoryPending}</button>}

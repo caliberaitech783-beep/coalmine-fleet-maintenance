@@ -4,6 +4,11 @@ import { isIdleVehicleRequest } from './request-idle.mjs';
 const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
 
 export const BREAKDOWN_TYPE_LABELS = ["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"];
+export const DASHBOARD_REPAIR_TYPES = ['Preventive', 'Breakdown', 'Accidental', 'Scheduled', 'WGM'];
+export const dashboardRepairTypeKey = value => {
+  const key = String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return ['scheduled', 'scheduledservice', 'scheduleservice'].includes(key) ? 'scheduled' : key;
+};
 
 export const normalizedBreakdownType = (value) => {
   const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
