@@ -1505,6 +1505,20 @@ const misCredentialIdentity=installPulseApplicationIdentity(app,{pool,sessionSto
 let verifyMisTripCard;
 installMisPulseBridge(app,{identity:misCredentialIdentity,
  readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
+ readFleet:async(profile,site)=>{
+  const user=await currentUserRecord(profile);
+  const assigned=userSiteSelection(user);
+  const isMisAdmin=[...profile.permissions.misDesktopAccess,...profile.permissions.misMobileAccess].includes('Users & employees');
+  const scope=assigned.length?userSiteScope(user):isMisAdmin?{sites:null}:managerReportScope(user);
+  if((scope.sites===null&&!isMisAdmin)||!reportScopeIncludesSite(scope,site))throw Object.assign(new Error('This card site is not assigned to your Pulse login.'),{status:403});
+  const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY id");
+  // Cross-site assignments let the matcher distinguish transfers from unknown equipment.
+  return {'Equipment master':rows.map(({id,record_data:record})=>({
+   id,door:equipmentDoorNumber(record),doorNo:record.doorNo,equipmentDoorNo:record.equipmentDoorNo,
+   currentLocation:record.currentLocation||record.location||record.site,
+   category:record.category||record.equipmentCategory||record.kind,cardAliases:record.cardAliases,
+  }))};
+ },
  readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
  verifyRequest:(...args)=>verifyMisTripCard(...args),
 });

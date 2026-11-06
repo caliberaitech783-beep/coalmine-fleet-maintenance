@@ -1,5 +1,5 @@
 const menus=profile=>[...(profile.permissions?.misDesktopAccess||[]),...(profile.permissions?.misMobileAccess||[])];
-export function installMisPulseBridge(app,{identity,readRequests,readMasters,verifyRequest}){
+export function installMisPulseBridge(app,{identity,readRequests,readMasters,readFleet,verifyRequest}){
  app.post('/api/integrations/mis/pulse',async(req,res,next)=>{
   res.set('Cache-Control','no-store');req.audit=false;
   try{
@@ -11,6 +11,11 @@ export function installMisPulseBridge(app,{identity,readRequests,readMasters,ver
    if(status!==200||!result?.profile)return res.status(401).json({error:'Pulse sign-in expired. Sign in normally again to reconnect.'});
    const profile=result.profile,allowed=menus(profile),action=req.body?.action;
    const tripAccess=['Vehicle Log Book','Trip Card Bulk Scan'].some(menu=>allowed.includes(menu));
+   if(action==='fleet'&&(tripAccess||allowed.includes('Job Card Bulk Scan')||allowed.includes('Equipment Log Book'))){
+    const site=String(req.body?.site||'').trim();
+    if(!site||site.length>200)return res.status(400).json({error:'A card site is required for Pulse equipment verification.'});
+    return res.json(await readFleet(profile,site));
+   }
    if(action==='masters'&&allowed.includes('Pulse Master Sync'))return res.json(await readMasters(profile));
    if(action==='requests'&&(tripAccess||allowed.includes('Pulse Master Sync')))return res.json(await readRequests(profile));
    if(action==='verify'&&tripAccess){
