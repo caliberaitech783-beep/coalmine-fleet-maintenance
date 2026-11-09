@@ -65,7 +65,7 @@ test('equipment, dashboard, Info Pulse and scheduled reports agree on both assig
 test('request APIs apply selected sites to every Team User feed, including a changed assignment',async()=>{
   for(const role of ['General User','Production User','Maintenance User','MIS User'])for(const selected of [user,{site:'Majri OC'},{}]){
     const result=await invoke('get','/api/requests',{record:selected,session:sessionFor(role),query:{scope:'dashboard'},dependencies:{
-      pool:{query:async()=>({rows})},requestProjection:'*',requestsVisibleToSession:rows=>rows,attachDailyRemarks:async rows=>rows,requestFeedCache:createFeedCache({ttlMs:0}),
+      pool:{query:async()=>({rows})},requestProjection:'*',dashboardRequestProjection:'*',requestsVisibleToSession:rows=>rows,attachDailyRemarks:async rows=>rows,requestFeedCache:createFeedCache({ttlMs:0}),
     }});
     assert.equal(result.status,200);
     assert.deepEqual(result.body,selected===user?rows.slice(0,2):selected.site?[rows[2]]:[]);

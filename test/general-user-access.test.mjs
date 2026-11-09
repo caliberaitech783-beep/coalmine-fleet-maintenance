@@ -156,7 +156,7 @@ test("General User request feeds keep dashboard, optional Requests, and Reports 
     const rows=[{ref:"VISIBLE",site:"Sasti OB"},{ref:"OTHER",site:"Ghugus"}];
     const context=vm.createContext({
       app:{get(_path,_guard,callback){handler=callback;}},requireSession(){},GENERAL_USER_ROLE,
-      ...siteAccess,currentUserRecord:async()=>user,assignedUserSiteName:value=>value.site,requestProjection:"*",
+      ...siteAccess,currentUserRecord:async()=>user,assignedUserSiteName:value=>value.site,requestProjection:"*",dashboardRequestProjection:"*",
       pool:{query:async()=>({rows})},canonicalSiteName:value=>value,
       requestsVisibleToSession:value=>value,attachDailyRemarks:async value=>value,requestFeedCache:createFeedCache({ttlMs:0}),
     });

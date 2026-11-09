@@ -133,7 +133,7 @@ test('the requests route shares the feed and business writes clear it', () => {
 
   const route = server.slice(server.indexOf("app.get('/api/requests',requireSession"), server.indexOf("app.get('/api/requests/conflict'"));
   assert.match(route, /const ownRowsOnly=query\.values\.length>0;/);
-  assert.match(route, /const rows=ownRowsOnly\?await readFeed\(\):await requestFeedCache\.read\(readFeed,JSON\.stringify\(revisions\)\);/,
+  assert.match(route, /const rows=ownRowsOnly\?await readFeed\(\):await requestFeedCache\.read\(readFeed,`\$\{dashboardScope\?'dashboard':'workflow'\}:\$\{JSON\.stringify\(revisions\)\}`\);/,
     'a production user reads only their own rows, so that query is not shared');
   assert.match(route, /const payload=requestsVisibleToSession\(siteVisibleRows,req\.session\)/,
     'every response is still filtered for the signed-in user');
