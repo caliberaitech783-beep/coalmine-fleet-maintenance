@@ -12539,7 +12539,7 @@ function App() {
       </RequestShiftProvider>
     );
   return (
-    <RequestShiftProvider token={session.token} requests={requests}><div className="app">
+    <RequestShiftProvider token={session.token} requests={renderedActive === "Dashboard" && dashboardRequestsLoaded ? dashboardRequestState.records : requests}><div className="app">
       <Side
         active={active}
         setActive={(x) => {

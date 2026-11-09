@@ -10,6 +10,7 @@ test('dashboard and both operational table types include the responsibility colu
   assert.ok(source.includes('dashboard-location-dates|workflow-table|breakdown-table-auto-fit'));
   assert.ok(source.includes('data-oem-responsibility={r.oemResponsibility}'));
   assert.ok(source.includes('data-oem-responsibility={row.oemResponsibility}'));
+  assert.ok(source.includes('requests={renderedActive === "Dashboard" && dashboardRequestsLoaded ? dashboardRequestState.records : requests}'));
   assert.ok(source.includes('Select OEM or NON OEM before accepting the vehicle.'));
 });
 test('dashboard responsibility values become real sortable and exportable cells',()=>{
