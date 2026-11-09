@@ -20,7 +20,12 @@ test("only production starts a second site-wide dashboard feed", () => {
   assert.match(normal, /stop\(\);loader\.cancel\(\);dashboardLoader\.current=null/);
   assert.match(client, /<Dashboard requests=\{misDashboardRequests\}/);
   assert.match(server, /const dashboardScope=req\.query\.scope==='dashboard'/);
+  assert.match(server, /const projection=dashboardScope\?dashboardRequestProjection:requestProjection/);
+  assert.match(server, /dashboardRequestProjection=requestProjection[\s\S]*maintenance_work AS "maintenanceWork"[\s\S]*opening_meter_readings AS "openingMeterReadings"/);
   assert.match(server, /assignedRole==='Production User'&&!dashboardScope/);
+  assert.match(client, /createDashboardRequestLoader\(\{onState:setDashboardRequestState\}\)/);
+  assert.match(client, /requests=\{dashboardRequestState\.records\}/);
+  assert.match(client, /const deferFullRequestLoad = session\?\.role === "super" && active === "Dashboard"/);
 });
 
 test("equipment and vehicle totals open a name list on every dashboard", () => {

@@ -6359,6 +6359,14 @@ const requestProjection=`archived_at AS "archivedAt", linked_request_references 
   closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '') AS "closingMeterFileUploaded",
   closing_meter_file_name AS "closingMeterFileName"`;
 
+// Dashboard charts do not use work descriptions or meter-reading maps. Keep
+// those complete fields on workflow reads, but do not transfer them on every
+// dashboard refresh.
+const dashboardRequestProjection=requestProjection
+  .replace('maintenance_work AS "maintenanceWork"','\'\'::text AS "maintenanceWork"')
+  .replace('opening_meter_readings AS "openingMeterReadings"','\'{}\'::jsonb AS "openingMeterReadings"')
+  .replace('closing_meter_readings AS "closingMeterReadings"','\'{}\'::jsonb AS "closingMeterReadings"');
+
 const infoPulseProjection=`archived_at AS "archivedAt",reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
   (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
   registration_number AS reg,site,category,complaint,owner_name AS owner,requester_login AS "requesterLogin",
@@ -6583,9 +6591,10 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       return res.status(403).json({error:'Your assigned role is not authorized to view maintenance requests.'});
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
     const dashboardScope=req.query.scope==='dashboard';
+    const projection=dashboardScope?dashboardRequestProjection:requestProjection;
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'&&!dashboardScope
-      ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL AND requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
-      : {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
+      ? {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL AND requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
+      : {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'){
       const operationalUser=await currentUserRecord(req.session);
@@ -6606,7 +6615,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     // remarks for a few seconds instead of repeating both per user.
     const ownRowsOnly=query.values.length>0;
     const readFeed=async()=>attachDailyRemarks((await pool.query(query)).rows);
-    const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,JSON.stringify(revisions));
+    const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,`${dashboardScope?'dashboard':'workflow'}:${JSON.stringify(revisions)}`);
     const siteVisibleRows=scopedManagerSites!==null
       ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
       : scopedSite===null

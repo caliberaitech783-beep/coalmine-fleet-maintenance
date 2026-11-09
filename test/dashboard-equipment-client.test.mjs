@@ -75,10 +75,10 @@ test("a failed profile request cannot turn an otherwise valid fleet response int
   const dashboard=source.slice(source.indexOf("function Dashboard({"),source.indexOf("function BreakdownTable"));
 
   assert.match(app,/fetch\("\/api\/me\/profile"[\s\S]*\.catch\(\(\) => \{\}\)/);
-  assert.match(app,/<Dashboard goto=\{selectMenu\}[\s\S]*requests=\{requests\} requestsError=\{requestsError\} requestsUpdatedAt=\{requestState.updatedAt\}/);
+  assert.match(app,/<Dashboard goto=\{selectMenu\}[\s\S]*requests=\{dashboardRequestState\.records\} requestsError=\{dashboardRequestsError\} requestsUpdatedAt=\{dashboardRequestState.updatedAt\}/);
   assert.match(normal,/<Dashboard requests=\{misDashboardRequests\} requestsError=\{dashboardRequestsError\} requestsUpdatedAt=\{dashboardRequestsUpdatedAt\}/);
   assert.match(normal,/dashboardRequestsReady\s*\? <Dashboard/);
-  assert.match(app,/requestsLoaded\s*\? <Dashboard/);
+  assert.match(app,/dashboardRequestsLoaded\s*\? <Dashboard/);
   assert.doesNotMatch(app,/profileManagerSites|allowedSites=\{|allowedRegions=\{|restrictToScope=/);
   assert.doesNotMatch(normal,/allowedSites=\{|allowedRegions=\{|restrictToScope/);
   assert.match(dashboard,/const scopedBreakdowns=useMemo\(\(\)=>equipmentLoaded\?/);

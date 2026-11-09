@@ -11986,6 +11986,7 @@ function App() {
     [activeReportCategory, setActiveReportCategory] = useNavigationState("main.activeReportCategory", "general"),
     [requests, setRequests] = useState([]),
     [requestState, setRequestState] = useState({ token: "", loaded: false, error: "", updatedAt: 0 }),
+    [dashboardRequestState, setDashboardRequestState] = useState({ token: "", records: [], loaded: false, error: "", updatedAt: 0 }),
     [menu, setMenu] = useState(false),
     [canGoBack, setCanGoBack] = useState(false),
     [theme, setTheme] = useState(() => {
@@ -12001,6 +12002,7 @@ function App() {
   const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);
   const requestResponseCache = useRef({token: "", etag: ""});
+  const dashboardRequestLoader = useRef(null);
   // Commit the selected navigation item immediately. Only the expensive page
   // body follows at deferred priority, so a click always paints before a large
   // dashboard or table starts rendering.
@@ -12236,6 +12238,17 @@ function App() {
   };
   const requestsLoaded = requestState.token === session?.token && requestState.loaded;
   const requestsError = requestState.token === session?.token ? requestState.error : "";
+  const dashboardRequestsLoaded = dashboardRequestState.token === session?.token && dashboardRequestState.loaded;
+  const dashboardRequestsError = dashboardRequestState.token === session?.token ? dashboardRequestState.error : "";
+  const refreshDashboardRequests = () => dashboardRequestLoader.current?.load(session?.token);
+  const deferFullRequestLoad = session?.role === "super" && active === "Dashboard";
+  useEffect(() => {
+    if (!session?.token || session.role !== "super") return undefined;
+    const loader=createDashboardRequestLoader({onState:setDashboardRequestState});
+    dashboardRequestLoader.current=loader;
+    const stop=watchRequestRefresh(()=>loader.load(session.token),{win:window,doc:document,initial:true});
+    return()=>{stop();loader.cancel();if(dashboardRequestLoader.current===loader)dashboardRequestLoader.current=null;};
+  },[session?.token,session?.role]);
   useEffect(() => {
     requestResponseCache.current = {token: session?.token || "", etag: ""};
     setRequestState({ token: session?.token || "", loaded: false, error: "", updatedAt: 0 });
@@ -12243,14 +12256,16 @@ function App() {
     if (!session?.token || session.userType === "Account User") {
       requestLoadSequence.current += 1;
       setRequests([]);
-      return undefined;
     }
+  }, [session?.token]);
+  useEffect(() => {
+    if (!session?.token || session.userType === "Account User" || deferFullRequestLoad) return undefined;
     const stopRefresh = watchRequestRefresh(loadRequests, { win: window, doc: document, initial: true });
     return () => {
       requestLoadSequence.current += 1;
       stopRefresh();
     };
-  }, [session?.token]);
+  }, [session?.token, session?.userType, deferFullRequestLoad]);
   const gotoEquipment = (filter = "all", location = "", category = "all", locations = []) => {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
@@ -12410,7 +12425,7 @@ function App() {
   // not change the current page. Preserve the page element across those root
   // renders so opening navigation cannot rebuild a large dashboard or table.
   const adminPageContent = useMemo(() => renderedActive === "Dashboard" ? (
-    requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+    dashboardRequestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={dashboardRequestState.records} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestState.updatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />
   ) : renderedActive === "Stock Statement" ? (
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Purchase Order" ? (
@@ -12490,7 +12505,7 @@ function App() {
   ), [
     renderedActive, renderedReportCategory, adminPermissions, renderedBreakdownFleetFilter, renderedBreakdownFleetSites,
     renderedEquipmentCategory, renderedEquipmentFilter, renderedEquipmentLocation, renderedEquipmentLocations, profileDesignationKey,
-    profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, responsiveMobile,
+    profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, dashboardRequestState, dashboardRequestsError, dashboardRequestsLoaded, responsiveMobile,
     session, theme,
   ]);
   if (!session || new URLSearchParams(window.location.search).get('login')==='mis') return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
