@@ -6361,7 +6361,7 @@ const requestProjection=`archived_at AS "archivedAt", linked_request_references 
 
 // Dashboard charts do not use work descriptions or meter-reading maps. Keep
 // those complete fields on workflow reads, but do not transfer them on every
-// dashboard refreshes.
+// dashboard refresh.
 const dashboardRequestProjection=requestProjection
   .replace('maintenance_work AS "maintenanceWork"','\'\'::text AS "maintenanceWork"')
   .replace('opening_meter_readings AS "openingMeterReadings"','\'{}\'::jsonb AS "openingMeterReadings"')
