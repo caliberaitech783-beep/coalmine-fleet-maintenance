@@ -81,6 +81,7 @@ import {resolveRequestIssues,hasOutstandingRequestIssues,REQUEST_CLOSE_STATUSES,
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache,requestFeedWriteInvalidates} from './request-feed-cache.mjs';
+import {createBackgroundJobQueue} from './background-job-queue.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
 import {CDIR_CASCADES,CDIR_MASTERS,CDIR_MASTER_NAMES,CDIR_UNIQUE_KEYS,cdirCaps,cdirDirectoryFromMasters,cdirEmployeeError,cdirMastersFromDirectory,cdirNormalizeRecord,isCdirMaster} from './cdir-masters.mjs';
@@ -192,8 +193,8 @@ app.use((req,res,next)=>{
   res.end=function(...args){
     const durationMs=Number(process.hrtime.bigint()-startedAt)/1e6;
     if(!res.headersSent)res.setHeader('Server-Timing',`app;dur=${durationMs.toFixed(1)}`);
-    if(req.path.startsWith('/api/')&&durationMs>=slowRequestThresholdMs){
-      console.warn(JSON.stringify({event:'slow_http_request',method:req.method,path:req.path,status:res.statusCode,durationMs:Number(durationMs.toFixed(1)),databasePool:{total:pool?.totalCount??0,idle:pool?.idleCount??0,waiting:pool?.waitingCount??0}}));
+    if(req.path.startsWith('/api/')&&(durationMs>=slowRequestThresholdMs||(req.dashboardReadPool&&res.statusCode>=500))){
+      console.warn(JSON.stringify({event:'slow_http_request',method:req.method,path:req.path,status:res.statusCode,durationMs:Number(durationMs.toFixed(1)),databasePool:{total:pool?.totalCount??0,idle:pool?.idleCount??0,waiting:pool?.waitingCount??0},dashboard:!!req.dashboardReadPool,dashboardWaiting:dashboardReadPool.waitingCount}));
     }
     return originalEnd.apply(this,args);
   };
@@ -204,6 +205,7 @@ app.use((req,res,next)=>{
 // again when the write has answered means the refresh that follows a click
 // always reads the database.
 const requestFeedCache=createFeedCache({ttlMs:30_000});
+const masterReadCache=createFeedCache({ttlMs:300_000});
 // Pulse-II reads the breakdown feed and the fleet from here on every card save at every site
 // (a scanning burst is hundreds of saves an hour per site). One read answers all of them for
 // a short window; like the request feed, the window closes on any write. The user record read
@@ -2353,7 +2355,7 @@ async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=nu
     const result=await exportDatabase({client,output:filePath});
     const stat=await fs.stat(filePath);
     const checksum=await sha256File(filePath);
-    await pool.query(`UPDATE backup_runs SET status='Completed',size_bytes=$1,checksum=$2,table_counts=$3::jsonb,completed_at=NOW(),error_message=''
+    await client.query(`UPDATE backup_runs SET status='Completed',size_bytes=$1,checksum=$2,table_counts=$3::jsonb,completed_at=NOW(),error_message=''
       WHERE id=$4`,[stat.size,checksum,JSON.stringify(result.tables),id]);
     return {id,fileName,filePath,sizeBytes:stat.size,checksum,tableCounts:result.tables,status:'Completed'};
   }catch(error){
@@ -2372,14 +2374,17 @@ async function pruneStoredBackups(){
 }
 
 let scheduledBackupRunning=false;
+let completedScheduledBackupSlot='';
 async function runScheduledBackup(now=new Date()){
   if(scheduledBackupRunning||!databaseReady)return {skipped:true,reason:'Backup service is busy.'};
-  const {settings}=await readBackupSettings();
-  if(!scheduledBackupDue(settings,now))return {skipped:true,reason:'No backup is due.'};
+  const slot=indiaBackupSlot(now);
+  if(slot.slotKey===completedScheduledBackupSlot)return {skipped:true,reason:'This scheduled backup has already completed.'};
   scheduledBackupRunning=true;
   try{
-    const slot=indiaBackupSlot(now);
+    const {settings}=await readBackupSettings();
+    if(!scheduledBackupDue(settings,now))return {skipped:true,reason:'No backup is due.'};
     const result=await createStoredBackup({triggerType:'Scheduled',scheduleSlot:slot.slotKey,actor:{name:'Automatic schedule'}});
+    if(result.status==='Completed')completedScheduledBackupSlot=slot.slotKey;
     await pruneStoredBackups();
     if(!result.skipped)await appendScheduledBackupAudit({targetReference:result.fileName,reason:`Completed ${result.sizeBytes} bytes; SHA-256 ${result.checksum}`});
     return result;
@@ -4832,10 +4837,14 @@ async function currentUserRecord(session,client=pool){
 }
 
 async function currentDashboardAuthorization(session,client=pool){
-  const [{rows:userRows},{rows:privilegeRows}]=await Promise.all([
+  const load=()=>Promise.all([
     client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
     client.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`),
   ]);
+  // Transaction callers must read their own writes and never share their snapshot.
+  const [{rows:userRows},{rows:privilegeRows}]=client===pool||client===dashboardReadPool
+    ? await readCurrentMasterSnapshot('dashboard-authorization',load,client)
+    : await load();
   const user=currentDashboardUserCandidate(userRows,session);
   if(!user)return null;
   const identifiers=new Set([
@@ -4844,6 +4853,20 @@ async function currentDashboardAuthorization(session,client=pool){
   ].filter(Boolean));
   const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers),portal:session.userType==='Account User'?'accounts':undefined,selectedRole:session.role==='normal'&&session.assignedRole!=='Account User'?session.assignedRole:undefined});
   return {user,session:dashboardSessionFromProfile(profile)};
+}
+
+async function readCurrentMasterSnapshot(feed,load,client=pool){
+  const {rows:[revision]}=await client.query(
+    "SELECT revision,updated_at FROM data_revisions WHERE revision_key='master-data'",
+  );
+  return revision?masterReadCache.read(load,JSON.stringify(revision),feed):load();
+}
+
+function readReportScheduleMasters(){
+  return readCurrentMasterSnapshot('report-schedule',()=>Promise.all([
+    pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
+    pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
+  ]));
 }
 
 function ticketProjection(){
@@ -5872,9 +5895,8 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!whatsappOn&&!telegramChats.size)return {skipped:true,reason:'paused by Report settings'};
   hierarchyReportRunning=true;
   try{
-    const [{rows:userRows},{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
-      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
-      pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
+    const [[{rows:userRows},{rows:hierarchyRows}],scheduleSettings,userScheduleOverrides]=await Promise.all([
+      readReportScheduleMasters(),
       storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
     ]);
     let sourceData=null;
@@ -8961,13 +8983,35 @@ function scheduleBackgroundStart(task,delayMs){
   return timer;
 }
 
-function setStaggeredInterval(task,intervalMs,offsetMs=0){
+function setStaggeredInterval(task,intervalMs,offsetMs=0,queue=null){
+  const run=queue?()=>queue(task):task;
   return scheduleBackgroundStart(()=>{
-    task();
-    const timer=setInterval(task,intervalMs);
+    run();
+    const timer=setInterval(run,intervalMs);
     timer.unref?.();
   },intervalMs+offsetMs);
 }
+
+let databasePressureStartedAt=null;
+let databasePressureReported=false;
+function observeDatabasePressure(){
+  const sharedWaiting=pool.waitingCount;
+  const dashboardWaiting=dashboardReadPool.waitingCount;
+  const signInWaiting=authPool.waitingCount;
+  const now=Date.now();
+  if(sharedWaiting<20&&dashboardWaiting<3&&signInWaiting<3){
+    if(databasePressureReported)console.info(JSON.stringify({event:'database_pool_pressure_recovered',sharedWaiting,dashboardWaiting,signInWaiting}));
+    databasePressureStartedAt=null;
+    databasePressureReported=false;
+    return;
+  }
+  databasePressureStartedAt??=now;
+  if(!databasePressureReported&&now-databasePressureStartedAt>=120_000){
+    databasePressureReported=true;
+    console.warn(JSON.stringify({event:'database_pool_pressure',sharedWaiting,dashboardWaiting,signInWaiting,durationMs:now-databasePressureStartedAt}));
+  }
+}
+setStaggeredInterval(observeDatabasePressure,15_000);
 
 async function initializeDatabase(){
   try{
@@ -9050,13 +9094,19 @@ async function loadOemEmailData(){
 }
 void initializeDatabase();
 if(scheduledJobsEnabled){
+  // Two jobs can make progress even when a slow delivery occupies one slot.
+  // Each timer can have at most one queued or running tick.
+  const reportQueue=createBackgroundJobQueue({
+    concurrency:2,
+    onError:error=>console.error('Scheduled report job failed.',error.message),
+  });
   setStaggeredInterval(()=>{
     void sendMandatorySiteInvitations().catch(error=>console.error('Mandatory Telegram invitations failed.',error.message));
   },60000,1000);
   setStaggeredInterval(()=>{
     if(!databaseReady)return;
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:loadOemEmailData})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
-  },60*1000,29_000);
+    return runAuditedBackendProcess({module:'Scheduled reports',action:'Send OEM breakdown emails'},()=>sendScheduledOemEmails({pool,loadData:loadOemEmailData})).catch(error=>console.error('Scheduled OEM email report failed.',error.message));
+  },60*1000,29_000,reportQueue);
   const whatsappTemplateStatusTimer=setStaggeredInterval(()=>{
     if(databaseReady)void syncStandardWhatsAppTemplates().catch(error=>console.error('WhatsApp template status refresh failed.',error.message));
   },15*60*1000,5_000);
@@ -9070,9 +9120,9 @@ if(scheduledJobsEnabled){
   const hourlyTelegramDelivery=createHourlyTelegramDelivery({pool,loadSource:directorReportSourceData,buildPdf:buildTableExportPdf,sendDocument:sendTelegramDocument,
     loadGroups:telegramSiteGroups});
   const hourlyTelegramTimer=setStaggeredInterval(()=>{
-    if(databaseReady)void runAuditedBackendProcess({module:'Scheduled reports',action:'Send site hourly Telegram PDFs'},()=>hourlyTelegramDelivery())
+    if(databaseReady)return runAuditedBackendProcess({module:'Scheduled reports',action:'Send site hourly Telegram PDFs'},()=>hourlyTelegramDelivery())
       .catch(error=>console.error('Hourly Telegram delivery failed',error.message));
-  },60*1000,40_000);
+  },60*1000,40_000,reportQueue);
   hourlyTelegramTimer.unref?.();
   const siteFleetDelivery=createSiteFleetTelegramDelivery({pool,
     loadSettings:storedWhatsAppReportSettings,allowed:telegramPurposeEnabled,
@@ -9080,18 +9130,17 @@ if(scheduledJobsEnabled){
     loadSource:directorReportSourceData,sendText:sendTelegramText,
     publish:plan=>publishDirectorReportFiles({...plan,siteAccess:plan.site,baseUrl:publicBaseUrl()}),
     loadPlans:async now=>{
-      const [{rows:users},{rows:hierarchyRecords},scheduleSettings,userScheduleOverrides]=await Promise.all([
-        pool.query("SELECT record_data FROM master_records WHERE master_name='Users & employees'"),
-        pool.query("SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC"),
+      const [[{rows:users},{rows:hierarchyRecords}],scheduleSettings,userScheduleOverrides]=await Promise.all([
+        readReportScheduleMasters(),
         storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
       ]);
       return siteFleetPlans({users:users.map(row=>row.record_data),hierarchyRecords,scheduleSettings,userScheduleOverrides,now});
     },
   });
   const siteFleetTimer=setStaggeredInterval(()=>{
-    if(databaseReady)void runAuditedBackendProcess({module:'Scheduled reports',action:'Send site fleet Telegram bundles'},()=>siteFleetDelivery())
+    if(databaseReady)return runAuditedBackendProcess({module:'Scheduled reports',action:'Send site fleet Telegram bundles'},()=>siteFleetDelivery())
       .catch(error=>console.error('Site fleet Telegram report failed.',error.message));
-  },60*1000,47_000);
+  },60*1000,47_000,reportQueue);
   siteFleetTimer.unref?.();
   const consolidatedWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
@@ -9100,10 +9149,10 @@ if(scheduledJobsEnabled){
   },60*1000,5_000);
   consolidatedWhatsAppTimer.unref?.();
   const consolidatedTicketWhatsAppTimer=setStaggeredInterval(()=>{
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
+    return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-  },60*1000,12_000);
+  },60*1000,12_000,reportQueue);
   consolidatedTicketWhatsAppTimer.unref?.();
   const directorWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
@@ -9112,10 +9161,10 @@ if(scheduledJobsEnabled){
   },60*1000,19_000);
   directorWhatsAppTimer.unref?.();
   const hierarchyWhatsAppTimer=setStaggeredInterval(()=>{
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
+    return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-  },60*1000,26_000);
+  },60*1000,26_000,reportQueue);
   hierarchyWhatsAppTimer.unref?.();
   const workflowReminderTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
@@ -9124,10 +9173,10 @@ if(scheduledJobsEnabled){
   },60*1000,33_000);
   workflowReminderTimer.unref?.();
   const auditLogExportTimer=setStaggeredInterval(()=>{
-    void runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
+    return runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Audit Trail export completed.',result)})
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
-  },60*1000,40_000);
+  },60*1000,40_000,reportQueue);
   auditLogExportTimer.unref?.();
   const logRetentionTimer=setStaggeredInterval(()=>{
     if(!databaseReady)return;
@@ -9137,10 +9186,10 @@ if(scheduledJobsEnabled){
   },5*60*1000,47_000);
   logRetentionTimer.unref?.();
   const databaseBackupTimer=setStaggeredInterval(()=>{
-    void runScheduledBackup()
+    return runScheduledBackup()
       .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})
       .catch(error=>console.error('Scheduled database backup failed.',error));
-  },60*1000,47_000);
+  },60*1000,47_000,reportQueue);
   databaseBackupTimer.unref?.();
   const adminLockAuditTimer=setStaggeredInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000,54_000);
   adminLockAuditTimer.unref?.();

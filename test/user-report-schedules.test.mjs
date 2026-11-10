@@ -183,6 +183,7 @@ function deliveryHarness({
     databaseReady:true,storedWhatsAppReportSettings:async()=>({}),whatsappPurposeEnabled:()=>deliveryEnabled,
     storedHierarchyReportScheduleSettings:async()=>settings,
     storedUserReportScheduleOverrides:async()=>overrides,
+    readReportScheduleMasters:async()=>[{rows:users.map(record_data=>({record_data}))},{rows:[]}],
     pool:{query:async(sql,args=[])=>{
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map((record_data)=>({record_data}))};
       if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};

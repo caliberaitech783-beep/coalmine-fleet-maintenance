@@ -117,6 +117,7 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
   const dependencies={
     databaseReady:true,storedWhatsAppReportSettings:async()=>({}),whatsappPurposeEnabled:()=>true,
     storedHierarchyReportScheduleSettings:async()=>scheduleSettings,storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,
+    readReportScheduleMasters:async()=>[{rows:recipients.map(record_data=>({record_data}))},{rows:[]}],
     pool:{query:async(sql,args=[])=>{
       queries.push({sql,args});
       if(sql.includes("master_name='Users & employees'"))return {rows:recipients.map(record_data=>({record_data}))};
