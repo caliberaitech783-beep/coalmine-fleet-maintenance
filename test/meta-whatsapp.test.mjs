@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,normalizeWhatsAppRecipient,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from '../meta-whatsapp.mjs';
 
+test('Equipment approval OTP uses the authentication template while reports are paused',async()=>{
+  const env={META_WHATSAPP_ACCESS_TOKEN:'test',META_WHATSAPP_PHONE_NUMBER_ID:'123',WHATSAPP_REPORT_SETTINGS:{enabled:false}};
+  const send={to:'910000000001',templateKey:'passwordResetOtp',parameters:['123456']};
+  const fetchImpl=async(_url,{body})=>{
+    assert.equal(JSON.parse(body).template.name,META_WORKFLOW_TEMPLATES.passwordResetOtp.name);
+    return {ok:true,json:async()=>({messages:[{id:'test-message'}]})};
+  };
+  await assert.rejects(sendMetaWhatsAppTemplate(send,{env,fetchImpl}),{code:'WHATSAPP_POLICY_PAUSED'});
+  const approval={...send,purpose:'equipmentMasterApprovalOtp'};
+  assert.equal((await sendMetaWhatsAppTemplate(approval,{env,fetchImpl})).sent,true);
+  await assert.rejects(sendMetaWhatsAppTemplate(approval,{env:{...env,META_WHATSAPP_DELIVERY_PAUSED:'true'},fetchImpl}),{code:'WHATSAPP_POLICY_PAUSED'});
+});
+
 test('Meta WhatsApp configuration remains disabled until token and phone id are present',()=>{
   assert.equal(metaWhatsAppConfiguration({}).configured,false);
   assert.equal(metaWhatsAppConfiguration({META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'}).configured,true);

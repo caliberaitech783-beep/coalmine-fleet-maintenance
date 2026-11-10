@@ -425,7 +425,7 @@ async function storedWhatsAppTemplateApprovals(){
   return rows[0]?.setting_value||{};
 }
 
-async function metaWhatsAppRuntimeEnv(){
+async function metaWhatsAppRuntimeEnv(purpose=''){
   try{
     const [settings,reportSettings,approvals]=await Promise.all([storedWhatsAppSettings(),storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals()]);
     return {
@@ -436,7 +436,7 @@ async function metaWhatsAppRuntimeEnv(){
       META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
       META_GRAPH_VERSION:String(settings.graphVersion||process.env.META_GRAPH_VERSION||'v25.0').trim(),
-      META_WHATSAPP_DELIVERY_PAUSED:String(!reportSettings.enabled),
+      META_WHATSAPP_DELIVERY_PAUSED:purpose==='equipmentMasterApprovalOtp'?process.env.META_WHATSAPP_DELIVERY_PAUSED:String(!reportSettings.enabled),
       WHATSAPP_REPORT_SETTINGS:reportSettings,WHATSAPP_TEMPLATE_APPROVALS:approvals,
     };
   }catch(error){
@@ -1572,9 +1572,10 @@ const equipmentMasterChangeService=createEquipmentMasterChanges({pool,
  normalize:record=>normalizeOperationalSiteFields(equipmentMasterWithDoor(record)),
  identity:record=>equipmentIdentity(record),
  sendOtp:async({phone,otp,message})=>{
-  const env=await metaWhatsAppRuntimeEnv();
-  try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',purpose:'passwordResetOtp',parameters:[otp]},{env});}
-  catch(error){if(error.code==='WHATSAPP_POLICY_PAUSED')throw error;await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message},{env});}
+  const purpose='equipmentMasterApprovalOtp';
+  const env=await metaWhatsAppRuntimeEnv(purpose);
+  try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',purpose,parameters:[otp]},{env});}
+  catch(error){if(error.code==='WHATSAPP_POLICY_PAUSED')throw error;await sendMetaWhatsAppText({to:phone,purpose,message},{env});}
  }});
 // An applied change set alters the fleet, so the shared read windows (Pulse-II fleet included) close.
 const equipmentMasterChanges={...equipmentMasterChangeService,

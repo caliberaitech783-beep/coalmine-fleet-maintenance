@@ -96,6 +96,7 @@ export function isWhatsAppQuietTime(settings,now=new Date()) {
 }
 
 export function whatsappPurposeEnabled(settings,purpose='',now=new Date()) {
+  if(purpose==='equipmentMasterApprovalOtp')return true;
   if(!settings.enabled)return false;
   if(purpose==='passwordResetOtp')return settings.channels.passwordResetOtp;
   if(isWhatsAppQuietTime(settings,now)&&!(settings.quietHours.allowedPurposes||[]).includes(purpose))return false;
