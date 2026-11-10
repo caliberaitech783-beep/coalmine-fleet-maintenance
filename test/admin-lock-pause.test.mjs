@@ -90,6 +90,8 @@ function loginHarness({paused=true,level='Admin',mustChangePassword=false}={}){
     sessionStore:{async createForVerifiedDevice(session){sessions.push(session);return session.token;}},
     loginPayload:({token,profile,employee:record,login})=>({token,role:profile.sessionRole,name:record.employee,login}),
   };
+  // Sign-in runs on its own pool and session store (authPool, authSessionStore) beside the shared ones.
+  context.authPool=context.pool;context.authSessionStore=context.sessionStore;
   runInNewContext(loginSource,context);
   return {queries,passwordChecks,sessions,get incidentReads(){return incidentReads;},async call(body={username:'test.admin',password:'correct-test-password'}){
     const req={body},res=response();

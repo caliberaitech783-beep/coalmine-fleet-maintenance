@@ -44,6 +44,8 @@ function harness({targetLevel = '', actorLevel = 'Admin', missing = false} = {})
     sessionStore: {async createForVerifiedDevice(session) {sessions.push(session);return session.token;}},
     loginPayload: ({token}) => ({token}),
   };
+  // Sign-in runs on its own pool and session store (authPool, authSessionStore) beside the shared ones.
+  context.authPool = context.pool; context.authSessionStore = context.sessionStore;
   runInNewContext(passwordRoute + '\n' + loginRoute, context);
   assert.equal(handlers.get('/api/masters/:master/:id/password')[0], requireSuper, 'admin authorization stays on the route');
   return {
