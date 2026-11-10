@@ -41,7 +41,7 @@ function deliveryHarness({databaseReady=true}={}){
     ...Object.fromEntries([
       'storedWhatsAppReportSettings','whatsappPurposeEnabled','storedHierarchyReportScheduleSettings','storedUserReportScheduleOverrides',
       'reportRecipientLogin','resolveMobileAccess','flowDesignationForUser','hierarchyRuleForDesignation','applyHierarchyDeliveryRule',
-      'applyUserReportScheduleOverride','reportsDueForDesignation','hierarchyRecipientReportScope','hierarchyAccessAllowsReport',
+      'applyUserReportScheduleOverride','reportsDueForDesignation','hierarchyReportsPossiblyDue','hierarchyRecipientReportScope','hierarchyAccessAllowsReport',
       'directorReportSourceData','reportSites','displaySiteName','publishDirectorReportFiles','publicBaseUrl',
       'metaWhatsAppRuntimeEnv','sendMetaWhatsAppTemplate','sendMetaWhatsAppText',
     ].map((name)=>[name,forbidden(name)])),

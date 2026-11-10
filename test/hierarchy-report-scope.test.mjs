@@ -10,6 +10,7 @@ import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 import {reportSites} from '../site-consolidated-report.mjs';
 import {siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
+import {hierarchyReportsPossiblyDue} from '../scheduled-report-due.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const mobile=(fields={})=>({login:'mobile',userType:'Mobile User',userGroup:'Production User',site:'Sasti OB',...fields});
@@ -116,7 +117,7 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
   const recipients=users.map((user,index)=>({phone:`9100000000${String(index).padStart(2,'0')}`,...user}));
   const dependencies={
     databaseReady:true,storedWhatsAppReportSettings:async()=>({}),whatsappPurposeEnabled:()=>true,
-    storedHierarchyReportScheduleSettings:async()=>scheduleSettings,storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,
+    storedHierarchyReportScheduleSettings:async()=>scheduleSettings,storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,hierarchyReportsPossiblyDue,
     readReportScheduleMasters:async()=>[{rows:recipients.map(record_data=>({record_data}))},{rows:[]}],
     pool:{query:async(sql,args=[])=>{
       queries.push({sql,args});

@@ -10,27 +10,40 @@ function clock(start = 1000) {
   return {now: () => value, advance(ms) { value += ms; }};
 }
 
-test('sign-in and telemetry cannot evict the feed but business and unknown writes still do', async () => {
+test('only a write that can change the feed closes the window; sign-in, telemetry, bridge reads and unrelated writes leave it open', async () => {
   const cache = createFeedCache();
   let reads = 0;
   const load = async () => [{ref: `REQ-${++reads}`}];
+  const open = ['/api/login', '/api/session-heartbeat', '/api/user-activity', '/api/logout',
+    '/api/integrations/mis/pulse', '/api/integrations/mis/validate', '/api/mis-sso/validate',
+    '/api/notifications/read', '/api/tickets', '/api/tickets/resolve', '/api/telegram/webhook', '/api/telegram/link',
+    '/api/remote-assistance/7/events', '/api/user-sessions/7/messages', '/api/session-messages/7/dismiss', '/api/translate',
+    '/api/announcements/3/acknowledge', '/api/whatsapp/send', '/api/report-settings', '/api/navigation-settings',
+    '/api/backups/run', '/api/backups/settings', '/api/exports/pdf', '/api/info-pulse/prompt', '/api/requests-feature'];
   for (let user = 0; user < 100; user += 1) {
-    for (const path of ['/api/login', '/api/session-heartbeat', '/api/user-activity']) {
-      assert.equal(requestFeedWriteInvalidates({method:'POST', path}), false);
+    for (const path of open) {
+      assert.equal(requestFeedWriteInvalidates({method:'POST', path}), false, path);
       if (requestFeedWriteInvalidates({method:'POST', path})) cache.clear();
       await cache.read(load, 'revision-1');
     }
   }
-  assert.equal(reads, 1, 'interleaved sign-in, telemetry and polls share one database load');
-  for (const path of ['/api/requests', '/api/requests/REQ-1/close', '/api/masters', '/api/new-feature', '/api/session-heartbeat/extra']) {
-    assert.equal(requestFeedWriteInvalidates({method:'POST', path}), true);
+  assert.equal(reads, 1, 'interleaved sign-ins, heartbeats, Pulse-II bridge reads and polls share one database load');
+  const closing = [['POST', '/api/requests'], ['PATCH', '/api/requests/REQ/26/1/close'], ['POST', '/api/requests/REQ/26/1/daily-remarks'],
+    ['PATCH', '/api/requests/REQ/26/1/production-first-trip'], ['DELETE', '/api/requests/REQ/26/1'], ['POST', '/api/requests/bulk-delete'],
+    ['POST', '/api/request-corrections'], ['PATCH', '/api/request-corrections/4/apply'], ['POST', '/api/request-archives'], ['POST', '/api/request-archives/2/restore'],
+    ['POST', '/api/masters/Equipment master'], ['PUT', '/api/masters/Users & employees/5'], ['DELETE', '/api/masters/Privilege/5'], ['POST', '/api/masters/Users & employees/5/password'],
+    ['POST', '/api/vehicle-transfers'], ['PATCH', '/api/vehicle-transfers/3/source-approval'], ['POST', '/api/oracle/equipment/sync'],
+    ['PATCH', '/api/cdir/employees/4'], ['POST', '/api/cdir/employee-transfers'], ['POST', '/api/change-initial-password'], ['POST', '/api/password-reset/confirm'], ['POST', '/api/preferred-language'],
+    ['POST', '/api/data-housekeeping/purge'], ['POST', '/api/deletion-approvals/1/verify'], ['POST', '/api/backups/import/restore'], ['POST', '/api/selective-media/import/t/restore']];
+  for (const [method, path] of closing) {
+    assert.equal(requestFeedWriteInvalidates({method, path}), true, `${method} ${path}`);
     cache.clear();
     await cache.read(load, 'revision-1');
   }
-  assert.equal(reads, 6);
-  assert.equal(requestFeedWriteInvalidates({method:'PATCH',path:'/api/user-activity'}), true);
+  assert.equal(reads, 1 + closing.length);
+  for (const method of ['GET', 'HEAD', 'OPTIONS']) assert.equal(requestFeedWriteInvalidates({method, path:'/api/requests'}), false, method);
   await cache.read(load, 'revision-2');
-  assert.equal(reads, 7, 'database revisions still invalidate changes from another instance');
+  assert.equal(reads, 2 + closing.length, 'database revisions still invalidate changes from another path');
 });
 
 test('dashboard and workflow polls reuse their own feeds until the data changes', async () => {

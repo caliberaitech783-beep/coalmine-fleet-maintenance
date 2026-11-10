@@ -13,6 +13,7 @@ import {buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportW
 import {formatDisplayDateTime} from '../date-time-format.mjs';
 import {whatsAppRecipientRole} from '../whatsapp-workflow-policy.mjs';
 import {scheduledReportWindowsDue} from '../report-delivery-window.mjs';
+import {crmReportsPossiblyDue} from '../scheduled-report-due.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const now=new Date('2026-09-15T15:00:00+05:30');
@@ -30,7 +31,7 @@ function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTe
   ];
   const dependencies={siteReportMessageContext,recipientReportMessage,databaseReady:true,storedWhatsAppReportSettings:async()=>settings,whatsappPurposeEnabled,ticketReportWindow,scheduledReportWindowsDue,
     storedHierarchyReportScheduleSettings:async()=>defaultHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides:async()=>overrides,
-    reportRecipientLogin:user=>String(user.login||'').toLowerCase(),whatsAppRecipientRole,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,
+    reportRecipientLogin:user=>String(user.login||'').toLowerCase(),whatsAppRecipientRole,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,crmReportsPossiblyDue,
     hierarchyRuleForDesignation:()=>null,hierarchyRecipientReportScope,canonicalSiteName,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow,displaySiteName,formatDisplayDateTime,
     pool:{query:async(sql,args=[])=>{
       queries.push({sql,args});
@@ -88,7 +89,10 @@ test('CRM pauses, recipient selections and empty-site preferences are enforced b
   const selected=crmHarness();selected.settings.crm.recipientRoles=['Super Admin'];
   assert.equal((await selected.send(now)).sent,1);assert.ok(selected.templates.every(item=>item.to==='9000000002'));
   const otherTime=crmHarness();otherTime.settings.crm.times=['11:30'];
-  assert.equal((await otherTime.send(now)).sent,0);assert.equal(otherTime.templates.length,0);
+  const quiet=await otherTime.send(now);
+  assert.equal(quiet.skipped,true);assert.equal(otherTime.templates.length,0);
+  assert.equal(otherTime.queries.some(query=>query.sql.includes("master_name='Users & employees'")||query.sql.includes("master_name='Equipment master'")),false,
+    'a minute with no CRM time due reads neither the recipients nor the fleet');
 });
 
 const crmRoleUsers=[...users,
@@ -144,7 +148,9 @@ test('CRM personal timetable overrides only that recipient and uses previous act
   assert.equal(harness.pdfs[0].start.toISOString(),'2026-09-15T09:30:00.000Z');
   assert.equal(harness.pdfs[0].end.toISOString(),'2026-09-15T13:30:00.000Z');
   const paused=crmHarness({overrides:new Map([['manager',{...schedule,enabled:false}]])});
-  assert.equal((await paused.send(new Date('2026-09-15T19:01:00+05:30'))).sent,0);
+  const quiet=await paused.send(new Date('2026-09-15T19:01:00+05:30'));
+  assert.equal(quiet.skipped,true,'a paused personal schedule leaves no CRM time due at 19:01');
+  assert.equal(paused.templates.length,0);
 });
 
 test('CRM fallback delivers both close slots within grace, keeps legacy claim keys and deduplicates repeated polls',async()=>{
@@ -167,7 +173,7 @@ test('CRM fallback delivers both close slots within grace, keeps legacy claim ke
     {slotKey:'CRM-2026-09-15-1510',status:'Sent',attempts:1},
   ]);
   assert.equal((await harness.send(new Date('2026-09-15T15:16:00+05:30'))).sent,0);
-  assert.equal((await harness.send(new Date('2026-09-15T15:31:00+05:30'))).sent,0);
+  assert.equal((await harness.send(new Date('2026-09-15T15:31:00+05:30'))).skipped,true,'past the grace of both slots nothing is due, so the recipients are not even read');
   assert.equal(harness.templates.length,2);assert.equal(harness.pdfs.length,2);
   assert.ok([...harness.claims.values()].every(claim=>claim.attempts===1));
 });

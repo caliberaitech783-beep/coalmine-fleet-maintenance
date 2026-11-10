@@ -3,6 +3,7 @@ import {REPAIR_TYPES,isRepairType,repairTypeKey} from './repair-classification.m
 import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
 import {createHourlyTelegramDelivery} from './hourly-breakdown-delivery.mjs';
 import {createSiteFleetTelegramDelivery,siteFleetPlans} from './telegram-site-fleet-delivery.mjs';
+import {crmReportsPossiblyDue,hierarchyReportsPossiblyDue} from './scheduled-report-due.mjs';
 import {protectDeletionPool,installDeletionApproval,resolveDeletionSelection,deletionApproved,approvedDeletionTime,afterDeletionCommit,afterDeletionRollback,resetProductionFirstTripAcceptance} from './deletion-approval.mjs';
 import {createDeletionWhatsApp} from './deletion-sms.mjs';
 import {seedLmvDemoRecords} from './lmv-fleet.mjs';
@@ -208,16 +209,23 @@ const requestFeedCache=createFeedCache({ttlMs:30_000});
 const masterReadCache=createFeedCache({ttlMs:300_000});
 // Pulse-II reads the breakdown feed and the fleet from here on every card save at every site
 // (a scanning burst is hundreds of saves an hour per site). One read answers all of them for
-// a short window; like the request feed, the window closes on any write. The user record read
-// for the Telegram membership check on every request is held the same way, per login.
+// a short window; like the request feed, the window closes on a write that can change them.
+// The user record read for the Telegram membership check on every request, and the user and
+// privilege records behind the live Dashboard authorization, are held the same way, per login.
 const misBridgeFeedCache=createFeedCache({ttlMs:20_000}),misBridgeFleetCache=createFeedCache({ttlMs:30_000});
-const membershipUserRecords=new Map();
-const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();membershipUserRecords.clear();};
+const membershipUserRecords=new Map(),dashboardAuthorizations=new Map();
+const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
+// Closes every shared read window now and again once the write has answered.
+function closeFeedWindows(res){
+  requestFeedCache.clear();clearMisReadWindows();
+  res.on('finish',()=>requestFeedCache.clear());res.on('finish',clearMisReadWindows);
+}
+// Only writes that can change requests, remarks, first-trip acceptances or master data close the
+// windows (requestFeedWriteInvalidates). Sign-in, telemetry, notifications, tickets, Telegram,
+// remote assistance, settings and the Pulse-II bridge's reads leave them open; the bridge's own
+// verification write closes them where it is wired (installMisPulseBridge).
 app.use((req,res,next)=>{
-  if(requestFeedWriteInvalidates(req)){
-    requestFeedCache.clear();clearMisReadWindows();
-    res.on('finish',()=>requestFeedCache.clear());res.on('finish',clearMisReadWindows);
-  }
+  if(requestFeedWriteInvalidates(req)){closeFeedWindows(res);}
   next();
 });
 const port=Number(process.env.PORT||3000);
@@ -308,15 +316,21 @@ const pool=protectDeletionPool(rawPool);
 // handoff and their identity checks run on a small pool of their own, so a scanning burst or a
 // report run never queues a password check behind it. On 10 Nov 2026 the MIS sign-in returned
 // HTTP 504 while this pool stood at 10 busy and 100-250 waiting.
-const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,idleTimeoutMillis:30000,connectionTimeoutMillis:10000}));
+// Its connections stay open for ten minutes between sign-ins. With the earlier 30-second idle
+// limit the first sign-in after a quiet spell opened a fresh TLS connection, which took 4-6 s
+// while the server was busy. TCP keepalives hold the idle connection through the platform's
+// idle limit on outbound connections (four minutes on Azure), so it is still usable when needed.
+const warmPoolOptions={idleTimeoutMillis:600000,keepAlive:true,keepAliveInitialDelayMillis:30000};
+const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,...warmPoolOptions}));
 // Keep the initial Dashboard reads out of the shared work queue without
-// competing with password verification for the sign-in connections.
+// competing with password verification for the sign-in connections. Kept warm for the same
+// reason: the Dashboard is the first screen after sign-in.
 const dashboardReadPool=protectDeletionPool(new Pool({
   connectionString:connectionString||undefined,
   ssl:databaseSsl,
   max:3,
-  idleTimeoutMillis:30000,
   connectionTimeoutMillis:10000,
+  ...warmPoolOptions,
 }));
 // The notification LISTEN connection is held for the life of the process; it has a pool of its
 // own so it never takes one of the ten shared connections.
@@ -797,6 +811,10 @@ async function migrate(){
     DROP TRIGGER IF EXISTS maintenance_daily_remarks_revision_trigger ON maintenance_daily_remarks;
     CREATE TRIGGER maintenance_daily_remarks_revision_trigger
       AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_daily_remarks
+      FOR EACH STATEMENT EXECUTE FUNCTION bump_data_revision('request-feed');
+    DROP TRIGGER IF EXISTS production_first_trip_acceptances_revision_trigger ON production_first_trip_acceptances;
+    CREATE TRIGGER production_first_trip_acceptances_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON production_first_trip_acceptances
       FOR EACH STATEMENT EXECUTE FUNCTION bump_data_revision('request-feed');
     DROP TRIGGER IF EXISTS master_records_revision_trigger ON master_records;
     CREATE TRIGGER master_records_revision_trigger
@@ -1567,7 +1585,8 @@ installMisPulseBridge(app,{identity:misCredentialIdentity,
   return {'Equipment master':fleet};
  },
  readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
- verifyRequest:(...args)=>verifyMisTripCard(...args),
+ // The bridge's reads arrive as POSTs and leave the shared read windows open; its one write does not.
+ verifyRequest:(req,res,next)=>{closeFeedWindows(res);return verifyMisTripCard(req,res,next);},
 });
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
@@ -2351,16 +2370,27 @@ async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=nu
     ]);
   if(!insert.rowCount)return {skipped:true,reason:'This scheduled backup has already completed.'};
   const id=insert.rows[0].id;
-  const client=await pool.connect();
-  let locked=false;
+  // The export holds the backup lock for its whole run, minutes for a large database. It runs on
+  // a connection of its own rather than one of the ten shared connections, which stay with the
+  // request queue, and that connection is closed before the file is measured and checksummed.
+  const client=new pg.Client({connectionString:connectionString||undefined,ssl:databaseSsl});
+  let locked=false,connected=false;
+  const releaseExportConnection=async()=>{
+    if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
+    locked=false;
+    if(connected)await client.end().catch(()=>{});
+    connected=false;
+  };
   try{
+    await client.connect();connected=true;
     const {rows:locks}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");
     locked=Boolean(locks[0]?.locked);
     if(!locked)throw Object.assign(new Error('Another backup or restore is already running. Try again after it completes.'),{status:409});
     const result=await exportDatabase({client,output:filePath});
+    await releaseExportConnection();
     const stat=await fs.stat(filePath);
     const checksum=await sha256File(filePath);
-    await client.query(`UPDATE backup_runs SET status='Completed',size_bytes=$1,checksum=$2,table_counts=$3::jsonb,completed_at=NOW(),error_message=''
+    await pool.query(`UPDATE backup_runs SET status='Completed',size_bytes=$1,checksum=$2,table_counts=$3::jsonb,completed_at=NOW(),error_message=''
       WHERE id=$4`,[stat.size,checksum,JSON.stringify(result.tables),id]);
     return {id,fileName,filePath,sizeBytes:stat.size,checksum,tableCounts:result.tables,status:'Completed'};
   }catch(error){
@@ -2368,8 +2398,7 @@ async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=nu
     await pool.query(`UPDATE backup_runs SET status='Failed',error_message=$1,completed_at=NOW() WHERE id=$2`,[String(error?.message||'Backup failed').slice(0,500),id]).catch(()=>{});
     throw error;
   }finally{
-    if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
-    client.release();
+    await releaseExportConnection();
   }
 }
 
@@ -4841,21 +4870,43 @@ async function currentUserRecord(session,client=pool){
   return rows[0]?.record_data||{};
 }
 
+// Live Dashboard authorization is rebuilt from the user's current record and privileges by about
+// fifteen endpoints, once per request. Both masters used to be read whole each time. Now only the
+// rows that can belong to this session are read, and the answer is held per session identity for
+// a short window that any master write closes (clearMisReadWindows), like the membership record.
 async function currentDashboardAuthorization(session,client=pool){
-  const load=()=>Promise.all([
-    client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
-    client.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`),
-  ]);
   // Transaction callers must read their own writes and never share their snapshot.
-  const [{rows:userRows},{rows:privilegeRows}]=client===pool||client===dashboardReadPool
-    ? await readCurrentMasterSnapshot('dashboard-authorization',load,client)
-    : await load();
+  if(client!==pool&&client!==dashboardReadPool)return loadDashboardAuthorization(session,client);
+  const key=JSON.stringify([String(session?.login||'').trim().toLowerCase(),String(session?.name||'').trim().toLowerCase(),
+    String(session?.userType||''),String(session?.role||''),String(session?.assignedRole||'')]);
+  const saved=dashboardAuthorizations.get(key);
+  if(saved&&Date.now()-saved.time<DASHBOARD_AUTHORIZATION_WINDOW_MS)return saved.authorization;
+  const authorization=await loadDashboardAuthorization(session,client);
+  dashboardAuthorizations.set(key,{time:Date.now(),authorization});
+  if(dashboardAuthorizations.size>5000)for(const [id,value] of dashboardAuthorizations)if(Date.now()-value.time>=DASHBOARD_AUTHORIZATION_WINDOW_MS)dashboardAuthorizations.delete(id);
+  return authorization;
+}
+const DASHBOARD_AUTHORIZATION_WINDOW_MS=60000;
+// Reads the rows currentDashboardUserCandidate chooses from: the record with this login, a legacy
+// record without a login whose employee name carries it, or (no login) the record with this
+// employee name. The candidate rule itself is unchanged; the query only narrows the rows it sees,
+// and where the two could differ it reads more rows rather than fewer. Privileges are then read
+// for that user's identifiers only.
+async function loadDashboardAuthorization(session,client){
+  const login=String(session?.login||'').trim().toLowerCase();
+  const name=String(session?.name||'').trim().toLowerCase();
+  const {rows:userRows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' AND (
+      ($1 <> '' AND (lower(trim(record_data->>'login'))=$1 OR (COALESCE(record_data->>'login','') !~ '\\S' AND position($1 IN lower(record_data->>'employee'))>0))) OR
+      ($1 = '' AND $2 <> '' AND lower(trim(record_data->>'employee'))=$2)
+    )`,[login,name]);
   const user=currentDashboardUserCandidate(userRows,session);
   if(!user)return null;
   const identifiers=new Set([
     ...userLoginCandidates(user),
-    String(session?.login||'').trim().toLowerCase(),
+    login,
   ].filter(Boolean));
+  const {rows:privilegeRows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'
+    AND lower(trim(record_data->>'username'))=ANY($1::text[])`,[[...identifiers]]);
   const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers),portal:session.userType==='Account User'?'accounts':undefined,selectedRole:session.role==='normal'&&session.assignedRole!=='Account User'?session.assignedRole:undefined});
   return {user,session:dashboardSessionFromProfile(profile)};
 }
@@ -5640,11 +5691,15 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
   const reportSettings={...storedSettings,crm:{...storedSettings.crm,enabled:true}};
   consolidatedTicketReportRunning=true;
   try{
-    const [{rows:userRows},{rows:hierarchyRows},{rows:equipmentRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
-      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+    const [{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
-      pool.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
       storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
+    ]);
+    // The recipients and the fleet are read only once a CRM time, or a personal schedule, is due.
+    if(!crmReportsPossiblyDue({now,crmSettings:reportSettings.crm,scheduleSettings,hierarchyRows,userScheduleOverrides}))return {skipped:true,reason:'No report time is due.'};
+    const [{rows:userRows},{rows:equipmentRows}]=await Promise.all([
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
     ]);
     const windows=new Map(),bundles=new Map();
     let sent=0,failed=0,skipped=0;
@@ -5900,10 +5955,14 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!whatsappOn&&!telegramChats.size)return {skipped:true,reason:'paused by Report settings'};
   hierarchyReportRunning=true;
   try{
-    const [[{rows:userRows},{rows:hierarchyRows}],scheduleSettings,userScheduleOverrides]=await Promise.all([
-      readReportScheduleMasters(),
+    const [{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
     ]);
+    // The Users master is read only once a role, rule or personal time is due, and then from the
+    // revision-keyed master snapshot, so the ticks inside one grace window share a single read.
+    if(!hierarchyReportsPossiblyDue({now,scheduleSettings,hierarchyRows,userScheduleOverrides}))return {skipped:true,reason:'No report time is due.'};
+    const [{rows:userRows}]=await readReportScheduleMasters();
     let sourceData=null;
     const bundles=new Map();
     let sent=0,failed=0,skipped=0;
@@ -6532,6 +6591,15 @@ async function requestWorkflowWhatsAppLogins(client,{eventType,site,ignoreSwitch
   const settings=await storedWhatsAppReportSettings();
   return workflowWhatsAppRecipientLogins(rows,{eventType,site,settings:ignoreSwitches?routingReportSettings(settings):settings});
 }
+// The same routing for a pass over many requests (the reminder tick): the Users master is read
+// once, the first time a recipient list is needed, and the tick's report settings are reused.
+function requestWorkflowWhatsAppLoginsOnce(client,settings){
+  let users=null;
+  return async({eventType,site,ignoreSwitches=false})=>{
+    users??=client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`).then(({rows})=>rows);
+    return workflowWhatsAppRecipientLogins(await users,{eventType,site,settings:ignoreSwitches?routingReportSettings(settings):settings});
+  };
+}
 
 let workflowReminderRunning=false;
 async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
@@ -6541,6 +6609,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
   if(!telegramReminders&&!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
   workflowReminderRunning=true;
   let sent=0,failed=0,skipped=0;
+  const recipientsFor=requestWorkflowWhatsAppLoginsOnce(pool,reportSettings);
   try{
     const {rows}=await pool.query(`SELECT reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
       site,category,complaint,complaint_audio AS "complaintAudio",maintenance_work AS "maintenanceWork",maintenance_audio AS "maintenanceAudio",ideal_requested_by AS "idealRequestedBy",chassis_number AS chassis,registration_number AS reg,owner_name AS owner,idle_reason AS "idleReason",status,started_at AS "startedAtRaw",
@@ -6561,7 +6630,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         offRoad:{...reportSettings.reminders.offRoad,enabled:true},idle:{...reportSettings.reminders.idle,enabled:true}}};
       const slotKey=workflowReminderSlot(eventType,eventTime,now,slotSettings);
       if(!slotKey)continue;
-      const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site,ignoreSwitches:!whatsappReminder});
+      const recipients=await recipientsFor({eventType,site:request.site,ignoreSwitches:!whatsappReminder});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
       const reminderText=`SITE: ${request.site||'Not recorded'}\n${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}\n${equipmentDetails}\n${idle?`Idle since ${requestNotificationTime(eventTime)}. Reason: ${request.idleReason||'Not recorded'}`:`Off Road since ${requestNotificationTime(eventTime)}`}\n${workflowRequestLink(request.ref,publicBaseUrl())}`;
       // Personal reminders are deduplicated per eligible operational user, even when WhatsApp is paused.
@@ -9129,10 +9198,14 @@ if(scheduledJobsEnabled){
     loadSource:directorReportSourceData,sendText:sendTelegramText,
     publish:plan=>publishDirectorReportFiles({...plan,siteAccess:plan.site,baseUrl:publicBaseUrl()}),
     loadPlans:async now=>{
-      const [[{rows:users},{rows:hierarchyRecords}],scheduleSettings,userScheduleOverrides]=await Promise.all([
-        readReportScheduleMasters(),
+      const [{rows:hierarchyRecords},scheduleSettings,userScheduleOverrides]=await Promise.all([
+        pool.query("SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC"),
         storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
       ]);
+      // The Users master is read only once a role, rule or personal time is due, and then from the
+      // revision-keyed master snapshot shared with the hierarchy report job.
+      if(!hierarchyReportsPossiblyDue({now,scheduleSettings,hierarchyRows:hierarchyRecords,userScheduleOverrides}))return [];
+      const [{rows:users}]=await readReportScheduleMasters();
       return siteFleetPlans({users:users.map(row=>row.record_data),hierarchyRecords,scheduleSettings,userScheduleOverrides,now});
     },
   });
