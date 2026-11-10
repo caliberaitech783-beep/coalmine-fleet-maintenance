@@ -302,6 +302,15 @@ const pool=protectDeletionPool(rawPool);
 // report run never queues a password check behind it. On 10 Nov 2026 the MIS sign-in returned
 // HTTP 504 while this pool stood at 10 busy and 100-250 waiting.
 const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,idleTimeoutMillis:30000,connectionTimeoutMillis:10000}));
+// Keep the initial Dashboard reads out of the shared work queue without
+// competing with password verification for the sign-in connections.
+const dashboardReadPool=protectDeletionPool(new Pool({
+  connectionString:connectionString||undefined,
+  ssl:databaseSsl,
+  max:3,
+  idleTimeoutMillis:30000,
+  connectionTimeoutMillis:10000,
+}));
 // The notification LISTEN connection is held for the life of the process; it has a pool of its
 // own so it never takes one of the ten shared connections.
 const listenerPool=new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:1,idleTimeoutMillis:0});
@@ -320,11 +329,21 @@ async function currentDataRevisions(keys,client=pool){
 // which is what turned a momentary database hiccup into a site-wide outage.
 pool.on('error',error=>console.error('PostgreSQL pool connection error (will reconnect on next query).',error));
 authPool.on('error',error=>console.error('PostgreSQL sign-in pool connection error (will reconnect on next query).',error));
+dashboardReadPool.on('error',error=>console.error('PostgreSQL Dashboard pool connection error (will reconnect on next query).',error));
 listenerPool.on('error',error=>console.error('PostgreSQL listener connection error (will reconnect on the next subscription).',error));
 process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
 const sessionStore=createSessionStore(pool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
 // The same sessions table, reached through the sign-in pool, for the login paths.
 const authSessionStore=createSessionStore(authPool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
+const dashboardSessionStore=createSessionStore(dashboardReadPool);
+function selectDashboardReadPool(req,res,next){
+  if(req.method==='GET'&&(req.path==='/api/dashboard/equipment'||(req.path==='/api/requests'&&req.query.scope==='dashboard'))){
+    req.dashboardReadPool=dashboardReadPool;
+    req.dashboardSessionStore=dashboardSessionStore;
+  }
+  next();
+}
+app.use(selectDashboardReadPool);
 let databaseReady=false;
 let cdirRosterRevision=null;
 let databaseError='Database initialization is pending.';
@@ -2611,7 +2630,7 @@ async function readSession(req){
   // first answer serves both, so a request costs one session lookup and one membership check.
   if(req.pulseSessionLookup!==undefined)return req.pulseSessionLookup;
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  const session=await sessionStore.get(token);
+  const session=await (req.dashboardSessionStore||sessionStore).get(token);
   if(session&&!membershipOnboardingPath(req.path)){
     const telegramServiceAccount=String(session.login||'').trim().toLowerCase()==='mis_sync_service';
     // These existing administrator-authorized routes remain available solely
@@ -2619,7 +2638,7 @@ async function readSession(req){
     const remediation=session.role==='super'&&session.permissions?.adminLevel!=='Manager'&&
       (req.path.startsWith('/api/telegram/site-groups')||req.path==='/api/telegram/settings');
     if(!remediation&&!telegramServiceAccount){
-      const status=await telegramMembershipFor(session.login);
+      const status=await telegramMembershipFor(session.login,false,req.dashboardReadPool);
       if(!status.allowed){const error=new Error('Join and verify all assigned site Telegram groups to continue.');error.status=403;error.code='TELEGRAM_MEMBERSHIP_REQUIRED';throw error;}
     }
   }
@@ -3673,7 +3692,7 @@ app.get('/api/health',async(_req,res)=>{
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
       oemEmailSchedule:{enabled:scheduledJobsEnabled,mailConfigured:ticketEmailConfiguration().configured,timeZone:'Asia/Kolkata',hour:17},
       cdirRosterRevision,
-      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},signInPool:{total:authPool.totalCount,idle:authPool.idleCount,waiting:authPool.waitingCount},requestFeedCache:requestFeedCache.stats,misBridgeCache:{feed:misBridgeFeedCache.stats,fleet:misBridgeFleetCache.stats},slowRequestThresholdMs},
+      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},signInPool:{total:authPool.totalCount,idle:authPool.idleCount,waiting:authPool.waitingCount},dashboardPool:{total:dashboardReadPool.totalCount,idle:dashboardReadPool.idleCount,waiting:dashboardReadPool.waitingCount},requestFeedCache:requestFeedCache.stats,misBridgeCache:{feed:misBridgeFeedCache.stats,fleet:misBridgeFleetCache.stats},slowRequestThresholdMs},
     });
   }catch(error){
     databaseReady=false;
@@ -3936,20 +3955,20 @@ const membershipChecker=createMembershipChecker({checkMember:telegramChatMember,
 // site-group change clears the settings). The Telegram link is read every time, so a user who
 // has just connected Telegram is let in at once.
 let telegramSiteGroupsRead=null;
-async function telegramSiteGroupsCached(force){
+async function telegramSiteGroupsCached(force,client){
   if(!force&&telegramSiteGroupsRead&&Date.now()-telegramSiteGroupsRead.time<60000)return telegramSiteGroupsRead.groups;
-  const groups=await telegramSiteGroups();telegramSiteGroupsRead={time:Date.now(),groups};return groups;
+  const groups=await telegramSiteGroups(client);telegramSiteGroupsRead={time:Date.now(),groups};return groups;
 }
-async function membershipUserRecord(login,force){
+async function membershipUserRecord(login,force,client){
   const key=String(login||'').trim().toLowerCase(),saved=membershipUserRecords.get(key);
   if(!force&&saved&&Date.now()-saved.time<60000)return saved.user;
-  const user=await bdmsUserRecord(login);membershipUserRecords.set(key,{time:Date.now(),user});
+  const user=await bdmsUserRecord(login,client);membershipUserRecords.set(key,{time:Date.now(),user});
   if(membershipUserRecords.size>5000)for(const [id,value] of membershipUserRecords)if(Date.now()-value.time>=60000)membershipUserRecords.delete(id);
   return user;
 }
-async function telegramMembershipFor(login,force=false){
-  const [user,groups,{rows}]=await Promise.all([membershipUserRecord(login,force),telegramSiteGroupsCached(force),
-    pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
+async function telegramMembershipFor(login,force=false,client=pool){
+  const [user,groups,{rows}]=await Promise.all([membershipUserRecord(login,force,client),telegramSiteGroupsCached(force,client),
+    client.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
   return membershipChecker({user:user||{},groups,chatId:rows[0]?.chat_id,force});
 }
 
@@ -4868,8 +4887,8 @@ async function telegramInvitationRecords(){
   }
   return groups;
 }
-async function telegramSiteGroups(){
-  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
+async function telegramSiteGroups(client=pool){
+  const {rows}=await client.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[TELEGRAM_SITE_GROUPS_KEY]);
   return normalizeTelegramSiteGroups(rows[0]?.setting_value).map(group=>({...group,inviteLink:REQUIRED_SITE_LINKS[group.site]||group.inviteLink}));
 }
 
@@ -4976,8 +4995,8 @@ function isBdmsAdministrator(user={}){
   return profile.sessionRole==='super'&&['admin','super admin'].includes(String(profile.permissions?.adminLevel||'').trim().toLowerCase());
 }
 
-async function bdmsUserRecord(login){
-  const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'
+async function bdmsUserRecord(login,client=pool){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'
     AND lower(trim(record_data->>'login'))=$1 LIMIT 1`,[String(login||'').trim().toLowerCase()]);
   return rows[0]?.record_data||null;
 }
@@ -6620,10 +6639,11 @@ app.get('/api/reports/bd-ageing',requireSession,bdAgeingReportHandler({
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
+    const client=req.dashboardReadPool||pool;
     // HR sessions issued before dashboard access was added have readRequests=false.
     // Resolve current account permissions rather than retaining that stale denial.
     if(req.session.assignedRole==='HR User'){
-      const authorization=await currentDashboardAuthorization(req.session);
+      const authorization=await currentDashboardAuthorization(req.session,client);
       if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
       req.session={...req.session,...authorization.session};
     }
@@ -6639,14 +6659,14 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       : {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'){
-      const operationalUser=await currentUserRecord(req.session);
+      const operationalUser=await currentUserRecord(req.session,client);
       scopedSite=userSiteScope(operationalUser);
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
-      const manager=await currentUserRecord(req.session);
+      const manager=await currentUserRecord(req.session,client);
       scopedManagerSites=managerReportScope({...manager,site:assignedUserSiteName(manager)}).sites;
     }
-    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data'],client):{};
     const etag=typeof privateVersionEtag==='function'?privateVersionEtag('requests',revisions,{
       dashboardScope,requesterLogin,scopedSite,scopedManagerSites,
       role:req.session.role,assignedRole:req.session.assignedRole,permissions:req.session.permissions,
@@ -6656,7 +6676,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     // other role reads the same full feed, so those polls share one read and its
     // remarks for a few seconds instead of repeating both per user.
     const ownRowsOnly=query.values.length>0;
-    const readFeed=async()=>attachDailyRemarks((await pool.query(query)).rows);
+    const readFeed=async()=>attachDailyRemarks((await client.query(query)).rows,client);
     const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,JSON.stringify(revisions),dashboardScope?'dashboard':'workflow');
     const siteVisibleRows=scopedManagerSites!==null
       ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
@@ -8068,7 +8088,8 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
   next();
 },requireSession,async(req,res,next)=>{
   try{
-    const authorization=await currentDashboardAuthorization(req.session);
+    const client=req.dashboardReadPool||pool;
+    const authorization=await currentDashboardAuthorization(req.session,client);
     if(!authorization)
       return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
     if(!canReadDashboardEquipment(authorization.session))
@@ -8076,20 +8097,20 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
     const scope=dashboardEquipmentScope(authorization.session,authorization.user);
     if(!dashboardEquipmentScopeIsUsable(scope))
       return res.status(409).json({error:'No dashboard site or region is assigned to this account. Contact an administrator.'});
-    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data'],client):{};
     const countDay=indiaCountDayWindow();
     const etag=typeof privateVersionEtag==='function'?privateVersionEtag('dashboard-equipment',revisions,{scope,day:countDay.day,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
     if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
     // The raw snapshots are identical for every caller. Apply account scope
     // after the shared read, including when a previous caller warmed the cache.
     const loadFleet=async()=>{
-      const {rows}=await pool.query(`SELECT id,record_data FROM master_records
+      const {rows}=await client.query(`SELECT id,record_data FROM master_records
         WHERE master_name='Equipment master' ORDER BY created_at ASC`);
       const records=rows.map(({id,record_data})=>({
         id,
         ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
       }));
-      const {rows:fleetRequests}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
+      const {rows:fleetRequests}=await client.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
       door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, vehicle_idle AS "vehicleIdle",owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
       (lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE) AS "currentlyActive",
@@ -8101,7 +8122,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       FROM maintenance_requests
       WHERE archived_at IS NULL AND (lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE
         OR (started_at < $1 AND ((closed_at IS NULL OR closed_at >= $1) OR (ideal_requested_at < $1 AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1)))))`,[countDay.openingAt]);
-      const {rows:shiftRows}=await pool.query(`SELECT id,record_data FROM master_records
+      const {rows:shiftRows}=await client.query(`SELECT id,record_data FROM master_records
         WHERE master_name='Shift Master' ORDER BY created_at ASC`);
       const shifts=shiftRows.map(({id,record_data})=>({
         id,

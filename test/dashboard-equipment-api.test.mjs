@@ -166,7 +166,7 @@ test('dashboard equipment API is authenticated, uncached, scoped, and always ret
   assert.match(route,/private, no-store, no-cache, must-revalidate/);
   assert.match(route,/\.vary\('Authorization'\)/);
   assert.match(route,/requireSession/);
-  assert.match(route,/currentDashboardAuthorization\(req\.session\)/);
+  assert.match(route,/currentDashboardAuthorization\(req\.session,client\)/);
   assert.match(route,/if\(!authorization\)[\s\S]*res\.status\(401\)/);
   assert.match(route,/canReadDashboardEquipment\(authorization\.session\)/);
   assert.match(route,/dashboardEquipmentScopeIsUsable\(scope\)/);

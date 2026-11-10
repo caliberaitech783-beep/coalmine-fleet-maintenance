@@ -85,9 +85,10 @@ test('actual read-only dashboard route derives status before enforcing every rol
     app:{get(path,...registered){assert.equal(path,'/api/dashboard/equipment');handlers=registered;}},
     requireSession(req,res,next){next();},
     currentDashboardAuthorization:async()=>authorization,
-    pool:{async query(sql){queries.push(sql);return {rows:sql.includes('master_records')
-      ? assets.map(({id,...record_data})=>({id,record_data})) : [{...request,site:'Sasti OB'}]};}},
+    pool:{query(){throw new Error('The shared pool is saturated');}},
   };
+  const dashboardReadPool={async query(sql){queries.push(sql);return {rows:sql.includes('master_records')
+    ? assets.map(({id,...record_data})=>({id,record_data})) : [{...request,site:'Sasti OB'}]};}};
   new Function(...Object.keys(dependencies),route)(...Object.values(dependencies));
   for(const role of ['Production User','Maintenance User','MIS User','Manager','Admin','Super Admin']){
     const normal=role.endsWith('User');
@@ -95,7 +96,7 @@ test('actual read-only dashboard route derives status before enforcing every rol
       user:normal?{site:'Majri OB'}:role==='Manager'?{managerSites:'Majri OB'}:{}};
     let result,status=200;
     const res={json(value){result=value;return this;},status(value){status=value;return this;}};
-    await handlers.at(-1)({session:{}},res,error=>{throw error;});
+    await handlers.at(-1)({session:{},dashboardReadPool},res,error=>{throw error;});
     assert.equal(status,200,role);
     assert.equal(result.records.length,normal||role==='Manager'?2:3,role);
     assert.equal(liveEquipmentMetrics(result.records).offRoad,1,role);

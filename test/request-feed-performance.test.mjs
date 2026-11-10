@@ -156,9 +156,54 @@ test('the requests route shares the feed and business writes clear it', () => {
     'a production user reads only their own rows, so that query is not shared');
   assert.match(route, /const payload=requestsVisibleToSession\(siteVisibleRows,req\.session\)/,
     'every response is still filtered for the signed-in user');
-  assert.match(route, /currentDataRevisions\(\['request-feed','master-data'\]\)/,
+  assert.match(route, /currentDataRevisions\(\['request-feed','master-data'\],client\)/,
     'unchanged polling responses must be decided before the full request query');
   assert.match(route, /sendPrivateNotModified\(req,res,etag\)\)return;/);
+});
+
+test('dashboard requests can authenticate and load when the shared pool is saturated', async () => {
+  const overloaded = () => { throw new Error('Shared pool is saturated'); };
+  const session = {role:'super', login:'test-admin'};
+  const dashboardSessionStore = {get: async token => token === 'valid-session' ? session : null};
+  const records = [{ref:'REQ-1'}];
+  const dashboardReadPool = {query: async () => ({rows:records})};
+  const select = new Function('dashboardReadPool', 'dashboardSessionStore',
+    server.slice(server.indexOf('function selectDashboardReadPool('), server.indexOf('app.use(selectDashboardReadPool);')) +
+    'return selectDashboardReadPool;')(dashboardReadPool, dashboardSessionStore);
+  let allowed = true;
+  const readSession = new Function('sessionStore', 'membershipOnboardingPath', 'telegramMembershipFor',
+    server.slice(server.indexOf('async function readSession('), server.indexOf('function sessionActivityDetails(')) +
+    'return readSession;')({get:overloaded}, () => false, async (login, force, client) => {
+      assert.equal(login, session.login);
+      assert.equal(client, dashboardReadPool);
+      return {allowed};
+    });
+  let handler;
+  const bindings = {
+    app:{get(_path, _guard, run){handler=run;}},
+    requireSession(){}, pool:{query:overloaded}, requestProjection:'reference AS ref',
+    dashboardRequestProjection:'reference AS ref', requestFeedCache:createFeedCache(),
+    currentDataRevisions:async (_keys, client) => {assert.equal(client,dashboardReadPool);return {};},
+    attachDailyRemarks:async (rows, client) => {assert.equal(client,dashboardReadPool);return rows;},
+    requestsVisibleToSession:rows => rows,
+  };
+  const start = server.indexOf("app.get('/api/requests',requireSession");
+  const route = server.slice(start, server.indexOf('\n});', start) + 4);
+  new Function(...Object.keys(bindings), route)(...Object.values(bindings));
+  const request = (scope, token = 'valid-session') => {
+    const req = {method:'GET',path:'/api/requests',query:{scope},headers:{authorization:'Bearer '+token}};
+    select(req, {}, () => {});
+    return req;
+  };
+  const req = request('dashboard');
+  req.session = await readSession(req);
+  assert.equal(req.session, session);
+  const rows = await new Promise((resolve, reject) => handler(req, {json:resolve}, reject));
+  assert.deepEqual(rows, records);
+  assert.equal(await readSession(request('dashboard','unknown-token')), null);
+  allowed = false;
+  await assert.rejects(readSession(request('dashboard')), {status:403,code:'TELEGRAM_MEMBERSHIP_REQUIRED'});
+  await assert.rejects(readSession(request('workflow')), /Shared pool is saturated/);
 });
 
 test('a click never waits for WhatsApp delivery to Meta', () => {

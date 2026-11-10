@@ -12,10 +12,11 @@ test('existing HR sessions read the shared breakdown feed using current account 
  const {runInNewContext}=await import('node:vm');
  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  const route=source.slice(source.indexOf("app.get('/api/requests',requireSession"));
- const guard=route.slice(route.indexOf("if(req.session.assignedRole==='HR User')"),route.indexOf('    const requesterLogin='));
+ const guard=route.slice(route.indexOf('const client=req.dashboardReadPool||pool;'),route.indexOf('    const requesterLogin='));
  const profile=resolveMobileAccess({user:{userType:'Mobile User',userRoles:'HR User'},selectedRole:'HR User'});
  for(const current of [profile,null,{sessionRole:'normal',assignedRole:'Unknown',permissions:{}}]){
   const authorize=runInNewContext('(async(req,res)=>{'+guard+'return true;})',{
+   pool:{},
    currentDashboardAuthorization:async()=>current?{session:{role:current.sessionRole,assignedRole:current.assignedRole,permissions:current.permissions}}:null,
   });
   const req={session:{role:'normal',assignedRole:'HR User',login:'hr',permissions:{readRequests:false}}};
