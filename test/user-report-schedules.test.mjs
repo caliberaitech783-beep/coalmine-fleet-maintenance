@@ -9,6 +9,7 @@ import {displaySiteName} from '../region-scope.mjs';
 import {reportSites,siteSourceData} from '../site-consolidated-report.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
 import {siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
+import {hierarchyReportsPossiblyDue} from '../scheduled-report-due.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -177,14 +178,15 @@ function deliveryHarness({
     equipmentRecords:[{id:'S',currentLocation:'Sasti OB'},{id:'M',currentLocation:'Majri OB'}],
     transferRecords:[{id:'S',destination:'Sasti OB'},{id:'M',destination:'Majri OB'}],
   };
-  const published=[],sent=[],history=[],errors=[],claims=new Map();
-  const activity={sourceReads:0};
+  const published=[],sent=[],history=[],errors=[],claims=new Map(),queries=[];
+  const activity={sourceReads:0,masterReads:0};
   const dependencies={
     databaseReady:true,storedWhatsAppReportSettings:async()=>({}),whatsappPurposeEnabled:()=>deliveryEnabled,
     storedHierarchyReportScheduleSettings:async()=>settings,
     storedUserReportScheduleOverrides:async()=>overrides,
-    readReportScheduleMasters:async()=>[{rows:users.map(record_data=>({record_data}))},{rows:[]}],
+    readReportScheduleMasters:async()=>{activity.masterReads++;return [{rows:users.map(record_data=>({record_data}))},{rows:[]}];},
     pool:{query:async(sql,args=[])=>{
+      queries.push(sql);
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map((record_data)=>({record_data}))};
       if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};
       if(sql.startsWith('INSERT INTO whatsapp_consolidated_report_runs')){
@@ -201,7 +203,7 @@ function deliveryHarness({
       if(sql.includes('INSERT INTO whatsapp_alert_history')){history.push(args);return {rows:[],rowCount:1};}
       throw new Error(`Unexpected scheduler query: ${sql}`);
     }},
-    resolveMobileAccess,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,
+    resolveMobileAccess,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,hierarchyReportsPossiblyDue,
     reportRecipientLogin,hierarchyRecipientReportScope,hierarchyAccessAllowsReport,reportSites,displaySiteName,
     hierarchyRuleForDesignation:()=>rule,recipientReportMessage,
     directorReportSourceData:async()=>{activity.sourceReads++;return sourceData;},
@@ -216,8 +218,22 @@ function deliveryHarness({
     console:{error:(...args)=>errors.push(args)},
   };
   const api=new Function(...Object.keys(dependencies),`${schedulerSource};return {sendScheduledHierarchyReportBundles,sendRequestEventReports};`)(...Object.values(dependencies));
-  return {...api,settings,overrides,sourceData,activity,published,sent,history,errors,claims};
+  return {...api,settings,overrides,sourceData,activity,published,sent,history,errors,claims,queries};
 }
+
+test('a minute with no role, rule or personal time due reads only the timetables, never the Users master',async()=>{
+  const harness=deliveryHarness({overrides:new Map([['mis-a',{...personalDaily,schedules:[{key:'mine',cadence:'daily',times:['12:00'],reports:[CLOSING_BD]}]}]])});
+  const quiet=await harness.sendScheduledHierarchyReportBundles(new Date('2026-09-11T05:35:00Z'));
+  assert.equal(quiet.skipped,true);
+  assert.equal(harness.activity.masterReads,0,'11:05 IST: no timetable is due, so the Users master is not read');
+  assert.equal(harness.queries.filter((sql)=>sql.includes("master_name='Hierarchy master'")).length,1,'only the small Hierarchy master and the settings are read');
+  assert.equal(harness.queries.filter((sql)=>sql.includes("master_name='Users & employees'")).length,0);
+  assert.equal(harness.activity.sourceReads,0);
+  const personalTime=await harness.sendScheduledHierarchyReportBundles(new Date('2026-09-11T06:35:00Z'));
+  assert.deepEqual(personalTime,{sent:1,failed:0,skipped:0},'12:05 IST: only the personal 12:00 schedule is due');
+  assert.equal(harness.activity.masterReads,1,'the Users master then comes from the revision-keyed snapshot');
+  assert.deepEqual(harness.errors,[]);
+});
 
 test('the sender uses each user\'s own schedule while others in the same role keep the role default',async()=>{
   const harness=deliveryHarness();

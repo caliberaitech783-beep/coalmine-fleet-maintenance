@@ -4,11 +4,31 @@
 // that land in that window share it. Business writes clear the window immediately,
 // so a user never sees their own change missing from the next refresh.
 
-// These exact POST routes update only authentication or activity, not requests,
-// remarks, first-trip acceptance or master data. Unknown writes remain invalidating.
+// Only a write that can change what the feed returns closes the window: maintenance requests
+// (with their remarks, first-trip acceptances, corrections and archives), master data (users,
+// privileges, equipment, vehicle transfers, Oracle synchronisation), the C-Dir employee records,
+// password and language changes to a user's record, and the purges and restores that rewrite
+// those tables. Every other write (sign-in, heartbeat, activity, notifications, CRM tickets,
+// Telegram, remote assistance, announcements, settings, exports) leaves the window open. A
+// Telegram link is also noted on the user's record, but no held record reads those fields.
+//
+// Until 10 Nov 2026 every write except three closed the window. The Pulse-II bridge reads the
+// feed and the fleet through a POST (/api/integrations/mis/pulse), so each of its reads during
+// a scanning burst emptied the very caches meant to answer it; the bridge's own verification
+// write closes the windows where it is wired in server.mjs. The database also keeps a revision
+// per feed (data_revisions, bumped by triggers on these tables) that the request feed checks on
+// every poll, so a change from any path is never served stale beyond that poll.
+const FEED_WRITE_ROUTES = [
+  '/api/requests', '/api/request-corrections', '/api/request-archives',
+  '/api/masters', '/api/vehicle-transfers', '/api/oracle',
+  '/api/cdir', '/api/change-initial-password', '/api/password-reset', '/api/preferred-language',
+  '/api/data-housekeeping', '/api/deletion-approvals', '/api/backups/import', '/api/selective-media',
+];
+
 export function requestFeedWriteInvalidates({method, path} = {}) {
-  if (method === 'GET' || method === 'HEAD') return false;
-  return !(method === 'POST' && ['/api/login', '/api/session-heartbeat', '/api/user-activity'].includes(path));
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
+  const route = String(path || '');
+  return FEED_WRITE_ROUTES.some((prefix) => route === prefix || route.startsWith(`${prefix}/`));
 }
 
 export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
