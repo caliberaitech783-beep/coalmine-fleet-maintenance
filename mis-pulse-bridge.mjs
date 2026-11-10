@@ -1,5 +1,5 @@
 const menus=profile=>[...(profile.permissions?.misDesktopAccess||[]),...(profile.permissions?.misMobileAccess||[])];
-export function installMisPulseBridge(app,{identity,readRequests,readMasters,readFleet,verifyRequest}){
+export function installMisPulseBridge(app,{identity,readRequests,readMasters,readFleet,verifyRequest,equipmentChanges=null}){
  app.post('/api/integrations/mis/pulse',async(req,res,next)=>{
   res.set('Cache-Control','no-store');req.audit=false;
   try{
@@ -15,6 +15,13 @@ export function installMisPulseBridge(app,{identity,readRequests,readMasters,rea
     const site=String(req.body?.site||'').trim();
     if(!site||site.length>200)return res.status(400).json({error:'A card site is required for Pulse equipment verification.'});
     return res.json(await readFleet(profile,site));
+   }
+   // Pulse-II Equipment master edits: Pulse stages them, sends the one shared OTP and applies
+   // them only after that OTP, exactly as for edits typed in Pulse.
+   if(equipmentChanges&&['equipment-changes','equipment-changes-verify'].includes(action)&&allowed.includes('Pulse Master Sync')){
+    const by=await equipmentChanges.authorize(profile);
+    if(action==='equipment-changes')return res.json(await equipmentChanges.request({changes:req.body?.changes,requestedBy:by,source:'Pulse-II'}));
+    return res.json(await equipmentChanges.verify(String(req.body?.id||''),req.body?.otp));
    }
    if(action==='masters'&&allowed.includes('Pulse Master Sync'))return res.json(await readMasters(profile));
    if(action==='requests'&&(tripAccess||allowed.includes('Pulse Master Sync')))return res.json(await readRequests(profile));

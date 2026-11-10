@@ -18,6 +18,7 @@ import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
 import {installMisPulseBridge} from './mis-pulse-bridge.mjs';
+import {createEquipmentMasterChanges,registerEquipmentMasterChanges} from './equipment-master-changes.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
@@ -1565,6 +1566,21 @@ const deletionApproval=installDeletionApproval(app,{
   }),
 });
 const misCredentialIdentity=installPulseApplicationIdentity(app,{pool:authPool,sessionStore:authSessionStore});
+// Equipment master: one shared OTP to the authorised mobiles approves each staged change set,
+// from Pulse or from Pulse-II. Direct writes to the master are closed.
+const equipmentMasterChangeService=createEquipmentMasterChanges({pool,
+ normalize:record=>normalizeOperationalSiteFields(equipmentMasterWithDoor(record)),
+ identity:record=>equipmentIdentity(record),
+ sendOtp:async({phone,otp,message})=>{
+  const env=await metaWhatsAppRuntimeEnv();
+  try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',purpose:'passwordResetOtp',parameters:[otp]},{env});}
+  catch(error){if(error.code==='WHATSAPP_POLICY_PAUSED')throw error;await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message},{env});}
+ }});
+// An applied change set alters the fleet, so the shared read windows (Pulse-II fleet included) close.
+const equipmentMasterChanges={...equipmentMasterChangeService,
+ verify:async(...args)=>{const result=await equipmentMasterChangeService.verify(...args);requestFeedCache.clear();clearMisReadWindows();return result;}};
+registerEquipmentMasterChanges(app,{service:equipmentMasterChanges,requireSuper,
+ audit:(req,{action,reference,details})=>{req.audit={eventType:'Master data',module:'Equipment master',action,targetType:'Equipment master',targetReference:reference,changedFields:[],details};}});
 let verifyMisTripCard;
 installMisPulseBridge(app,{identity:misCredentialIdentity,
  // The feed and the fleet are read once per window for every Pulse-II caller (misBridgeFeedCache,
@@ -1587,6 +1603,7 @@ installMisPulseBridge(app,{identity:misCredentialIdentity,
  readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
  // The bridge's reads arrive as POSTs and leave the shared read windows open; its one write does not.
  verifyRequest:(req,res,next)=>{closeFeedWindows(res);return verifyMisTripCard(req,res,next);},
+ equipmentChanges:{...equipmentMasterChanges,authorize:async profile=>{const user=await currentUserRecord(profile);const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||(!masterAccessAllows(permissions,'Equipment master')&&!masterAccessAllows(permissions,'Equipment master','mobileMasterAccess')))throw Object.assign(new Error('Your Pulse login cannot change the Equipment master.'),{status:403});return String(user?.name||user?.employee||profile.login||'Pulse-II user');}},
 });
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
