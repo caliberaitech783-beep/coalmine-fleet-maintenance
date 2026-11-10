@@ -280,6 +280,11 @@ function sendDataUrlMedia(res,data,{name='attachment',fallbackType='application/
 const connectionString=process.env.DATABASE_URL;
 const databaseSsl=String(process.env.DATABASE_SSL||'').trim().toLowerCase()==='false'?false:{rejectUnauthorized:false};
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
+// Bound expensive scheduled work and coalesce timer ticks while a job is pending.
+const reportQueue=createBackgroundJobQueue({
+  concurrency:2,
+  onError:error=>console.error('Scheduled background job failed.',error.message),
+});
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>formatDisplayDateTime(value);
 const reportFilename=(kind,scope,slot)=>`Caliber-Pulse-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
@@ -3188,7 +3193,7 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
   }catch(error){next(error)}
 });
 
-registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha,record:appendScheduledBackupAudit});
+registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha,record:appendScheduledBackupAudit,enqueue:reportQueue});
 
 app.get('/api/backups',requireSuper,requireAdministrator,async(_req,res,next)=>{
   try{
@@ -9094,12 +9099,6 @@ async function loadOemEmailData(){
 }
 void initializeDatabase();
 if(scheduledJobsEnabled){
-  // Two jobs can make progress even when a slow delivery occupies one slot.
-  // Each timer can have at most one queued or running tick.
-  const reportQueue=createBackgroundJobQueue({
-    concurrency:2,
-    onError:error=>console.error('Scheduled report job failed.',error.message),
-  });
   setStaggeredInterval(()=>{
     void sendMandatorySiteInvitations().catch(error=>console.error('Mandatory Telegram invitations failed.',error.message));
   },60000,1000);
@@ -9143,10 +9142,10 @@ if(scheduledJobsEnabled){
   },60*1000,47_000,reportQueue);
   siteFleetTimer.unref?.();
   const consolidatedWhatsAppTimer=setStaggeredInterval(()=>{
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
+    return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-  },60*1000,5_000);
+  },60*1000,5_000,reportQueue);
   consolidatedWhatsAppTimer.unref?.();
   const consolidatedTicketWhatsAppTimer=setStaggeredInterval(()=>{
     return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
@@ -9155,10 +9154,10 @@ if(scheduledJobsEnabled){
   },60*1000,12_000,reportQueue);
   consolidatedTicketWhatsAppTimer.unref?.();
   const directorWhatsAppTimer=setStaggeredInterval(()=>{
-    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
+    return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-  },60*1000,19_000);
+  },60*1000,19_000,reportQueue);
   directorWhatsAppTimer.unref?.();
   const hierarchyWhatsAppTimer=setStaggeredInterval(()=>{
     return runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())

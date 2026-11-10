@@ -17,7 +17,7 @@ export function hostingCoverage(snapshot,now=Date.now()){
   return {status:snapshot.complete?'Included':'Partial',detail:snapshot.summary||'Review Azure inventory coverage.'};
 }
 
-export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requireAdministrator,isReady,scheduledJobsEnabled,commit,env=process.env,record=async()=>{}}){
+export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requireAdministrator,isReady,scheduledJobsEnabled,commit,env=process.env,record=async()=>{},enqueue=task=>void task()}){
   const folder=path.join(storageRoot,'full-recovery'),snapshotFile=path.join(folder,'azure-hosting.enc'),snapshotInfo=path.join(folder,'azure-status.json');
   let initializing,activeRun=null;
   async function init(){
@@ -50,7 +50,7 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
     return {skipped:true,reason:'Backup expiration requires owner WhatsApp OTP approval.'};
   }
   function safeFile(name){if(!/^full-backup-[a-f0-9-]+\.enc$/.test(name))throw Error('Invalid backup filename');return path.join(folder,name);}
-  async function run({trigger='Manual',actor='',slot=null}={}){
+  async function run({trigger='Manual',actor='',slot=null,waitForCompletion=false}={}){
     await init();
     const key=await publicKey().catch(()=>{throw Object.assign(Error('Recovery public key is missing. Configure offline recovery keys first.'),{status:409});});
     const client=await pool.connect();let locked=false,id=randomUUID(),started=false;
@@ -72,7 +72,9 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
       started=true;
       activeRun={id,stage:'Starting database export',file:''};
       // Keep the advisory lock/client owned by the background task after returning 202.
-      void build(id,key,client).finally(async()=>{activeRun=null;await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}).catch(()=>{});
+      const completion=build(id,key,client).finally(async()=>{activeRun=null;await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();});
+      if(waitForCompletion)await completion;
+      else void completion.catch(()=>{});
       return {id,status:'Running'};
     }catch(error){if(!started){if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});client.release();}throw error;}
   }
@@ -143,7 +145,7 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
   const download=wrap(async(req,res)=>{
     const {rows}=await pool.query("SELECT file_name,checksum FROM full_backup_runs WHERE id=$1 AND status IN ('Completed','Partial')",[req.params.id]);
     if(!rows[0]?.file_name)return res.status(404).json({error:'Recovery file unavailable'});
-    res.set({'Cache-Control':'no-store','X-Checksum-SHA256':rows[0].checksum});res.download(safeFile(rows[0].file_name));
+    res.set({'Cache-Control':'no-store, no-transform','X-Checksum-SHA256':rows[0].checksum});res.download(safeFile(rows[0].file_name));
   });
   app.get('/api/full-backups/:id/download',requireSuper,requireAdministrator,download);
   const service=(req,res,next)=>{if(!scheduledJobsEnabled||!validServiceKey(env.FULL_BACKUP_SERVICE_KEY,String(req.headers['x-full-backup-key']||'')))return res.status(403).json({error:'Backup service access denied'});next();};
@@ -157,7 +159,18 @@ export function registerFullBackup(app,{pool,root,storageRoot,requireSuper,requi
   app.post('/api/full-backup-system/run',service,wrap(async(_req,res)=>res.status(202).json(await run({trigger:'Azure collector',actor:'GitHub OIDC collector'}))));
   app.get('/api/full-backup-system/status',service,wrap(async(_req,res)=>{await reconcileInterrupted();const {rows}=await pool.query('SELECT id,status,file_name AS "fileName",checksum,started_at AS "startedAt" FROM full_backup_runs ORDER BY started_at DESC LIMIT 1');res.set('Cache-Control','no-store').json({...rows[0],progress:await progress()});}));
   app.get('/api/full-backup-system/:id/download',service,download);
-  async function tick(){if(!isReady()||!scheduledJobsEnabled)return;await init();const config=await settings();if(scheduledBackupDue(config))await run({trigger:'Scheduled',actor:'Automatic IST schedule',slot:indiaBackupSlot().slotKey});}
-  const timer=setInterval(()=>void tick().catch(error=>console.error('Full backup schedule check failed',error.code||error.name)),60000);timer.unref?.();
+  let completedSlot=null;
+  async function tick(){
+    if(!isReady()||!scheduledJobsEnabled||activeRun)return;
+    const now=new Date(),slot=indiaBackupSlot(now).slotKey;
+    if(completedSlot===slot)return;
+    await init();
+    if(!scheduledBackupDue(await settings(),now))return;
+    const existing=await pool.query("SELECT 1 FROM full_backup_runs WHERE slot=$1 AND status IN ('Completed','Partial')",[slot]);
+    if(existing.rows.length){completedSlot=slot;return;}
+    await run({trigger:'Scheduled',actor:'Automatic IST schedule',slot,waitForCompletion:true});
+  }
+  const scheduledTick=()=>tick().catch(error=>console.error('Full backup schedule check failed',error.code||error.name));
+  const timer=setInterval(()=>enqueue(scheduledTick),60000);timer.unref?.();
   return {run,tick,progress};
 }

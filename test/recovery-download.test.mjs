@@ -11,18 +11,21 @@ test('range recovery copy retries reads and verifies the entire file before publ
  const data=Buffer.from('Immutable encrypted recovery archive '.repeat(2000));
  const checksum=createHash('sha256').update(data).digest('hex');let retried=false;
  const fetchImpl=async(_url,options)=>{
+  assert.equal(options.headers.get('accept-encoding'),'identity');
+  assert.equal(options.headers.get('x-full-backup-key'),'fixture');
   if(options.method==='HEAD')return new Response(null,{headers:{'content-length':String(data.length)}});
-  const [,a,b]=options.headers.Range.match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);
+  const [,a,b]=options.headers.get('range').match(/bytes=(\d+)-(\d+)/),start=Number(a),end=Number(b);
   if(start===0&&!retried){retried=true;return new Response(null,{status:503});}
   return new Response(data.subarray(start,end+1),{status:206,headers:{'content-range':`bytes ${start}-${end}/${data.length}`}});
  };
  try{
   const target=path.join(folder,'archive.enc');
-  await downloadRecoveryArchive({url:'https://example.invalid',target,checksum,chunkBytes:4096,fetchImpl});
+  const headers={'x-full-backup-key':'fixture','Accept-Encoding':'gzip'};
+  await downloadRecoveryArchive({url:'https://example.invalid',headers,target,checksum,chunkBytes:4096,fetchImpl});
   assert.equal(retried,true);assert.deepEqual(await readFile(target),data);
-  await assert.rejects(downloadRecoveryArchive({url:'https://example.invalid',target,checksum,chunkBytes:4096,fetchImpl}),{code:'EEXIST'});
+  await assert.rejects(downloadRecoveryArchive({url:'https://example.invalid',headers,target,checksum,chunkBytes:4096,fetchImpl}),{code:'EEXIST'});
   assert.deepEqual(await readFile(target),data);
-  await assert.rejects(downloadRecoveryArchive({url:'https://example.invalid',target:path.join(folder,'bad.enc'),checksum:'0'.repeat(64),chunkBytes:4096,fetchImpl}),/checksum mismatch/);
+  await assert.rejects(downloadRecoveryArchive({url:'https://example.invalid',headers,target:path.join(folder,'bad.enc'),checksum:'0'.repeat(64),chunkBytes:4096,fetchImpl}),/checksum mismatch/);
   assert.deepEqual(await readdir(folder),['archive.enc']);
  }finally{await rm(folder,{recursive:true,force:true});}
 });
