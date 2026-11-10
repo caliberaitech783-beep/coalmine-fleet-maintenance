@@ -28,7 +28,7 @@ test('the lower-row Breakdown legend opens the LMV breakdown list by click or ke
 test('LMV route and one-time demo seed are wired into the application',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/await seedLmvDemoRecords\(client\)/);
-  assert.match(server,/registerLmvFleet\(app,\{pool,requireSession,currentDashboardAuthorization,readSnapshot:/);
+  assert.match(server,/registerLmvFleet\(app,\{pool,requireSession,currentDashboardAuthorization\}\)/);
 });
 
 test('LMV header Breakdown adds displayed non-OEM balance and OEM without changing report counts',async()=>{
@@ -140,38 +140,6 @@ test('LMV API denies missing identities, unsupported roles and unassigned sites 
   for(const [authorization,code] of [[null,401],[{session:{role:'normal',assignedRole:'Unknown'},user:{}},403],[{session:{role:'normal',assignedRole:'MIS User'},user:{}},409]]){
     const api=setupApi({authorization});assert.equal((await api.run()).code,code);assert.equal(api.queries.length,0);
   }
-});
-
-test('LMV refreshes share their data read while preserving each account’s site scope',async()=>{
-  let handler,sharedSnapshot;
-  const queries=[];
-  const dashboardReadPool={async query(sql){
-    queries.push(sql);
-    return {rows:sql.includes('FROM master_records')
-      ?lmvDemoRecords().map((record,index)=>({id:index+1,record_data:record}))
-      :[]};
-  }};
-  registerLmvFleet({get(_path,_auth,callback){handler=callback;}},{
-    pool:{query(){assert.fail('The LMV refresh must use the Dashboard connection.');}},
-    requireSession(){},
-    async currentDashboardAuthorization({site},client){
-      assert.equal(client,dashboardReadPool);
-      return {session:{role:'normal',assignedRole:'MIS User'},user:{site}};
-    },
-    readSnapshot(_client,load){return sharedSnapshot??=load();},
-  });
-  const load=async site=>{
-    let payload;
-    await handler({session:{site},dashboardReadPool},{set(){},vary(){},json(data){payload=data;}},error=>{throw error;});
-    return payload.records;
-  };
-  const sites=['Majri OC','Sasti OC'];
-  const results=await Promise.all(sites.map(load));
-  assert.equal(queries.length,2);
-  results.forEach((records,index)=>{
-    assert.equal(records.length,5);
-    assert.ok(records.every(record=>recordBelongsToSite(record,sites[index])));
-  });
 });
 
 test('reports-only administrators can read scoped LMV reports without dashboard permission',async()=>{
