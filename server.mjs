@@ -204,10 +204,17 @@ app.use((req,res,next)=>{
 // again when the write has answered means the refresh that follows a click
 // always reads the database.
 const requestFeedCache=createFeedCache({ttlMs:30_000});
+// Pulse-II reads the breakdown feed and the fleet from here on every card save at every site
+// (a scanning burst is hundreds of saves an hour per site). One read answers all of them for
+// a short window; like the request feed, the window closes on any write. The user record read
+// for the Telegram membership check on every request is held the same way, per login.
+const misBridgeFeedCache=createFeedCache({ttlMs:20_000}),misBridgeFleetCache=createFeedCache({ttlMs:30_000});
+const membershipUserRecords=new Map();
+const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();membershipUserRecords.clear();};
 app.use((req,res,next)=>{
   if(requestFeedWriteInvalidates(req)){
-    requestFeedCache.clear();
-    res.on('finish',()=>requestFeedCache.clear());
+    requestFeedCache.clear();clearMisReadWindows();
+    res.on('finish',()=>requestFeedCache.clear());res.on('finish',clearMisReadWindows);
   }
   next();
 });
@@ -290,6 +297,14 @@ const rawPool=new Pool({
   connectionTimeoutMillis:10000
 });
 const pool=protectDeletionPool(rawPool);
+// Sign-in must answer while the shared pool is busy. Pulse's own login, the MIS and HR sign-in
+// handoff and their identity checks run on a small pool of their own, so a scanning burst or a
+// report run never queues a password check behind it. On 10 Nov 2026 the MIS sign-in returned
+// HTTP 504 while this pool stood at 10 busy and 100-250 waiting.
+const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,idleTimeoutMillis:30000,connectionTimeoutMillis:10000}));
+// The notification LISTEN connection is held for the life of the process; it has a pool of its
+// own so it never takes one of the ten shared connections.
+const listenerPool=new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:1,idleTimeoutMillis:0});
 
 async function currentDataRevisions(keys,client=pool){
   const normalized=[...new Set(keys.map(value=>String(value||'').trim()).filter(Boolean))].sort();
@@ -304,8 +319,12 @@ async function currentDataRevisions(keys,client=pool){
 // treats that as an unhandled 'error' event and exits the whole process,
 // which is what turned a momentary database hiccup into a site-wide outage.
 pool.on('error',error=>console.error('PostgreSQL pool connection error (will reconnect on next query).',error));
+authPool.on('error',error=>console.error('PostgreSQL sign-in pool connection error (will reconnect on next query).',error));
+listenerPool.on('error',error=>console.error('PostgreSQL listener connection error (will reconnect on the next subscription).',error));
 process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
 const sessionStore=createSessionStore(pool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
+// The same sessions table, reached through the sign-in pool, for the login paths.
+const authSessionStore=createSessionStore(authPool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
 let databaseReady=false;
 let cdirRosterRevision=null;
 let databaseError='Database initialization is pending.';
@@ -1501,28 +1520,30 @@ const deletionApproval=installDeletionApproval(app,{
     },
   }),
 });
-const misCredentialIdentity=installPulseApplicationIdentity(app,{pool,sessionStore});
+const misCredentialIdentity=installPulseApplicationIdentity(app,{pool:authPool,sessionStore:authSessionStore});
 let verifyMisTripCard;
 installMisPulseBridge(app,{identity:misCredentialIdentity,
- readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
+ // The feed and the fleet are read once per window for every Pulse-II caller (misBridgeFeedCache,
+ // misBridgeFleetCache); the caller's own site scope is still applied on every call.
+ readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const rows=await misBridgeFeedCache.read(async()=>(await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`)).rows);return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
  readFleet:async(profile,site)=>{
   const user=await currentUserRecord(profile);
   const assigned=userSiteSelection(user);
   const isMisAdmin=[...profile.permissions.misDesktopAccess,...profile.permissions.misMobileAccess].includes('Users & employees');
   const scope=assigned.length?userSiteScope(user):isMisAdmin?{sites:null}:managerReportScope(user);
   if((scope.sites===null&&!isMisAdmin)||!reportScopeIncludesSite(scope,site))throw Object.assign(new Error('This card site is not assigned to your Pulse login.'),{status:403});
-  const {rows}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY id");
   // Cross-site assignments let the matcher distinguish transfers from unknown equipment.
-  return {'Equipment master':rows.map(({id,record_data:record})=>({
+  const fleet=await misBridgeFleetCache.read(async()=>(await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY id")).rows.map(({id,record_data:record})=>({
    id,door:equipmentDoorNumber(record),doorNo:record.doorNo,equipmentDoorNo:record.equipmentDoorNo,
    currentLocation:record.currentLocation||record.location||record.site,
    category:record.category||record.equipmentCategory||record.kind,cardAliases:record.cardAliases,
-  }))};
+  })));
+  return {'Equipment master':fleet};
  },
  readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
  verifyRequest:(...args)=>verifyMisTripCard(...args),
 });
-const misLoginHandoff=installMisLoginHandoff(app,{pool,identity:misCredentialIdentity});
+const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 
 app.get('/api/app-version',(_req,res)=>{
@@ -2366,7 +2387,7 @@ app.post('/api/login',async(req,res,next)=>{
     const username=String(req.body?.username||'').trim().toLowerCase();
     const password=String(req.body?.password||'');
     if(!username||!password)return res.status(400).json({error:'User name and password are required.'});
-    const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
+    const {rows:userRows}=await authPool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
     // Filter by the submitted login before verifying any password hashes. A
     // scrypt verification is deliberately costly, so checking all employee
     // records here makes login scale linearly with the entire master and can
@@ -2388,7 +2409,7 @@ app.post('/api/login',async(req,res,next)=>{
     const employee=employeeRow.record_data;
     const login=String(employee.login||userLoginCandidates(employee)[0]||username).trim();
     const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),username]);
-    const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
+    const {rows:privilegeRows}=await authPool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
     const fleetRoles=assignedUserRoles(employee).filter(role=>!['Account User','Tender User'].includes(role));
     const desktopAccount=String(employee.userType||'').toLowerCase().includes('super');
     if(req.body.portal==='accounts'&&!hasAccountRole(employee))return res.status(403).json({error:'This ID is not assigned to Accounts. Select Fleet operations.'});
@@ -2417,14 +2438,14 @@ app.post('/api/login',async(req,res,next)=>{
     if(employee.mustChangePassword===true){
       req.audit.reason='Initial password change required';
       const changeToken=randomUUID();
-      await pool.query(`INSERT INTO password_change_sessions
+      await authPool.query(`INSERT INTO password_change_sessions
         (token,master_record_id,role,employee_name,login_name,user_type,assigned_role,permissions)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,[
           changeToken,employeeRow.id,profile.sessionRole,employee.employee,login,profile.userType,profile.assignedRole,JSON.stringify(profile.permissions)
         ]);
       return res.json({requiresPasswordChange:true,changeToken,name:employee.employee});
     }
-    const token=await sessionStore.createForVerifiedDevice({token:randomUUID(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions},sessionActivityDetails(req));
+    const token=await authSessionStore.createForVerifiedDevice({token:randomUUID(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions},sessionActivityDetails(req));
     req.auditSessionToken=token;
     res.json(loginPayload({token,profile,employee,login}));
   }catch(error){next(error)}
@@ -2586,6 +2607,9 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
 });
 
 async function readSession(req){
+  // A router-level guard and the route's own guard both read the session of one request; the
+  // first answer serves both, so a request costs one session lookup and one membership check.
+  if(req.pulseSessionLookup!==undefined)return req.pulseSessionLookup;
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   const session=await sessionStore.get(token);
   if(session&&!membershipOnboardingPath(req.path)){
@@ -2599,6 +2623,7 @@ async function readSession(req){
       if(!status.allowed){const error=new Error('Join and verify all assigned site Telegram groups to continue.');error.status=403;error.code='TELEGRAM_MEMBERSHIP_REQUIRED';throw error;}
     }
   }
+  req.pulseSessionLookup=session;
   return session;
 }
 
@@ -3648,7 +3673,7 @@ app.get('/api/health',async(_req,res)=>{
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
       oemEmailSchedule:{enabled:scheduledJobsEnabled,mailConfigured:ticketEmailConfiguration().configured,timeZone:'Asia/Kolkata',hour:17},
       cdirRosterRevision,
-      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},requestFeedCache:requestFeedCache.stats,slowRequestThresholdMs},
+      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},signInPool:{total:authPool.totalCount,idle:authPool.idleCount,waiting:authPool.waitingCount},requestFeedCache:requestFeedCache.stats,misBridgeCache:{feed:misBridgeFeedCache.stats,fleet:misBridgeFleetCache.stats},slowRequestThresholdMs},
     });
   }catch(error){
     databaseReady=false;
@@ -3906,8 +3931,24 @@ app.post('/api/telegram/test-templates',requireSuper,requireWhatsAppAdministrato
 const sessionLogin=(req)=>String(req.session?.login||'').trim().toLowerCase();
 
 const membershipChecker=createMembershipChecker({checkMember:telegramChatMember,checkGroup:telegramSiteGroupDetails});
+// The user's record and the site-group settings are needed for every request's membership check
+// and change rarely: each is read at most once a minute (any write clears the records, a
+// site-group change clears the settings). The Telegram link is read every time, so a user who
+// has just connected Telegram is let in at once.
+let telegramSiteGroupsRead=null;
+async function telegramSiteGroupsCached(force){
+  if(!force&&telegramSiteGroupsRead&&Date.now()-telegramSiteGroupsRead.time<60000)return telegramSiteGroupsRead.groups;
+  const groups=await telegramSiteGroups();telegramSiteGroupsRead={time:Date.now(),groups};return groups;
+}
+async function membershipUserRecord(login,force){
+  const key=String(login||'').trim().toLowerCase(),saved=membershipUserRecords.get(key);
+  if(!force&&saved&&Date.now()-saved.time<60000)return saved.user;
+  const user=await bdmsUserRecord(login);membershipUserRecords.set(key,{time:Date.now(),user});
+  if(membershipUserRecords.size>5000)for(const [id,value] of membershipUserRecords)if(Date.now()-value.time>=60000)membershipUserRecords.delete(id);
+  return user;
+}
 async function telegramMembershipFor(login,force=false){
-  const [user,groups,{rows}]=await Promise.all([bdmsUserRecord(login),telegramSiteGroups(),
+  const [user,groups,{rows}]=await Promise.all([membershipUserRecord(login,force),telegramSiteGroupsCached(force),
     pool.query('SELECT chat_id FROM telegram_user_links WHERE login=$1',[String(login||'').trim().toLowerCase()])]);
   return membershipChecker({user:user||{},groups,chatId:rows[0]?.chat_id,force});
 }
@@ -4842,6 +4883,7 @@ async function updateTelegramSiteGroups(change){
     await client.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
       ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[TELEGRAM_SITE_GROUPS_KEY,JSON.stringify(groups)]);
     await client.query('COMMIT');
+    telegramSiteGroupsRead=null;
   }catch(error){await client.query('ROLLBACK');throw error}
   finally{client.release()}
 }
@@ -6202,7 +6244,7 @@ function scheduleMaintenanceReminderNotifications(now=Date.now()){
   }).finally(()=>{maintenanceReminderRun=null});
 }
 
-const waitForNotification=createNotificationFeed(pool);
+const waitForNotification=createNotificationFeed(listenerPool);
 app.get('/api/notifications',requireSession,async(req,res,next)=>{
   let subscription;
   res.set('Cache-Control','private, no-store');
@@ -8902,6 +8944,10 @@ function setStaggeredInterval(task,intervalMs,offsetMs=0){
 async function initializeDatabase(){
   try{
     await migrate();
+    // Every authenticated request and every sign-in looks a user up by login. Without this index
+    // each lookup read the whole Users & employees master. Built without blocking writes.
+    await pool.query("CREATE INDEX CONCURRENTLY IF NOT EXISTS users_login_lookup ON master_records ((lower(trim(record_data->>'login')))) WHERE master_name='Users & employees'")
+      .catch(error=>console.error('The login lookup index could not be created; lookups continue without it.',error.message));
     await misSharedSignIn.initialize();
     await misCredentialIdentity.initialize();
     await misLoginHandoff.initialize();
