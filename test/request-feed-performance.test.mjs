@@ -10,18 +10,18 @@ function clock(start = 1000) {
   return {now: () => value, advance(ms) { value += ms; }};
 }
 
-test('telemetry cannot evict the feed but business and unknown writes still do', async () => {
+test('sign-in and telemetry cannot evict the feed but business and unknown writes still do', async () => {
   const cache = createFeedCache();
   let reads = 0;
   const load = async () => [{ref: `REQ-${++reads}`}];
   for (let user = 0; user < 100; user += 1) {
-    for (const path of ['/api/session-heartbeat', '/api/user-activity']) {
+    for (const path of ['/api/login', '/api/session-heartbeat', '/api/user-activity']) {
       assert.equal(requestFeedWriteInvalidates({method:'POST', path}), false);
       if (requestFeedWriteInvalidates({method:'POST', path})) cache.clear();
       await cache.read(load, 'revision-1');
     }
   }
-  assert.equal(reads, 1, '200 interleaved telemetry/poll pairs share one database load');
+  assert.equal(reads, 1, 'interleaved sign-in, telemetry and polls share one database load');
   for (const path of ['/api/requests', '/api/requests/REQ-1/close', '/api/masters', '/api/new-feature', '/api/session-heartbeat/extra']) {
     assert.equal(requestFeedWriteInvalidates({method:'POST', path}), true);
     cache.clear();
@@ -31,6 +31,25 @@ test('telemetry cannot evict the feed but business and unknown writes still do',
   assert.equal(requestFeedWriteInvalidates({method:'PATCH',path:'/api/user-activity'}), true);
   await cache.read(load, 'revision-2');
   assert.equal(reads, 7, 'database revisions still invalidate changes from another instance');
+});
+
+test('dashboard and workflow polls reuse their own feeds until the data changes', async () => {
+  const cache = createFeedCache();
+  let reads = 0;
+  const load = feed => async () => { reads += 1; return [feed]; };
+  for (let i = 0; i < 100; i += 1) {
+    assert.deepEqual(await cache.read(load('dashboard'), 'r1', 'dashboard'), ['dashboard']);
+    assert.deepEqual(await cache.read(load('workflow'), 'r1', 'workflow'), ['workflow']);
+  }
+  assert.equal(reads, 2);
+  await cache.read(load('dashboard'), 'r2', 'dashboard');
+  assert.equal(reads, 3);
+  cache.clear();
+  await Promise.all([
+    cache.read(load('dashboard'), 'r2', 'dashboard'),
+    cache.read(load('workflow'), 'r2', 'workflow'),
+  ]);
+  assert.equal(reads, 5);
 });
 
 test('a slow in-flight read is shared beyond TTL, without reviving a cleared result', async () => {
@@ -133,7 +152,7 @@ test('the requests route shares the feed and business writes clear it', () => {
 
   const route = server.slice(server.indexOf("app.get('/api/requests',requireSession"), server.indexOf("app.get('/api/requests/conflict'"));
   assert.match(route, /const ownRowsOnly=query\.values\.length>0;/);
-  assert.match(route, /const rows=ownRowsOnly\?await readFeed\(\):await requestFeedCache\.read\(readFeed,`\$\{dashboardScope\?'dashboard':'workflow'\}:\$\{JSON\.stringify\(revisions\)\}`\);/,
+  assert.match(route, /const rows=ownRowsOnly\?await readFeed\(\):await requestFeedCache\.read\(readFeed,JSON\.stringify\(revisions\),dashboardScope\?'dashboard':'workflow'\);/,
     'a production user reads only their own rows, so that query is not shared');
   assert.match(route, /const payload=requestsVisibleToSession\(siteVisibleRows,req\.session\)/,
     'every response is still filtered for the signed-in user');

@@ -6657,7 +6657,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     // remarks for a few seconds instead of repeating both per user.
     const ownRowsOnly=query.values.length>0;
     const readFeed=async()=>attachDailyRemarks((await pool.query(query)).rows);
-    const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,`${dashboardScope?'dashboard':'workflow'}:${JSON.stringify(revisions)}`);
+    const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,JSON.stringify(revisions),dashboardScope?'dashboard':'workflow');
     const siteVisibleRows=scopedManagerSites!==null
       ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
       : scopedSite===null
@@ -8077,18 +8077,19 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
     if(!dashboardEquipmentScopeIsUsable(scope))
       return res.status(409).json({error:'No dashboard site or region is assigned to this account. Contact an administrator.'});
     const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
-    const etag=typeof privateVersionEtag==='function'?privateVersionEtag('dashboard-equipment',revisions,{scope,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
-    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
-    const {rows}=await pool.query(`SELECT id,record_data FROM master_records
-      WHERE master_name='Equipment master' ORDER BY created_at ASC`);
-    const records=rows.map(({id,record_data})=>({
-      id,
-      ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
-    }));
-    // Rebuild the midnight opening fleet from shared request history. The
-    // account's full site assignment is applied to both snapshots below.
     const countDay=indiaCountDayWindow();
-    const {rows:fleetRequests}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
+    const etag=typeof privateVersionEtag==='function'?privateVersionEtag('dashboard-equipment',revisions,{scope,day:countDay.day,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
+    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
+    // The raw snapshots are identical for every caller. Apply account scope
+    // after the shared read, including when a previous caller warmed the cache.
+    const loadFleet=async()=>{
+      const {rows}=await pool.query(`SELECT id,record_data FROM master_records
+        WHERE master_name='Equipment master' ORDER BY created_at ASC`);
+      const records=rows.map(({id,record_data})=>({
+        id,
+        ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
+      }));
+      const {rows:fleetRequests}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
       door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, vehicle_idle AS "vehicleIdle",owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
       (lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE) AS "currentlyActive",
@@ -8100,16 +8101,22 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       FROM maintenance_requests
       WHERE archived_at IS NULL AND (lower(trim(status)) <> 'closed' OR vehicle_idle=TRUE
         OR (started_at < $1 AND ((closed_at IS NULL OR closed_at >= $1) OR (ideal_requested_at < $1 AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1)))))`,[countDay.openingAt]);
-    const {rows:shiftRows}=await pool.query(`SELECT id,record_data FROM master_records
-      WHERE master_name='Shift Master' ORDER BY created_at ASC`);
-    const shiftRecords=shiftRows.map(({id,record_data})=>({
-      id,
-      ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
-    })).filter(row=>!scope.restrictToScope||!Array.isArray(scope.allowedSites)||!scope.allowedSites.length||scope.allowedSites.some(site=>String(site||'').trim().toLowerCase()===String(row.site||'').trim().toLowerCase()));
-    const activeFleetRequests=fleetRequests.filter(row=>row.currentlyActive??String(row.status||'').trim().toLowerCase()!=='closed');
-    const openingFleetRequests=fleetRequests.filter(row=>row.openAtMidnight).map(row=>({...row,status:row.midnightStatus}));
-    const fleetSnapshot=dashboardFleetSnapshot(records,activeFleetRequests);
-    const openingFleetSnapshot=dashboardFleetSnapshot(records,openingFleetRequests);
+      const {rows:shiftRows}=await pool.query(`SELECT id,record_data FROM master_records
+        WHERE master_name='Shift Master' ORDER BY created_at ASC`);
+      const shifts=shiftRows.map(({id,record_data})=>({
+        id,
+        ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
+      }));
+      const activeFleetRequests=fleetRequests.filter(row=>row.currentlyActive??String(row.status||'').trim().toLowerCase()!=='closed');
+      const openingFleetRequests=fleetRequests.filter(row=>row.openAtMidnight).map(row=>({...row,status:row.midnightStatus}));
+      return {
+        shifts,
+        fleetSnapshot:dashboardFleetSnapshot(records,activeFleetRequests),
+        openingFleetSnapshot:dashboardFleetSnapshot(records,openingFleetRequests),
+      };
+    };
+    const {shifts,fleetSnapshot,openingFleetSnapshot}=await requestFeedCache.read(loadFleet,JSON.stringify([countDay.day,revisions]),'dashboard-equipment');
+    const shiftRecords=shifts.filter(row=>!scope.restrictToScope||!Array.isArray(scope.allowedSites)||!scope.allowedSites.length||scope.allowedSites.some(site=>String(site||'').trim().toLowerCase()===String(row.site||'').trim().toLowerCase()));
     const scopedFleet=scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope);
     const scopedOpeningFleet=scopeDashboardEquipmentRecords(openingFleetSnapshot,authorization.session,authorization.user,scope);
     const breakdownCountChange=dailyCountChange(

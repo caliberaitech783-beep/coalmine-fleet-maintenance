@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dashboardFleetSnapshot} from '../dashboard-fleet-snapshot.mjs';
+import {createFeedCache} from '../request-feed-cache.mjs';
 import {liveEquipmentMetrics, fleetChartCounts} from '../dashboard-equipment-metrics.mjs';
 import {dailyCountChange,indiaCountDayWindow} from '../src/fleet-count-trend.mjs';
 import * as access from '../dashboard-equipment-access.mjs';
@@ -80,7 +81,7 @@ test('actual read-only dashboard route derives status before enforcing every rol
   const route=source.slice(source.indexOf("app.get('/api/dashboard/equipment'"),source.indexOf("app.get('/api/reports/master-data'"));
   let handlers,authorization;
   const queries=[];
-  const dependencies={...access,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,
+  const dependencies={...access,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
     app:{get(path,...registered){assert.equal(path,'/api/dashboard/equipment');handlers=registered;}},
     requireSession(req,res,next){next();},
     currentDashboardAuthorization:async()=>authorization,
@@ -100,6 +101,7 @@ test('actual read-only dashboard route derives status before enforcing every rol
     assert.equal(liveEquipmentMetrics(result.records).offRoad,1,role);
     assert.equal(JSON.stringify(result).includes('TEST-ONLY'),false,role);
   }
+  assert.equal(queries.length,3,'every role shares the three snapshot reads without sharing its access scope');
   assert.ok(queries.every(sql=>/^SELECT\b/.test(sql)), 'no database mutation');
   assert.ok(queries.filter(sql=>sql.includes('maintenance_requests')).every(sql=>!sql.includes('remark')&&!sql.includes('opened_by')));
   authorization=null;
