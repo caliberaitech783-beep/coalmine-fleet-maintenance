@@ -104,9 +104,34 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 /* Announcement images: shown in the popup, previewed while composing and as thumbnails in the history. */
 .session-message-inbox-body{max-height:calc(100dvh - 230px);overflow:auto}
 .login > section.login-visual{background:linear-gradient(135deg,#522e90 0%,#9d2e80 55%,#ef4960 100%)}
-.login-application-links{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
-.login-application-links > a,.login-application-links > button{display:flex;align-items:center;gap:12px;min-width:180px;padding:16px 20px;border:1px solid #ffffff66;border-radius:12px;background:#ffffff16;color:#fff;text-decoration:none;text-align:left;font-size:13px}
-.login-application-links strong{display:block;font-size:18px;margin-bottom:4px}
+.login-application-links{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-auto-rows:1fr;
+  width:min(100%,420px);
+  gap:12px;
+  margin-top:24px;
+}
+.login-application-links > a,.login-application-links > button{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+  min-height:78px;
+  padding:16px 20px;
+  border:1px solid #ffffff66;
+  border-radius:12px;
+  background:#ffffff16;
+  color:#fff;
+  font:400 13px/1.35 'DM Sans',sans-serif;
+  text-align:left;
+  text-decoration:none;
+  white-space:normal;
+}
+.login-application-links > :is(a,button) > span{min-width:0;overflow-wrap:anywhere}
+.login-application-links strong{display:block;margin-bottom:4px;font-size:16px;font-weight:800;text-transform:uppercase}
 .login-application-links svg{width:28px;height:28px;flex:none}
 .login-application-links > :hover{background:#ffffff2e}
 .login-application-links > :focus-visible{outline:3px solid white;outline-offset:3px}
@@ -123,7 +148,7 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .accounts-user-workspace > header button{display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff66;background:transparent;color:#fff;border-radius:8px}
 .accounts-user-workspace > header button.active{border-color:#fff;background:#ffffff22;box-shadow:inset 0 -2px #fff}
 .accounts-user-workspace > main{padding:24px}
-@media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;margin-top:16px;gap:12px}.login-application-links > a,.login-application-links > button{min-width:0;width:100%;height:auto;box-sizing:border-box;padding:12px;gap:8px;white-space:normal;line-height:1.35}.login-application-links > :is(a,button) > span{min-width:0;overflow-wrap:anywhere}.login-application-links strong{font-size:15px;line-height:1.3}.login-application-links svg{width:22px;height:22px}.accounts-user-workspace > main{padding:12px}}
+@media(max-width:900px){.login > section.login-visual{display:flex;height:auto;min-height:0}.login .login-message{display:none}.login-application-links{margin-top:16px}.login-application-links > a,.login-application-links > button{padding:12px;gap:8px}.login-application-links svg{width:22px;height:22px}.accounts-user-workspace > main{padding:12px}}
 @media(max-width:360px){.login-application-links{grid-template-columns:minmax(0,1fr)}}
 /* Keep the archive outside navigation styling, with a single full-page scroll area. */
 .overlay.announcement-archive-overlay{padding:0;place-items:stretch}
