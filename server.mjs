@@ -358,7 +358,7 @@ const sessionStore=createSessionStore(pool,{cleanup:async()=>({skipped:true,reas
 const authSessionStore=createSessionStore(authPool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
 const dashboardSessionStore=createSessionStore(dashboardReadPool);
 function selectDashboardReadPool(req,res,next){
-  if(req.method==='GET'&&(req.path==='/api/dashboard/equipment'||(req.path==='/api/requests'&&req.query.scope==='dashboard'))){
+  if(req.method==='GET'&&(req.path==='/api/dashboard/equipment'||req.path==='/api/lmv-fleet'||(req.path==='/api/requests'&&req.query.scope==='dashboard'))){
     req.dashboardReadPool=dashboardReadPool;
     req.dashboardSessionStore=dashboardSessionStore;
   }
@@ -8989,7 +8989,10 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
 
 // Vite fingerprints every file under /app-assets, so a deploy changes the URL and
 // browsers may keep these for a year. index.html is still revalidated.
-registerLmvFleet(app,{pool,requireSession,currentDashboardAuthorization});
+registerLmvFleet(app,{pool,requireSession,currentDashboardAuthorization,readSnapshot:async(client,load)=>{
+  const revisions=await currentDataRevisions(['request-feed','master-data'],client);
+  return requestFeedCache.read(load,JSON.stringify(revisions),'dashboard-lmv');
+}});
 registerBreakdownResponsibilityRoute();
 registerReopenBreakdownRoute();
 // Legacy directory snapshots embed unfiltered phone numbers. Use the protected API.
