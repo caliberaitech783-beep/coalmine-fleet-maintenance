@@ -1,9 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {PGlite} from '@electric-sql/pglite';
 import {createFeedCache,requestFeedWriteInvalidates} from '../request-feed-cache.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+
+test('dashboard read keeps all active requests and first-trip details with one join', async (t) => {
+  const db = new PGlite();
+  t.after(() => db.close());
+  const requestTable = server.match(/CREATE TABLE IF NOT EXISTS maintenance_requests \([\s\S]+?\n    \);/)[0];
+  const columns = [...server.matchAll(/^ +ALTER TABLE maintenance_requests\s+ADD COLUMN IF NOT EXISTS [^;]+;/gm)]
+    .map(([sql]) => sql);
+  const tripTable = server.match(/CREATE TABLE IF NOT EXISTS production_first_trip_acceptances \([\s\S]+?\n    \);/)[0];
+  await db.exec(requestTable);
+  await db.exec(columns.join('\n'));
+  await db.exec(`
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS vehicle_idle BOOLEAN DEFAULT FALSE;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+    ${tripTable}
+    INSERT INTO maintenance_requests(reference, door_number, complaint, created_at, archived_at)
+      VALUES ('with-trip','D1','fault','2026-11-10',NULL),
+             ('without-trip','D2','fault','2026-11-09',NULL),
+             ('archived','D3','fault','2026-11-11','2026-11-11');
+    INSERT INTO production_first_trip_acceptances
+      (request_reference, production_first_trip_at, production_first_trip_by, production_first_trip_login, production_first_trip_remark)
+      VALUES ('with-trip','2026-11-10 10:00+00','Operator','operator','Confirmed');
+  `);
+  const projectionCode = server.slice(server.indexOf('const requestProjection='), server.indexOf('const infoPulseProjection='));
+  const projections = new Function(`${projectionCode}; return {requestProjection,dashboardRequestProjection};`)();
+  const start = server.indexOf("app.get('/api/requests',requireSession");
+  const route = server.slice(start, server.indexOf('\n});', start) + 4);
+  let handler;
+  const bindings = {
+    app:{get(_path, _guard, run){handler=run;}}, requireSession(){},
+    pool:{query:({text,values}) => db.query(text,values)}, ...projections,
+    requestFeedCache:createFeedCache(), attachDailyRemarks:async rows => rows, requestsVisibleToSession:rows => rows,
+  };
+  new Function(...Object.keys(bindings), route)(...Object.values(bindings));
+  const read = (scope) => new Promise((resolve,reject) => handler(
+    {query:{scope},session:{role:'super',login:'admin'}}, {json:resolve}, reject,
+  ));
+  const dashboard = await read('dashboard');
+  assert.deepEqual(dashboard, await read('workflow'));
+  assert.deepEqual(dashboard.map(row => [row.ref,row.productionFirstTripAt,row.productionFirstTripBy,row.productionFirstTripLogin,row.productionFirstTripRemark]), [
+    ['with-trip','2026-11-10 15:30:00','Operator','operator','Confirmed'],
+    ['without-trip',null,'','',''],
+  ]);
+});
 
 function clock(start = 1000) {
   let value = start;

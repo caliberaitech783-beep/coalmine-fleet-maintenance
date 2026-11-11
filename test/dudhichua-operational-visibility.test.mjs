@@ -15,7 +15,7 @@ test("dashboard excludes old Dudhichua rows while the Admin feed retains them", 
   assert.deepEqual(requestsVisibleToDashboard(adminRows), keep);
   assert.deepEqual(adminRows, [...oldRows, ...keep]);
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /function Dashboard\([\s\S]*?const requests = useMemo\(\(\) => requestsVisibleToDashboard\(sourceRequests\), \[sourceRequests\]\);/);
+  assert.match(source, /function Dashboard\([\s\S]*?const requests = useMemo\(\(\) => requestsVisibleToDashboard\(requestRecords\), \[requestRecords\]\);/);
 });
 test("existing Dudhichua requests of every status are hidden only from the three operational roles", () => {
   for (const assignedRole of ["Production User", "Maintenance User", "MIS User"]) {

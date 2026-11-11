@@ -93,8 +93,10 @@ test("mobile retry remains reconnecting until the next response actually succeed
   assert.deepEqual(loader.getState().records, [{ref: "NEW"}]);
 });
 
-test("admin and production/maintenance/MIS dashboard gates retain only same-session successful data", () => {
-  assert.match(source, /dashboardRequestsLoaded \? <Dashboard/);
+test("admin and operational dashboard shells render before their same-session feeds are ready", () => {
+  assert.match(source, /<Dashboard requestsLoaded=\{dashboardRequestsLoaded\}/);
+  assert.match(source, /showDashboardMenu&&<Dashboard requests=\{misDashboardRequests\} requestsLoaded=\{dashboardRequestsReady\}/);
+  assert.doesNotMatch(source, /\? <Dashboard[^\n]+: <RequestDataState/);
   assert.match(source, /requestState.token === session\?\.token && requestState.loaded/);
   assert.match(source, /dashboardState.token === session\?\.token && dashboardState.loaded/);
   assert.match(source, /requestsError=\{dashboardRequestsError\} requestsUpdatedAt=\{dashboardRequestsUpdatedAt\}/);

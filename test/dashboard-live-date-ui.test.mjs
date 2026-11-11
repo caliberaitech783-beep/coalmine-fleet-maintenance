@@ -243,7 +243,11 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...metrics, requestCategoryLabel,...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
     availabilityRequestsForDate, dashboardFleetSnapshot, fleetMovementLedger, indiaDateTimeEpoch, ...meterColumns,
     dashboardKpiExportColumns: [],
-    React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useCallback: callback => callback, useRef: (initial) => useState(() => ({current: initial}))[0],
+    React, useState,
+    // Commit the snapshot after render. Browser effects with dependency lists
+    // (observers, timers and listeners) are outside this harness.
+    useEffect(effect, dependencies) { if (!dependencies) effects.push(effect); },
+    useMemo: (calculate) => calculate(), useCallback: callback => callback, useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel, isIdleVehicleRequest,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
@@ -256,21 +260,43 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
   };
   dependencies.useNavigationState=(_key, initial)=>dependencies.useState(initial);
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
-  return {render(rows = requests, props = {}) {
+  const effects = [];
+  const render = (rows, props) => {
     cursor = 0;
-    let tree = Dashboard({requests: rows, ...props});
+    const tree = Dashboard({requests: rows, requestsLoaded: true, ...props});
+    effects.splice(0).forEach(effect => effect());
+    return tree;
+  };
+  return {render(rows = requests, props = {}) {
+    let tree = render(rows, props);
     if (!initialized) {
       initialized = true;
       // Existing breakdown tests enter that view through its normal label action.
       if (initialMode) {
         button(byLabel(tree, "Fleet chart view"), initialMode === "oem" ? "OEM BD" : initialMode === "total" ? "Total" : "Breakdown").props.onClick();
-        cursor = 0;
-        tree = Dashboard({requests: rows, ...props});
+        tree = render(rows, props);
       }
     }
     return tree;
   }};
 }
+
+test("dashboard remains visible through a cold failure and shows counts only after verification", () => {
+  const view = harness({initialMode: null});
+  const pending = {requestsLoaded: false};
+  for (const requestsError of ["", "Database unavailable"]) {
+    const tree = view.render([], {...pending, requestsError});
+    assert.ok(byLabel(tree, "Region"));
+    assert.ok(byLabel(tree, "Fleet and repair overview"));
+    assert.equal(text(byLabel(tree, "View Breakdown list")), "—");
+    assert.equal(byLabel(tree, "View Breakdown list").props.disabled, true);
+    assert.equal(byClass(tree, "mine-fleet-chart-plot"), undefined);
+    assert.doesNotMatch(text(byClass(tree, "mine-updated")), /\bLive\b/);
+  }
+  const tree = view.render([]);
+  assert.equal(text(fleetCount(tree, "Breakdown")), "0");
+  assert.match(text(byClass(tree, "mine-updated")), /\bLive\b/);
+});
 
 for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} failure keeps cards, filters and drilldown mounted without a Live label`, () => {
   const equipmentState = {updatedAt: 1788854300000};
@@ -284,8 +310,9 @@ for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} fa
   const originalRows = detailView(tree).rows;
   assert.match(text(byClass(tree, "mine-updated")), /Live/);
   if (resource === "equipment") equipmentState.loadError = "Network unavailable";
+  else equipmentState.records = assets.slice(0, 2);
   const failureProps = {...props, requestsError: resource === "requests" ? "Network unavailable" : ""};
-  tree = view.render(requests, failureProps);
+  tree = view.render(resource === "equipment" ? [] : requests, failureProps);
   assert.equal(byLabel(tree, "Region").props.value, "WCL");
   assert.deepEqual(detailView(tree).rows, originalRows);
   assert.ok(byClass(tree, "mine-fleet-chart-plot"));
@@ -294,6 +321,7 @@ for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} fa
   const notice = findAll(tree, (node) => typeof node.props.retry === "function" && node.props.updatedAt)[0];
   assert.equal(notice.props.updatedAt, equipmentState.updatedAt);
   equipmentState.loadError = "";
+  equipmentState.records = assets;
   tree = view.render(requests, props);
   assert.match(text(byClass(tree, "mine-updated")), /Live/);
   assert.deepEqual(detailView(tree).rows, originalRows);

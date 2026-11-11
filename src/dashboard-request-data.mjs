@@ -111,19 +111,24 @@ export function createDashboardRequestLoader({
           signal: controller.signal,
           headers: {Authorization: `Bearer ${authToken}`, ...(currentEtag ? {"If-None-Match": currentEtag} : {})},
         });
-        if (response.status === 304) return {notModified: true, records: state.records};
+        if (response.status === 304) {
+          if (!currentEtag || !state.loaded) throw new Error("Dashboard requests could not be verified. Please retry.");
+          return {records: state.records, etag: currentEtag};
+        }
         let body;
         try { body = await response.json(); }
         catch { throw Object.assign(new Error("Dashboard request data could not be read. Please retry."), {status: response.status}); }
         if (!response.ok) throw Object.assign(new Error(
           typeof body?.error === "string" && body.error.trim() ? body.error : "Could not load dashboard requests. Please retry.",
         ), {status: response.status});
-        if (!Array.isArray(body)) throw new Error("Dashboard request data is invalid. Please retry.");
-        currentEtag = response.headers?.get?.("etag") || "";
-        return {notModified: false, records: body};
+        if (!Array.isArray(body) || body.some((row) => typeof row?.ref !== "string" || !row.ref.trim())) {
+          throw new Error("Dashboard request data is invalid. Please retry.");
+        }
+        return {records: body, etag: response.headers?.get?.("etag") || ""};
       };
       const result = await Promise.race([request(), aborted]);
       if (attempt !== sequence || controller.signal.aborted) return getState();
+      currentEtag = result.etag;
       publish({token: authToken, records: result.records, loaded: true, loading: false, error: "", updatedAt: now()});
     } catch (error) {
       if (attempt !== sequence || (controller.signal.aborted && !timedOut)) return getState();

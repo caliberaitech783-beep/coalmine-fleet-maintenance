@@ -12,7 +12,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.equal(assignedUserSiteName({site:"Majri OB",location:"Sasti OB"}),"Majri OB");
   assert.match(source,/createDashboardRequestLoader\(\{onState:setDashboardState\}\)/);
   assert.match(source,/dashboardState\.token === session\?\.token && dashboardState\.loaded/);
-  assert.match(source,/dashboardRequestsReady \? <Dashboard requests=\{misDashboardRequests\}/);
+  assert.match(source,/<Dashboard requests=\{misDashboardRequests\} requestsLoaded=\{dashboardRequestsReady\}/);
   assert.match(source,/loader\.cancel\(\)/);
   assert.match(server,/rows\.filter\(\(row\)=>reportScopeIncludesSite\(scopedSite,row\.site\)\)/);
   assert.match(server,/A location must be assigned before this MIS user can verify requests/);

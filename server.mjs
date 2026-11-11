@@ -331,6 +331,7 @@ const dashboardReadPool=protectDeletionPool(new Pool({
   ssl:databaseSsl,
   max:3,
   connectionTimeoutMillis:10000,
+  statement_timeout:15000,
   ...warmPoolOptions,
 }));
 // The notification LISTEN connection is held for the life of the process; it has a pool of its
@@ -6528,6 +6529,7 @@ const requestProjection=`archived_at AS "archivedAt", linked_request_references 
 // those complete fields on workflow reads, but do not transfer them on every
 // dashboard refresh.
 const dashboardRequestProjection=requestProjection
+  .replace(/\(SELECT (.+?) FROM production_first_trip_acceptances pfta WHERE pfta\.request_reference=maintenance_requests\.reference\)/g,'$1')
   .replace('maintenance_work AS "maintenanceWork"','\'\'::text AS "maintenanceWork"')
   .replace('opening_meter_readings AS "openingMeterReadings"','\'{}\'::jsonb AS "openingMeterReadings"')
   .replace('closing_meter_readings AS "closingMeterReadings"','\'{}\'::jsonb AS "closingMeterReadings"');
@@ -6768,9 +6770,16 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
     const dashboardScope=req.query.scope==='dashboard';
     const projection=dashboardScope?dashboardRequestProjection:requestProjection;
+    // The acceptance table has one row per reference. Join it once for the
+    // four first-trip fields, exposing only columns unique to the request table.
+    const source=dashboardScope?`maintenance_requests LEFT JOIN (
+      SELECT request_reference, production_first_trip_at, production_first_trip_by,
+        production_first_trip_login, production_first_trip_remark
+      FROM production_first_trip_acceptances
+    ) pfta ON pfta.request_reference=maintenance_requests.reference`:'maintenance_requests';
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'&&!dashboardScope
       ? {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL AND requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
-      : {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
+      : {text:`SELECT ${projection} FROM ${source} WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'){
       const operationalUser=await currentUserRecord(req.session,client);

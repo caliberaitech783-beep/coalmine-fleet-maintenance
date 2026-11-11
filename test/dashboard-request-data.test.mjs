@@ -129,7 +129,7 @@ test("loader refuses absent authentication without fetching or treating it as an
 });
 
 test("invalid JSON and non-array payloads remain failures, never successful zero requests", async () => {
-  const payloads = [response({requests: []}), response(null), response("[]"), {ok: true, json: async () => { throw new SyntaxError("bad JSON"); }}];
+  const payloads = [response({requests: []}), response(null), response("[]"), response([{}]), {ok: true, json: async () => { throw new SyntaxError("bad JSON"); }}];
   for (const result of payloads) {
     const loader = createDashboardRequestLoader({fetchImpl: async () => result});
     const state = await loader.load("demo");
@@ -138,6 +138,14 @@ test("invalid JSON and non-array payloads remain failures, never successful zero
     assert.ok(state.error);
     assert.equal(state.updatedAt, 0);
   }
+});
+
+test("an unsolicited 304 cannot turn a cold dashboard into a verified zero", async () => {
+  const loader = createDashboardRequestLoader({fetchImpl: async () => ({status: 304})});
+  const state = await loader.load("demo");
+  assert.equal(state.loaded, false);
+  assert.equal(state.updatedAt, 0);
+  assert.ok(state.error);
 });
 
 test("same-session refresh errors retain previously loaded records and expose failure", async () => {

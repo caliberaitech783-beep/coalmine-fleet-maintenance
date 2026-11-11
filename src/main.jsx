@@ -1508,14 +1508,16 @@ function useDashboardEquipment() {
       signal: controller.signal,
       headers: {Authorization: `Bearer ${authToken}`, ...(responseEtag ? {"If-None-Match": responseEtag} : {})},
     })
-      .then((response) => {
+      .then(async (response) => {
         if ([401, 403].includes(response.status)) throw Object.assign(new Error("Sign in again or check your dashboard access."), {status: response.status});
-        if (response.status === 304) return {notModified: true};
-        responseEtag = response.headers?.get?.("etag") || "";
-        return readApiJson(response, "Could not load fleet data.");
+        if (response.status === 304) {
+          if (!responseEtag) throw new Error("Fleet data could not be verified. Please retry.");
+          return {notModified: true};
+        }
+        return {data: await readApiJson(response, "Could not load fleet data."), etag: response.headers?.get?.("etag") || ""};
       })
-      .then((data) => {
-        if (data?.notModified) {
+      .then(({data, etag, notModified}) => {
+        if (notModified) {
           // A 304 is deliberately a no-op: updating the timestamp here forced
           // every dashboard chart and fleet aggregate to render again even
           // though no fleet data had changed.
@@ -1534,6 +1536,7 @@ function useDashboardEquipment() {
           || !Number.isFinite(Date.parse(data.nextCountDayAt)))
           throw new Error("Fleet daily count response was invalid. Please retry.");
         if (!activeRequest) return;
+        responseEtag = etag;
         loadedFleetScope.current.loaded = true;
         setBreakdownCountChange(change);
         setNextCountDayAt(data.nextCountDayAt);
@@ -1547,6 +1550,7 @@ function useDashboardEquipment() {
       .catch((error) => {
         if (activeRequest) {
           if ([401, 403].includes(error.status)) {
+            responseEtag = "";
             loadedFleetScope.current.loaded = false;
             setRecords([]);
             setScope(null);
@@ -1866,8 +1870,7 @@ function DashboardCardSearch({ cards, onSelect, close }) {
   </Modal>;
 }
 
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
-  const requests = useMemo(() => requestsVisibleToDashboard(sourceRequests), [sourceRequests]);
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests: sourceRequests = [], requestsLoaded, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const [dashboardCategories] = useMasterRecords("Breakdown Category");
   const [selectedCategoryRepairType, setSelectedCategoryRepairType] = useState(DASHBOARD_REPAIR_TYPES[0]);
   const throughputFiltersRef = useRef(null);
@@ -1890,13 +1893,39 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     window.addEventListener('resize', updateOffset);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
   }, []);
-  const lmvFleet = useLmvFleet(authToken);
+  const lmvFeed = useLmvFleet(authToken);
   const [lmvMode,setLmvMode] = useState("");
   const [lmvSelection,setLmvSelection] = useState(null);
   const [totalFleetSelection,setTotalFleetSelection] = useState(null);
-  const {records:equipmentRecords,scope:equipmentScope,shiftRecords,breakdownCountChange,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
-  const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
-  const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
+  const fleetFeed = useDashboardEquipment();
+  const {loaded:equipmentVerified,loadError:fleetError,retry:refreshFleet}=fleetFeed;
+  const lastDashboardData = useRef(null);
+  useEffect(() => {
+    if (!equipmentVerified || !requestsLoaded) {
+      lastDashboardData.current = null;
+    } else if (!fleetError && !requestsError) {
+      lastDashboardData.current = {
+        token: authToken, requests: sourceRequests, fleet: fleetFeed, lmv: lmvFeed,
+        updatedAt: Math.min(requestsUpdatedAt, fleetFeed.updatedAt), displayedAt: Date.now(),
+      };
+    }
+  });
+  const reconnecting = Boolean(fleetError || requestsError);
+  const lastVerified = equipmentVerified && requestsLoaded && reconnecting
+    && lastDashboardData.current?.token === authToken ? lastDashboardData.current : null;
+  // Both feeds are required before the combined panels can show counts.
+  const equipmentLoaded = equipmentVerified && requestsLoaded && (!reconnecting || Boolean(lastVerified));
+  const {records:equipmentRecords,scope:equipmentScope,shiftRecords,breakdownCountChange} = lastVerified?.fleet ?? fleetFeed;
+  const requestRecords = lastVerified?.requests ?? sourceRequests;
+  const requests = useMemo(() => requestsVisibleToDashboard(requestRecords), [requestRecords]);
+  const lmvFleet = lastVerified && lmvFeed.loaded ? {...lastVerified.lmv, retry: lmvFeed.retry} : lmvFeed;
+  const equipmentLoadError = requestsError || fleetError;
+  const retryEquipmentLoad = () => {
+    if (!requestsLoaded || requestsError) void Promise.resolve().then(onRefreshRequests).catch(() => {});
+    if (!equipmentVerified || fleetError) refreshFleet();
+  };
+  const dashboardReconnecting = Boolean(lastVerified);
+  const dashboardUpdatedAt = lastVerified?.updatedAt;
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [movementBrowseScope, setMovementBrowseScope] = useState(null);
   const updateMovementBrowseScope = useCallback(({ region, site }) => {
@@ -1994,7 +2023,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [roadFocusSite, setRoadFocusSite] = useState("");
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
-  const now = new Date();
+  const now = new Date(lastVerified?.displayedAt ?? Date.now());
   const todayKey = localDateKey(now);
   // The top From/To range scopes opening-date analysis; a range ending today is the live view.
   const dashboardRangeActive = Boolean(dashboardFrom && dashboardTo);
@@ -2814,13 +2843,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ]),
   ].filter(Boolean);
   // The whole dashboard: PDF and Smart Print capture it as it is on screen; Excel has every section.
-  const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Print/Export" dashboardPdf />;
+  const dashboardExportMenu = (className) => equipmentLoaded && <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Print/Export" dashboardPdf />;
   const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-shift-filter"><span>Shift Master</span><select aria-label="Shift Master" value={dashboardShift} onChange={(event) => setDashboardShift(event.target.value)}><option value="all">All shifts</option>{dashboardShiftOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label><label className="mine-date-filter"><span>From</span><DateInput aria-label="Dashboard from date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><DateInput aria-label="Dashboard to date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => filterOemChart(event.target.value)}><option value="all">All OEMs</option>{mainFleetOemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}{dashboardShift !== "all" ? ` · ${dashboardShiftLabel}` : ""}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
       {cardSearchOpen && <DashboardCardSearch cards={dashboardSearchCards} onSelect={showDashboardCard} close={() => setCardSearchOpen(false)} />}
-      {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
+      {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { refreshFleet(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""} has-lmv-bars`} ref={fleetChartRef} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
@@ -2829,7 +2858,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
                 {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <React.Fragment key={mode}>{mode === "oem" && <div className="mine-fleet-view-option mine-bd-balance" title="Non-OEM and Not Selected breakdowns, excluding OEM BD"><button type="button" disabled={!equipmentLoaded} onClick={() => openFleetChartList("fleet-breakdown:balance")}>BD Balance</button><button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label="View BD Balance list" onClick={() => openFleetChartList("fleet-breakdown:balance")}>{combinedFleetReady ? fleetHeaderBalanceCount.toLocaleString() : "—"}</button></div>}<div className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${todayBreakdownDirection}` : mode}`}>
                   <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => {setLmvMode("");setFleetChartMode(mode);}}>{label}</button>
-                  <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? mainFleetOemChart.rows.length : mode === "total" ? mainFleetTotal : fleetHeaderBreakdownCount} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
+                  <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={!equipmentLoaded ? `View ${label} list` : `View ${label} list: ${mode === "oem" ? mainFleetOemChart.rows.length : mode === "total" ? mainFleetTotal : fleetHeaderBreakdownCount} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); if(hasLmvFleet) inspectCombinedOem(); else openOemDrilldown(); }
                     else if (mode === "total") { if(hasLmvFleet) setTotalFleetSelection({mode:"total",make:showOemBreakdowns?dashboardOem:""}); else if (showOemBreakdowns) setOemDrilldownKind("fleet"); else openFleetChartList("all"); }
                     else openFleetChartList("fleet-breakdown:account");
@@ -2842,7 +2871,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="fleet-row-side">{!showOemBreakdowns && <div className="mine-fleet-chart-legend fleet-row-legend"><span {...fleetListAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...fleetListAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...fleetListAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}<div className="mine-fleet-chart-tools">{equipmentLoaded && <ExportMenu {...fleetSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></div>
           </header>
           {showOemBreakdowns && <div className="mine-oem-view-tabs" role="group" aria-label="OEM BD report view">{[["chart", "Chart"], ["details", "Site-wise detailing"]].map(([view, label]) => <button type="button" key={view} aria-pressed={oemView === view} onClick={() => setOemView(view)}>{label}</button>)}<div className="mine-oem-view-toolbar" ref={setOemViewToolbarTarget} /></div>}
-          <LmvFleetControls records={visibleLmv} mode={lmvMode} onMode={setLmvMode} onInspect={setLmvSelection} loaded={lmvFleet.loaded} error={lmvFleet.error} retry={lmvFleet.retry} onReports={()=>setLmvSelection({reports:true})} legend={<span role="button" tabIndex={0} onClick={()=>setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"})} onKeyDown={event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"});}}}><i className="otherVehicles" />Other vehicles / LMV</span>} todayCount={todayLmvBreakdownRecords.length} onTodayInspect={()=>setLmvSelection({mode:"breakdown",today:true})} />
+          <LmvFleetControls records={visibleLmv} mode={lmvMode} onMode={setLmvMode} onInspect={setLmvSelection} loaded={lmvFleet.loaded} error={lmvFleet.error} retry={lmvFleet.retry} onReports={()=>setLmvSelection({reports:true})} legend={<span role="button" tabIndex={0} onClick={()=>setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"})} onKeyDown={event=>{if(["Enter"," "].includes(event.key)){event.preventDefault();setLmvSelection({mode:showFleetBreakdowns?"breakdown":"total"});}}}><i className="otherVehicles" />Other vehicles / LMV</span>} todayCount={equipmentLoaded ? todayLmvBreakdownRecords.length : null} onTodayInspect={()=>setLmvSelection({mode:"breakdown",today:true})} />
           {equipmentLoaded ? (lmvMode ? <LmvFleetView records={visibleLmv} regions={fleetRegionInsights} mode={lmvMode} onInspect={setLmvSelection} ExportMenu={ExportMenu} stale={Boolean(lmvFleet.error)} /> : showOemBreakdowns ? (oemView === "details" && hasLmvFleet ? <ReportSection title="OEM BD · Equipment and vehicles" description="Current equipment and vehicle fleet" columns={TOTAL_FLEET_DETAIL_COLUMNS} rows={totalFleetDetailRows(totalFleetSelectionRows(combinedFleetRecords,{mode:"oem",make:dashboardOem}),liveBreakdowns)} /> : oemView === "details" ? <section className="mine-oem-inline-details" aria-label="Site-wise OEM breakdown detailing"><OemBreakdownDetails viewToolbarTarget={oemViewToolbarTarget} key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, dashboardShift].join("|")} selection={oemSiteDetailSelection} title={`OEM BD · Site-wise detailing · ${oemSiteDetailSelection.label}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} /></section> : <OemBreakdownChart chart={mainFleetOemChart} toolbarTarget={oemViewToolbarTarget} from={hasLmvFleet ? "" : oemFrom} to={hasLmvFleet ? "" : oemTo} availableHeight={oemPlotSpace} onSelect={hasLmvFleet?inspectCombinedOem:openOemDrilldown} onFilterOem={filterOemChart} onReset={resetOemFilters} />) : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${fleetBarHeightPercent(tick, fleetChartAxisMax)}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
@@ -2862,10 +2891,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-{totalFleetSelection && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={combinedListTitle} close={()=>setTotalFleetSelection(null)}><DashboardRecordBrowser key={JSON.stringify(totalFleetSelection)} rows={totalFleetDetailRows(combinedListRows,liveBreakdowns)} classificationRequests={liveBreakdowns} showBreakdownCategory regions={assetDrilldownRegions} rowsAreScoped={true} title={combinedListTitle} initialSite={totalFleetSelection.site || ""} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} onHourlyReport={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode)} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} /></Modal>}
-        {lmvSelection && <LmvFleetDialog key={JSON.stringify(lmvSelection)} selection={lmvSelection} records={lmvSelection.today ? todayLmvBreakdownRecords : visibleLmv} regions={fleetRegionInsights} close={()=>setLmvSelection(null)} Dialog={Modal} ReportSection={ReportSection} requests={liveBreakdowns} browserProps={{ActionsTable,Status,formatDate:formatTwelveHourDateTime,RequestTimelineButton,timelineToken:authToken,Dialog:Modal,Remarks:MaintenanceRemarks}} />}
+{equipmentLoaded && totalFleetSelection && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={combinedListTitle} close={()=>setTotalFleetSelection(null)}><DashboardRecordBrowser key={JSON.stringify(totalFleetSelection)} rows={totalFleetDetailRows(combinedListRows,liveBreakdowns)} classificationRequests={liveBreakdowns} showBreakdownCategory regions={assetDrilldownRegions} rowsAreScoped={true} title={combinedListTitle} initialSite={totalFleetSelection.site || ""} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} onHourlyReport={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={["breakdown", "balance", "oem"].includes(totalFleetSelection.mode)} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} /></Modal>}
+        {lmvSelection && lmvFleet.loaded && (!lmvSelection.today || equipmentLoaded) && <LmvFleetDialog key={JSON.stringify(lmvSelection)} selection={lmvSelection} records={lmvSelection.today ? todayLmvBreakdownRecords : visibleLmv} regions={fleetRegionInsights} close={()=>setLmvSelection(null)} Dialog={Modal} ReportSection={ReportSection} requests={liveBreakdowns} browserProps={{ActionsTable,Status,formatDate:formatTwelveHourDateTime,RequestTimelineButton,timelineToken:authToken,Dialog:Modal,Remarks:MaintenanceRemarks}} />}
 
-        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
+        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} shift={dashboardShift} shiftOptions={dashboardShiftOptions} shiftRecords={shiftRecords} onShiftChange={setDashboardShift} onRefresh={() => { refreshFleet(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
         {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><h2>Tracking Vehicle Throughput</h2></div>
@@ -3059,7 +3088,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       {oemDrilldown && <Modal className="dashboard-asset-modal mine-oem-modal" overlayClassName="dashboard-asset-overlay" topBar={renderDashboardHeader(true)} title={oemDrilldown.title} close={() => setOemDrilldownKind(null)} headerActions={<div className="modal-header-actions" ref={setOemToolbarTarget} />}>
         <OemBreakdownDetails key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, oemDrilldownKind].join("|")} selection={oemDrilldown} title={oemDrilldown.title} toolbarTarget={oemToolbarTarget} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} />
       </Modal>}
-      {assetDrilldown && <Modal className={`dashboard-asset-modal${showFleetSiteTabs ? " fleet-site-tabs-modal" : ""}`} overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
+      {equipmentLoaded && assetDrilldown && <Modal className={`dashboard-asset-modal${showFleetSiteTabs ? " fleet-site-tabs-modal" : ""}`} overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
         <DashboardRecordBrowser key={assetDrilldown} rows={fleetSiteTabRows} classificationRequests={liveBreakdowns} showBreakdownCategory groupBySite={showFleetSiteTabs} hideHierarchyFilters={showFleetSiteTabs} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown || availabilityBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           includeEmptySites={movementDrilldown} onScopeChange={movementDrilldown ? updateMovementBrowseScope : null}
@@ -11913,7 +11942,7 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="cdir-update"){setDirectoryView("updates");setSection("directory");return;}if(target?.kind==="cdir-deletion"){setDirectoryView("deletions");setSection("directory");return;}if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
+      {!embedded&&section==="dashboard"&&showDashboardMenu&&<Dashboard requests={misDashboardRequests} requestsLoaded={dashboardRequestsReady} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} />}
       {!embedded&&section==="directory"&&showDirectoryMenu&&<CdirModule token={session?.token || authToken} ReportSection={ReportSection} initialView={directoryView} onViewChange={setDirectoryView}/>}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
@@ -12448,7 +12477,7 @@ function App() {
   // not change the current page. Preserve the page element across those root
   // renders so opening navigation cannot rebuild a large dashboard or table.
   const adminPageContent = useMemo(() => renderedActive === "Dashboard" ? (
-    dashboardRequestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={dashboardRequestState.records} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestState.updatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />
+    <Dashboard requestsLoaded={dashboardRequestsLoaded} goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={dashboardRequestState.records} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestState.updatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} />
   ) : renderedActive === "Stock Statement" ? (
     <StockStatement token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "Purchase Order" ? (
