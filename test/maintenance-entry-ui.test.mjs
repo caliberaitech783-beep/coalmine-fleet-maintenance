@@ -36,6 +36,7 @@ const all = (tree, predicate) => {
 };
 const byType = (tree, type) => all(tree, node => node.type === type)[0];
 function harness(code, name, extra = {}) {
+  extra = {useMasterRecords: () => [[], null, true, null, null, null, null, () => {}], ...extra};
   const slots = [];
   let cursor = 0;
   const useState = initial => {
@@ -107,6 +108,27 @@ test('changing equipment group clears the old vehicle, hidden door and fetched d
   assert.equal(combo().props.value, '');
   assert.equal(door(), '');
   assert.equal(all(tree, node => node.props.value === 'CH-300').length, 0);
+});
+
+test('LMV master vehicles are included only for the assigned site regardless of their master group', () => {
+  const EquipmentCombobox = () => null;
+  const lmv = [
+    {id: 101, group: 'PICKUP VAN', door: 'J8', currentLocation: 'Jayant OB'},
+    {id: 102, group: 'CAR', door: 'J9', currentLocation: 'Jayant OB'},
+    {id: 103, group: 'CAR', door: 'S1', currentLocation: 'Sasti OB'},
+  ];
+  const app = harness(formCode, 'MaintenanceForm', {
+    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
+    TIME_24H_PATTERN: '.*',
+    useMasterRecords: () => [lmv, null, true, null, null, null, null, () => {}],
+  });
+  const props = {equipmentRecords: records, equipmentLoaded: true, assignedLocation: 'Jayant OB'};
+  let tree = app.render(props);
+  all(tree, node => node.props.name === 'equipmentGroup')[0].props.onChange({target: {value: 'LMV'}});
+  tree = app.render(props);
+  assert.deepEqual(byType(tree, EquipmentCombobox).props.records.map(row => row.id), [101, 102]);
+  assert.equal(lmv[0].group, 'PICKUP VAN', 'master records remain unchanged');
 });
 
 test('successful creation closes only after save and never opens a blocking success alert', async () => {

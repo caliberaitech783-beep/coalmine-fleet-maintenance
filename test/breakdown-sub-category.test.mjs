@@ -51,6 +51,6 @@ test('request forms load the mapped master and new requests require selection fr
 });
 
 test('request roles can read sub-categories without gaining master write permissions',()=>{
-  assert.match(server,/\['Equipment master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row.master_name\)/);
+  assert.match(server,/\['Equipment master','LMV master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row.master_name\)/);
   assert.match(server,/masterAccessAllows\(req.session.permissions,row.master_name==='Breakdown Category'\?'Repair type master':row.master_name\)/);
 });
