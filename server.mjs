@@ -1,3 +1,4 @@
+import {coalesceSessionActivity} from './session-activity-coalescing.mjs';
 import {seedRepairClassificationMasters} from './repair-classification-seed.mjs';
 import {REPAIR_TYPES,isRepairType,repairTypeKey} from './repair-classification.mjs';
 import {classificationActive,newClassification,updateClassification,classificationError} from './repair-classification.mjs';
@@ -2712,6 +2713,7 @@ function sessionActivityDetails(req){
   };
 }
 
+const recordSessionActivity = coalesceSessionActivity();
 async function touchUserSessionActivity(req,session={}){
   // OTP review has its own durable history. Updating activity here would
   // invalidate the very cleanup/restore snapshot being authorized.
@@ -2719,7 +2721,7 @@ async function touchUserSessionActivity(req,session={}){
   const sessionId=auditClean(session.sessionId,80);
   if(!sessionId)return;
   const details=sessionActivityDetails(req);
-  await pool.query(`INSERT INTO user_session_activity
+  await recordSessionActivity(sessionId, () => pool.query(`INSERT INTO user_session_activity
     (session_id,actor_login,actor_name,actor_role,started_at,last_seen_at,active_seconds,ip_address,device_id,user_agent)
     VALUES ($1,$2,$3,$4,COALESCE($5::timestamptz,NOW()),NOW(),0,$6,$7,$8)
     ON CONFLICT (session_id) DO UPDATE SET
@@ -2729,7 +2731,7 @@ async function touchUserSessionActivity(req,session={}){
     WHERE user_session_activity.last_seen_at<=NOW()-INTERVAL '5 seconds'`,[
       sessionId,auditClean(session.login,120),auditClean(session.name,160),auditRole(session),session.created_at||session.createdAt||null,
       details.ipAddress,details.deviceId,details.userAgent,
-    ]);
+    ]));
 }
 
 async function requireSession(req,res,next){
