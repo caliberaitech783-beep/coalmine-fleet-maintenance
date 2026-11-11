@@ -26,7 +26,7 @@ test("mobile request forms allow optional chassis and retain search, duplicate b
   assert.match(server, /equipment_group TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /equipment_group AS "equipmentGroup"/);
   assert.match(server, /SET equipment_group=COALESCE/);
-  assert.match(source, /equipmentGroup: equipmentDetails\.group \|\| equipmentGroup/);
+  assert.match(source, /equipmentGroup: equipmentGroup === 'LMV' \? 'LMV' : equipmentDetails\.group \|\| equipmentGroup/);
   assert.match(source, /normalizeEquipmentGroup\(row\.equipmentGroup\) \|\| row\.equipment/);
   assert.match(source, /normalizeEquipmentGroup\(r\.equipmentGroup\) \|\| r\.equipment/);
   assert.match(server, /duplicate:true/);
