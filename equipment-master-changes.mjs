@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {deleteOtpApprovedEquipment} from './deletion-approval.mjs';
 import {
   applyEquipmentApproval, equipmentApprovalSchema, prepareSharedEquipmentApproval, saveEquipmentApproval,
 } from './equipment-master-approval.mjs';
@@ -99,7 +100,8 @@ export async function applyEquipmentChangeSet(client, changes, {identity = () =>
       await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3', [JSON.stringify(change.record), change.id, EQUIPMENT_MASTER]);
       if (key) byIdentity.set(key, {id: change.id, record_data: change.record});
     } else {
-      await client.query('DELETE FROM master_records WHERE id=$1 AND master_name=$2', [change.id, EQUIPMENT_MASTER]);
+      const {rowCount} = await deleteOtpApprovedEquipment(client, change.id, change.revision);
+      if (rowCount !== 1) fail('The equipment record changed after approval was requested. Review it and request a new OTP.', 409);
       byId.delete(change.id);
     }
     applied.push({operation: change.operation, id: change.id, label: change.label});
@@ -128,11 +130,14 @@ export function createEquipmentMasterChanges({pool, sendOtp, normalize, identity
   return {
     async request({changes, requestedBy, source = 'Pulse'}) {
       await init();
-      const {rows: existing} = await pool.query('SELECT id,record_data FROM master_records WHERE master_name=$1', [EQUIPMENT_MASTER]);
+      const {rows: existing} = await pool.query('SELECT id,record_data,md5(to_jsonb(master_records)::text) AS revision FROM master_records WHERE master_name=$1', [EQUIPMENT_MASTER]);
       const frozen = resolveImportOverwrites(normalizeEquipmentChanges(changes, {normalize}), existing, {identity});
-      const found = new Set(existing.map(row => Number(row.id)));
+      const found = new Map(existing.map(row => [Number(row.id), row]));
       const missing = frozen.find(change => change.id && !found.has(change.id));
       if (missing) fail(`${missing.label || 'Equipment record ' + missing.id} no longer exists in Pulse. Refresh and stage the change again.`, 409);
+      for (const change of frozen) {
+        if (change.operation === 'delete') change.revision = found.get(change.id).revision;
+      }
       const summary = changeSummary(frozen);
       const change = {changes: frozen, summary, requestedBy: text(requestedBy, 120) || 'Unknown user', source: text(source, 40), requestedAt: new Date(now()).toISOString()};
       const {request, recipients} = prepareSharedEquipmentApproval({change, secret: await secret(), now: now()});

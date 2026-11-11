@@ -78,10 +78,24 @@ async function checkDeletionSelection(client, sql, values) {
   if(rows.some(row=>!state.revisions.get(table)?.has(row.revision)))fail(409,'Affected records changed after approval. Review and obtain a new OTP.');
 }
 
+const equipmentDeleteSql = `DELETE FROM master_records WHERE id=$1 AND master_name='Equipment master'
+  AND md5(to_jsonb(master_records)::text)=$2`;
+
+// Called after verifying the stored Equipment master OTP inside its transaction.
+export function deleteOtpApprovedEquipment(client, id, revision) {
+  if (!Number.isSafeInteger(id) || id <= 0 || !/^[a-f0-9]{32}$/.test(revision || '')) {
+    fail(409, 'Review the equipment selection and request a new OTP.');
+  }
+  return context.run({equipmentDelete: {id, revision}}, () => client.query(equipmentDeleteSql, [id, revision]));
+}
+
 function guardedUnapprovedQuery(target,args) {
   const sql=typeof args[0]==='string'?args[0]:args[0]?.text;
   const workflowReset=context.getStore()?.workflowFirstTripReset;
   const values=args[1] || args[0]?.values || [];
+  const equipmentDelete=context.getStore()?.equipmentDelete;
+  if(equipmentDelete && sql===equipmentDeleteSql && values.length===2
+    && values[0]===equipmentDelete.id && values[1]===equipmentDelete.revision) return target.query(...args);
   if(workflowReset
     && /^\s*DELETE\s+FROM\s+production_first_trip_acceptances\s+WHERE\s+request_reference\s*=\s*\$1\s*;?\s*$/i.test(sql || '')
     && values.length===1 && String(values[0])===workflowReset.reference) return target.query(...args);

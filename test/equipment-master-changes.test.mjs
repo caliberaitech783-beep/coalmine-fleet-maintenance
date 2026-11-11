@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {protectDeletionPool} from '../deletion-approval.mjs';
 import {PGlite} from '@electric-sql/pglite';
 import {createEquipmentMasterChanges, normalizeEquipmentChanges, registerEquipmentMasterChanges, maskPhone} from '../equipment-master-changes.mjs';
 
@@ -8,7 +9,7 @@ const PHONES = ['919850396090', '917828619175', '919423604667'];
 async function setup() {
   const db = new PGlite();
   const query = db.query.bind(db);
-  const pool = {query, connect: async () => ({query, release() {}})};
+  const pool = protectDeletionPool({query, connect: async () => ({query, release() {}})});
   await db.exec('CREATE TABLE master_records (id BIGSERIAL PRIMARY KEY, master_name TEXT NOT NULL, record_data JSONB NOT NULL)');
   const insert = async data => (await query("INSERT INTO master_records (master_name,record_data) VALUES ('Equipment master',$1::jsonb) RETURNING id", [JSON.stringify(data)])).rows[0].id;
   const a = await insert({door: 'D-1', chassisNo: 'CH1'});
@@ -21,7 +22,7 @@ async function setup() {
     sendOtp: async message => { sent.push(message); },
   });
   const rows = async () => (await query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY id")).rows;
-  return {db, service, sent, rows, a: Number(a), b: Number(b)};
+  return {db, pool, service, sent, rows, a: Number(a), b: Number(b)};
 }
 
 test('one OTP goes to all three authorised mobiles and applies the whole change set once', async () => {
@@ -134,5 +135,19 @@ test('an import cannot overwrite a record that the same list also edits or delet
       {operation: 'delete', id: a},
       {operation: 'add', record: {door: 'D-1', chassisNo: 'CH1'}},
     ]}), /already changed in this list/);
+  } finally { await db.close(); }
+});
+
+test('the deletion guard requires a verified OTP and the original record revision', async () => {
+  const {db, pool, service, sent, rows, a} = await setup();
+  try {
+    await assert.rejects(pool.query('DELETE FROM master_records WHERE id=$1', [a]), /exact selection/);
+    const request = await service.request({changes: [{operation: 'delete', id: a}]});
+    await db.query('UPDATE master_records SET record_data=record_data || $2::jsonb WHERE id=$1', [a, '{"make":"Volvo"}']);
+    await assert.rejects(service.verify(request.id, sent[0].otp), /changed after approval was requested/);
+    assert.equal((await rows()).length, 2);
+    const retry = await service.request({changes: [{operation: 'delete', id: a}]});
+    await service.verify(retry.id, sent.at(-1).otp);
+    assert.deepEqual((await rows()).map(row => row.record_data.door), ['D-2']);
   } finally { await db.close(); }
 });
