@@ -8223,7 +8223,8 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       const records=rows.map(({id,record_data})=>({
         id,
         ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
-      }));
+        fleetSource:'Equipment master',
+      })).filter(record=>![record.group||record.equipmentGroup,record.category].some(value=>String(value||'').trim().toUpperCase()==='LMV'));
       const {rows:fleetRequests}=await client.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
       door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, vehicle_idle AS "vehicleIdle",owner_name AS owner,
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",

@@ -1,4 +1,5 @@
 import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
+import {isLmvRequest} from './fleet-registry.mjs';
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {requestMeterReadings} from './request-equipment.mjs';
 import {equipmentDoorNumber} from './equipment-door.mjs';
@@ -62,6 +63,8 @@ function fleetIdentity(record = {}) {
   const requestSite = [record.site, record.currentLocation, record.location]
     .map((value) => String(value ?? "").trim()).find(Boolean) || "";
   return {
+    fleetSource: record.fleetSource,
+    lmvRequest: isLmvRequest(record),
     requestSite: canonicalSiteName(requestSite),
     assetSite: canonicalSiteName(equipmentSiteName(record)),
     serials: serialIdentityValues(record),
@@ -80,6 +83,7 @@ const individualNameMatches = (source, target) => Boolean(source.requestedName
   && source.group !== source.requestedName);
 
 function identitiesMatch(source, target) {
+  if (source.lmvRequest && target.fleetSource === 'Equipment master') return false;
   if (!compatibleSites(source, target)) return false;
   // Strong identifiers outrank reused door numbers or display labels. Keep
   // identifier types separate: a door number is not another asset's chassis.
@@ -125,7 +129,7 @@ export function createFleetAssetResolver(records = []) {
   });
   return (request = {}, { allowTransferred = false } = {}) => {
     const source = fleetIdentity(request);
-    const strong = [...indexedRows(serialIndex, source.serials)];
+    const strong = [...indexedRows(serialIndex, source.serials)].filter(index => !(source.lmvRequest && identities[index].fleetSource === 'Equipment master'));
     const sameSiteStrong = strong.filter((index) => compatibleSites(source, identities[index]));
     if (sameSiteStrong.length) return result(sameSiteStrong, sameSiteStrong.length === 1 ? "matched" : "ambiguous");
     // Only a globally unique chassis/serial can carry current availability to
@@ -135,7 +139,7 @@ export function createFleetAssetResolver(records = []) {
       ...indexedRows(doorIndex, source.doors),
       ...[...(nameIndex.get(source.requestedName) || [])].filter((index) => individualNameMatches(source, identities[index])),
     ]);
-    const sameSite = [...related].filter((index) => compatibleSites(source, identities[index]));
+    const sameSite = [...related].filter((index) => compatibleSites(source, identities[index]) && !(source.lmvRequest && identities[index].fleetSource === 'Equipment master'));
     const matched = sameSite.filter((index) => identitiesMatch(source, identities[index]));
     if (matched.length) return result(matched, matched.length === 1 ? "matched" : "ambiguous");
     // A known door/name with contradictory strong identity needs review. It

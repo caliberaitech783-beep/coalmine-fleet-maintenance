@@ -81,7 +81,8 @@ test('actual read-only dashboard route derives status before enforcing every rol
   const route=source.slice(source.indexOf("app.get('/api/dashboard/equipment'"),source.indexOf("app.get('/api/reports/master-data'"));
   let handlers,authorization;
   const queries=[];
-  const dependencies={...access,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
+  const {isLmvAsset}=await import('../fleet-registry.mjs');
+  const dependencies={...access,isLmvAsset,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
     app:{get(path,...registered){assert.equal(path,'/api/dashboard/equipment');handlers=registered;}},
     requireSession(req,res,next){next();},
     currentDashboardAuthorization:async()=>authorization,

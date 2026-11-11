@@ -2065,9 +2065,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
-  const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey);
+  const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey).filter(request => String(request.equipmentGroup || '').trim().toUpperCase() !== 'LMV');
   const resolveLmvToday = createFleetAssetResolver(visibleLmv);
-  const lmvTodayIndexes = new Set(todayBreakdownRows.map(request => resolveLmvToday(request, {allowTransferred:true}).assetIndex).filter(index => index !== null));
+  const lmvTodayIndexes = new Set(activeTodayBreakdowns(scopedBreakdowns, todayKey).map(request => resolveLmvToday(request, {allowTransferred:true}).assetIndex).filter(index => index !== null));
   const todayLmvBreakdownRecords = visibleLmv.filter((record,index) => record.lmvRoadStatus === "offroad" && lmvTodayIndexes.has(index));
   const todayBreakdownDirection = todayBreakdownRows.length ? "up" : "flat";
   const trendAvailableSites = useMemo(()=>[...new Set((selectedRegion || dashboardSite !== "all" ? activeSites : availableRegions.flatMap((region) => region.sites))
@@ -6336,7 +6336,7 @@ function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSub
         existingReason, existingReference: duplicateConflict?.existingReference,
         ref: "REQ-" + Date.now(),
         equipment: equipmentDetails.equipment,
-        equipmentGroup: equipmentDetails.group || equipmentGroup,
+        equipmentGroup: equipmentGroup === 'LMV' ? 'LMV' : equipmentDetails.group || equipmentGroup,
         door: equipmentDetails.door,
         site: currentLocation || "Not assigned",
         category: String(fd.get("breakdownCategory") || fd.get("category") || "").trim(),

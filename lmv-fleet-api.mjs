@@ -2,6 +2,7 @@ import {accessAllows} from './admin-access.mjs';
 import {generalUserCanAccessMenu} from './mobile-access.mjs';
 import {canReadDashboardEquipment,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {lmvFleetSnapshot} from './lmv-fleet.mjs';
+import {lmvRegistryRecords} from './fleet-registry.mjs';
 
 export function registerLmvFleet(app,{pool,requireSession,currentDashboardAuthorization}) {
   app.get('/api/lmv-fleet',requireSession,async(req,res,next)=>{
@@ -17,7 +18,8 @@ export function registerLmvFleet(app,{pool,requireSession,currentDashboardAuthor
       const scope=dashboardEquipmentScope(session,user);
       if(!dashboardEquipmentScopeIsUsable(scope))return res.status(409).json({error:'No LMV report site is assigned to this account.'});
       const {rows:masters}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='LMV master' ORDER BY created_at ASC");
-      const records=masters.map(row=>({...row.record_data,id:row.id}));
+      const {rows:equipment}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC");
+      const records=lmvRegistryRecords(masters.map(row=>({...row.record_data,id:row.id})),equipment.map(row=>({...row.record_data,id:row.id})));
       // Resolve against every active case before applying current-site scope;
       // transferred LMVs retain live availability without exposing case details.
       const {rows:requests}=await pool.query(`SELECT reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",
