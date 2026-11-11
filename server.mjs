@@ -8330,14 +8330,15 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     for(const row of rows){
       if(req.session.role==='super'){
         const maintenanceManagerList=maintenanceManager&&['Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name);
-        if(!maintenanceManagerList&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name,'mobileMasterAccess'))continue;
+        const requestLmvList=row.master_name==='LMV master'&&canViewEquipment;
+        if(!maintenanceManagerList&&!requestLmvList&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name==='Breakdown Category'?'Repair type master':row.master_name,'mobileMasterAccess'))continue;
       }else{
-        if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
+        if(['Equipment master','LMV master'].includes(row.master_name)&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
         if(row.master_name==='Breakdown Category'&&!canViewRepairTypes&&!canViewDelayedReasons)continue;
         if(row.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes&&!canViewDelayedReasons)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
+        if(['HR User','HR Manager'].includes(req.session.assignedRole)?!isCdirMaster(row.master_name):!['Equipment master','LMV master','Repair type master','Breakdown Category','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):['Equipment master','LMV master'].includes(row.master_name)?equipmentMasterWithDoor(row.record_data):row.record_data;
       if(managerRecord&&['Equipment master','LMV master'].includes(row.master_name)){

@@ -6192,6 +6192,9 @@ function BreakdownSubCategorySelect({category,initialValue="",required=false}) {
 }
 
 function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+  const [lmvRecords, , lmvLoaded, , , , lmvError, retryLmv] = useMasterRecords("LMV master");
+  equipmentRecords = [...equipmentRecords, ...lmvRecords.map(record => ({...record, group: "LMV"}))];
+  equipmentLoaded = equipmentLoaded && lmvLoaded;
   const [selectedCategory,setSelectedCategory]=useState("");
   const [complaintSuggestion,setComplaintSuggestion]=useState("");
   const shiftData=useRequestShiftData();
@@ -6416,6 +6419,7 @@ function MaintenanceForm({ close, maintenanceUser = false, normal = false, onSub
               ))}
             </select>
           </label>
+          {lmvError && <small role="alert">LMV records could not be loaded. <button type="button" onClick={retryLmv}>Retry</button></small>}
           {hierarchyEnabled ? <RepairClassificationFields required onSubCategoryChange={setComplaintSuggestion} /> : <>
           <label>
             Type of breakdown *
