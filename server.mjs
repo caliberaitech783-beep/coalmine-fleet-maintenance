@@ -84,6 +84,7 @@ import {resolveRequestIssues,hasOutstandingRequestIssues,REQUEST_CLOSE_STATUSES,
 import {isIdleVehicleRequest} from './request-idle.mjs';
 import {PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,isProductionFirstTripRequired} from './info-pulse-data.mjs';
 import {createFeedCache,requestFeedWriteInvalidates} from './request-feed-cache.mjs';
+import {createSharedFeedResponses,sendSharedFeedJson} from './shared-feed-response.mjs';
 import {createBackgroundJobQueue} from './background-job-queue.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,ensureDirectoryMenuAccess,managerRoleSelection,masterAccessAllows,normalizeAdminLevel} from './admin-access.mjs';
@@ -208,6 +209,10 @@ app.use((req,res,next)=>{
 // again when the write has answered means the refresh that follows a click
 // always reads the database.
 const requestFeedCache=createFeedCache({ttlMs:30_000});
+// Users with the same role and site scope receive the same bytes for a feed read. The body is
+// serialised and compressed once per read and variant instead of once per user (45 MB of JSON on
+// 13 Nov 2026); it is tied to the rows object of that read, so it never outlives it.
+const sharedFeedResponses=createSharedFeedResponses({maxBytes:Math.max(16,Number(process.env.SHARED_FEED_RESPONSE_MB||192))*1024*1024});
 const masterReadCache=createFeedCache({ttlMs:300_000});
 // Pulse-II reads the breakdown feed and the fleet from here on every card save at every site
 // (a scanning burst is hundreds of saves an hour per site). One read answers all of them for
@@ -3762,7 +3767,7 @@ app.get('/api/health',async(_req,res)=>{
       crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
       oemEmailSchedule:{enabled:scheduledJobsEnabled,mailConfigured:ticketEmailConfiguration().configured,timeZone:'Asia/Kolkata',hour:17},
       cdirRosterRevision,
-      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},signInPool:{total:authPool.totalCount,idle:authPool.idleCount,waiting:authPool.waitingCount},dashboardPool:{total:dashboardReadPool.totalCount,idle:dashboardReadPool.idleCount,waiting:dashboardReadPool.waitingCount},requestFeedCache:requestFeedCache.stats,misBridgeCache:{feed:misBridgeFeedCache.stats,fleet:misBridgeFleetCache.stats},slowRequestThresholdMs},
+      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},signInPool:{total:authPool.totalCount,idle:authPool.idleCount,waiting:authPool.waitingCount},dashboardPool:{total:dashboardReadPool.totalCount,idle:dashboardReadPool.idleCount,waiting:dashboardReadPool.waitingCount},requestFeedCache:requestFeedCache.stats,sharedFeedResponses:sharedFeedResponses.stats,misBridgeCache:{feed:misBridgeFeedCache.stats,fleet:misBridgeFleetCache.stats},slowRequestThresholdMs},
     });
   }catch(error){
     databaseReady=false;
@@ -6813,16 +6818,28 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     const ownRowsOnly=query.values.length>0;
     const readFeed=async()=>attachDailyRemarks((await client.query(query)).rows,client);
     const rows=ownRowsOnly?await readFeed():await requestFeedCache.read(readFeed,JSON.stringify(revisions),dashboardScope?'dashboard':'workflow');
-    const siteVisibleRows=scopedManagerSites!==null
-      ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
-      : scopedSite===null
-      ? rows
-      : scopedSite
-        ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
-        : [];
-    const payload=requestsVisibleToSession(siteVisibleRows,req.session);
-    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',payload,{etag});
-    return res.json(payload);
+    const visiblePayload=()=>{
+      const siteVisibleRows=scopedManagerSites!==null
+        ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
+        : scopedSite===null
+        ? rows
+        : scopedSite
+          ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
+          : [];
+      const payload=requestsVisibleToSession(siteVisibleRows,req.session);
+      return payload;
+    };
+    // The shared feed is filtered only by site scope and role, never by login, so every caller
+    // of one variant is sent the same serialised and compressed body with their own ETag.
+    if(!ownRowsOnly&&etag&&typeof sendSharedFeedJson==='function'&&typeof sharedFeedResponses!=='undefined'&&typeof setPrivateResponseHeaders==='function')
+      return await sendSharedFeedJson(req,res,sharedFeedResponses,{
+        source:rows,
+        variant:JSON.stringify([dashboardScope?'dashboard':'workflow',req.session.role,req.session.assignedRole,scopedSite,scopedManagerSites]),
+        build:visiblePayload,etag,setHeaders:setPrivateResponseHeaders,
+      });
+    const ownPayload=visiblePayload();
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',ownPayload,{etag});
+    return res.json(ownPayload);
   }catch(error){next(error)}
 });
 
