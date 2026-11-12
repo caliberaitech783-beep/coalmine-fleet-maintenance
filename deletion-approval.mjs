@@ -27,7 +27,9 @@ const SECURITY_TABLES = new Set(['auth_sessions','password_change_sessions','pas
  'mis_credential_grants','application_login_attempts','application_identity_grants',
  'mis_login_codes','mis_sso_codes','mis_sso_grants','mis_sso_pending']);
 export function destructiveTables(sql) {
-  const clean = String(sql).replace(/\/\*[\s\S]*?\*\//g,' ').replace(/--[^\n]*/g,' ');
+  // TRUNCATE in a revision trigger event list describes when the trigger runs.
+  const clean = String(sql).replace(/\/\*[\s\S]*?\*\//g,' ').replace(/--[^\n]*/g,' ')
+    .replace(/(\bCREATE\s+TRIGGER\s+[a-z_][a-z0-9_]*\s+AFTER\s+INSERT\s+OR\s+UPDATE\s+OR\s+DELETE\s+OR\s+)TRUNCATE(?=\s+ON\s+[a-z_][a-z0-9_]*\s+FOR\s+EACH\s+STATEMENT\s+EXECUTE\s+FUNCTION\s+bump_data_revision\('(?:request-feed|master-data)'\)\s*;)/gi,'$1');
   const tables = [...clean.matchAll(/\bDELETE\s+FROM\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)].map(match=>match[1].toLowerCase());
   if (/\bTRUNCATE\b/i.test(clean)) {
     const statement = clean.match(/\bTRUNCATE\s+(?:TABLE\s+)?([\s\S]*?)(?:\bRESTART\b|\bCONTINUE\b|\bCASCADE\b|\bRESTRICT\b|;|$)/i)?.[1] || '';

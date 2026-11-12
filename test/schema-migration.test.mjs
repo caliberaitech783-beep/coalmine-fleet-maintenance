@@ -1,3 +1,4 @@
+import {assertDeletionSql,protectDeletionPool} from '../deletion-approval.mjs';
 import {CDIR_DELETION_SCHEMA} from '../cdir-deletion.mjs';
 import {CDIR_CHANGE_SCHEMA} from '../cdir-change-requests.mjs';
 import assert from 'node:assert/strict';
@@ -56,7 +57,8 @@ test('production schema and session repairs install atomically on a fresh databa
     if(!args&&sql.includes(';'))return db.exec(sql);
     return db.query(sql,args);
   },release(){}};
-  const pool={connect:async()=>client};
+  const pool=protectDeletionPool({connect:async()=>client});
+  assert.throws(()=>assertDeletionSql(sql+' TRUNCATE TABLE maintenance_requests;'),/Deletion of maintenance_requests/);
   try {
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,false);
     assert.equal((await applySchemaMigration(pool,sql,[repairLegacySessionDefaults,initializeLoginHistory])).skipped,true);

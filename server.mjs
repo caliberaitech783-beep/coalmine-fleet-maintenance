@@ -1199,6 +1199,7 @@ async function migrate(){
     ALTER TABLE crm_notifications ADD COLUMN IF NOT EXISTS notification_key TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS crm_notifications_key_idx ON crm_notifications (notification_key) WHERE notification_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS crm_notifications_recipient_idx ON crm_notifications (recipient_login, is_read, created_at DESC);
+    CREATE INDEX IF NOT EXISTS crm_notifications_recent_idx ON crm_notifications (recipient_login, created_at DESC, id DESC);
     CREATE OR REPLACE FUNCTION signal_crm_notification() RETURNS trigger LANGUAGE plpgsql AS $notification$
     BEGIN
       PERFORM pg_notify('bdms_notifications',NEW.recipient_login);
