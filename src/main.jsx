@@ -12094,6 +12094,8 @@ function App() {
   }, [session?.token]);
   useEffect(()=>{
     if(!session?.token)return undefined;
+    // One activity heartbeat per minute preserves the two-minute online window
+    // without creating a write for every short burst of user interaction.
     const heartbeatIntervalMs=60_000;
     let lastHeartbeatAt=0,closed=false;
     const heartbeat=async(force=false)=>{
