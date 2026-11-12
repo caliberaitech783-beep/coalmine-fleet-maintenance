@@ -121,6 +121,7 @@ import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
 import { createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
+import { BREAKDOWN_MASTER_RECENT_DAYS, recentBreakdownRows } from "./breakdown-master-window.mjs";
 import { lifecycleTimeMatches } from "./dashboard-lifecycle-time.mjs";
 import LifecycleTimeControls from "./lifecycle-time-controls.jsx";
 import { activeTodayBreakdowns } from "./dashboard-today-breakdowns.mjs";
@@ -9614,9 +9615,14 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   const [equipmentRecords, , equipmentLoaded, , , , equipmentLoadError, retryEquipmentLoad] = useMasterRecords("Equipment master");
   const [statusFilter, setStatusFilter] = useState("all");
   const statusTabRefs = useRef([]);
+  // The table builds a row for every request it is given, so this screen opens on open requests
+  // and the last few days (breakdown-master-window.mjs). The header's Export keeps every record.
+  const [showAllRows, setShowAllRows] = useState(false);
+  const allRows = useMemo(() => [...(requests || []), ...(manualRecords || [])].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords)), [requests, manualRecords, equipmentRecords]);
+  const recentRows = useMemo(() => recentBreakdownRows(allRows, {today: localDateKey(new Date())}).rows, [allRows]);
   if ((loadError && !loaded) || (equipmentLoadError && !equipmentLoaded)) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
   if (!loaded || !equipmentLoaded) return <MasterLoader name="Breakdown master" />;
-  const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
+  const rows = showAllRows ? allRows : recentRows;
   const count = (status) => rows.filter((record) => requestStatusLabel(record).toLowerCase() === status.toLowerCase()).length;
   const statusTabs = [
     ["all", "All requests", rows.length],
@@ -9648,8 +9654,14 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           <h1>Breakdown master</h1>
           <p>Mobile User requests and Super Admin-created breakdown records</p>
         </div>
-        <MasterActions name="Breakdown master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name="Breakdown master" records={allRows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
+      {recentRows.length < allRows.length && <p className="breakdown-master-window" role="status" style={{margin: "0 0 8px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
+        <span>{showAllRows
+          ? `Showing all ${allRows.length.toLocaleString("en-IN")} requests.`
+          : `Showing open requests and the last ${BREAKDOWN_MASTER_RECENT_DAYS} days: ${recentRows.length.toLocaleString("en-IN")} of ${allRows.length.toLocaleString("en-IN")} requests. Counts and the table below cover these only; Export in the header covers all.`}</span>
+        <button type="button" className="secondary compact" aria-pressed={showAllRows} onClick={() => setShowAllRows((current) => !current)}>{showAllRows ? `Show last ${BREAKDOWN_MASTER_RECENT_DAYS} days` : "Show all requests (slower)"}</button>
+      </p>}
       <div className="tabs" role="tablist" aria-label="Breakdown request status">
         {statusTabs.map(([value, label, total], index) => (
           <button
