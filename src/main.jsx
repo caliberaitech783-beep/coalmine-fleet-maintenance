@@ -12132,7 +12132,7 @@ function App() {
     const check=()=>{void fetch('/api/session-status',{cache:'no-store',headers:{Authorization:`Bearer ${session.token}`},signal:controller.signal}).catch(()=>{});};
     // Feature requests already detect an expired session immediately. Keep
     // this fallback probe gentle so every open tab does not create continuous
-    // authentication traffic while the user is working elsewhere.
+    // authentication traffic or compete with operational page requests.
     const timer=window.setInterval(check,adaptiveRefreshInterval(window,60_000));
     window.addEventListener('focus',check);
     return()=>{controller.abort();window.clearInterval(timer);window.removeEventListener('focus',check);};
