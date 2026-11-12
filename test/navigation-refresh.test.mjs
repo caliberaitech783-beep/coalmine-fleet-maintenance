@@ -48,3 +48,9 @@ test('navigation hook restores after remount, supports updater functions, and is
  assert.equal(render('mis.tab','requests')[0],'requests');assert.equal(render('production.tab','requests')[0],'history');
  resetNavigation(saved);configureNavigation({...user,id:2});assert.equal(render('production.tab','requests')[0],'requests');
 });
+
+test('selecting the active page is a render and storage no-op',async()=>{
+ const source=await readFile(new URL('../src/navigation-state.jsx',import.meta.url),'utf8');
+ assert.match(source,/if \(Object\.is\(value, previous\)\) return;/);
+ assert.match(source,/startTransition\(\(\) => setState\(\{identity, value\}\)\)/);
+});

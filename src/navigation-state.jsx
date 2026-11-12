@@ -17,7 +17,11 @@ export function useNavigationState(key, initial) {
   }
   current.current = {identity, value};
   const setValue = useCallback(update => {
-    const value = typeof update === 'function' ? update(current.current.value) : update;
+    const previous = current.current.value;
+    const value = typeof update === 'function' ? update(previous) : update;
+    // Clicking an already selected page or tab must not rebuild its large
+    // report tree or rewrite browser storage.
+    if (Object.is(value, previous)) return;
     current.current = {identity, value};
     writeNavigation(key, value);
     setState({identity, value});
