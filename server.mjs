@@ -7550,16 +7550,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedSubCategory=classification ? classification.breakdownSubCategory : await requestSubCategory(client,category,req.body?.subCategory,requestRequiresSubCategory());
     const requestShift=requestShiftLabel({start:startedAt,site:storedSite},shiftRows.rows.map(row=>row.record_data));
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name,classification)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21,$24::jsonb)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name,classification,request_shift,complaint_media)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21,$24::jsonb,$25,$26::jsonb)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,storedCategory,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory,JSON.stringify(classification)]);
-    await client.query('UPDATE maintenance_requests SET request_shift=$2 WHERE reference=$1',[ref,requestShift]);
-    result.rows[0].requestShift=requestShift;
-    if(complaintMedia.length){
-      await client.query('UPDATE maintenance_requests SET complaint_media=$2::jsonb WHERE reference=$1',[ref,JSON.stringify(complaintMedia)]);
-      result.rows[0].complaintMediaAvailable=true;
-    }
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,storedCategory,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory,JSON.stringify(classification),requestShift,JSON.stringify(complaintMedia)]);
     if(duplicate){
       const linked=await client.query('SELECT reference,linked_request_references FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 FOR UPDATE',[duplicate.ref]);
       const references=[...new Set([duplicate.ref,...(linked.rows[0]?.linked_request_references||[]),ref])];

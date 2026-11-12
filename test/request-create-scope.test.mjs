@@ -29,11 +29,10 @@ async function create({user={site:'Sasti OC'},session=production,body={}}={}){
     activeRequestConflict:async payload=>{calls.push({kind:'conflict',payload});return null;},requestProjection:'*',
     pool:{async query(sql,values){
       if(sql.includes("master_name='Shift Master'"))return {rows:SHIFT_MASTER_DEFAULTS.map(record_data=>({record_data}))};
-      if(sql.startsWith('UPDATE maintenance_requests SET request_shift')){calls.push({kind:'shift',values});return {rows:[]};}
       if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
       assert.ok(sql.startsWith('INSERT INTO maintenance_requests'));
       calls.push({kind:'insert',sql,values});
-      return {rows:[{ref:values[0],site:values[9],driverName:values[6],driverNameSource:values[7],owner:values[14],requesterLogin:values[15],requesterRole:values[16],status:'Open'}]};
+      return {rows:[{ref:values[0],site:values[9],driverName:values[6],driverNameSource:values[7],owner:values[14],requesterLogin:values[15],requesterRole:values[16],requestShift:values[24],complaintMediaAvailable:JSON.parse(values[25]).length>0,status:'Open'}]};
     }},
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',
@@ -71,7 +70,7 @@ test('both creation roles receive a server-assigned shift, ignoring a forged cho
     const result=await create({session:{...production,assignedRole},body:{start:'2026-09-08 14:00:00',requestShift:'Shift A'}});
     assert.equal(result.status,201);
     assert.equal(result.body.requestShift,'Shift B');
-    assert.equal(result.calls.find(call=>call.kind==='shift').values[1],'Shift B');
+    assert.equal(result.calls.find(call=>call.kind==='insert').values[24],'Shift B');
   }
 });
 
