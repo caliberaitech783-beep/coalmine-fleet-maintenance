@@ -97,6 +97,10 @@ const requests = Object.freeze([
 
 const todayKey = new Date().toLocaleDateString("en-CA");
 const todayLabel = displayDates.formatDisplayDate(todayKey);
+// A breakdown that has already started today, whatever the hour the suite runs. A fixed
+// "today 09:00" is still in the future before nine in the morning, and live movement counts
+// only breakdowns that have started, so those tests failed on any run between midnight and 09:00.
+const startedToday = `${todayKey} 00:00`;
 const liveAvailabilityCaption = `All timeAvailability: live · ${todayLabel}`;
 const todayCaption = `From: ${todayLabel}To: ${todayLabel}Availability: live · ${todayLabel}`;
 // Set the top From and To to one day, re-rendering between the two inputs.
@@ -128,7 +132,7 @@ test("BD Type Mix renders master categories with no requests as well as new requ
 test("BD In components appear only for default today and return on reset", () => {
   const rows = [
     {ref: "OPENING", door:'V1', chassis:'C1', site: "Sasti OB", status: "Open", start: "2020-01-01 09:00", category: "Breakdown"},
-    {ref: "NEW", door:'V2', chassis:'C2', site: "Sasti OB", status: "Open", start: `${todayKey} 09:00`, category: "Breakdown"},
+    {ref: "NEW", door:'V2', chassis:'C2', site: "Sasti OB", status: "Open", start: startedToday, category: "Breakdown"},
   ];
   const view = harness();
   let tree = view.render(rows);
@@ -146,7 +150,7 @@ test("BD In components appear only for default today and return on reset", () =>
 
 test('unreconciled or ambiguous movement is visibly flagged instead of showing a fabricated balance adjustment',()=>{
  const view=harness();
- const tree=view.render([{ref:'UNMATCHED',door:'NOT-IN-MASTER',site:'Sasti OB',status:'Open',start:`${todayKey} 09:00`}]);
+ const tree=view.render([{ref:'UNMATCHED',door:'NOT-IN-MASTER',site:'Sasti OB',status:'Open',start:startedToday}]);
  assert.match(text(tree),/Movement history needs review at Sasti OB/);
  const row=byClass(tree,'mine-breakdown-site-row');
  assert.match(text(row),/—/);
