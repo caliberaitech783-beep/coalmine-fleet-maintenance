@@ -40,7 +40,7 @@ test('navigation hook restores after remount, supports updater functions, and is
  let slots=[],cursor=0;
  const useState=initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],next=>slots[i]=typeof next==='function'?next(slots[i]):next];};
  const useRef=initial=>{const i=cursor++;return slots[i]??(slots[i]={current:initial});};
- const hook=new Function('useState','useRef','useCallback','navigationScope','readNavigation','writeNavigation',source+';return useNavigationState;')(useState,useRef,fn=>fn,navigationScope,(key,initial)=>readNavigation(key,initial,saved),(key,value)=>writeNavigation(key,value,saved));
+ const hook=new Function('useState','useRef','useCallback','startTransition','navigationScope','readNavigation','writeNavigation',source+';return useNavigationState;')(useState,useRef,fn=>fn,fn=>fn(),navigationScope,(key,initial)=>readNavigation(key,initial,saved),(key,value)=>writeNavigation(key,value,saved));
  const render=(key,initial)=>{cursor=0;return hook(key,initial);};
  let [value,set]=render('reports',{});set(current=>({...current,production:'Pending'}));set(current=>({...current,mis:'First trip'}));
  slots=[];assert.deepEqual(render('reports',{})[0],{production:'Pending',mis:'First trip'});

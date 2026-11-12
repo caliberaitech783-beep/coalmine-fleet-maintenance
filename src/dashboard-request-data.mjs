@@ -91,7 +91,11 @@ export function createDashboardRequestLoader({
 
     const controller = new AbortController();
     activeController = controller;
-    publish({...state, loading: true});
+    // Keep an already rendered dashboard stable during background validation.
+    // Publishing a loading state here rebuilt every chart and table even when
+    // the server immediately confirmed the same ETag with a 304 response.
+    if (state.loaded) state = {...state, loading: true};
+    else publish({...state, loading: true});
     let timedOut = false;
     let rejectAbort;
     const aborted = new Promise((_, reject) => {
@@ -113,7 +117,7 @@ export function createDashboardRequestLoader({
         });
         if (response.status === 304) {
           if (!currentEtag || !state.loaded) throw new Error("Dashboard requests could not be verified. Please retry.");
-          return {records: state.records, etag: currentEtag};
+          return {records: state.records, etag: currentEtag, notModified: true};
         }
         let body;
         try { body = await response.json(); }
@@ -129,7 +133,15 @@ export function createDashboardRequestLoader({
       const result = await Promise.race([request(), aborted]);
       if (attempt !== sequence || controller.signal.aborted) return getState();
       currentEtag = result.etag;
-      publish({token: authToken, records: result.records, loaded: true, loading: false, error: "", updatedAt: now()});
+      if (result.notModified) {
+        const recovered = Boolean(state.error);
+        state = {...state, loading: false, error: ""};
+        // A successful retry must clear a visible error, but an ordinary warm
+        // 304 is a complete no-op for React and therefore cannot cause lag.
+        if (recovered) publish(state);
+      } else {
+        publish({token: authToken, records: result.records, loaded: true, loading: false, error: "", updatedAt: now()});
+      }
     } catch (error) {
       if (attempt !== sequence || (controller.signal.aborted && !timedOut)) return getState();
       // Do not retain another account's or newly unauthorised request data.

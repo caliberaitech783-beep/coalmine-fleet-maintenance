@@ -1,4 +1,4 @@
-import {useCallback, useRef, useState} from 'react';
+import {startTransition, useCallback, useRef, useState} from 'react';
 import {navigationScope, readNavigation, writeNavigation} from './navigation-state.mjs';
 export {configureNavigation, resetNavigation} from './navigation-state.mjs';
 
@@ -11,7 +11,9 @@ export function useNavigationState(key, initial) {
   let value = state.value;
   if (state.identity !== identity) {
     value = readNavigation(key, initial);
-    setState({identity, value});
+    // Page and tab changes can mount very large reports. A transition keeps
+    // the current controls responsive while React prepares the next screen.
+    startTransition(() => setState({identity, value}));
   }
   current.current = {identity, value};
   const setValue = useCallback(update => {

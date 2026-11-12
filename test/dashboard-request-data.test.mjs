@@ -163,13 +163,15 @@ test("same-session refresh errors retain previously loaded records and expose fa
 test("same-session refresh sends an entity tag and a 304 keeps records without downloading JSON", async () => {
   const rows = [{ref: "UNCHANGED"}];
   const calls = [];
+  const states = [];
   let jsonReads = 0;
-  const loader = createDashboardRequestLoader({now: () => 50, fetchImpl: async (_, options) => {
+  const loader = createDashboardRequestLoader({now: () => 50, onState: state => states.push(state), fetchImpl: async (_, options) => {
     calls.push(options);
     if (calls.length === 1) return response(rows, {etag: '"requests-v1"'});
     return {ok: false, status: 304, headers: {get: () => null}, json: async () => { jsonReads += 1; throw new Error("304 body must not be read"); }};
   }});
   await loader.load("demo");
+  const publicationsAfterInitialLoad = states.length;
   const state = await loader.load("demo");
   assert.equal(calls[0].headers["If-None-Match"], undefined);
   assert.equal(calls[1].headers["If-None-Match"], '"requests-v1"');
@@ -178,6 +180,26 @@ test("same-session refresh sends an entity tag and a 304 keeps records without d
   assert.equal(state.loaded, true);
   assert.equal(state.error, "");
   assert.equal(state.updatedAt, 50);
+  assert.equal(states.length, publicationsAfterInitialLoad, "an unchanged warm poll must not rebuild the dashboard");
+});
+
+test("a warm 304 publishes only when it clears a visible reconnecting error", async () => {
+  let attempt = 0;
+  const states = [];
+  const loader = createDashboardRequestLoader({onState: state => states.push(state), fetchImpl: async () => {
+    attempt += 1;
+    if (attempt === 1) return response([{ref: "SAVED"}], {etag: '"requests-v1"'});
+    if (attempt === 2) return response({error: "Temporary failure"}, {ok: false, status: 503});
+    return {status: 304, headers: {get: () => null}};
+  }});
+  await loader.load("demo");
+  await loader.load("demo");
+  const beforeRecovery = states.length;
+  assert.equal(loader.getState().error, "Temporary failure");
+  await loader.load("demo");
+  assert.equal(states.length, beforeRecovery + 1);
+  assert.equal(loader.getState().error, "");
+  assert.deepEqual(loader.getState().records, [{ref: "SAVED"}]);
 });
 
 test("changed account clears old records immediately and an aborted stale response cannot overwrite its result", async () => {
