@@ -181,6 +181,27 @@ export function liveEquipmentRoadStatus(record = {}, requests = []) {
   return matchingRoadStatus(record,requests,fleetAssetMatcher());
 }
 
+// For a screen that asks the status of many assets against one request list (a table column,
+// its filter values, a drilldown). liveEquipmentRoadStatus reads every request for each asset;
+// on 13 Nov 2026 that was 1,617 assets against 21,068 requests, of which 90 could affect a
+// status, and one pass over the fleet took about two seconds. This sets the closed requests
+// aside once, shares one matcher, and remembers each asset's answer. It applies the same rule
+// through the same matchingRoadStatus, so every asset gets the status it had before.
+// Build one per request list and discard it when the list changes.
+export function liveEquipmentRoadStatusLookup(requests = []) {
+  const activeRequests = (Array.isArray(requests) ? requests : [])
+    .filter((request) => normalize(request?.status) !== "closed" || isIdleVehicleRequest(request));
+  const matches = fleetAssetMatcher();
+  const known = new WeakMap();
+  return (record = {}) => {
+    const remembered = record && typeof record === "object" ? known.get(record) : undefined;
+    if (remembered) return remembered;
+    const status = matchingRoadStatus(record, activeRequests, matches);
+    if (record && typeof record === "object") known.set(record, status);
+    return status;
+  };
+}
+
 // Resolve a complete fleet snapshot by indexing the master once, then walking
 // active requests once. This preserves ambiguous matches (all genuinely
 // matching candidates receive the status) without the former O(fleet*requests)

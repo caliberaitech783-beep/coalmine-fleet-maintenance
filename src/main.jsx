@@ -149,7 +149,7 @@ import { matchesSmartSearch } from "../smart-search.mjs";
 import { createRowSearchIndex } from "./indexed-smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus, liveEquipmentRoadStatusLookup, liveEquipmentRoadStatuses } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, newBreakdownCategoryShare, newCategoryMixRequests, NEW_CATEGORY_MIX_LABEL, dailyBreakdownMovement, normalizedBreakdownType, DASHBOARD_REPAIR_TYPES, dashboardRepairTypeKey } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
@@ -5498,8 +5498,13 @@ function Equipment({
     [editing, setEditing] = useState(null),
     [savingEdit, setSavingEdit] = useState(false),
     [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  // The live status of every asset is read several times per render (column filter values,
+  // rows, the filter panel). One lookup per request list answers all of them; asking
+  // liveEquipmentRoadStatus for each asset reads every request each time and froze this
+  // screen for 40 seconds once the request list passed 20,000 rows.
+  const liveStatusLookup = useMemo(() => Array.isArray(statusRequests) ? liveEquipmentRoadStatusLookup(statusRequests) : null, [statusRequests]);
   const roadStatusFor = (record) => Array.isArray(statusRequests)
-    ? liveEquipmentRoadStatus(record, statusRequests)
+    ? (typeof liveStatusLookup === "function" ? liveStatusLookup(record) : liveEquipmentRoadStatus(record, statusRequests))
     : equipmentRoadStatus(record);
   const roadStatusLabel = (status) => ({onroad: "On road", offroad: "Off road", idle: "Idle"}[status] || "Status not set");
   const equipmentColumns = [
