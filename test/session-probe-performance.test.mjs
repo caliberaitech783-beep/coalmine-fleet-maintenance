@@ -22,3 +22,11 @@ test('the fallback expiry probe uses the shared adaptive background cadence',()=
   assert.match(effect,/setInterval\(check,adaptiveRefreshInterval\(window,60_000\)\)/);
   assert.doesNotMatch(effect,/setInterval\(check,15000\)/);
 });
+
+test('activity heartbeats retain online status without writing every thirty seconds',()=>{
+  const start=client.indexOf('const heartbeatIntervalMs=60_000;');
+  const effect=client.slice(start,client.indexOf('},[session?.token]);',start));
+  assert.ok(start>0);
+  assert.ok((effect.match(/<heartbeatIntervalMs/g)||[]).length>=2);
+  assert.doesNotMatch(effect,/<30000/);
+});

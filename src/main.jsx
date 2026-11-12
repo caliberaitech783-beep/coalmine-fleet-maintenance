@@ -12094,10 +12094,11 @@ function App() {
   }, [session?.token]);
   useEffect(()=>{
     if(!session?.token)return undefined;
+    const heartbeatIntervalMs=60_000;
     let lastHeartbeatAt=0,closed=false;
     const heartbeat=async(force=false)=>{
       if(closed)return;
-      if(!force&&Date.now()-lastHeartbeatAt<30000)return;
+      if(!force&&Date.now()-lastHeartbeatAt<heartbeatIntervalMs)return;
       lastHeartbeatAt=Date.now();
       try{
         // The shared interceptor validates expiry and ignores stale-token
@@ -12107,7 +12108,7 @@ function App() {
     };
     let activityHeartbeatHandle=null,activityHeartbeatUsesIdle=false;
     const markActivity=()=>{
-      if(closed||activityHeartbeatHandle!==null||Date.now()-lastHeartbeatAt<30000)return;
+      if(closed||activityHeartbeatHandle!==null||Date.now()-lastHeartbeatAt<heartbeatIntervalMs)return;
       const run=()=>{activityHeartbeatHandle=null;activityHeartbeatUsesIdle=false;void heartbeat();};
       if(typeof window.requestIdleCallback==="function"){
         activityHeartbeatUsesIdle=true;
