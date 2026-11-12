@@ -184,7 +184,10 @@ jobs:
             --type zip \
             --clean true \
             --restart true
-          for attempt in {1..18}; do
+          # A complete-package restart can exceed 90 seconds while Azure warms
+          # Node and the database connection. Keep the same strict checks, but
+          # allow up to three minutes before deciding to roll back.
+          for attempt in {1..36}; do
             if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?fast-ui=${GITHUB_SHA}")" && \
               HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$GITHUB_SHA" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true)process.exit(1)'; then
               page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
@@ -212,7 +215,7 @@ jobs:
             --type zip \
             --clean true \
             --restart true
-          for attempt in {1..18}; do
+          for attempt in {1..36}; do
             if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?fast-ui-rollback=${GITHUB_SHA}")" && \
               HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$PREVIOUS_SHA" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true)process.exit(1)'; then
               page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
