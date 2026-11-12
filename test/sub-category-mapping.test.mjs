@@ -129,11 +129,11 @@ test('creation SQL persists the validated sub-category and permits an empty prod
   const db=new PGlite();
   try{
     const start=source.indexOf('    const result=await client.query(`INSERT INTO maintenance_requests',source.indexOf("app.post('/api/requests',"));
-    const end=source.indexOf('\n    await client.query',start);
+    const end=source.indexOf('\n    if(duplicate)',start);
     const insert=source.slice(start,end);
     const columns=insert.match(/\((reference,[^)]+)\)/)[1].split(',');
-    await db.exec(`CREATE TABLE maintenance_requests(${columns.map(name=>`${name} ${name==='acceptance_required'?'boolean':name==='started_at'?'timestamptz':'text'}`).join(',')});`);
-    const context={client:db,requestProjection:'reference AS ref,sub_category AS "subCategory"',ref:'REQ-SUB',equipment:'Truck',equipmentGroup:'TIPPER',door:'D1',reg:'R1',chassis:'CH1',storedDriverName:'',storedDriverSource:'',superior:'',storedSite:'Site',category:'DRIVELINE',complaint:'Noise',complaintAudio:'',startedAt:new Date(),req:{session:{name:'Operator',login:'production',assignedRole:'Production User'}},normalizedMeterType:'KMR',storedComplaintLanguage:'en',storedSubCategory:validateRequestSubCategory('DRIVELINE','Engine',mappings)};
+    await db.exec(`CREATE TABLE maintenance_requests(${columns.map(name=>`${name} ${name==='complaint_media'?'jsonb':name==='acceptance_required'?'boolean':name==='started_at'?'timestamptz':'text'}`).join(',')});`);
+    const context={client:db,requestProjection:'reference AS ref,sub_category AS "subCategory"',ref:'REQ-SUB',equipment:'Truck',equipmentGroup:'TIPPER',door:'D1',reg:'R1',chassis:'CH1',storedDriverName:'',storedDriverSource:'',superior:'',storedSite:'Site',requestShift:'Shift A',complaintMedia:[],category:'DRIVELINE',complaint:'Noise',complaintAudio:'',startedAt:new Date(),req:{session:{name:'Operator',login:'production',assignedRole:'Production User'}},normalizedMeterType:'KMR',storedComplaintLanguage:'en',storedSubCategory:validateRequestSubCategory('DRIVELINE','Engine',mappings)};
     const save=new Function(...Object.keys(context),`const storedCategory=category,classification=null;return (async()=>{${insert};return result;})()`);
     let result=await save(...Object.values(context));
     assert.deepEqual(result.rows,[{ref:'REQ-SUB',subCategory:'Engine'}]);

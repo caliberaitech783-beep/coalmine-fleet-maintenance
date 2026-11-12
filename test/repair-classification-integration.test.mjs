@@ -48,13 +48,13 @@ test('real insert SQL persists new category, component and rollout marker togeth
   const db=new PGlite();
   try {
     const start=source.indexOf('    const result=await client.query(`INSERT INTO maintenance_requests',source.indexOf("app.post('/api/requests',"));
-    const sql=source.slice(start,source.indexOf('\n    await client.query',start));
+    const sql=source.slice(start,source.indexOf('\n    if(duplicate)',start));
     const columns=sql.match(/\((reference,[^)]+)\)/)[1].split(',');
-    await db.exec(`CREATE TABLE maintenance_requests(${columns.map(name=>`${name} ${name==='classification'?'jsonb':name==='acceptance_required'?'boolean':name==='started_at'?'timestamptz':'text'}`).join(',')});`);
+    await db.exec(`CREATE TABLE maintenance_requests(${columns.map(name=>`${name} ${name==='classification'?'jsonb':name==='complaint_media'?'jsonb':name==='acceptance_required'?'boolean':name==='started_at'?'timestamptz':'text'}`).join(',')});`);
     const classification=newClassification({repairType:'WGM',breakdownCategory:'WGM',breakdownSubCategory:'WGM'},'2026-10-28T17:00:00+05:30');
-    const context={client:db,requestProjection:'reference AS ref,category,sub_category,classification',ref:'REQ-NEW',equipment:'Truck',equipmentGroup:'TIPPER',door:'D1',reg:'',chassis:'',storedDriverName:'',storedDriverSource:'',superior:'',storedSite:'Mine',storedCategory:'WGM',complaint:'Maintenance',complaintAudio:'',startedAt:new Date(),req:{session:{assignedRole:'Maintenance User'}},normalizedMeterType:'HMR',storedComplaintLanguage:'',storedSubCategory:'WGM',classification};
+    const context={client:db,requestProjection:'reference AS ref,category,sub_category,classification,request_shift,complaint_media',ref:'REQ-NEW',equipment:'Truck',equipmentGroup:'TIPPER',door:'D1',reg:'',chassis:'',storedDriverName:'',storedDriverSource:'',superior:'',storedSite:'Mine',requestShift:'Shift B',complaintMedia:[{kind:'photo'}],storedCategory:'WGM',complaint:'Maintenance',complaintAudio:'',startedAt:new Date(),req:{session:{assignedRole:'Maintenance User'}},normalizedMeterType:'HMR',storedComplaintLanguage:'',storedSubCategory:'WGM',classification};
     const rows=await new Function(...Object.keys(context),`return (async()=>{${sql};return result.rows;})()`)(...Object.values(context));
-    assert.deepEqual(rows,[{ref:'REQ-NEW',category:'WGM',sub_category:'WGM',classification}]);
+    assert.deepEqual(rows,[{ref:'REQ-NEW',category:'WGM',sub_category:'WGM',classification,request_shift:'Shift B',complaint_media:[{kind:'photo'}]}]);
   } finally {await db.close();}
 });
 
