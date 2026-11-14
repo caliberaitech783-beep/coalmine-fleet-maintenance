@@ -1,4 +1,4 @@
-import { sendTelegramText } from './telegram.mjs';
+import { sendTelegramDocument, sendTelegramText } from './telegram.mjs';
 
 const OEM_BOT_USERNAME = 'oembd_bot';
 
@@ -42,7 +42,8 @@ export async function oemTelegramRequest(method, payload, { env = process.env, f
   return body.result;
 }
 
-export async function sendOemTelegramText({ chatId, message }, options = {}) {
+async function sendToPrivateOemChat(send, delivery, options) {
+  const { chatId } = delivery;
   const target = String(chatId ?? '').trim();
   if (!/^[1-9]\d*$/.test(target)) {
     throw new Error('A linked private Telegram chat is required for OEM delivery.');
@@ -50,12 +51,20 @@ export async function sendOemTelegramText({ chatId, message }, options = {}) {
   const env = options.env ?? process.env;
   await verifyOemTelegramBot({ ...options, env });
   try {
-    return await sendTelegramText({ chatId: target, message, privateChat: true }, {
+    return await send({ ...delivery, chatId: target, privateChat: true }, {
       ...options,
       fetchImpl: (url, init) => (options.fetchImpl ?? fetch)(url, { ...init, signal: AbortSignal.timeout(10000) }),
-      env: { ...env, TELEGRAM_BOT_TOKEN: oemBotToken(env) },
+      env: { ...env, TELEGRAM_BOT_TOKEN: oemBotToken(env), TELEGRAM_DEFAULT_CHAT_ID: target },
     });
   } catch (error) {
     throw new Error(error.status ? `OEM Telegram send failed (HTTP ${error.status}).` : 'OEM Telegram send failed before confirmation.');
   }
+}
+
+export function sendOemTelegramText(delivery, options = {}) {
+  return sendToPrivateOemChat(sendTelegramText, delivery, options);
+}
+
+export function sendOemTelegramPdf(delivery, options = {}) {
+  return sendToPrivateOemChat(sendTelegramDocument, delivery, options);
 }

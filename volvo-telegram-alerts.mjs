@@ -3,7 +3,8 @@ import { createFleetAssetResolver } from './dashboard-equipment-metrics.mjs';
 import { equipmentGroupValue } from './equipment-group.mjs';
 import { indiaDateTimeEpoch } from './report-date-range.mjs';
 import { canonicalSiteName } from './site-location.mjs';
-import { oemTelegramRequest, sendOemTelegramText, verifyOemTelegramBot } from './oem-telegram.mjs';
+import { oemTelegramRequest, sendOemTelegramPdf, sendOemTelegramText, verifyOemTelegramBot } from './oem-telegram.mjs';
+import { buildTableBundlePdf } from './table-export-pdf.mjs';
 
 const hours = [24, 48, 96, 144];
 const areas = {
@@ -38,6 +39,47 @@ function timestamp(epoch) {
   return `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute} IST`;
 }
 const field = value => clean(value).replace(/\s+/g, ' ').slice(0, 360) || 'Not recorded';
+
+export async function buildVolvoCheckpointPdf(row, asset, checkpoint, now) {
+  const site = canonicalSiteName(row.site);
+  const region = Object.entries(areas).find(([, sites]) =>
+    sites.some(location => canonicalSiteName(location) === site))?.[0];
+  if (!region || !hours.includes(checkpoint)) throw new Error('Invalid Volvo PDF site or checkpoint.');
+  const started = indiaDateTimeEpoch(row.start);
+  const minutes = Math.floor((+now - started) / 60000);
+  const age = `${Math.floor(minutes / 1440)}d ${Math.floor(minutes % 1440 / 60)}h ${minutes % 60}m`;
+  const vehicle = field(asset.model || row.equipment);
+  const door = field(asset.door || asset.equipmentName);
+  const chassis = field(asset.chassisNo || row.chassis);
+  const columns = ['Breakdown ID', 'Location', 'Vehicle', 'Door No.', 'Chassis No.', 'Status',
+    'Reported at', 'Days of BD', 'Reason of BD', 'Latest action', 'Expected restoration'].map(label => ({ label }));
+  const buffer = await buildTableBundlePdf({
+    title: 'Volvo OEM Breakdown Report',
+    subtitle: `${region} | ${checkpoint}-hour checkpoint | ${timestamp(+now)}`,
+    tables: [{
+      title: field(row.site), columns,
+      rows: [[field(row.ref), field(row.site), vehicle, door, chassis, field(row.status),
+        timestamp(started), age, field(row.complaint), field(row.dailyRemarks?.[0]?.remark || row.maintenanceWork),
+        timestamp(indiaDateTimeEpoch(row.expectedCompletionAt))]],
+    }],
+    generatedAt: now,
+    pageSize: 'A4',
+  });
+  const index = hours.indexOf(checkpoint);
+  const next = hours[index + 1];
+  const caption = [
+    `🔴 OEM BREAKDOWN ESCALATION LEVEL ${index + 1}`,
+    'ACTION REQUIRED - Confirm the recovery plan and expected restoration time.',
+    `Escalation Checkpoint: ${checkpoint} hours / ${checkpoint / 24} days`,
+    `Site: ${field(row.site).slice(0, 65)} (${region}) | OEM: Volvo Trucks`,
+    `Vehicle: ${vehicle.slice(0, 75)} | Breakdown ID: ${field(row.ref).slice(0, 50)}`,
+    `Door No.: ${door.slice(0, 55)} | Chassis No.: ${chassis.slice(0, 55)}`,
+    `Current Status: ${field(row.status).slice(0, 45)}`, `Total Downtime: ${age}`,
+    `Next Escalation: ${next ? timestamp(started + next * hourMs) : 'Final checkpoint'}`,
+    'Attached: OEM BD report for this location', 'Source: Caliber Pulse',
+  ].join('\n');
+  return { buffer, caption, filename: `Volvo-OEM-BD-${region}-${site.replaceAll(' ', '-')}-${checkpoint}h-${field(row.ref)}.pdf` };
+}
 
 export async function ensureVolvoTelegramTables(client) {
   await client.query(`
@@ -175,16 +217,19 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
         event = 'C';
         recipients = [...new Set(history.filter(item => item.status === 'sent').map(item => item.contact_id))];
       }
-      const message = renderAlert(row, asset, event, now);
+      const checkpoint = Number(event);
+      const deliveryEvent = checkpoint ? `pdf-${event}` : event;
+      let pdf;
       for (const id of recipients) {
-        if (!linked.has(id) || history.some(item => item.event === event && item.contact_id === id)) continue;
+        if (!linked.has(id) || history.some(item => item.event === deliveryEvent && item.contact_id === id)) continue;
+        if (checkpoint && !pdf) pdf = await buildVolvoCheckpointPdf(row, asset, checkpoint, now);
         const current = (await client.query(`
           SELECT status,site,closed_at,archived_at,oem_responsibility FROM maintenance_requests WHERE reference=$1
         `, [row.ref])).rows[0];
         if (!current || current.archived_at || current.oem_responsibility !== 'OEM'
           || current.status !== row.status || Boolean(current.closed_at) !== Boolean(row.closedAt)
           || canonicalSiteName(current.site) !== canonicalSiteName(row.site)) break;
-        const params = [row.ref, event, id];
+        const params = [row.ref, deliveryEvent, id];
         const claim = await client.query(`
           INSERT INTO volvo_telegram_deliveries(reference,event,contact_id,status)
           VALUES($1,$2,$3,'sending') ON CONFLICT DO NOTHING RETURNING reference
@@ -192,7 +237,10 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
         if (!claim.rowCount) continue;
         let result;
         try {
-          result = await sendOemTelegramText({ chatId: linked.get(id), message });
+          const chatId = linked.get(id);
+          result = pdf
+            ? await sendOemTelegramPdf({ chatId, ...pdf })
+            : await sendOemTelegramText({ chatId, message: renderAlert(row, asset, event, now) });
         } catch (error) {
           await client.query(`
             UPDATE volvo_telegram_deliveries SET status='review',error=$4,updated_at=NOW()
