@@ -108,7 +108,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
-import {runVolvoTelegram} from './volvo-telegram-alerts.mjs';
+import {runVolvoTelegram,runVolvoTelegramEnrollment} from './volvo-telegram-alerts.mjs';
 import {registerOemEmailAdmin} from './oem-email-admin.mjs';
 import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
 import {bdAgeingReportHandler} from './bd-ageing-report.mjs';
@@ -9234,6 +9234,7 @@ async function loadVolvoTelegramData(){
 void initializeDatabase();
 if(scheduledJobsEnabled){
   if(process.env.OEM_TELEGRAM_BOT_TOKEN?.trim()){
+    void runVolvoTelegramEnrollment({pool,isReady:()=>databaseReady});
     setStaggeredInterval(()=>{
       if(databaseReady)return runVolvoTelegram({pool,loadData:loadVolvoTelegramData})
         .catch(error=>console.error('Volvo Telegram scheduler failed.',error.message));

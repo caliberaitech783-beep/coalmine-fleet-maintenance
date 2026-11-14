@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createFleetAssetResolver } from './dashboard-equipment-metrics.mjs';
 import { equipmentGroupValue } from './equipment-group.mjs';
 import { indiaDateTimeEpoch } from './report-date-range.mjs';
@@ -26,6 +27,7 @@ export const volvoContacts = [
 }));
 
 const hash = value => createHash('sha256').update(value).digest('hex');
+const publicOtpHash = (chatId, code) => `public-v2:${hash(`${chatId}:${code}`)}`;
 const clean = value => String(value ?? '').trim();
 const lower = value => clean(value).toLowerCase();
 const hourMs = 3600000;
@@ -160,7 +162,7 @@ async function handleEnrollment(client, message, ownerChatId) {
   const chatId = String(message?.chat?.id ?? '');
   if (message?.chat?.type !== 'private' || !/^[1-9]\d*$/.test(chatId)) return;
   const command = clean(message.text);
-  const verification = command.match(/^\/verify (\d{8})$/)?.[1];
+  const verification = /^\d{4}$/.test(command) ? command : '';
   if (verification) {
     const { rows } = await client.query(`
       UPDATE volvo_telegram_contacts SET
@@ -171,14 +173,15 @@ async function handleEnrollment(client, message, ownerChatId) {
         approval_hash=CASE WHEN approval_hash=$3 THEN NULL ELSE approval_hash END
       WHERE contact_id=$1 AND pending_chat_id=$2 AND public_enrolled_at IS NULL
         AND approval_expires_at>NOW() AND public_verification_attempts<5
-      RETURNING public_enrolled_at`, [`public:${chatId}`, chatId, hash(verification)]);
+        AND approval_hash LIKE 'public-v2:%'
+      RETURNING public_enrolled_at`, [`public:${chatId}`, chatId, publicOtpHash(chatId, verification)]);
     await sendOemTelegramText({ chatId, message: rows[0]?.public_enrolled_at
       ? 'Your bot enrollment was verified.'
       : 'Code verification failed. Use the code shared by the owner for your request. If it expired or you used all five attempts, send /start after the 10-minute window.' });
     return;
   }
-  if (command === '/verify') {
-    await sendOemTelegramText({ chatId, message: 'Send /verify followed by the eight-digit code shared by the owner.' });
+  if (/^\/verify(?:\s|$)/.test(command)) {
+    await sendOemTelegramText({ chatId, message: 'Send the four digits shared by the owner as a message. Send /start if you need to request a code.' });
     return;
   }
   const approval = command.match(/^\/approve (\d{8})$/)?.[1];
@@ -214,8 +217,9 @@ async function handleEnrollment(client, message, ownerChatId) {
   }
   const token = command.match(/^\/start ([a-zA-Z0-9_-]{32})$/)?.[1];
   if ((!token && !publicRequest) || !ownerChatId || chatId === ownerChatId) return;
-  const code = String(randomInt(10000000, 100000000));
-  const approvalHash = hash(code);
+  const code = publicRequest ? String(randomInt(0, 10000)).padStart(4, '0')
+    : String(randomInt(10000000, 100000000));
+  const approvalHash = publicRequest ? publicOtpHash(chatId, code) : hash(code);
   const { rows } = publicRequest ? await client.query(`
     INSERT INTO volvo_telegram_contacts(contact_id,pending_chat_id,approval_hash,approval_expires_at)
     SELECT $1,$2,$3,NOW()+INTERVAL '10 minutes'
@@ -224,7 +228,8 @@ async function handleEnrollment(client, message, ownerChatId) {
       approval_hash=EXCLUDED.approval_hash, approval_expires_at=EXCLUDED.approval_expires_at,
       public_verification_attempts=0
     WHERE volvo_telegram_contacts.public_enrolled_at IS NULL
-      AND (volvo_telegram_contacts.approval_expires_at IS NULL OR volvo_telegram_contacts.approval_expires_at<=NOW())
+      AND (volvo_telegram_contacts.approval_expires_at IS NULL OR volvo_telegram_contacts.approval_expires_at<=NOW()
+        OR volvo_telegram_contacts.approval_hash NOT LIKE 'public-v2:%')
     RETURNING contact_id`, [`public:${chatId}`, chatId, approvalHash]) : await client.query(`
     UPDATE volvo_telegram_contacts SET pending_chat_id=$1, approval_hash=$3,
       approval_expires_at=NOW()+INTERVAL '10 minutes'
@@ -238,7 +243,7 @@ async function handleEnrollment(client, message, ownerChatId) {
         SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1
           OR (contact_id=$2 AND public_enrolled_at IS NOT NULL)`, [chatId, `public:${chatId}`]);
       await sendOemTelegramText({ chatId, message: rowCount ? 'You are already enrolled.'
-        : 'Your request is pending. Once the owner shares your code, send /verify followed by the code.' });
+        : 'Your request is pending. Once the owner shares your code, send the four digits here.' });
     }
     return;
   }
@@ -250,7 +255,7 @@ async function handleEnrollment(client, message, ownerChatId) {
       publicRequest ? 'Public bot enrollment request' : 'Volvo Telegram enrollment request',
       publicRequest ? 'Access: Bot enrollment only' : `Contact: ${name}`,
       `Telegram account: ${account || 'Name unavailable'} (ID ${chatId})`,
-      publicRequest ? `Share this code privately with the applicant: ${code}. They must send /verify followed by the code in their own bot chat.`
+      publicRequest ? `Share this code privately with the applicant: ${code}. They must send the four digits in their own bot chat.`
         : `To approve, send /approve ${code} in this chat.`,
       'The code expires in 10 minutes.',
     ].join('\n') });
@@ -260,7 +265,7 @@ async function handleEnrollment(client, message, ownerChatId) {
     throw error;
   }
   await sendOemTelegramText({ chatId, message: publicRequest
-    ? 'The owner received your code. Once they share it with you, send /verify followed by the code here. If it expires, send /start again.'
+    ? 'The owner received your code. Once they share it with you, send the four digits here. If it expires, send /start again.'
     : 'Your request is waiting for owner approval. If the code expires, open your invitation link again.' });
 }
 
@@ -268,7 +273,7 @@ async function enrollContacts(client, nextUpdate, configuredOwner) {
   const owner = clean(configuredOwner);
   const ownerChatId = /^[1-9]\d*$/.test(owner) ? owner : '';
   const updates = await oemTelegramRequest('getUpdates', {
-    ...(nextUpdate == null ? {} : { offset: Number(nextUpdate) }), allowed_updates: ['message'],
+    ...(nextUpdate == null ? {} : { offset: Number(nextUpdate) }), allowed_updates: ['message'], timeout: 5,
   });
   for (const update of updates) {
     try {
@@ -277,6 +282,43 @@ async function enrollContacts(client, nextUpdate, configuredOwner) {
       console.error('Volvo Telegram enrollment update failed.', error.message);
     }
     await client.query('UPDATE volvo_telegram_state SET next_update=$1 WHERE id=1', [update.update_id + 1]);
+  }
+}
+
+// Keep a Telegram long poll open so enrollment is independent of the PDF scheduler.
+export async function runVolvoTelegramEnrollment({ pool, isReady, signal }) {
+  let initialized = false;
+  while (!signal?.aborted) {
+    let pause = 250;
+    try {
+      if (isReady()) {
+        const client = await pool.connect();
+        let locked = false;
+        let discard = false;
+        try {
+          locked = (await client.query('SELECT pg_try_advisory_lock(71903543) AS locked')).rows[0].locked;
+          if (locked) {
+            if (!initialized) {
+              await verifyOemTelegramBot();
+              await ensureVolvoTelegramTables(client);
+              initialized = true;
+            }
+            const { rows: [state] } = await client.query('SELECT next_update,owner_chat_id FROM volvo_telegram_state WHERE id=1');
+            await enrollContacts(client, state.next_update, state.owner_chat_id);
+            pause = 0;
+          }
+        } finally {
+          if (locked) await client.query('SELECT pg_advisory_unlock(71903543)').catch(() => { discard = true; });
+          client.release(discard);
+        }
+      }
+    } catch (error) {
+      console.error('Volvo Telegram enrollment polling failed.', error.message);
+      pause = 1000;
+    }
+    if (pause) await delay(pause, undefined, { signal, ref: false }).catch(error => {
+      if (error.name !== 'AbortError') throw error;
+    });
   }
 }
 
@@ -332,8 +374,7 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
     if (!locked) return;
     await verifyOemTelegramBot();
     await ensureVolvoTelegramTables(client);
-    const state = (await client.query('SELECT next_update,enabled_at,owner_chat_id FROM volvo_telegram_state WHERE id=1')).rows[0];
-    await enrollContacts(client, state.next_update, state.owner_chat_id);
+    const state = (await client.query('SELECT enabled_at FROM volvo_telegram_state WHERE id=1')).rows[0];
     if (!state.enabled_at) return;
     const { requests, equipment } = await loadData();
     const resolve = createFleetAssetResolver(equipment);
