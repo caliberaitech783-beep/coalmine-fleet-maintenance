@@ -108,6 +108,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {createTicketMailer,sendTicketRaisedEmail,ticketEmailConfiguration} from './ticket-email.mjs';
 import {sendScheduledOemEmails} from './oem-breakdown-email.mjs';
+import {runVolvoTelegram} from './volvo-telegram-alerts.mjs';
 import {registerOemEmailAdmin} from './oem-email-admin.mjs';
 import {requireUserSessionView,isSessionViewOnlyUser} from './user-session-access.mjs';
 import {bdAgeingReportHandler} from './bd-ageing-report.mjs';
@@ -9218,8 +9219,26 @@ async function loadOemEmailData(){
   const records=name=>masters.filter(row=>row.master_name===name).map(row=>row.record_data);
   return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:records('Equipment master'),contacts:records('OEM master'),shifts:records('Shift master')};
 }
+async function loadVolvoTelegramData(){
+  const [{rows:requests},{rows:equipment}]=await Promise.all([
+    pool.query(`SELECT ${requestProjection} FROM maintenance_requests
+      WHERE archived_at IS NULL AND oem_responsibility='OEM'
+      AND (status NOT IN ('Closed','Idle','Ideal') OR (status='Closed' AND verified_at IS NOT NULL
+        AND EXISTS(SELECT 1 FROM volvo_telegram_deliveries d
+          WHERE d.reference=maintenance_requests.reference AND d.status='sent' AND d.event<>'C')))`),
+    pool.query("SELECT record_data FROM master_records WHERE master_name='Equipment master'"),
+  ]);
+  return {requests:await attachDailyRemarks(requestsVisibleGlobally(requests)),equipment:equipment.map(row=>row.record_data)};
+}
+
 void initializeDatabase();
 if(scheduledJobsEnabled){
+  if(process.env.OEM_TELEGRAM_BOT_TOKEN?.trim()){
+    setStaggeredInterval(()=>{
+      if(databaseReady)return runVolvoTelegram({pool,loadData:loadVolvoTelegramData})
+        .catch(error=>console.error('Volvo Telegram scheduler failed.',error.message));
+    },60_000,34_000);
+  }
   setStaggeredInterval(()=>{
     void sendMandatorySiteInvitations().catch(error=>console.error('Mandatory Telegram invitations failed.',error.message));
   },60000,1000);

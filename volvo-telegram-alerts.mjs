@@ -1,0 +1,213 @@
+import { createHash, randomBytes } from 'node:crypto';
+import { createFleetAssetResolver } from './dashboard-equipment-metrics.mjs';
+import { equipmentGroupValue } from './equipment-group.mjs';
+import { indiaDateTimeEpoch } from './report-date-range.mjs';
+import { canonicalSiteName } from './site-location.mjs';
+import { oemTelegramRequest, sendOemTelegramText, verifyOemTelegramBot } from './oem-telegram.mjs';
+
+const hours = [24, 48, 96, 144];
+const areas = {
+  WCL: ['Majri OC', 'Sasti OC', 'Dhoptala OC (2nd)', 'Gauri Pauni OC (2nd)'],
+  NCL: ['Jayant OC', 'Dudhichua OC', 'Dudhichua East OC'],
+};
+export const volvoContacts = [
+  ['tushar-shende', 'Tushar Shende', ['WCL'], [24, 48, 96, 144]],
+  ['kasturi-sai-shashank', 'Kasturi Sai Shashank', ['WCL'], [48, 96, 144]],
+  ['v-krishna-kishore', 'V Krishna Kishore', ['WCL', 'NCL'], [96, 144]],
+  ['shantanu-mondal', 'Shantanu Mondal', ['NCL'], [24, 48, 96, 144]],
+  ['ranjan-kumar-singh', 'Ranjan Kumar Singh', ['NCL'], [48, 96, 144]],
+  ['aditya-rai', 'Aditya Rai', ['NCL'], [96, 144]],
+  ['sanay-pawar', 'Sanay Pawar', ['WCL'], [144]],
+  ['brijesh-gautam', 'Brijesh Gautam', ['NCL'], [144]],
+  ['sachin-shivani', 'Sachin Shivani', ['WCL', 'NCL'], [144]],
+].map(([id, name, regions, checkpoints]) => ({
+  id, name, checkpoints, sites: regions.flatMap(region => areas[region].map(canonicalSiteName)),
+}));
+
+const hash = value => createHash('sha256').update(value).digest('hex');
+const clean = value => String(value ?? '').trim();
+const lower = value => clean(value).toLowerCase();
+const hourMs = 3600000;
+const dateFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+function timestamp(epoch) {
+  if (!Number.isFinite(epoch)) return 'Not recorded';
+  const parts = Object.fromEntries(dateFormat.formatToParts(epoch).map(({ type, value }) => [type, value]));
+  return `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute} IST`;
+}
+const field = value => clean(value).replace(/\s+/g, ' ').slice(0, 360) || 'Not recorded';
+
+export async function ensureVolvoTelegramTables(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS volvo_telegram_contacts (
+      contact_id TEXT PRIMARY KEY, invite_hash TEXT UNIQUE, invite_expires_at TIMESTAMPTZ,
+      chat_id TEXT UNIQUE, linked_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS volvo_telegram_state (
+      id INTEGER PRIMARY KEY CHECK(id=1), next_update BIGINT, enabled_at TIMESTAMPTZ
+    );
+    INSERT INTO volvo_telegram_state(id) VALUES(1) ON CONFLICT DO NOTHING;
+    CREATE TABLE IF NOT EXISTS volvo_telegram_deliveries (
+      reference TEXT NOT NULL, event TEXT NOT NULL, contact_id TEXT NOT NULL,
+      status TEXT NOT NULL, message_id TEXT, error TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(reference,event,contact_id)
+    )`);
+}
+
+export async function createVolvoTelegramInvites(client) {
+  const links = [];
+  for (const contact of volvoContacts) {
+    const token = randomBytes(24).toString('base64url');
+    const saved = await client.query(`
+      INSERT INTO volvo_telegram_contacts(contact_id,invite_hash,invite_expires_at)
+      VALUES($1,$2,NOW()+INTERVAL '7 days')
+      ON CONFLICT(contact_id) DO UPDATE SET invite_hash=EXCLUDED.invite_hash,
+        invite_expires_at=EXCLUDED.invite_expires_at WHERE volvo_telegram_contacts.chat_id IS NULL
+      RETURNING contact_id`, [contact.id, hash(token)]);
+    if (saved.rowCount) links.push({ name: contact.name, url: `https://t.me/OEMBD_BOT?start=${token}` });
+  }
+  return links;
+}
+
+async function enrollContacts(client, nextUpdate) {
+  const updates = await oemTelegramRequest('getUpdates', {
+    ...(nextUpdate == null ? {} : { offset: Number(nextUpdate) }), allowed_updates: ['message'],
+  });
+  for (const update of updates) {
+    const message = update.message;
+    const token = clean(message?.text).match(/^\/start ([a-zA-Z0-9_-]{32})$/)?.[1];
+    const chatId = String(message?.chat?.id ?? '');
+    if (token && message.chat.type === 'private' && /^[1-9]\d*$/.test(chatId)) {
+      await client.query(`
+        UPDATE volvo_telegram_contacts SET chat_id=$1, linked_at=NOW(), invite_hash=NULL, invite_expires_at=NULL
+        WHERE invite_hash=$2 AND invite_expires_at>NOW() AND chat_id IS NULL
+          AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1)`, [chatId, hash(token)]);
+    }
+    await client.query('UPDATE volvo_telegram_state SET next_update=$1 WHERE id=1', [update.update_id + 1]);
+  }
+}
+
+export function volvoRecipients(site, checkpoint) {
+  const location = canonicalSiteName(site);
+  return volvoContacts.filter(contact => contact.sites.includes(location) && contact.checkpoints.includes(checkpoint));
+}
+
+function renderAlert(row, asset, event, now) {
+  const started = indiaDateTimeEpoch(row.start);
+  const stopped = event === 'C' ? indiaDateTimeEpoch(row.closedAt) : +now;
+  const minutes = Math.max(0, Math.floor((stopped - started) / 60000));
+  const checkpoint = Number(event);
+  const level = hours.indexOf(checkpoint) + 1;
+  const next = event === 'A' ? hours[0] : hours[level];
+  const heading = event === 'A' ? '🔴 NEW OEM BREAKDOWN LEVEL 0'
+    : event === 'C' ? '🟢 OEM BREAKDOWN RESOLVED' : `🔴 OEM BREAKDOWN ESCALATION LEVEL ${level}`;
+  const action = event === 'A' ? 'ACTION REQUIRED - Please acknowledge and confirm the support plan.'
+    : event === 'C' ? 'Vehicle restoration has been verified and automated escalation is closed.'
+      : 'ACTION REQUIRED - Confirm the recovery plan and expected restoration time.';
+  const latest = row.dailyRemarks?.[0];
+  return [
+    heading, action,
+    ...(level ? [`Escalation Checkpoint: ${checkpoint} hours / ${checkpoint / 24} days`] : []),
+    `Breakdown ID: ${field(row.ref)}`, `Site: ${field(row.site)} | OEM: Volvo Trucks`,
+    'Asset Category: Vehicle', `Vehicle: Volvo ${field(asset.model || row.equipment)}`,
+    `Door No.: ${field(asset.door || asset.equipmentName)} | Fleet ID: ${field(asset.asset || asset.fleetId)}`,
+    `Chassis No.: ${field(asset.chassisNo || row.chassis)}`, `Reported At: ${timestamp(started)}`,
+    `Breakdown Age${event === 'C' ? ' at Closure' : ''}: ${Math.floor(minutes / 1440)} calendar days`,
+    `Total Downtime: ${Math.floor(minutes / 1440)} day ${Math.floor(minutes % 1440 / 60)} hr ${minutes % 60} min`,
+    ...(event === 'C' ? [
+      `Restored At: ${timestamp(stopped)}`, `Corrective Action: ${field(row.maintenanceWork)}`,
+      `Trial Result: ${field(row.firstTripRemark || row.productionFirstTripRemark || 'First trip completed')}`,
+      `Restored By: ${field(row.closedBy)}`, `Verified By: ${field(row.verifiedBy)}`,
+      'Verification Status: Verified',
+    ] : [
+      `Current Status: ${field(row.status)}`, `Fault Category: ${field(row.subCategory || row.category)}`,
+      `Problem Reported: ${field(row.complaint)}`, `Latest Action: ${field(latest?.remark || row.maintenanceWork)}`,
+      `Pending From OEM: ${field(latest?.delayedReason || row.delayedReason)}`,
+      'OEM Scope: Validated', `Expected Restoration: ${timestamp(indiaDateTimeEpoch(row.expectedCompletionAt))}`,
+      `Next Escalation: ${next ? timestamp(started + next * hourMs) : 'Final checkpoint'}`,
+    ]),
+    'TAT Status: Service TAT not configured',
+    `Alert Generated: ${timestamp(+now)}`, 'Source: Caliber Pulse - Automated Alert',
+  ].join('\n');
+}
+
+export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
+  const client = await pool.connect();
+  let locked = false;
+  try {
+    locked = (await client.query('SELECT pg_try_advisory_lock(71903542) AS locked')).rows[0].locked;
+    if (!locked) return;
+    await verifyOemTelegramBot();
+    await ensureVolvoTelegramTables(client);
+    const state = (await client.query('SELECT next_update,enabled_at FROM volvo_telegram_state WHERE id=1')).rows[0];
+    await enrollContacts(client, state.next_update);
+    if (!state.enabled_at) return;
+    const { requests, equipment } = await loadData();
+    const resolve = createFleetAssetResolver(equipment);
+    const linked = new Map((await client.query(`
+      SELECT contact_id,chat_id FROM volvo_telegram_contacts WHERE chat_id IS NOT NULL
+    `)).rows.map(row => [row.contact_id, row.chat_id]));
+    for (const row of requests) {
+      const { assetIndex } = resolve(row, { allowTransferred: true });
+      const asset = equipment[assetIndex];
+      const group = lower(asset && equipmentGroupValue(asset, asset.itemName || row.equipmentGroup));
+      const make = lower(asset?.make || asset?.oem);
+      if (!['volvo', 'volvo trucks', 'volvo tippers'].includes(make)
+        || !(group ? /\b(trucks?|tippers?)\b/.test(group) : make !== 'volvo')
+        || !clean(asset.door || asset.equipmentName) || !clean(asset.chassisNo || row.chassis)) continue;
+      const started = indiaDateTimeEpoch(row.start);
+      if (!Number.isFinite(started) || started > +now) continue;
+      const history = (await client.query(`
+        SELECT event,contact_id,status FROM volvo_telegram_deliveries WHERE reference=$1
+      `, [row.ref])).rows;
+      const open = !row.closedAt && !['closed', 'idle', 'ideal'].includes(lower(row.status));
+      let event, recipients;
+      if (open) {
+        const due = hours.filter(value => started + value * hourMs <= +now);
+        // At onboarding send the case's current level, then send each newly reached level.
+        event = String(due.at(-1) ?? 'A');
+        recipients = volvoRecipients(row.site, event === 'A' ? 24 : Number(event)).map(contact => contact.id);
+      } else {
+        if (lower(row.status) !== 'closed' || !row.verifiedAt || !row.verifiedBy
+          || !(row.firstTripDone || row.productionFirstTripAt) || !Number.isFinite(indiaDateTimeEpoch(row.closedAt))) continue;
+        event = 'C';
+        recipients = [...new Set(history.filter(item => item.status === 'sent').map(item => item.contact_id))];
+      }
+      const message = renderAlert(row, asset, event, now);
+      for (const id of recipients) {
+        if (!linked.has(id) || history.some(item => item.event === event && item.contact_id === id)) continue;
+        const current = (await client.query(`
+          SELECT status,site,closed_at,archived_at,oem_responsibility FROM maintenance_requests WHERE reference=$1
+        `, [row.ref])).rows[0];
+        if (!current || current.archived_at || current.oem_responsibility !== 'OEM'
+          || current.status !== row.status || Boolean(current.closed_at) !== Boolean(row.closedAt)
+          || canonicalSiteName(current.site) !== canonicalSiteName(row.site)) break;
+        const params = [row.ref, event, id];
+        const claim = await client.query(`
+          INSERT INTO volvo_telegram_deliveries(reference,event,contact_id,status)
+          VALUES($1,$2,$3,'sending') ON CONFLICT DO NOTHING RETURNING reference
+        `, params);
+        if (!claim.rowCount) continue;
+        let result;
+        try {
+          result = await sendOemTelegramText({ chatId: linked.get(id), message });
+        } catch (error) {
+          await client.query(`
+            UPDATE volvo_telegram_deliveries SET status='review',error=$4,updated_at=NOW()
+            WHERE reference=$1 AND event=$2 AND contact_id=$3
+          `, [...params, error.message]);
+          continue;
+        }
+        await client.query(`
+          UPDATE volvo_telegram_deliveries SET status='sent',message_id=$4,updated_at=NOW()
+          WHERE reference=$1 AND event=$2 AND contact_id=$3
+        `, [...params, String(result.messageId)]);
+      }
+    }
+  } finally {
+    if (locked) await client.query('SELECT pg_advisory_unlock(71903542)').catch(() => {});
+    client.release();
+  }
+}
