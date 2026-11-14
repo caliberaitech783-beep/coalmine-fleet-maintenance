@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { createFleetAssetResolver } from './dashboard-equipment-metrics.mjs';
 import { equipmentGroupValue } from './equipment-group.mjs';
 import { indiaDateTimeEpoch } from './report-date-range.mjs';
@@ -120,9 +120,16 @@ export async function ensureVolvoTelegramTables(client) {
       contact_id TEXT PRIMARY KEY, invite_hash TEXT UNIQUE, invite_expires_at TIMESTAMPTZ,
       chat_id TEXT UNIQUE, linked_at TIMESTAMPTZ
     );
+    ALTER TABLE volvo_telegram_contacts
+      ADD COLUMN IF NOT EXISTS pending_chat_id TEXT,
+      ADD COLUMN IF NOT EXISTS approval_hash TEXT,
+      ADD COLUMN IF NOT EXISTS approval_expires_at TIMESTAMPTZ;
+    CREATE UNIQUE INDEX IF NOT EXISTS volvo_telegram_approval_hash
+      ON volvo_telegram_contacts(approval_hash) WHERE approval_hash IS NOT NULL;
     CREATE TABLE IF NOT EXISTS volvo_telegram_state (
       id INTEGER PRIMARY KEY CHECK(id=1), next_update BIGINT, enabled_at TIMESTAMPTZ
     );
+    ALTER TABLE volvo_telegram_state ADD COLUMN IF NOT EXISTS owner_chat_id TEXT;
     INSERT INTO volvo_telegram_state(id) VALUES(1) ON CONFLICT DO NOTHING;
     CREATE TABLE IF NOT EXISTS volvo_telegram_deliveries (
       reference TEXT NOT NULL, event TEXT NOT NULL, contact_id TEXT NOT NULL,
@@ -139,26 +146,80 @@ export async function createVolvoTelegramInvites(client) {
       INSERT INTO volvo_telegram_contacts(contact_id,invite_hash,invite_expires_at)
       VALUES($1,$2,NOW()+INTERVAL '7 days')
       ON CONFLICT(contact_id) DO UPDATE SET invite_hash=EXCLUDED.invite_hash,
-        invite_expires_at=EXCLUDED.invite_expires_at WHERE volvo_telegram_contacts.chat_id IS NULL
+        invite_expires_at=EXCLUDED.invite_expires_at, pending_chat_id=NULL, approval_hash=NULL,
+        approval_expires_at=NULL WHERE volvo_telegram_contacts.chat_id IS NULL
       RETURNING contact_id`, [contact.id, hash(token)]);
     if (saved.rowCount) links.push({ name: contact.name, url: `https://t.me/OEMBD_BOT?start=${token}` });
   }
   return links;
 }
 
-async function enrollContacts(client, nextUpdate) {
+async function handleEnrollment(client, message, ownerChatId) {
+  const chatId = String(message?.chat?.id ?? '');
+  if (message?.chat?.type !== 'private' || !/^[1-9]\d*$/.test(chatId)) return;
+  const command = clean(message.text);
+  const approval = command.match(/^\/approve (\d{8})$/)?.[1];
+  if (approval && chatId === ownerChatId) {
+    const { rows } = await client.query(`
+      UPDATE volvo_telegram_contacts SET chat_id=pending_chat_id, linked_at=NOW(),
+        pending_chat_id=NULL, approval_hash=NULL, approval_expires_at=NULL,
+        invite_hash=NULL, invite_expires_at=NULL
+      WHERE approval_hash=$1 AND approval_expires_at>NOW() AND invite_expires_at>NOW()
+        AND pending_chat_id IS NOT NULL AND chat_id IS NULL
+        AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts linked
+          WHERE linked.chat_id=volvo_telegram_contacts.pending_chat_id)
+      RETURNING contact_id,chat_id`, [hash(approval)]);
+    const approved = rows[0];
+    const name = volvoContacts.find(contact => contact.id === approved?.contact_id)?.name;
+    await sendOemTelegramText({ chatId, message: approved
+      ? `Approved Telegram enrollment for ${name}.`
+      : 'That code is invalid, expired, or already used.' });
+    if (approved) await sendOemTelegramText({ chatId: approved.chat_id, message: 'Your Volvo Telegram enrollment was approved.' });
+    return;
+  }
+  if (command === '/start') {
+    await sendOemTelegramText({ chatId, message: 'Open your individual Volvo invitation link to request access. The owner must approve your request.' });
+    return;
+  }
+  const token = command.match(/^\/start ([a-zA-Z0-9_-]{32})$/)?.[1];
+  if (!token || !ownerChatId || chatId === ownerChatId) return;
+  const code = String(randomInt(10000000, 100000000));
+  const approvalHash = hash(code);
+  const { rows } = await client.query(`
+    UPDATE volvo_telegram_contacts SET pending_chat_id=$1, approval_hash=$3,
+      approval_expires_at=NOW()+INTERVAL '10 minutes'
+    WHERE invite_hash=$2 AND invite_expires_at>NOW() AND chat_id IS NULL
+      AND (approval_expires_at IS NULL OR approval_expires_at<=NOW())
+      AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1)
+    RETURNING contact_id`, [chatId, hash(token), approvalHash]);
+  if (!rows.length) return;
+  const name = volvoContacts.find(contact => contact.id === rows[0].contact_id)?.name;
+  const account = [message.from?.first_name, message.from?.last_name, message.from?.username && '@' + message.from.username]
+    .filter(Boolean).join(' ').replace(/[\r\n]/g, ' ').slice(0, 160);
+  try {
+    await sendOemTelegramText({ chatId: ownerChatId, message: [
+      'Volvo Telegram enrollment request', `Contact: ${name}`, `Telegram account: ${account || chatId}`,
+      `To approve, send /approve ${code} in this chat.`, 'The code expires in 10 minutes.',
+    ].join('\n') });
+  } catch (error) {
+    await client.query(`UPDATE volvo_telegram_contacts
+      SET pending_chat_id=NULL, approval_hash=NULL, approval_expires_at=NULL WHERE approval_hash=$1`, [approvalHash]);
+    throw error;
+  }
+  await sendOemTelegramText({ chatId, message: 'Your request is waiting for owner approval. If the code expires, open your invitation link again.' });
+}
+
+async function enrollContacts(client, nextUpdate, configuredOwner) {
+  const owner = clean(configuredOwner);
+  const ownerChatId = /^[1-9]\d*$/.test(owner) ? owner : '';
   const updates = await oemTelegramRequest('getUpdates', {
     ...(nextUpdate == null ? {} : { offset: Number(nextUpdate) }), allowed_updates: ['message'],
   });
   for (const update of updates) {
-    const message = update.message;
-    const token = clean(message?.text).match(/^\/start ([a-zA-Z0-9_-]{32})$/)?.[1];
-    const chatId = String(message?.chat?.id ?? '');
-    if (token && message.chat.type === 'private' && /^[1-9]\d*$/.test(chatId)) {
-      await client.query(`
-        UPDATE volvo_telegram_contacts SET chat_id=$1, linked_at=NOW(), invite_hash=NULL, invite_expires_at=NULL
-        WHERE invite_hash=$2 AND invite_expires_at>NOW() AND chat_id IS NULL
-          AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1)`, [chatId, hash(token)]);
+    try {
+      await handleEnrollment(client, update.message, ownerChatId);
+    } catch (error) {
+      console.error('Volvo Telegram enrollment update failed.', error.message);
     }
     await client.query('UPDATE volvo_telegram_state SET next_update=$1 WHERE id=1', [update.update_id + 1]);
   }
@@ -216,8 +277,8 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
     if (!locked) return;
     await verifyOemTelegramBot();
     await ensureVolvoTelegramTables(client);
-    const state = (await client.query('SELECT next_update,enabled_at FROM volvo_telegram_state WHERE id=1')).rows[0];
-    await enrollContacts(client, state.next_update);
+    const state = (await client.query('SELECT next_update,enabled_at,owner_chat_id FROM volvo_telegram_state WHERE id=1')).rows[0];
+    await enrollContacts(client, state.next_update, state.owner_chat_id);
     if (!state.enabled_at) return;
     const { requests, equipment } = await loadData();
     const resolve = createFleetAssetResolver(equipment);
