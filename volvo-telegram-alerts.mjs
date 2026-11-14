@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createFleetAssetResolver } from './dashboard-equipment-metrics.mjs';
-import { equipmentGroupValue } from './equipment-group.mjs';
 import { indiaDateTimeEpoch } from './report-date-range.mjs';
 import { canonicalSiteName } from './site-location.mjs';
 import { oemTelegramRequest, sendOemTelegramPdf, sendOemTelegramText, verifyOemTelegramBot } from './oem-telegram.mjs';
@@ -42,12 +41,10 @@ function timestamp(epoch) {
 }
 const field = value => clean(value).replace(/\s+/g, ' ').slice(0, 360) || 'Not recorded';
 
-const regionsBySite = new Map(Object.entries(areas).flatMap(([region, sites]) =>
-  sites.map(site => [canonicalSiteName(site), region])));
-
-export async function buildVolvoRegionalPdf(cases, region, checkpoint, now) {
-  if (!Object.hasOwn(areas, region) || !hours.includes(checkpoint) || !cases.length
-    || cases.some(({ row }) => regionsBySite.get(canonicalSiteName(row.site)) !== region)) {
+export async function buildVolvoRegionalPdf(cases, contact, checkpoint, now) {
+  const region = contact.regions.join(" + ");
+  if ( !hours.includes(checkpoint) || !cases.length
+    || cases.some(({ row }) => !contact.sites.includes(canonicalSiteName(row.site)))) {
     throw new Error('Invalid Volvo PDF region or checkpoint.');
   }
   const columns = ['Breakdown ID', 'Location', 'Vehicle', 'Door No.', 'Chassis No.', 'Status',
@@ -67,19 +64,23 @@ export async function buildVolvoRegionalPdf(cases, region, checkpoint, now) {
     'REGIONS: ' + region, title, 'From: ' + timestamp(Math.min(...starts)), 'To: ' + timestamp(+now),
     'Shift: All shifts', '', 'REGION: ' + region, 'Checkpoint: ' + checkpoint + ' hours',
     'Locations: ' + [...new Set(ordered.map(({ row }) => field(row.site)))].join(', '),
-    cases.length + ' breakdowns due | ' + cases.length + ' open | 0 resolved',
+    cases.length + ' open Volvo OEM breakdowns',
     'ACTION REQUIRED - Confirm the recovery plan and expected restoration time.',
     'PDF: Attached',
   ].join('\n');
   const buffer = await buildTableBundlePdf({
     title, subtitle: region + ' | ' + checkpoint + '-hour checkpoint | ' + timestamp(+now),
-    tables: [{ title: region, columns, rows }], generatedAt: now, pageSize: 'A4',
+    tables: contact.regions.flatMap(area => areas[area].map(site => ({
+      title: area + " | " + site, columns,
+      rows: rows.filter((_, index) => canonicalSiteName(ordered[index].row.site) === canonicalSiteName(site)),
+    }))).filter(table => table.rows.length), generatedAt: now, pageSize: 'A4',
   });
   return { buffer, caption, filename: 'Volvo-OEM-BD-' + region + '-' + checkpoint + 'h.pdf' };
 }
 
-async function sendRegionalReport(client, batch, chatId, now) {
-  const { cases, region, checkpoint, contactId } = batch;
+async function sendRegionalReport(client, batch, openCases, chatId, now) {
+  const { cases, contact, checkpoint } = batch;
+  const contactId = contact.id;
   const event = 'pdf-' + checkpoint;
   const claimed = [];
   let pdf;
@@ -96,7 +97,17 @@ async function sendRegionalReport(client, batch, chatId, now) {
       `, [row.ref, event, contactId, row.site, row.status]);
       if (result.rowCount) claimed.push(entry);
     }
-    if (claimed.length) pdf = await buildVolvoRegionalPdf(claimed, region, checkpoint, now);
+    if (claimed.length) {
+      const snapshot = openCases.filter(({ row }) => contact.sites.includes(canonicalSiteName(row.site)));
+      const current = await client.query(`
+        SELECT reference,site FROM maintenance_requests
+        WHERE reference=ANY($1::text[]) AND archived_at IS NULL AND closed_at IS NULL
+          AND oem_responsibility='OEM' AND lower(status) NOT IN ('closed','idle','ideal')
+      `, [snapshot.map(({ row }) => row.ref)]);
+      const sites = new Map(current.rows.map(row => [row.reference, row.site]));
+      pdf = await buildVolvoRegionalPdf(snapshot.filter(({ row }) => sites.get(row.ref) === row.site),
+        contact, checkpoint, now);
+    }
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -105,6 +116,9 @@ async function sendRegionalReport(client, batch, chatId, now) {
   if (!pdf) return;
   let result, errorMessage;
   try {
+    for (const { row, asset } of claimed) {
+      await sendOemTelegramText({ chatId, message: renderAlert(row, asset, String(checkpoint), now) });
+    }
     result = await sendOemTelegramPdf({ chatId, ...pdf });
   } catch (error) {
     errorMessage = error.message;
@@ -379,17 +393,16 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
     const { requests, equipment } = await loadData();
     const resolve = createFleetAssetResolver(equipment);
     const linked = new Map((await client.query(`
-      SELECT contact_id,chat_id FROM volvo_telegram_contacts WHERE chat_id IS NOT NULL
-    `)).rows.map(row => [row.contact_id, row.chat_id]));
+      SELECT contact_id,chat_id,linked_at FROM volvo_telegram_contacts
+      WHERE chat_id ~ '^[1-9][0-9]*$' AND linked_at IS NOT NULL
+    `)).rows.map(row => [row.contact_id, row]));
+    const openCases = [];
     const batches = new Map();
     for (const row of requests) {
       const { assetIndex } = resolve(row, { allowTransferred: true });
       const asset = equipment[assetIndex];
-      const group = lower(asset && equipmentGroupValue(asset, asset.itemName || row.equipmentGroup));
       const make = lower(asset?.make || asset?.oem);
-      if (!['volvo', 'volvo trucks', 'volvo tippers'].includes(make)
-        || !(group ? /\b(trucks?|tippers?)\b/.test(group) : make !== 'volvo')
-        || !clean(asset.door || asset.equipmentName) || !clean(asset.chassisNo || row.chassis)) continue;
+      if (!/^volvo(?: trucks?| tippers?)?$/.test(make)) continue;
       const started = indiaDateTimeEpoch(row.start);
       if (!Number.isFinite(started) || started > +now) continue;
       const history = (await client.query(`
@@ -398,24 +411,29 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
       const open = !row.closedAt && !['closed', 'idle', 'ideal'].includes(lower(row.status));
       let event, recipients;
       if (open) {
-        const due = hours.filter(value => started + value * hourMs <= +now);
-        // At onboarding send the case's current level, then send each newly reached level.
-        event = String(due.at(-1) ?? 'A');
-        recipients = volvoRecipients(row.site, event === 'A' ? 24 : Number(event)).map(contact => contact.id);
+        openCases.push({ row, asset });
+        const checkpoint = hours.findLast(value => started + value * hourMs <= +now);
+        event = String(checkpoint ?? 'A');
+        const eventTime = started + (checkpoint ?? 0) * hourMs;
+        recipients = volvoRecipients(row.site, checkpoint ?? 24).filter(contact => {
+          const link = linked.get(contact.id);
+          return link && eventTime >= +new Date(state.enabled_at) && eventTime >= +new Date(link.linked_at);
+        }).map(contact => contact.id);
       } else {
         if (lower(row.status) !== 'closed' || !row.verifiedAt || !row.verifiedBy
           || !(row.firstTripDone || row.productionFirstTripAt) || !Number.isFinite(indiaDateTimeEpoch(row.closedAt))) continue;
         event = 'C';
-        recipients = [...new Set(history.filter(item => item.status === 'sent').map(item => item.contact_id))];
+        recipients = [...new Set(history.filter(item => item.status === 'sent').map(item => item.contact_id))]
+          .filter(id => volvoContacts.some(contact => contact.id === id && contact.sites.includes(canonicalSiteName(row.site))));
       }
       const checkpoint = Number(event);
       const deliveryEvent = checkpoint ? `pdf-${event}` : event;
       for (const id of recipients) {
         if (!linked.has(id) || history.some(item => item.event === deliveryEvent && item.contact_id === id)) continue;
         if (checkpoint) {
-          const region = regionsBySite.get(canonicalSiteName(row.site));
-          const key = JSON.stringify([id, region, checkpoint]);
-          if (!batches.has(key)) batches.set(key, { cases: [], region, checkpoint, contactId: id });
+          const contact = volvoContacts.find(item => item.id === id);
+          const key = JSON.stringify([id, checkpoint]);
+          if (!batches.has(key)) batches.set(key, { cases: [], contact, checkpoint });
           batches.get(key).cases.push({ row, asset });
           continue;
         }
@@ -433,7 +451,7 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
         if (!claim.rowCount) continue;
         let result;
         try {
-          const chatId = linked.get(id);
+          const chatId = linked.get(id).chat_id;
           result = await sendOemTelegramText({ chatId, message: renderAlert(row, asset, event, now) });
         } catch (error) {
           await client.query(`
@@ -449,7 +467,7 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
       }
     }
     for (const batch of batches.values()) {
-      await sendRegionalReport(client, batch, linked.get(batch.contactId), now);
+      await sendRegionalReport(client, batch, openCases, linked.get(batch.contact.id).chat_id, now);
     }
   } finally {
     if (locked) await client.query('SELECT pg_advisory_unlock(71903542)').catch(() => {});

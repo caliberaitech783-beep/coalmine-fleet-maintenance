@@ -26,10 +26,9 @@ try {
     for (const { name, url } of links) console.log(`${name}  ${url}`);
   } else {
     const { rows } = await client.query('SELECT contact_id FROM volvo_telegram_contacts WHERE chat_id IS NOT NULL');
-    const linked = new Set(rows.map(row => row.contact_id));
+    const linked = new Set(volvoContacts.filter(contact => rows.some(row => row.contact_id === contact.id)).map(contact => contact.id));
     const missing = volvoContacts.filter(contact => !linked.has(contact.id));
     if (command === 'enable') {
-      if (missing.length) throw new Error(`Awaiting Telegram enrollment from ${missing.map(contact => contact.name).join(', ')}.`);
       await client.query('UPDATE volvo_telegram_state SET enabled_at=COALESCE(enabled_at,NOW()) WHERE id=1');
     }
     const { rows: [state] } = await client.query('SELECT enabled_at FROM volvo_telegram_state WHERE id=1');
