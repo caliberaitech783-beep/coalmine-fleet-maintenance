@@ -22,7 +22,7 @@ export const volvoContacts = [
   ['brijesh-gautam', 'Brijesh Gautam', ['NCL'], [144]],
   ['sachin-shivani', 'Sachin Shivani', ['WCL', 'NCL'], [144]],
 ].map(([id, name, regions, checkpoints]) => ({
-  id, name, checkpoints, sites: regions.flatMap(region => areas[region].map(canonicalSiteName)),
+  id, name, regions, checkpoints, sites: regions.flatMap(region => areas[region].map(canonicalSiteName)),
 }));
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -40,45 +40,78 @@ function timestamp(epoch) {
 }
 const field = value => clean(value).replace(/\s+/g, ' ').slice(0, 360) || 'Not recorded';
 
-export async function buildVolvoCheckpointPdf(row, asset, checkpoint, now) {
-  const site = canonicalSiteName(row.site);
-  const region = Object.entries(areas).find(([, sites]) =>
-    sites.some(location => canonicalSiteName(location) === site))?.[0];
-  if (!region || !hours.includes(checkpoint)) throw new Error('Invalid Volvo PDF site or checkpoint.');
-  const started = indiaDateTimeEpoch(row.start);
-  const minutes = Math.floor((+now - started) / 60000);
-  const age = `${Math.floor(minutes / 1440)}d ${Math.floor(minutes % 1440 / 60)}h ${minutes % 60}m`;
-  const vehicle = field(asset.model || row.equipment);
-  const door = field(asset.door || asset.equipmentName);
-  const chassis = field(asset.chassisNo || row.chassis);
+const regionsBySite = new Map(Object.entries(areas).flatMap(([region, sites]) =>
+  sites.map(site => [canonicalSiteName(site), region])));
+
+export async function buildVolvoRegionalPdf(cases, region, checkpoint, now) {
+  if (!Object.hasOwn(areas, region) || !hours.includes(checkpoint) || !cases.length
+    || cases.some(({ row }) => regionsBySite.get(canonicalSiteName(row.site)) !== region)) {
+    throw new Error('Invalid Volvo PDF region or checkpoint.');
+  }
   const columns = ['Breakdown ID', 'Location', 'Vehicle', 'Door No.', 'Chassis No.', 'Status',
     'Reported at', 'Days of BD', 'Reason of BD', 'Latest action', 'Expected restoration'].map(label => ({ label }));
-  const buffer = await buildTableBundlePdf({
-    title: 'Volvo OEM Breakdown Report',
-    subtitle: `${region} | ${checkpoint}-hour checkpoint | ${timestamp(+now)}`,
-    tables: [{
-      title: field(row.site), columns,
-      rows: [[field(row.ref), field(row.site), vehicle, door, chassis, field(row.status),
-        timestamp(started), age, field(row.complaint), field(row.dailyRemarks?.[0]?.remark || row.maintenanceWork),
-        timestamp(indiaDateTimeEpoch(row.expectedCompletionAt))]],
-    }],
-    generatedAt: now,
-    pageSize: 'A4',
+  const ordered = [...cases].sort((a, b) => a.row.site.localeCompare(b.row.site)
+    || indiaDateTimeEpoch(a.row.start) - indiaDateTimeEpoch(b.row.start));
+  const starts = ordered.map(({ row }) => indiaDateTimeEpoch(row.start));
+  const rows = ordered.map(({ row, asset }, index) => {
+    const minutes = Math.floor((+now - starts[index]) / 60000);
+    const age = [Math.floor(minutes / 1440) + 'd', Math.floor(minutes % 1440 / 60) + 'h', minutes % 60 + 'm'].join(' ');
+    return [row.ref, row.site, asset.model || row.equipment, asset.door || asset.equipmentName,
+      asset.chassisNo || row.chassis, row.status, timestamp(starts[index]), age, row.complaint,
+      row.dailyRemarks?.[0]?.remark || row.maintenanceWork, timestamp(indiaDateTimeEpoch(row.expectedCompletionAt))].map(field);
   });
-  const index = hours.indexOf(checkpoint);
-  const next = hours[index + 1];
+  const title = 'Volvo OEM BD consolidated report';
   const caption = [
-    `🔴 OEM BREAKDOWN ESCALATION LEVEL ${index + 1}`,
+    'REGIONS: ' + region, title, 'From: ' + timestamp(Math.min(...starts)), 'To: ' + timestamp(+now),
+    'Shift: All shifts', '', 'REGION: ' + region, 'Checkpoint: ' + checkpoint + ' hours',
+    'Locations: ' + [...new Set(ordered.map(({ row }) => field(row.site)))].join(', '),
+    cases.length + ' breakdowns due | ' + cases.length + ' open | 0 resolved',
     'ACTION REQUIRED - Confirm the recovery plan and expected restoration time.',
-    `Escalation Checkpoint: ${checkpoint} hours / ${checkpoint / 24} days`,
-    `Site: ${field(row.site).slice(0, 65)} (${region}) | OEM: Volvo Trucks`,
-    `Vehicle: ${vehicle.slice(0, 75)} | Breakdown ID: ${field(row.ref).slice(0, 50)}`,
-    `Door No.: ${door.slice(0, 55)} | Chassis No.: ${chassis.slice(0, 55)}`,
-    `Current Status: ${field(row.status).slice(0, 45)}`, `Total Downtime: ${age}`,
-    `Next Escalation: ${next ? timestamp(started + next * hourMs) : 'Final checkpoint'}`,
-    'Attached: OEM BD report for this location', 'Source: Caliber Pulse',
+    'PDF: Attached',
   ].join('\n');
-  return { buffer, caption, filename: `Volvo-OEM-BD-${region}-${site.replaceAll(' ', '-')}-${checkpoint}h-${field(row.ref)}.pdf` };
+  const buffer = await buildTableBundlePdf({
+    title, subtitle: region + ' | ' + checkpoint + '-hour checkpoint | ' + timestamp(+now),
+    tables: [{ title: region, columns, rows }], generatedAt: now, pageSize: 'A4',
+  });
+  return { buffer, caption, filename: 'Volvo-OEM-BD-' + region + '-' + checkpoint + 'h.pdf' };
+}
+
+async function sendRegionalReport(client, batch, chatId, now) {
+  const { cases, region, checkpoint, contactId } = batch;
+  const event = 'pdf-' + checkpoint;
+  const claimed = [];
+  let pdf;
+  await client.query('BEGIN');
+  try {
+    for (const entry of cases) {
+      const { row } = entry;
+      const result = await client.query(`
+        INSERT INTO volvo_telegram_deliveries(reference,event,contact_id,status)
+        SELECT reference,$2,$3,'sending' FROM maintenance_requests
+        WHERE reference=$1 AND site=$4 AND status=$5 AND closed_at IS NULL
+          AND archived_at IS NULL AND oem_responsibility='OEM'
+        ON CONFLICT DO NOTHING RETURNING reference
+      `, [row.ref, event, contactId, row.site, row.status]);
+      if (result.rowCount) claimed.push(entry);
+    }
+    if (claimed.length) pdf = await buildVolvoRegionalPdf(claimed, region, checkpoint, now);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  if (!pdf) return;
+  let result, errorMessage;
+  try {
+    result = await sendOemTelegramPdf({ chatId, ...pdf });
+  } catch (error) {
+    errorMessage = error.message;
+  }
+  await client.query(`
+    UPDATE volvo_telegram_deliveries SET status=$4,message_id=$5,error=$6,updated_at=NOW()
+    WHERE reference=ANY($1::text[]) AND event=$2 AND contact_id=$3
+  `, [claimed.map(({ row }) => row.ref), event, contactId,
+    result ? 'sent' : 'review', result ? String(result.messageId) : null, errorMessage ?? null]);
 }
 
 export async function ensureVolvoTelegramTables(client) {
@@ -191,6 +224,7 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
     const linked = new Map((await client.query(`
       SELECT contact_id,chat_id FROM volvo_telegram_contacts WHERE chat_id IS NOT NULL
     `)).rows.map(row => [row.contact_id, row.chat_id]));
+    const batches = new Map();
     for (const row of requests) {
       const { assetIndex } = resolve(row, { allowTransferred: true });
       const asset = equipment[assetIndex];
@@ -219,10 +253,15 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
       }
       const checkpoint = Number(event);
       const deliveryEvent = checkpoint ? `pdf-${event}` : event;
-      let pdf;
       for (const id of recipients) {
         if (!linked.has(id) || history.some(item => item.event === deliveryEvent && item.contact_id === id)) continue;
-        if (checkpoint && !pdf) pdf = await buildVolvoCheckpointPdf(row, asset, checkpoint, now);
+        if (checkpoint) {
+          const region = regionsBySite.get(canonicalSiteName(row.site));
+          const key = JSON.stringify([id, region, checkpoint]);
+          if (!batches.has(key)) batches.set(key, { cases: [], region, checkpoint, contactId: id });
+          batches.get(key).cases.push({ row, asset });
+          continue;
+        }
         const current = (await client.query(`
           SELECT status,site,closed_at,archived_at,oem_responsibility FROM maintenance_requests WHERE reference=$1
         `, [row.ref])).rows[0];
@@ -238,9 +277,7 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
         let result;
         try {
           const chatId = linked.get(id);
-          result = pdf
-            ? await sendOemTelegramPdf({ chatId, ...pdf })
-            : await sendOemTelegramText({ chatId, message: renderAlert(row, asset, event, now) });
+          result = await sendOemTelegramText({ chatId, message: renderAlert(row, asset, event, now) });
         } catch (error) {
           await client.query(`
             UPDATE volvo_telegram_deliveries SET status='review',error=$4,updated_at=NOW()
@@ -253,6 +290,9 @@ export async function runVolvoTelegram({ pool, loadData, now = new Date() }) {
           WHERE reference=$1 AND event=$2 AND contact_id=$3
         `, [...params, String(result.messageId)]);
       }
+    }
+    for (const batch of batches.values()) {
+      await sendRegionalReport(client, batch, linked.get(batch.contactId), now);
     }
   } finally {
     if (locked) await client.query('SELECT pg_advisory_unlock(71903542)').catch(() => {});
