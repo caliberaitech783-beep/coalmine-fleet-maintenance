@@ -117,7 +117,7 @@ async function sendRegionalReport(client, batch, openCases, chatId, now) {
   let result, errorMessage;
   try {
     for (const { row, asset } of claimed) {
-      await sendOemTelegramText({ chatId, message: renderAlert(row, asset, String(checkpoint), now) });
+      await sendOemTelegramText({ chatId, message: renderAlert(row, asset, String(checkpoint), now, contact) });
     }
     result = await sendOemTelegramPdf({ chatId, ...pdf });
   } catch (error) {
@@ -341,7 +341,7 @@ export function volvoRecipients(site, checkpoint) {
   return volvoContacts.filter(contact => contact.sites.includes(location) && contact.checkpoints.includes(checkpoint));
 }
 
-function renderAlert(row, asset, event, now) {
+function renderAlert(row, asset, event, now, contact) {
   const started = indiaDateTimeEpoch(row.start);
   const stopped = event === 'C' ? indiaDateTimeEpoch(row.closedAt) : +now;
   const minutes = Math.max(0, Math.floor((stopped - started) / 60000));
@@ -354,6 +354,38 @@ function renderAlert(row, asset, event, now) {
     : event === 'C' ? 'Vehicle restoration has been verified and automated escalation is closed.'
       : 'ACTION REQUIRED - Confirm the recovery plan and expected restoration time.';
   const latest = row.dailyRemarks?.[0];
+  if (level) {
+    const role = ['Service Engineer', 'Area Service Manager', 'Regional Service Head',
+      'Service Engineer', 'Area Service Manager', 'Regional Service Head',
+      'Area Sales Manager', 'Area Sales Manager', 'Regional Sales Manager'][volvoContacts.indexOf(contact)];
+    return [
+      `🔴 OEM BREAKDOWN ESCALATION LEVEL ${level}`,
+      'ACTION REQUIRED - Vehicle breakdown remains open. Confirm the recovery plan and restoration ETA.',
+      `Escalation Checkpoint: ${checkpoint} hours | ${checkpoint / 24} days`,
+      `Breakdown ID: ${field(row.ref)}`,
+      `Site: ${field(row.site)} | OEM: Volvo Trucks`,
+      'Asset Category: Vehicle',
+      `Vehicle: Volvo ${field(asset.model || row.equipment)}`,
+      `Door No.: ${field(asset.door || row.door || asset.equipmentName)} | Fleet ID: ${field(asset.asset || asset.fleetId)}`,
+      `Chassis / Serial No.: ${field(asset.chassisNo || row.chassis)}`,
+      '',
+      `Breakdown Age: ${Math.floor(minutes / 1440)} calendar days`,
+      `Total Downtime: ${Math.floor(minutes / 1440)} day ${Math.floor(minutes % 1440 / 60)} hr ${minutes % 60} min`,
+      `Production Impact: ${field(row.productionImpact)}`,
+      'Resolution TAT: Not configured',
+      'TAT Consumed: Not available',
+      'TAT Status: Not configured',
+      `Current OEM Status: ${field(latest?.remark || row.maintenanceWork || row.status)}`,
+      '',
+      `Pending From OEM: ${field(latest?.delayedReason || row.delayedReason)}`,
+      'Required Response: Confirm the action plan, engineer assignment or visit, and restoration ETA.',
+      `Escalated To: ${role} | ${contact.name}`,
+      `Next Escalation: ${next ? timestamp(started + next * hourMs) : 'Final checkpoint'}`,
+      '',
+      `Alert Generated: ${timestamp(+now)}`,
+      'Source: Caliber Pulse - Automated Escalation',
+    ].join('\n');
+  }
   return [
     heading, action,
     ...(level ? [`Escalation Checkpoint: ${checkpoint} hours / ${checkpoint / 24} days`] : []),
