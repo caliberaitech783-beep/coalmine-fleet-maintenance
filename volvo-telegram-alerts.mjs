@@ -123,7 +123,8 @@ export async function ensureVolvoTelegramTables(client) {
     ALTER TABLE volvo_telegram_contacts
       ADD COLUMN IF NOT EXISTS pending_chat_id TEXT,
       ADD COLUMN IF NOT EXISTS approval_hash TEXT,
-      ADD COLUMN IF NOT EXISTS approval_expires_at TIMESTAMPTZ;
+      ADD COLUMN IF NOT EXISTS approval_expires_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS public_enrolled_at TIMESTAMPTZ;
     CREATE UNIQUE INDEX IF NOT EXISTS volvo_telegram_approval_hash
       ON volvo_telegram_contacts(approval_hash) WHERE approval_hash IS NOT NULL;
     CREATE TABLE IF NOT EXISTS volvo_telegram_state (
@@ -161,44 +162,75 @@ async function handleEnrollment(client, message, ownerChatId) {
   const approval = command.match(/^\/approve (\d{8})$/)?.[1];
   if (approval && chatId === ownerChatId) {
     const { rows } = await client.query(`
-      UPDATE volvo_telegram_contacts SET chat_id=pending_chat_id, linked_at=NOW(),
+      WITH pending AS (
+        SELECT contact_id,pending_chat_id,contact_id LIKE 'public:%' AS is_public
+        FROM volvo_telegram_contacts
+        WHERE approval_hash=$1 AND approval_expires_at>NOW()
+          AND (contact_id LIKE 'public:%' OR invite_expires_at>NOW())
+          AND pending_chat_id IS NOT NULL AND chat_id IS NULL AND public_enrolled_at IS NULL
+          AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts linked
+            WHERE linked.chat_id=volvo_telegram_contacts.pending_chat_id)
+      )
+      UPDATE volvo_telegram_contacts c SET
+        chat_id=CASE WHEN pending.is_public THEN NULL ELSE pending.pending_chat_id END,
+        linked_at=CASE WHEN pending.is_public THEN NULL ELSE NOW() END,
+        public_enrolled_at=CASE WHEN pending.is_public THEN NOW() ELSE NULL END,
         pending_chat_id=NULL, approval_hash=NULL, approval_expires_at=NULL,
         invite_hash=NULL, invite_expires_at=NULL
-      WHERE approval_hash=$1 AND approval_expires_at>NOW() AND invite_expires_at>NOW()
-        AND pending_chat_id IS NOT NULL AND chat_id IS NULL
-        AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts linked
-          WHERE linked.chat_id=volvo_telegram_contacts.pending_chat_id)
-      RETURNING contact_id,chat_id`, [hash(approval)]);
+      FROM pending WHERE c.contact_id=pending.contact_id
+      RETURNING c.contact_id,pending.pending_chat_id AS chat_id,pending.is_public`, [hash(approval)]);
     const approved = rows[0];
     const name = volvoContacts.find(contact => contact.id === approved?.contact_id)?.name;
     await sendOemTelegramText({ chatId, message: approved
-      ? `Approved Telegram enrollment for ${name}.`
+      ? (approved.is_public ? 'Approved bot enrollment. Report access requires a Volvo invitation.'
+        : `Approved Telegram enrollment for ${name}.`)
       : 'That code is invalid, expired, or already used.' });
-    if (approved) await sendOemTelegramText({ chatId: approved.chat_id, message: 'Your Volvo Telegram enrollment was approved.' });
+    if (approved) await sendOemTelegramText({ chatId: approved.chat_id, message: approved.is_public
+      ? 'Your bot enrollment was approved.' : 'Your Volvo Telegram enrollment was approved.' });
     return;
   }
-  if (command === '/start') {
-    await sendOemTelegramText({ chatId, message: 'Open your individual Volvo invitation link to request access. The owner must approve your request.' });
+  const publicRequest = command === '/start';
+  if (publicRequest && (!ownerChatId || chatId === ownerChatId)) {
+    await sendOemTelegramText({ chatId, message: ownerChatId ? 'This is the owner approval chat.' : 'Bot enrollment is temporarily unavailable. Send /start again later.' });
     return;
   }
   const token = command.match(/^\/start ([a-zA-Z0-9_-]{32})$/)?.[1];
-  if (!token || !ownerChatId || chatId === ownerChatId) return;
+  if ((!token && !publicRequest) || !ownerChatId || chatId === ownerChatId) return;
   const code = String(randomInt(10000000, 100000000));
   const approvalHash = hash(code);
-  const { rows } = await client.query(`
+  const { rows } = publicRequest ? await client.query(`
+    INSERT INTO volvo_telegram_contacts(contact_id,pending_chat_id,approval_hash,approval_expires_at)
+    SELECT $1,$2,$3,NOW()+INTERVAL '10 minutes'
+    WHERE NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$2)
+    ON CONFLICT(contact_id) DO UPDATE SET pending_chat_id=EXCLUDED.pending_chat_id,
+      approval_hash=EXCLUDED.approval_hash, approval_expires_at=EXCLUDED.approval_expires_at
+    WHERE volvo_telegram_contacts.public_enrolled_at IS NULL
+      AND (volvo_telegram_contacts.approval_expires_at IS NULL OR volvo_telegram_contacts.approval_expires_at<=NOW())
+    RETURNING contact_id`, [`public:${chatId}`, chatId, approvalHash]) : await client.query(`
     UPDATE volvo_telegram_contacts SET pending_chat_id=$1, approval_hash=$3,
       approval_expires_at=NOW()+INTERVAL '10 minutes'
     WHERE invite_hash=$2 AND invite_expires_at>NOW() AND chat_id IS NULL
       AND (approval_expires_at IS NULL OR approval_expires_at<=NOW())
       AND NOT EXISTS(SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1)
     RETURNING contact_id`, [chatId, hash(token), approvalHash]);
-  if (!rows.length) return;
+  if (!rows.length) {
+    if (publicRequest) {
+      const { rowCount } = await client.query(`
+        SELECT 1 FROM volvo_telegram_contacts WHERE chat_id=$1
+          OR (contact_id=$2 AND public_enrolled_at IS NOT NULL)`, [chatId, `public:${chatId}`]);
+      await sendOemTelegramText({ chatId, message: rowCount ? 'You are already enrolled.'
+        : 'Your request is waiting for owner approval.' });
+    }
+    return;
+  }
   const name = volvoContacts.find(contact => contact.id === rows[0].contact_id)?.name;
   const account = [message.from?.first_name, message.from?.last_name, message.from?.username && '@' + message.from.username]
     .filter(Boolean).join(' ').replace(/[\r\n]/g, ' ').slice(0, 160);
   try {
     await sendOemTelegramText({ chatId: ownerChatId, message: [
-      'Volvo Telegram enrollment request', `Contact: ${name}`, `Telegram account: ${account || chatId}`,
+      publicRequest ? 'Public bot enrollment request' : 'Volvo Telegram enrollment request',
+      publicRequest ? 'Access: Bot enrollment only' : `Contact: ${name}`,
+      `Telegram account: ${account || 'Name unavailable'} (ID ${chatId})`,
       `To approve, send /approve ${code} in this chat.`, 'The code expires in 10 minutes.',
     ].join('\n') });
   } catch (error) {
@@ -206,7 +238,9 @@ async function handleEnrollment(client, message, ownerChatId) {
       SET pending_chat_id=NULL, approval_hash=NULL, approval_expires_at=NULL WHERE approval_hash=$1`, [approvalHash]);
     throw error;
   }
-  await sendOemTelegramText({ chatId, message: 'Your request is waiting for owner approval. If the code expires, open your invitation link again.' });
+  await sendOemTelegramText({ chatId, message: publicRequest
+    ? 'Your request is waiting for owner approval. If the code expires, send /start again.'
+    : 'Your request is waiting for owner approval. If the code expires, open your invitation link again.' });
 }
 
 async function enrollContacts(client, nextUpdate, configuredOwner) {
