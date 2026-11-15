@@ -384,7 +384,7 @@ import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
 import { approveEquipmentChanges, equipmentChangeText, equipmentChanges } from "./equipment-otp-dialog.mjs";
-import { SIGN_IN_LOCATION_NOTICE } from "./sign-in-location.mjs";
+import { SIGN_IN_LOCATION_NOTICE, SIGN_IN_LOCATION_REQUIRED_EVENT, isSignInLocationRequired } from "./sign-in-location.mjs";
 import { useSignInLocationGate, SignInLocationScreen } from "./sign-in-location-gate.jsx";
 
 const vehicles = [];
@@ -476,6 +476,11 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
         onRetry: ({attempt, reason, status}) => console.warn(`Retrying ${url} after a transient ${reason === "status" ? `HTTP ${status}` : "network failure"} (attempt ${attempt + 1}).`),
       });
       await sessionExpiry.check(response, authenticatedRequest);
+      // The server is holding this sign-in until its location arrives: go back to
+      // the location screen (only for the token that was sent, never an older one).
+      if (authenticatedRequest?.token && await isSignInLocationRequired(response)) {
+        window.dispatchEvent(new CustomEvent(SIGN_IN_LOCATION_REQUIRED_EVENT, {detail: {token: authenticatedRequest.token}}));
+      }
       finishWrite({ok: response.ok});
       return response;
     } finally {

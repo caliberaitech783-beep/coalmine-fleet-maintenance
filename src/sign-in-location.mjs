@@ -57,6 +57,28 @@ export function signInLocationDone(token, storage = globalThis.localStorage) {
   return Boolean(token) && storageGet(storage, DONE_KEY) === sessionMark(token);
 }
 
+// The server still holds this sign-in (HTTP 428 SIGN_IN_LOCATION_REQUIRED): a tab
+// opened on an older page, or the location report never reached the server. The
+// app goes back to the location screen instead of showing empty panels.
+export const SIGN_IN_LOCATION_REQUIRED_EVENT = "pulse-sign-in-location-required";
+
+/** True only for the location hold; the deletion-approval 428 is left alone. */
+export async function isSignInLocationRequired(response) {
+  if (response?.status !== 428 || typeof response.clone !== "function") return false;
+  try {
+    const body = await response.clone().json();
+    return body?.code === "SIGN_IN_LOCATION_REQUIRED";
+  } catch {
+    return false;
+  }
+}
+
+/** Drops the "already let through" mark for this sign-in so the location is asked again. */
+export function forgetSignInLocation(token, storage = globalThis.localStorage) {
+  if (!signInLocationDone(token, storage)) return;
+  try { storage?.removeItem(DONE_KEY); } catch {}
+}
+
 /**
  * Asks the browser and reports the answer. Returns {status, accepted}:
  * accepted true = open the app, false = keep the location screen up,

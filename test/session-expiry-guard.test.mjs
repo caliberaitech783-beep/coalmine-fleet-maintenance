@@ -7,6 +7,7 @@ import {fetchWithTransientRetry} from "../src/api-transient-retry.mjs";
 import {fetchWithDeletionApproval} from "../src/deletion-approval-fetch.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {createSiteUpdateSafety} from "../src/site-update-safety.mjs";
+import {SIGN_IN_LOCATION_REQUIRED_EVENT, isSignInLocationRequired} from "../src/sign-in-location.mjs";
 
 const origin = "https://pulse.cmll.in";
 const token = "current-token";
@@ -133,10 +134,11 @@ test("the actual fetch interceptor never replays a completed save or logs out fo
   const context = {
     authToken: token, clientDeviceId: "device-test", SESSION_EXPIRED_PARAM: "session-expired",
     authenticatedApiRequest, createSessionExpiryGuard, fetchWithTransientRetry, fetchWithDeletionApproval, edgeSafeJsonInit,
+    SIGN_IN_LOCATION_REQUIRED_EVENT, isSignInLocationRequired, CustomEvent,
     siteUpdateSafety: createSiteUpdateSafety({origin}),
     Headers, Request, console,
     clearStoredSession: value => cleared.push(value),
-    window: {location: {origin, replace: value => redirects.push(value)}, fetch: async (url, init) => {
+    window: {location: {origin, replace: value => redirects.push(value)}, dispatchEvent: () => true, fetch: async (url, init) => {
       calls.push([url, init]);
       if (url === "/api/requests/REQ-TEST/close") return Response.json({ref: "REQ-TEST", status: "Closed"});
       if (url === "/api/session-heartbeat") return new Response(null, {status: 204});
@@ -152,4 +154,35 @@ test("the actual fetch interceptor never replays a completed save or logs out fo
   assert.equal(calls.filter(([url]) => url === "/api/session-heartbeat").length, 1);
   assert.deepEqual(cleared, []);
   assert.deepEqual(redirects, []);
+});
+
+test("a 428 location hold on the current sign-in reopens the location screen without signing out", async () => {
+  const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const wrapper = source.slice(source.indexOf('if (typeof window !== "undefined" && typeof window.fetch'), source.indexOf("const subsidiaryData"));
+  const events = [], cleared = [], redirects = [];
+  const hold = () => Response.json({error: "Pulse needs your location to open.", code: "SIGN_IN_LOCATION_REQUIRED"}, {status: 428});
+  const context = {
+    authToken: token, clientDeviceId: "device-test", SESSION_EXPIRED_PARAM: "session-expired",
+    authenticatedApiRequest, createSessionExpiryGuard, fetchWithTransientRetry, fetchWithDeletionApproval, edgeSafeJsonInit,
+    SIGN_IN_LOCATION_REQUIRED_EVENT, isSignInLocationRequired, CustomEvent,
+    siteUpdateSafety: createSiteUpdateSafety({origin}),
+    Headers, Request, console,
+    clearStoredSession: value => cleared.push(value),
+    window: {location: {origin, replace: value => redirects.push(value)}, dispatchEvent: event => events.push(event), fetch: async url => {
+      if (url === "/api/deletion") return Response.json({deletionApproval: null, error: "other 428"}, {status: 428});
+      return hold();
+    }},
+  };
+  vm.runInNewContext(wrapper, context);
+  const response = await context.window.fetch("/api/requests?scope=dashboard", {headers});
+  assert.equal(response.status, 428);
+  assert.equal((await response.json()).code, "SIGN_IN_LOCATION_REQUIRED", "the panel can still read the answer");
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, SIGN_IN_LOCATION_REQUIRED_EVENT);
+  assert.equal(events[0].detail.token, token);
+  await context.window.fetch("/api/requests", {headers: {Authorization: "Bearer an-older-token"}});
+  await context.window.fetch("/api/deletion", {headers});
+  assert.equal(events.length, 1, "an older sign-in's answer and other 428s are ignored");
+  assert.deepEqual(cleared, []);
+  assert.deepEqual(redirects, [], "a location hold never signs the user out");
 });
