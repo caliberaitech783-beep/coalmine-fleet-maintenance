@@ -62,3 +62,28 @@ test('Pulse-II Equipment master changes need Pulse Master Sync and go through th
  assert.deepEqual((await bridge({action:'equipment-changes-verify',id:'r1',otp:'123456'})).value,{status:'approved'});
  assert.deepEqual(seen[1],['verify','r1','123456']);
 });
+
+test('Pulse-II vehicle transfers need Pulse Master Sync, pass the channel login and are audited',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text);`);
+ const pool={query:(sql,args)=>sql.split(';').filter(x=>x.trim()).length>1?db.exec(sql):db.query(sql,args)};
+ await initializeSingleLogin(pool);
+ const routes=new Map(),app={post:(url,fn)=>routes.set(url,fn),options(){}};
+ const identity=installPulseApplicationIdentity(app,{pool,sessionStore:createSessionStore(pool)});await identity.initialize();
+ const user={login:'pulse-sync',employee:'Pulse sync',passwordHash:hashPassword('synthetic-login-only'),misAccess:true,misDesktopAccess:['Vehicle Log Book'],site:'Sasti OC'};
+ await db.query("INSERT INTO master_records(master_name,record_data) VALUES('Users & employees',$1)",[JSON.stringify(user)]);
+ const seen=[];
+ const vehicleTransfers={authorize:async profile=>profile.login,complete:async(input,{by})=>{seen.push([input.transfer.transferNo,by]);return {pulseTransferId:'9',site:'Majri',replay:false,record:{transferNo:input.transfer.transferNo}};},audit:(req,profile,result)=>{req.audit={eventType:'Vehicle transfer',targetReference:result.record.transferNo};}};
+ installMisPulseBridge(app,{identity,readRequests:async()=>[],readMasters:async()=>({}),readFleet:async()=>({}),verifyRequest:async()=>{},vehicleTransfers});
+ const call=async(url,body)=>{let value;const req={body,headers:{},ip:'127.0.0.1'};const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(body){value=body;return this}};await routes.get(url)(req,res,error=>{throw error});return {status:res.statusCode,value,req};};
+ const login=await call('/api/integrations/mis/authenticate',{username:user.login,password:'synthetic-login-only'});
+ const bridge=body=>call('/api/integrations/mis/pulse',{grant:login.value.grant,...body});
+ const transfer={action:'vehicle-transfer-complete',transfer:{transferNo:'VT-1'}};
+ assert.equal((await bridge(transfer)).status,403,'trip-card menus alone cannot move a vehicle in Pulse');
+ assert.equal(seen.length,0);
+ user.misDesktopAccess=['Pulse Master Sync'];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
+ const done=await bridge(transfer);
+ assert.equal(done.status,200);assert.equal(done.value.site,'Majri');
+ assert.deepEqual(seen,[['VT-1','pulse-sync']]);
+ assert.equal(done.req.audit.eventType,'Vehicle transfer','the bridge write is audited, unlike its reads');
+});

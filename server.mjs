@@ -19,6 +19,7 @@ import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
 import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
 import {installMisPulseBridge} from './mis-pulse-bridge.mjs';
+import {createMisVehicleTransfers} from './mis-vehicle-transfer.mjs';
 import {createEquipmentMasterChanges,registerEquipmentMasterChanges} from './equipment-master-changes.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
@@ -1619,6 +1620,13 @@ installMisPulseBridge(app,{identity:misCredentialIdentity,
  readMasters:async profile=>{const user=await currentUserRecord(profile);const names=['Equipment master','Region master','Shift Master','Users & employees'];const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||names.some(name=>!masterAccessAllows(permissions,name)&&!masterAccessAllows(permissions,name,'mobileMasterAccess')))throw Object.assign(new Error('Your Pulse account is not authorised to sync all four masters.'),{status:403});const {rows}=await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY id',[names]);return Object.fromEntries(names.map(name=>[name,rows.filter(row=>row.master_name===name).map(row=>({...name==='Users & employees'?publicUserRecord(row.record_data):name==='Equipment master'?equipmentMasterWithDoor(row.record_data):row.record_data,id:row.id}))]));},
  // The bridge's reads arrive as POSTs and leave the shared read windows open; its one write does not.
  verifyRequest:(req,res,next)=>{closeFeedWindows(res);return verifyMisTripCard(req,res,next);},
+ // Pulse-II vehicle transfers: only a login that may change the Equipment master may complete
+ // them; the Pulse-II people of every stage travel with the transfer and into the audit trail.
+ vehicleTransfers:{...createMisVehicleTransfers({pool,siteOptions:client=>vehicleTransferSiteOptions(client),afterApply:()=>{requestFeedCache.clear();clearMisReadWindows();}}),
+  authorize:async profile=>{const user=await currentUserRecord(profile);const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||(!masterAccessAllows(permissions,'Equipment master')&&!masterAccessAllows(permissions,'Equipment master','mobileMasterAccess')))throw Object.assign(new Error('The Pulse login connected for Pulse Master Sync cannot change the Equipment master, so it cannot complete vehicle transfers.'),{status:403});return String(user?.login||profile.login||'').trim().toLowerCase();},
+  audit:(req,profile,result)=>{if(result.replay)return;req.session={...profile};const details=vehicleTransferAuditDetails(result.record,{previousStatus:'Pulse-II acceptance'});
+   details.changedFields.push({field:'Vehicle Master location',before:result.previousSite||'',after:result.alreadyAtDestination?`${result.site} (already there)`:result.site},{field:'Accepted in Pulse-II by',before:'',after:String(result.record.destinationAcceptedBy||result.record.sourceApprovedBy||'')});
+   req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Complete Pulse-II vehicle transfer',targetType:'Vehicle transfer',targetReference:result.record.transferNo,...details};}},
  equipmentChanges:{...equipmentMasterChanges,authorize:async profile=>{const user=await currentUserRecord(profile);const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||(!masterAccessAllows(permissions,'Equipment master')&&!masterAccessAllows(permissions,'Equipment master','mobileMasterAccess')))throw Object.assign(new Error('Your Pulse login cannot change the Equipment master.'),{status:403});return String(user?.name||user?.employee||profile.login||'Pulse-II user');}},
 });
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
