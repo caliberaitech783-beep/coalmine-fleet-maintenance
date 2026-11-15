@@ -1,5 +1,5 @@
 const menus=profile=>[...(profile.permissions?.misDesktopAccess||[]),...(profile.permissions?.misMobileAccess||[])];
-export function installMisPulseBridge(app,{identity,readRequests,readMasters,readFleet,verifyRequest,equipmentChanges=null}){
+export function installMisPulseBridge(app,{identity,readRequests,readAllRequests=null,readMasters,readFleet,verifyRequest,equipmentChanges=null}){
  app.post('/api/integrations/mis/pulse',async(req,res,next)=>{
   res.set('Cache-Control','no-store');req.audit=false;
   try{
@@ -25,6 +25,9 @@ export function installMisPulseBridge(app,{identity,readRequests,readMasters,rea
    }
    if(action==='masters'&&allowed.includes('Pulse Master Sync'))return res.json(await readMasters(profile));
    if(action==='requests'&&(tripAccess||allowed.includes('Pulse Master Sync')))return res.json(await readRequests(profile));
+   // Pulse-II keeps its own copy of the whole breakdown list (read once a minute) so BD hours on
+   // VLB/ELB cards never wait on Pulse; only a Pulse Master Sync login may read every site.
+   if(action==='breakdown-mirror'&&readAllRequests&&allowed.includes('Pulse Master Sync'))return res.json(await readAllRequests(profile));
    if(action==='verify'&&tripAccess){
     const reference=String(req.body?.reference||'').trim();
     const payload=req.body?.payload;
