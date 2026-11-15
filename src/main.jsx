@@ -384,7 +384,8 @@ import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
 import { approveEquipmentChanges, equipmentChangeText, equipmentChanges } from "./equipment-otp-dialog.mjs";
-import { recordSignInLocation, SIGN_IN_LOCATION_NOTICE } from "./sign-in-location.mjs";
+import { SIGN_IN_LOCATION_NOTICE } from "./sign-in-location.mjs";
+import { useSignInLocationGate, SignInLocationScreen } from "./sign-in-location-gate.jsx";
 
 const vehicles = [];
 const breakdowns = [];
@@ -12102,6 +12103,7 @@ function App() {
   const activeNavigationPermissions=navigationPermissionsForView(adminPermissions,responsiveMobile);
   const [profileLocation, setProfileLocation] = useState("");
   const [profileDesignationKey, setProfileDesignationKey] = useState("");
+  const locationGate=useSignInLocationGate(session?.token);
   useEffect(() => {
     if (!session?.token) return undefined;
     let activeRequest = true;
@@ -12139,7 +12141,6 @@ function App() {
     const activityEvents=['pointerdown','keydown','touchstart','wheel'];
     activityEvents.forEach((name)=>window.addEventListener(name,markActivity,{passive:true,capture:true}));
     void heartbeat(true);
-    void recordSignInLocation(session.token);
     return()=>{
       closed=true;
       activityEvents.forEach((name)=>window.removeEventListener(name,markActivity,{capture:true}));
@@ -12587,6 +12588,7 @@ function App() {
     session, theme,
   ]);
   if (!session || new URLSearchParams(window.location.search).get('login')==='mis') return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
+  if (locationGate.phase!=='open') return <SignInLocationScreen gate={locationGate} onSignOut={logout}/>;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
     <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection} initialView={accountDirectoryView} onViewChange={setAccountDirectoryView}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>

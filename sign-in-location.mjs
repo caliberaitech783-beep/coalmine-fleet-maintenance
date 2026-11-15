@@ -1,6 +1,15 @@
-// Location captured by the browser right after a sign-in. Sign-in never depends
-// on it: a refusal is stored as "refused" so administrators can see it.
+// Location captured by the browser right after a sign-in (owner, 15 Nov 2026).
+// Owner's rule: a device that can share its location must share it, so a user
+// who presses Block cannot use the app; a device that cannot find a location
+// (no GPS or Wi-Fi, no location API) is let in and shown as "Not available".
 export const SIGN_IN_LOCATION_STATUSES = Object.freeze(["shared", "refused", "unavailable"]);
+export const SIGN_IN_LOCATION_REQUIRED_CODE = "SIGN_IN_LOCATION_REQUIRED";
+export const SIGN_IN_LOCATION_REQUIRED_MESSAGE = "Pulse needs your location to open. Reload the page and press Allow when the browser asks.";
+
+// Session upkeep and the location report itself stay open while a location is missing.
+const ALWAYS_OPEN = new Set(["/api/session-location", "/api/logout", "/api/session-heartbeat", "/api/session-status", "/api/session-messages"]);
+// Logins that sign in without a browser (machine accounts) are never asked.
+const DEFAULT_EXCEPTIONS = ["mis_sync_service"];
 
 const coordinate = (value, limit) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit;
 
@@ -15,8 +24,71 @@ export function parseSignInLocation(body = {}) {
   return {status, latitude: round(body.latitude), longitude: round(body.longitude), accuracy};
 }
 
-// The first shared position of a session is kept. A refusal or "unavailable"
-// is only written while nothing is recorded, and is replaced by a later share.
+/** Off only when the App Service setting SIGN_IN_LOCATION_REQUIRED is "0". */
+export function signInLocationRequired(env = process.env) {
+  return String(env?.SIGN_IN_LOCATION_REQUIRED ?? "1").trim() !== "0";
+}
+
+/** Default machine logins plus SIGN_IN_LOCATION_EXCEPTIONS (comma-separated logins). */
+export function signInLocationExceptions(env = process.env) {
+  return new Set([...DEFAULT_EXCEPTIONS, ...String(env?.SIGN_IN_LOCATION_EXCEPTIONS || "").split(",")]
+    .map(login => login.trim().toLowerCase()).filter(Boolean));
+}
+
+export function requestRoute(req = {}) {
+  return String(req.originalUrl || req.url || req.path || "").split("?")[0].replace(/\/+$/, "") || "/";
+}
+
+/** True when this request must wait until the session has shared (or cannot share) its location. */
+export function signInLocationBlocks(session, {route = "", env = process.env, machine = false} = {}) {
+  if (!session || machine || !signInLocationRequired(env)) return false;
+  if (ALWAYS_OPEN.has(route)) return false;
+  if (["shared", "unavailable"].includes(String(session.locationStatus || ""))) return false;
+  return !signInLocationExceptions(env).has(String(session.login || "").trim().toLowerCase());
+}
+
+/**
+ * Session guards call this right after the session is read. The answer lives on the
+ * sign-in's login history row and is read once per sign-in: a sign-in that has been
+ * let in is remembered, so later requests cost nothing. It answers 428 (never 401,
+ * which would sign the user out) and returns true when the request must stop. Any
+ * failure to read lets the request through: a lookup problem must never lock
+ * everyone out.
+ */
+export function createSignInLocationGuard(pool, {env = process.env, cacheLimit = 20000, log = console} = {}) {
+  const open = new Set();
+  return async function signInLocationGuard(req, res, session, {machine = false} = {}) {
+    if (!signInLocationBlocks(session, {route: requestRoute(req), env, machine})) return false;
+    const sessionId = String(session?.sessionId || "").trim();
+    if (!sessionId || open.has(sessionId)) return false;
+    let status;
+    try {
+      const {rows} = await pool.query(SIGN_IN_LOCATION_STATUS_SQL, [sessionId]);
+      status = rows.length ? String(rows[0].status || "") : null;
+    } catch (error) {
+      log?.error?.("Sign-in location could not be checked:", error.message);
+      return false;
+    }
+    // No history row: nothing can be recorded for this sign-in, so it is not held.
+    if (status === null) return false;
+    if (status === "shared" || status === "unavailable") {
+      if (open.size >= cacheLimit) open.clear();
+      open.add(sessionId);
+      return false;
+    }
+    res.status(428).json({error: SIGN_IN_LOCATION_REQUIRED_MESSAGE, code: SIGN_IN_LOCATION_REQUIRED_CODE});
+    return true;
+  };
+}
+
+/** Whether the app may open after this answer. */
+export function signInLocationAccepted(status, session, env = process.env) {
+  return !signInLocationBlocks({...session, locationStatus: status}, {env});
+}
+
+export const SIGN_IN_LOCATION_STATUS_SQL = "SELECT location_status AS status FROM user_login_history WHERE session_id=$1";
+
+// The login history keeps the first shared position; until then the latest answer is shown.
 export const SIGN_IN_LOCATION_UPDATE_SQL = `UPDATE user_login_history
   SET location_status=$2::text,location_latitude=$3,location_longitude=$4,location_accuracy_m=$5,location_at=NOW()
-  WHERE session_id=$1 AND location_status<>'shared' AND ($2::text='shared' OR location_status='')`;
+  WHERE session_id=$1 AND location_status<>'shared'`;

@@ -1,7 +1,7 @@
 import {initializeLoginDays} from './inactive-users.mjs';
 import {initializeSingleLogin} from './single-login.mjs';
 import {userMasterRole} from './src/user-master-role.mjs';
-import {parseSignInLocation,SIGN_IN_LOCATION_UPDATE_SQL} from './sign-in-location.mjs';
+import {parseSignInLocation,signInLocationAccepted,SIGN_IN_LOCATION_STATUS_SQL,SIGN_IN_LOCATION_UPDATE_SQL} from './sign-in-location.mjs';
 
 // Detailed sessions may be purged. The small per-login summary must survive
 // that cleanup, logout and credential expiry; it stores no credentials/devices.
@@ -129,7 +129,7 @@ export function loginHistoryRange(query={}, now=new Date()) {
 
 // Every signed-in user reports their own sign-in location. Like the heartbeat it
 // reads the session and writes on the small sign-in pool, not the busy main pool.
-export function registerSignInLocationRoute(app,{pool,readSession}) {
+export function registerSignInLocationRoute(app,{pool,readSession,env=process.env}) {
   app.post('/api/session-location',async(req,res,next)=>{
     req.audit=false;
     try{
@@ -138,10 +138,14 @@ export function registerSignInLocationRoute(app,{pool,readSession}) {
       if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
       const location=parseSignInLocation(req.body);
       if(location.error)return res.status(400).json({error:location.error});
+      // "accepted" tells the browser whether the app may open (a refusal keeps it closed).
+      let accepted=signInLocationAccepted(location.status,session,env);
       const sessionId=String(session.sessionId||'').trim();
-      if(!sessionId)return res.json({recorded:false});
+      if(!sessionId)return res.json({recorded:false,accepted});
       const result=await pool.query(SIGN_IN_LOCATION_UPDATE_SQL,[sessionId,location.status,location.latitude,location.longitude,location.accuracy]);
-      res.json({recorded:result.rowCount>0});
+      // A sign-in that already shared stays open even if a later answer is a refusal.
+      if(!accepted&&!result.rowCount){const {rows}=await pool.query(SIGN_IN_LOCATION_STATUS_SQL,[sessionId]);accepted=!rows.length||rows[0].status==='shared';}
+      res.json({recorded:result.rowCount>0,accepted});
     }catch(error){next(error);}
   });
 }
