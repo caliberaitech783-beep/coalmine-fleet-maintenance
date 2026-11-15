@@ -2,14 +2,17 @@
 // Owner's rule: a device that can share its location must share it, so a user
 // who presses Block cannot use the app; a device that cannot find a location
 // (no GPS or Wi-Fi, no location API) is let in and shown as "Not available".
+// On hold since 15 Nov 2026 (owner): the rule applies only when the App Service
+// setting SIGN_IN_LOCATION_REQUIRED is "1". Until then the location is still
+// asked for and recorded, and a refusal is shown as "Refused by user".
 export const SIGN_IN_LOCATION_STATUSES = Object.freeze(["shared", "refused", "unavailable"]);
 export const SIGN_IN_LOCATION_REQUIRED_CODE = "SIGN_IN_LOCATION_REQUIRED";
 export const SIGN_IN_LOCATION_REQUIRED_MESSAGE = "Pulse needs your location to open. Reload the page and press Allow when the browser asks.";
 
 // Session upkeep and the location report itself stay open while a location is missing.
 const ALWAYS_OPEN = new Set(["/api/session-location", "/api/logout", "/api/session-heartbeat", "/api/session-status", "/api/session-messages"]);
-// Logins that sign in without a browser (machine accounts) are never asked.
-const DEFAULT_EXCEPTIONS = ["mis_sync_service"];
+// Never held: machine accounts (no browser) and the owner's chosen logins.
+const DEFAULT_EXCEPTIONS = ["mis_sync_service", "mohitchadda"];
 
 const coordinate = (value, limit) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit;
 
@@ -24,9 +27,14 @@ export function parseSignInLocation(body = {}) {
   return {status, latitude: round(body.latitude), longitude: round(body.longitude), accuracy};
 }
 
-/** Off only when the App Service setting SIGN_IN_LOCATION_REQUIRED is "0". */
+/** On only when the App Service setting SIGN_IN_LOCATION_REQUIRED is "1" (on hold otherwise). */
 export function signInLocationRequired(env = process.env) {
-  return String(env?.SIGN_IN_LOCATION_REQUIRED ?? "1").trim() !== "0";
+  return String(env?.SIGN_IN_LOCATION_REQUIRED ?? "0").trim() === "1";
+}
+
+/** Whether this signed-in user must share a location before the app opens. */
+export function signInLocationRequiredFor(session, env = process.env) {
+  return signInLocationBlocks({...session, locationStatus: ""}, {env});
 }
 
 /** Default machine logins plus SIGN_IN_LOCATION_EXCEPTIONS (comma-separated logins). */
