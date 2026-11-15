@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parseSignInLocation,SIGN_IN_LOCATION_UPDATE_SQL,SIGN_IN_LOCATION_STATUS_SQL,signInLocationBlocks,signInLocationRequiredFor,createSignInLocationGuard,signInLocationAccepted,signInLocationRequired,signInLocationExceptions,requestRoute,SIGN_IN_LOCATION_REQUIRED_CODE} from '../sign-in-location.mjs';
 import {registerSignInLocationRoute,initializeLoginHistory} from '../user-login-history.mjs';
-import {recordSignInLocation,readPosition,nearestPlaceLabel,formatAccuracy,signInLocationCell,sessionMark,signInLocationDone} from '../src/sign-in-location.mjs';
+import {recordSignInLocation,readPosition,nearestPlaceLabel,formatAccuracy,signInLocationCell,sessionMark,signInLocationDone,isSignInLocationRequired,forgetSignInLocation} from '../src/sign-in-location.mjs';
 import {auditShouldRecord} from '../audit-trail.mjs';
 
 // The rule is on hold unless SIGN_IN_LOCATION_REQUIRED=1; these tests switch it on.
@@ -196,6 +196,41 @@ test('the app stays on the location screen until it opens, and the sign-in scree
   // On hold: the app opens at once when the server says the location is not required.
   assert.match(gate,/if\(required===true\)\{void ask\(\);return;\}/);
   assert.match(gate,/setState\(\{token,phase:'open'\}\);\s*void recordSignInLocation\(token\);/);
+});
+
+test('a 428 location hold from the server brings the location screen back instead of empty panels',async()=>{
+  const json=(status,body)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+  assert.equal(await isSignInLocationRequired(json(428,{error:'x',code:SIGN_IN_LOCATION_REQUIRED_CODE})),true);
+  assert.equal(await isSignInLocationRequired(json(428,{error:'x',deletionApproval:{id:'1'}})),false,'the deletion-approval 428 is left alone');
+  assert.equal(await isSignInLocationRequired(json(401,{code:SIGN_IN_LOCATION_REQUIRED_CODE})),false);
+  assert.equal(await isSignInLocationRequired(new Response('not json',{status:428})),false);
+  assert.equal(await isSignInLocationRequired(null),false);
+  const hold=json(428,{code:SIGN_IN_LOCATION_REQUIRED_CODE});
+  await isSignInLocationRequired(hold);
+  assert.equal((await hold.json()).code,SIGN_IN_LOCATION_REQUIRED_CODE,'the caller can still read the body');
+
+  const store=new Map();const storage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)};
+  storage.setItem('pulse-sign-in-location-v2',sessionMark('tok-a'));
+  forgetSignInLocation('tok-b',storage);
+  assert.equal(signInLocationDone('tok-a',storage),true,'another sign-in leaves this mark alone');
+  forgetSignInLocation('tok-a',storage);
+  assert.equal(signInLocationDone('tok-a',storage),false,'asked again after the hold');
+
+  const gate=read('src/sign-in-location-gate.jsx');
+  const source=/export function signInLocationPhase[\s\S]*?\n\}/.exec(gate)?.[0];
+  assert.ok(source,'signInLocationPhase is in the gate');
+  const signInLocationPhase=new Function(`${source.replace(/^export /,'')};return signInLocationPhase;`)();
+  assert.equal(signInLocationPhase(true),'open');
+  assert.equal(signInLocationPhase(false),'refused');
+  assert.equal(signInLocationPhase(null),'open','server not reachable on a fresh sign-in: opens as before');
+  assert.equal(signInLocationPhase(null,{held:true}),'unconfirmed','after a 428 it cannot bounce back into empty panels');
+  assert.equal(signInLocationPhase(false,{held:true}),'refused');
+  assert.match(gate,/window\.addEventListener\(SIGN_IN_LOCATION_REQUIRED_EVENT,onHold\)/);
+  assert.match(gate,/if\(event\?\.detail\?\.token!==token\)return;/,'only the current sign-in reacts');
+  assert.match(gate,/Location services/,'Windows Location services step');
+
+  const main=read('src/main.jsx');
+  assert.match(main,/if \(authenticatedRequest\?\.token && await isSignInLocationRequired\(response\)\) \{\s*window\.dispatchEvent\(new CustomEvent\(SIGN_IN_LOCATION_REQUIRED_EVENT, \{detail: \{token: authenticatedRequest\.token\}\}\)\);/);
 });
 
 const connectionString=process.env.AUTH_SESSION_TEST_DATABASE_URL;
