@@ -71,7 +71,7 @@ import {PC_BACKUP_KEY_LIMIT,PC_BACKUP_KEY_SETTING,createAttemptLimiter,createPcB
 import {certificateSummary,generatePrintHelperSigning,resolvePrintHelperSigning,signPrintRequest} from './print-helper-signing.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
-import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
+import {initializeLoginHistory,registerLoginHistoryRoutes,registerSignInLocationRoute} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {requestsWithDoorNumbers,equipmentDoorNumber,equipmentMasterWithDoor} from './equipment-door.mjs';
@@ -2818,6 +2818,7 @@ app.post('/api/session-heartbeat',async(req,res,next)=>{
     res.status(204).end();
   }catch(error){next(error)}
 });
+registerSignInLocationRoute(app,{pool:authPool,readSession:token=>authSessionStore.get(token)});
 
 // Authorization probe deliberately does not record activity or refresh online status.
 app.get('/api/session-status',async(req,res,next)=>{

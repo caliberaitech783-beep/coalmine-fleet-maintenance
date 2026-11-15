@@ -144,7 +144,7 @@ export function auditShouldRecord(method = "", path = "", {statusCode = 0, event
   const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
   const failed = Number(statusCode) >= 400;
 
-  if (route === "/api/session-heartbeat") return false;
+  if (route === "/api/session-heartbeat" || route === "/api/session-location") return false;
   if (!failed && (route === "/api/login" || route === "/api/logout")) return false;
   if (!failed && route.startsWith("/api/requests")) return false;
   if (failed) return route.startsWith("/api/");

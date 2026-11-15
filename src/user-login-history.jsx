@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {sessionTimeSummary,formatSessionDuration} from './login-session-duration.mjs';
 import {LOGIN_ACTIVITY_FILTERS,loginActivityRows} from './login-activity.mjs';
+import {signInLocationCell} from './sign-in-location.mjs';
 
 function useHistory(token,parameters,refreshKey=0){
   const [state,setState]=useState({loading:true,data:null,error:''});
@@ -16,6 +17,11 @@ function useHistory(token,parameters,refreshKey=0){
   return state;
 }
 
+function SignInLocation({item}){
+  const cell=signInLocationCell(item);
+  return <span className={`sign-in-location ${cell.tone}`}>{cell.text}{cell.href&&<> · <a href={cell.href} target="_blank" rel="noopener noreferrer">Open map</a></>}</span>;
+}
+
 export function UserLoginHistory({token,row,Modal,Table,formatDate,deviceDetails,onClose}){
   const [refresh,setRefresh]=useState(0);
   const {loading,data,error}=useHistory(token,new URLSearchParams({period:'24h',login:row.login}).toString(),refresh);
@@ -25,8 +31,8 @@ export function UserLoginHistory({token,row,Modal,Table,formatDate,deviceDetails
     <div className="login-history-controls"><div><b>{loading?'Loading sessions…':`${data?.sessions?.length||0} recorded sessions`}</b><p>All devices, including ended sessions.</p></div><button type="button" className="secondary" disabled={loading} onClick={()=>setRefresh(value=>value+1)}>Refresh history</button></div>
     <details className="login-history-help"><summary>How is time calculated?</summary><p>Duration runs from login to last recorded activity, limited to the last 24 hours. Total time combines overlapping sessions only once; it is recorded session time, not a measure of continuous work.</p></details>
     {error&&<p role="alert">{error}</p>}
-    <div className="login-history-table"><Table preserveColumnOrder exportTitle="User login sessions · Last 24 hours"><thead><tr><th>Session</th><th>Duration</th><th>Last activity</th><th>Device</th><th>Device ID</th><th>IP address</th></tr></thead>
-      <tbody>{(data?.sessions||[]).map((item,index)=>{const device=deviceDetails(item.userAgent);return <tr key={item.sessionId}><td><span className={`session-state ${item.active?'online':'inactive'}`}>{item.active?'Signed in':'Ended / expired'}</span></td><td><b>{formatSessionDuration(timing.durations[index])}</b></td><td>{formatDate(item.lastSeenAt)}</td><td>{device.type} · {device.platform} · {device.browser}</td><td>{item.deviceId||'Not recorded'}</td><td>{item.ipAddress||'Not recorded'}</td></tr>;})}
+    <div className="login-history-table"><Table preserveColumnOrder exportTitle="User login sessions · Last 24 hours"><thead><tr><th>Session</th><th>Duration</th><th>Last activity</th><th>Device</th><th>Device ID</th><th>IP address</th><th>Location at sign-in</th></tr></thead>
+      <tbody>{(data?.sessions||[]).map((item,index)=>{const device=deviceDetails(item.userAgent);return <tr key={item.sessionId}><td><span className={`session-state ${item.active?'online':'inactive'}`}>{item.active?'Signed in':'Ended / expired'}</span></td><td><b>{formatSessionDuration(timing.durations[index])}</b></td><td>{formatDate(item.lastSeenAt)}</td><td>{device.type} · {device.platform} · {device.browser}</td><td>{item.deviceId||'Not recorded'}</td><td>{item.ipAddress||'Not recorded'}</td><td><SignInLocation item={item}/></td></tr>;})}
       {!data?.sessions?.length&&<tr><td colSpan="6">{loading?'Loading history…':'No recorded sessions in the last 24 hours.'}</td></tr>}</tbody></Table></div>
     <p>Continuous history tracking began {data?.trackingSince?formatDate(data.trackingSince):'recently'}. Earlier retained activity is included where available.</p>
     </div>
