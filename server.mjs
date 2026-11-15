@@ -72,6 +72,7 @@ import {certificateSummary,generatePrintHelperSigning,resolvePrintHelperSigning,
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes,registerSignInLocationRoute} from './user-login-history.mjs';
+import {createSignInLocationGuard} from './sign-in-location.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {requestsWithDoorNumbers,equipmentDoorNumber,equipmentMasterWithDoor} from './equipment-door.mjs';
@@ -330,6 +331,9 @@ const pool=protectDeletionPool(rawPool);
 // idle limit on outbound connections (four minutes on Azure), so it is still usable when needed.
 const warmPoolOptions={idleTimeoutMillis:600000,keepAlive:true,keepAliveInitialDelayMillis:30000};
 const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,...warmPoolOptions}));
+// Owner rule (15 Nov 2026): a sign-in that refused its location cannot use Pulse. One small
+// read per sign-in on the sign-in pool, then remembered, so the busy main pool is not touched.
+const signInLocationGuard=createSignInLocationGuard(authPool);
 // Keep the initial Dashboard reads out of the shared work queue without
 // competing with password verification for the sign-in connections. Kept warm for the same
 // reason: the Dashboard is the first screen after sign-in.
@@ -2745,6 +2749,7 @@ async function requireSession(req,res,next){
   try{
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
+    if(typeof signInLocationGuard==='function'&&await signInLocationGuard(req,res,session))return;
     req.session=session;
     req.auditSessionId=session.sessionId;
     if(typeof touchUserSessionActivity==='function')void touchUserSessionActivity(req,session).catch(error=>console.error('User session activity could not be recorded:',error.message));
@@ -2789,6 +2794,7 @@ async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
+    if(typeof signInLocationGuard==='function'&&await signInLocationGuard(req,res,session))return;
     if(['HR User','HR Manager'].includes(session.assignedRole)&&isCdirMaster(req.params?.master?decodeURIComponent(req.params.master):'')){
       req.session=session;return next();
     }

@@ -1,11 +1,12 @@
 // Records where a user signed in from (owner, 15 Nov 2026, after the uKnowva
-// punch screen, Pulse and Pulse-II). The browser shows its own "Allow location?" prompt; a refusal
-// never blocks sign-in, it is saved as "refused" for the login history.
+// punch screen). The browser shows its own "Allow location?" prompt. Owner's
+// rule: pressing Block keeps the app closed; a device that cannot find a
+// location is let in and shown as "Not available". The server decides.
 import {SITE_COORDINATES, DEFAULT_COORDINATES} from "./live-temperature.mjs";
 
-export const SIGN_IN_LOCATION_NOTICE = "Your location is recorded when you sign in, for attendance and security.";
-const DONE_KEY = "pulse-sign-in-location-done";
-const NO_ANSWER_MS = 60000;
+export const SIGN_IN_LOCATION_NOTICE = "Pulse needs your location to open. It is recorded at every sign-in, for attendance and security.";
+// v2: answers saved under the first version (when Block still opened the app) must be asked again.
+const DONE_KEY = "pulse-sign-in-location-v2";
 
 // Not the token itself: only enough to tell one sign-in from the next.
 export function sessionMark(token = "") {
@@ -25,6 +26,7 @@ export function readPosition({geolocation = globalThis.navigator?.geolocation, t
           longitude: Number(position.coords.longitude),
           accuracy: Number.isFinite(position.coords.accuracy) ? Number(position.coords.accuracy) : undefined,
         }),
+        // 1 = the user (or a browser setting) refused; 2 and 3 = the device could not find a position.
         error => resolve({status: error?.code === 1 ? "refused" : "unavailable"}),
         {enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 120000},
       );
@@ -37,39 +39,38 @@ export function readPosition({geolocation = globalThis.navigator?.geolocation, t
 function storageGet(storage, key) { try { return storage?.getItem(key) || ""; } catch { return ""; } }
 function storageSet(storage, key, value) { try { storage?.setItem(key, value); } catch {} }
 
+/** True when this sign-in has already been let through (no prompt needed). */
+export function signInLocationDone(token, storage = globalThis.localStorage) {
+  return Boolean(token) && storageGet(storage, DONE_KEY) === sessionMark(token);
+}
+
 /**
- * Asks once per sign-in. A browser that leaves the prompt unanswered is saved as
- * "unavailable" after a minute; if the user allows it later, the position follows.
+ * Asks the browser and reports the answer. Returns {status, accepted}:
+ * accepted true = open the app, false = keep the location screen up,
+ * null = the server could not be asked (its own checks still apply).
+ * An unanswered prompt simply keeps waiting: it is never saved as "Not available".
  */
 export async function recordSignInLocation(token, {
   fetchImpl = globalThis.fetch,
   storage = globalThis.localStorage,
   geolocation = globalThis.navigator?.geolocation,
-  noAnswerMs = NO_ANSWER_MS,
-  setTimer = globalThis.setTimeout,
-  clearTimer = globalThis.clearTimeout,
 } = {}) {
-  if (!token || typeof fetchImpl !== "function") return null;
-  const mark = sessionMark(token);
-  if (storageGet(storage, DONE_KEY) === mark) return null;
-  const send = async payload => {
-    try {
-      const response = await fetchImpl("/api/session-location", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`},
-        body: JSON.stringify(payload),
-      });
-      // A 401 means the sign-in ended; a later sign-in asks again.
-      if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 401)) storageSet(storage, DONE_KEY, mark);
-    } catch {}
-  };
-  let answered = false;
-  const timer = setTimer(() => { if (!answered) void send({status: "unavailable"}); }, noAnswerMs);
+  if (!token || typeof fetchImpl !== "function") return {status: "", accepted: null};
+  if (signInLocationDone(token, storage)) return {status: "done", accepted: true};
   const result = await readPosition({geolocation});
-  answered = true;
-  clearTimer(timer);
-  await send(result);
-  return result;
+  try {
+    const response = await fetchImpl("/api/session-location", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`},
+      body: JSON.stringify(result),
+    });
+    const data = response.ok ? await response.json().catch(() => ({})) : {};
+    const accepted = response.ok ? data.accepted !== false : null;
+    if (accepted) storageSet(storage, DONE_KEY, sessionMark(token));
+    return {...result, accepted};
+  } catch {
+    return {...result, accepted: null};
+  }
 }
 
 const SITE_PLACES = [
