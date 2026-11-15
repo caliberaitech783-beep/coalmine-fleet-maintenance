@@ -287,3 +287,8 @@ test('browser asks the server whether the location is required and treats no ans
   assert.equal(await fetchSignInLocationRequired('t',{fetchImpl:async()=>{throw new Error('offline');}}),null);
   assert.equal(await fetchSignInLocationRequired('',{fetchImpl:async()=>assert.fail('no token, no call')}),null);
 });
+
+test('the sign-in screen only says the location is recorded, not that it is required (rule on hold)',async()=>{
+  const {SIGN_IN_LOCATION_NOTICE}=await import('../src/sign-in-location.mjs');
+  assert.equal(SIGN_IN_LOCATION_NOTICE,'Your location is recorded when you sign in, for attendance and security.');
+});
