@@ -1,11 +1,13 @@
 import React,{useCallback,useEffect,useState} from 'react';
-import {recordSignInLocation,signInLocationDone} from './sign-in-location.mjs';
+import {fetchSignInLocationRequired,recordSignInLocation,signInLocationDone} from './sign-in-location.mjs';
 import './sign-in-location-gate.css';
 
-// Holds the app closed until this sign-in has shared its location (or the device
-// has shown it cannot find one). The server enforces the same rule with HTTP 428.
+// Asks the server whether this sign-in must share its location (owner's rule,
+// on hold since 15 Nov 2026 unless SIGN_IN_LOCATION_REQUIRED=1). When it must,
+// the app stays closed until the browser answers and a Block keeps it closed;
+// otherwise the app opens at once and the location is still asked and recorded.
 export function useSignInLocationGate(token){
-  const [state,setState]=useState(()=>({token,phase:signInLocationDone(token)?'open':'asking'}));
+  const [state,setState]=useState(()=>({token,phase:signInLocationDone(token)?'open':'checking'}));
   const ask=useCallback(async()=>{
     if(!token)return;
     setState({token,phase:'asking'});
@@ -13,16 +15,26 @@ export function useSignInLocationGate(token){
     setState({token,phase:result.accepted===false?'refused':'open'});
   },[token]);
   useEffect(()=>{
-    if(!token)return;
-    if(signInLocationDone(token)){setState({token,phase:'open'});return;}
-    void ask();
+    if(!token)return undefined;
+    if(signInLocationDone(token)){setState({token,phase:'open'});return undefined;}
+    let active=true;
+    setState({token,phase:'checking'});
+    void fetchSignInLocationRequired(token).then(required=>{
+      if(!active)return;
+      if(required===true){void ask();return;}
+      // Not required (or the server could not say): open now, record in the background.
+      setState({token,phase:'open'});
+      void recordSignInLocation(token);
+    });
+    return()=>{active=false;};
   },[token,ask]);
   // A new sign-in (new token) is closed until its own answer arrives.
-  const phase=!token?'open':state.token===token?state.phase:(signInLocationDone(token)?'open':'asking');
+  const phase=!token?'open':state.token===token?state.phase:(signInLocationDone(token)?'open':'checking');
   return {phase,retry:ask};
 }
 
 export function SignInLocationScreen({gate,onSignOut}){
+  if(gate.phase==='checking')return <main className="sign-in-location-screen"><section className="sign-in-location-card" aria-live="polite"><p>Opening…</p></section></main>;
   const refused=gate.phase==='refused';
   return <main className="sign-in-location-screen"><section className="sign-in-location-card" aria-live="polite">
     <h1>{refused?'Location is blocked':'Allow your location to continue'}</h1>

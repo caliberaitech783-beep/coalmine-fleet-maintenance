@@ -36,6 +36,19 @@ export function readPosition({geolocation = globalThis.navigator?.geolocation, t
   });
 }
 
+/** true / false from the server; null when it could not be asked (the app then opens). */
+export async function fetchSignInLocationRequired(token, {fetchImpl = globalThis.fetch} = {}) {
+  if (!token || typeof fetchImpl !== "function") return null;
+  try {
+    const response = await fetchImpl("/api/session-location", {cache: "no-store", headers: {Authorization: `Bearer ${token}`}});
+    if (!response.ok) return null;
+    const data = await response.json();
+    return typeof data?.required === "boolean" ? data.required : null;
+  } catch {
+    return null;
+  }
+}
+
 function storageGet(storage, key) { try { return storage?.getItem(key) || ""; } catch { return ""; } }
 function storageSet(storage, key, value) { try { storage?.setItem(key, value); } catch {} }
 

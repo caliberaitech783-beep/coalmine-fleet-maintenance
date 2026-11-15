@@ -1,7 +1,7 @@
 import {initializeLoginDays} from './inactive-users.mjs';
 import {initializeSingleLogin} from './single-login.mjs';
 import {userMasterRole} from './src/user-master-role.mjs';
-import {parseSignInLocation,signInLocationAccepted,SIGN_IN_LOCATION_STATUS_SQL,SIGN_IN_LOCATION_UPDATE_SQL} from './sign-in-location.mjs';
+import {parseSignInLocation,signInLocationAccepted,signInLocationRequiredFor,SIGN_IN_LOCATION_STATUS_SQL,SIGN_IN_LOCATION_UPDATE_SQL} from './sign-in-location.mjs';
 
 // Detailed sessions may be purged. The small per-login summary must survive
 // that cleanup, logout and credential expiry; it stores no credentials/devices.
@@ -130,6 +130,15 @@ export function loginHistoryRange(query={}, now=new Date()) {
 // Every signed-in user reports their own sign-in location. Like the heartbeat it
 // reads the session and writes on the small sign-in pool, not the busy main pool.
 export function registerSignInLocationRoute(app,{pool,readSession,env=process.env}) {
+  // Tells the browser whether to keep the app closed until the location is in.
+  app.get('/api/session-location',async(req,res,next)=>{
+    req.audit=false;res.set('Cache-Control','no-store');
+    try{
+      const session=await readSession(String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim());
+      if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
+      res.json({required:signInLocationRequiredFor(session,env)});
+    }catch(error){next(error);}
+  });
   app.post('/api/session-location',async(req,res,next)=>{
     req.audit=false;
     try{
