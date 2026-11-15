@@ -47,13 +47,16 @@ test('Pulse-II Equipment master changes need Pulse Master Sync and go through th
  await db.query("INSERT INTO master_records(master_name,record_data) VALUES('Users & employees',$1)",[JSON.stringify(user)]);
  const seen=[];
  const equipmentChanges={authorize:async profile=>profile.login,request:async input=>{seen.push(['request',input]);return {id:'r1'};},verify:async(id,otp)=>{seen.push(['verify',id,otp]);return {status:'approved'};}};
- installMisPulseBridge(app,{identity,readRequests:async()=>[],readMasters:async()=>({}),readFleet:async()=>({}),verifyRequest:async()=>{},equipmentChanges});
+ const everySite=[{ref:'BD1',site:'Majri'},{ref:'BD2',site:'Sasti OC'}];
+ installMisPulseBridge(app,{identity,readRequests:async()=>[],readAllRequests:async()=>everySite,readMasters:async()=>({}),readFleet:async()=>({}),verifyRequest:async()=>{},equipmentChanges});
  const call=async(url,body)=>{let value;const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(body){value=body;return this}};await routes.get(url)({body,headers:{},ip:'127.0.0.1'},res,error=>{throw error});return {status:res.statusCode,value}};
  const login=await call('/api/integrations/mis/authenticate',{username:user.login,password:'synthetic-login-only'});
  const bridge=body=>call('/api/integrations/mis/pulse',{grant:login.value.grant,...body});
  const changes=[{operation:'delete',id:5}];
  assert.equal((await bridge({action:'equipment-changes',changes})).status,403,'trip-card menus alone cannot change the master');
+ assert.equal((await bridge({action:'breakdown-mirror'})).status,403,'trip-card menus alone cannot read every site');
  user.misDesktopAccess=['Pulse Master Sync'];await db.query('UPDATE master_records SET record_data=$1',[JSON.stringify(user)]);
+ assert.deepEqual((await bridge({action:'breakdown-mirror'})).value,everySite,'Pulse Master Sync reads the whole breakdown list for the Pulse-II copy');
  assert.deepEqual((await bridge({action:'equipment-changes',changes})).value,{id:'r1'});
  assert.deepEqual(seen[0],['request',{changes,requestedBy:user.login,source:'Pulse-II'}]);
  assert.deepEqual((await bridge({action:'equipment-changes-verify',id:'r1',otp:'123456'})).value,{status:'approved'});

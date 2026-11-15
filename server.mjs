@@ -1596,10 +1596,12 @@ const equipmentMasterChanges={...equipmentMasterChangeService,
 registerEquipmentMasterChanges(app,{service:equipmentMasterChanges,requireSuper,
  audit:(req,{action,reference,details})=>{req.audit={eventType:'Master data',module:'Equipment master',action,targetType:'Equipment master',targetReference:reference,changedFields:[],details};}});
 let verifyMisTripCard;
+const readMisBridgeFeed=()=>misBridgeFeedCache.read(async()=>(await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`)).rows);
 installMisPulseBridge(app,{identity:misCredentialIdentity,
  // The feed and the fleet are read once per window for every Pulse-II caller (misBridgeFeedCache,
  // misBridgeFleetCache); the caller's own site scope is still applied on every call.
- readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const rows=await misBridgeFeedCache.read(async()=>(await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`)).rows);return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
+ readRequests:async profile=>{const user=await currentUserRecord(profile),scope=userSiteScope(user);const rows=await readMisBridgeFeed();return rows.filter(row=>reportScopeIncludesSite(scope,row.site));},
+ readAllRequests:async()=>readMisBridgeFeed(),
  readFleet:async(profile,site)=>{
   const user=await currentUserRecord(profile);
   const assigned=userSiteSelection(user);
