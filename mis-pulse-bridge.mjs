@@ -1,5 +1,5 @@
 const menus=profile=>[...(profile.permissions?.misDesktopAccess||[]),...(profile.permissions?.misMobileAccess||[])];
-export function installMisPulseBridge(app,{identity,readRequests,readAllRequests=null,readMasters,readFleet,verifyRequest,equipmentChanges=null}){
+export function installMisPulseBridge(app,{identity,readRequests,readAllRequests=null,readMasters,readFleet,verifyRequest,equipmentChanges=null,vehicleTransfers=null}){
  app.post('/api/integrations/mis/pulse',async(req,res,next)=>{
   res.set('Cache-Control','no-store');req.audit=false;
   try{
@@ -22,6 +22,14 @@ export function installMisPulseBridge(app,{identity,readRequests,readAllRequests
     const by=await equipmentChanges.authorize(profile);
     if(action==='equipment-changes')return res.json(await equipmentChanges.request({changes:req.body?.changes,requestedBy:by,source:'Pulse-II'}));
     return res.json(await equipmentChanges.verify(String(req.body?.id||''),req.body?.otp));
+   }
+   // A vehicle transfer accepted in Pulse-II is completed here first (mis-vehicle-transfer.mjs), so
+   // the vehicle's site in Pulse, the master, matches; the hourly copy then never moves it back.
+   if(vehicleTransfers&&action==='vehicle-transfer-complete'&&allowed.includes('Pulse Master Sync')){
+    const by=await vehicleTransfers.authorize(profile);
+    const result=await vehicleTransfers.complete(req.body,{by});
+    vehicleTransfers.audit?.(req,profile,result);
+    return res.json(result);
    }
    if(action==='masters'&&allowed.includes('Pulse Master Sync'))return res.json(await readMasters(profile));
    if(action==='requests'&&(tripAccess||allowed.includes('Pulse Master Sync')))return res.json(await readRequests(profile));
