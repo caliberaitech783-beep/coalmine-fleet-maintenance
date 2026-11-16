@@ -1,6 +1,7 @@
 import {createFleetAssetResolver,liveEquipmentRoadStatuses} from '../dashboard-equipment-metrics.mjs';
 import {indiaDateTimeEpoch} from '../report-date-range.mjs';
 import {isIdleVehicleRequest} from '../request-idle.mjs';
+import {isLmvRequest} from '../fleet-registry.mjs';
 
 // Count actual off-road transitions, not request rows. Overlapping requests for
 // one master asset form one off-road interval; a second repair after a real
@@ -13,6 +14,8 @@ export function fleetMovementLedger(equipment=[],requests=[],from='',to='',{now=
  if(Number.isNaN(lower)||Number.isNaN(upper)||lower>=upper)return {rows,open:0,incoming:0,outgoing:0,balance:0,idle:0,verified:false,issues:['Invalid movement period.']};
  const resolve=createFleetAssetResolver(equipment),intervals=equipment.map(()=>[]);
  for(const request of requests){
+  // The dashboard fleet excludes LMVs. Their tickets cannot affect its movement totals.
+  if(isLmvRequest(request))continue;
   const start=indiaDateTimeEpoch(request.start||request.startedAt||request.createdAt);
   if(Number.isFinite(start)&&start>=upper)continue;
   const ends=[request.closedAt,request.completedAt,request.idealRequestedAt,request.idleRequestedAt,request.runningBdAt].map(indiaDateTimeEpoch).filter(Number.isFinite);
