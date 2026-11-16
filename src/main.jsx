@@ -97,6 +97,7 @@ import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import {fleetMovementLedger} from './fleet-movement-ledger.mjs';
+import {isLmvRequest} from '../fleet-registry.mjs';
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DailyUpdatesList, { DailyUpdatesPanel } from "./daily-updates-list.jsx";
@@ -2198,7 +2199,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const now=Date.now();
       let scope=scopes.get(site);
       if(!scope){
-        const records = throughputRequests.filter(record => !site || recordBelongsToSite(record, site));
+        // The dashboard equipment feed excludes LMVs, so their tickets are outside this ledger.
+        const records = throughputRequests.filter(record => !isLmvRequest(record) && (!site || recordBelongsToSite(record, site)));
         const assets = throughputEquipment.filter(record => !site || recordBelongsToSite(record, site));
         const future=records.flatMap(record=>[record.start,record.startedAt,record.createdAt,record.closedAt,record.completedAt,record.idealRequestedAt,record.idleRequestedAt,record.runningBdAt].map(indiaDateTimeEpoch)).filter(at=>Number.isFinite(at)&&at>now).sort((a,b)=>a-b);
         scope={records,assets,future};scopes.set(site,scope);

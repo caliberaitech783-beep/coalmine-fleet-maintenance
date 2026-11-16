@@ -32,6 +32,7 @@ import {requestStatusLabel} from "../src/request-status.mjs";
 import {isIdleVehicleRequest} from "../request-idle.mjs";
 import {availabilityRequestsForDate} from "../src/dashboard-availability.mjs";
 import {fleetMovementLedger} from '../src/fleet-movement-ledger.mjs';
+import {isLmvRequest} from '../fleet-registry.mjs';
 import {indiaDateTimeEpoch} from '../report-date-range.mjs';
 import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
@@ -245,7 +246,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
     ...metrics, requestCategoryLabel,...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport, filterOemDelayedRows,
-    availabilityRequestsForDate, dashboardFleetSnapshot, fleetMovementLedger, indiaDateTimeEpoch, ...meterColumns,
+    availabilityRequestsForDate, dashboardFleetSnapshot, fleetMovementLedger, isLmvRequest, indiaDateTimeEpoch, ...meterColumns,
     dashboardKpiExportColumns: [],
     React, useState,
     // Commit the snapshot after render. Browser effects with dependency lists
