@@ -82,6 +82,7 @@ export default function DashboardRecordBrowser({ rows, classificationRequests = 
   // Idle drilldowns display vehicle state; other lists retain maintenance request status.
   const idleDateFilter = lifecycleEvent === "idle" || /\bidle\b/i.test(title);
   const classificationByReference = useMemo(()=>new Map(classificationRequests.map(request=>[request.ref||request.reference,request])),[classificationRequests]);
+  // Breakdown detail reports keep the stored three-level repair classification beside the recorded reason.
   const classificationRequest = record => record.requestDetails || classificationByReference.get(record.requestReference) || (record.ref || record.reference ? record : {});
   const breakdownCategoryText = record => {
     const request = classificationRequest(record);
