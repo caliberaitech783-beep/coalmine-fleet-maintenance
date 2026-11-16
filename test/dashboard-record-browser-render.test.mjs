@@ -43,20 +43,23 @@ test("BD Balance places location, reasons and meter readings beside their reques
     useMemo: React.useMemo, useDeferredValue: React.useDeferredValue, createRowSearchIndex,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
-  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownCategory: "BRAKING SYSTEM", breakdownReason: "Brake repair"};
-  const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true, showBreakdownCategory:true,
+  const row = {id: "bd-1", requestReference: "REQ-BD-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownCategory: "BRAKING SYSTEM", breakdownReason: "Brake repair"};
+  const classificationRequests = [{ref: "REQ-BD-1", classification: {version: 1, repairType: "Accidental", breakdownCategory: "BRAKING SYSTEM", breakdownSubCategory: "Brake drum"}}];
+  const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], classificationRequests, regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true, showBreakdownCategory:true,
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
   assert.match(html, /<th>Days of BD<\/th><th>Current location<\/th>/);
   assert.match(html, /<th[^>]*>Started<\/th><th>ETC<\/th>/);
   assert.match(html, /10-09-26 10:00:00 AM<\/td><td[^>]*>10-09-26 06:00:00 PM<\/td>/);
-  assert.match(html, /<th>Equipment category<\/th><th>Breakdown Category<\/th><th>Reason of BD<\/th>/);
+  assert.match(html, /<th>Equipment category<\/th><th>Breakdown Category<\/th><th>Reason of BD<\/th><th>Repair type<\/th><th>Breakdown sub-category<\/th>/);
   assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
   assert.match(html, /Brake repair/);
   assert.match(html, /<td>BRAKING SYSTEM<\/td>/);
-  const legacyHtml=renderToStaticMarkup(React.createElement(Browser,{rows:[row],regions:REGION_DATA,rowsAreScoped:true,bdBalanceColumns:true,Status:({children})=>children,formatDate:formatDisplayDateTime,ActionsTable:({children})=>React.createElement("table",null,children)}));
+  assert.match(html, /<td>Accidental<\/td><td>Brake drum<\/td>/);
+  const legacyHtml=renderToStaticMarkup(React.createElement(Browser,{rows:[{...row,requestReference:"REQ-OLD",subCategory:"Legacy brake item"}],regions:REGION_DATA,rowsAreScoped:true,bdBalanceColumns:true,Status:({children})=>children,formatDate:formatDisplayDateTime,ActionsTable:({children})=>React.createElement("table",null,children)}));
   assert.match(legacyHtml,/<th>Type of BD<\/th>/);
   assert.match(legacyHtml,/<td>Breakdown<\/td>/);
+  assert.match(legacyHtml,/<td>Breakdown<\/td><td>Legacy brake item<\/td>/);
 });
 
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
