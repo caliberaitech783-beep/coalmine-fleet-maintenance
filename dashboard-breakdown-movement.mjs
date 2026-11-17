@@ -120,10 +120,23 @@ export function breakdownCategoryShare(records=[],startDate="",endDate="",catego
 // eligibility from the editable breakdown start date or backfill old records.
 export const NEW_CATEGORY_MIX_FROM='2026-10-29T14:00:00+05:30';
 export const NEW_CATEGORY_MIX_LABEL='Created from 29 Oct 2026, 2:00 PM IST';
+const NEW_CATEGORY_MIX_FROM_MS=Date.parse(NEW_CATEGORY_MIX_FROM);
+// The dashboard filters the same requests several times per render; cache the
+// parsed creation time (a number, never a shared Date) per string, bounded.
+const CREATED_EPOCH_CACHE_LIMIT=50_000;
+const createdEpochCache=new Map();
+const createdEpoch=value=>{
+  if(typeof value!=='string')return parseRequestTimelineTimestamp(value)?.getTime()??null;
+  if(createdEpochCache.has(value))return createdEpochCache.get(value);
+  const epoch=parseRequestTimelineTimestamp(value)?.getTime()??null;
+  if(createdEpochCache.size>=CREATED_EPOCH_CACHE_LIMIT)createdEpochCache.clear();
+  createdEpochCache.set(value,epoch);
+  return epoch;
+};
 export function newCategoryMixRequests(records=[],kind='classified'){
   return records.filter(record=>{
-    const created=parseRequestTimelineTimestamp(record.createdAt);
-    if(!created||created.getTime()<Date.parse(NEW_CATEGORY_MIX_FROM))return false;
+    const created=createdEpoch(record.createdAt);
+    if(created===null||created<NEW_CATEGORY_MIX_FROM_MS)return false;
     const classified=!['Unclassified','UNCLASSIFIED','UNCATEGORISED','UNCATEGORIZED','UNSPECIFIED'].includes(requestCategoryLabel(record));
     return kind==='all'||(kind==='pending'?!classified:classified);
   });

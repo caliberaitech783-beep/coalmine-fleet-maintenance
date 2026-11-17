@@ -2,9 +2,25 @@ import {parseRequestTimelineTimestamp} from "../request-timeline.mjs";
 
 const INDIA_OFFSET_MS = 330 * 60_000;
 
+// The dashboard derives the same day from the same timestamp strings on every
+// render. The answer depends only on the string, so string inputs are cached
+// (Date objects are not); the cap keeps memory bounded.
+const REQUEST_DATE_KEY_CACHE_LIMIT = 50_000;
+const requestDateKeyCache = new Map();
+
+export function requestDateKey(value) {
+  if (typeof value !== "string") return computeRequestDateKey(value);
+  const cached = requestDateKeyCache.get(value);
+  if (cached !== undefined) return cached;
+  const day = computeRequestDateKey(value);
+  if (requestDateKeyCache.size >= REQUEST_DATE_KEY_CACHE_LIMIT) requestDateKeyCache.clear();
+  requestDateKeyCache.set(value, day);
+  return day;
+}
+
 // Calendar-only values already name an Indian operational day. Timestamp
 // offsets, including UTC, must be converted before choosing that day.
-export function requestDateKey(value) {
+function computeRequestDateKey(value) {
   const text = typeof value === "string" ? value.trim() : "";
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text);
   const parsed = parseRequestTimelineTimestamp(dateOnly ? `${text}T00:00:00` : value);

@@ -45,7 +45,19 @@ export function equipmentMetrics(records = []) {
   };
 }
 
-const identityValue = (value) => normalize(value).replace(/[^\p{L}\p{N}]+/gu, "");
+// Pure text clean-up repeated for the same door/chassis/name strings on every
+// dashboard render; cache by input text (bounded) to skip the Unicode regex.
+const IDENTITY_VALUE_CACHE_LIMIT = 50_000;
+const identityValueCache = new Map();
+const identityValue = (value) => {
+  const text = String(value ?? "");
+  const cached = identityValueCache.get(text);
+  if (cached !== undefined) return cached;
+  const identity = normalize(text).replace(/[^\p{L}\p{N}]+/gu, "");
+  if (identityValueCache.size >= IDENTITY_VALUE_CACHE_LIMIT) identityValueCache.clear();
+  identityValueCache.set(text, identity);
+  return identity;
+};
 const missingIdentityValues = new Set(["na", "notavailable", "notapplicable", "unknown", "none", "null"]);
 const serialIdentityValues = (record = {}) => [
   record.manufacturerSerialNo,

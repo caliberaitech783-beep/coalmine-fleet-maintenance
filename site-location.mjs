@@ -27,8 +27,25 @@ const SITE_ALIASES = new Map([
   ["dudhicua east ob", "dudhichua east ob"],
 ]);
 
+// Dashboards compare every request against every site on each render, so the
+// same few site spellings are normalised millions of times. The result depends
+// only on the input text, so it is cached; the cap keeps a long-running server
+// bounded if it ever sees many distinct spellings.
+const CANONICAL_SITE_CACHE_LIMIT = 5000;
+const canonicalSiteCache = new Map();
+
 export function canonicalSiteName(value = "") {
-  const normalized = String(value ?? "")
+  const text = String(value ?? "");
+  const cached = canonicalSiteCache.get(text);
+  if (cached !== undefined) return cached;
+  const canonical = normalizeSiteName(text);
+  if (canonicalSiteCache.size >= CANONICAL_SITE_CACHE_LIMIT) canonicalSiteCache.clear();
+  canonicalSiteCache.set(text, canonical);
+  return canonical;
+}
+
+function normalizeSiteName(text) {
+  const normalized = text
     .trim()
     .toLowerCase()
     .replace(/\(\s*2nd\s*\)/g, " 2nd")

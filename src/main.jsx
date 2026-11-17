@@ -2099,12 +2099,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const visibleBreakdowns = useMemo(() => historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveEquipment,visibleEquipment]);
   const liveFleetCounts = useMemo(() => fleetChartCounts(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
-  const visibleLmv = lmvFleet.records.filter(record => (!selectedRegion || selectedRegion.sites.some(site => recordBelongsToSite(record,site))) && (dashboardSite === "all" || recordBelongsToSite(record,dashboardSite)));
+  const visibleLmv = useMemo(() => lmvFleet.records.filter(record => (!selectedRegion || selectedRegion.sites.some(site => recordBelongsToSite(record,site))) && (dashboardSite === "all" || recordBelongsToSite(record,dashboardSite))), [lmvFleet.records, selectedRegion, dashboardSite]);
   const hasLmvFleet = visibleLmv.length > 0;
   const combinedFleetReady = equipmentLoaded;
-  const combinedFleetOemRecords = filterOemDelayedRows(buildOemBreakdownRows({equipment:visibleEquipment,requests:liveBreakdowns})).map(row=>row.record);
-  const combinedFleetRecords = equipmentVehicleFleetRecords(visibleEquipment,liveBreakdowns,combinedFleetOemRecords);
-  const combinedFleetCounts = totalFleetCounts(combinedFleetRecords);
+  const combinedFleetOemRecords = useMemo(() => filterOemDelayedRows(buildOemBreakdownRows({equipment:visibleEquipment,requests:liveBreakdowns})).map(row=>row.record), [visibleEquipment, liveBreakdowns]);
+  const combinedFleetRecords = useMemo(() => equipmentVehicleFleetRecords(visibleEquipment,liveBreakdowns,combinedFleetOemRecords), [visibleEquipment, liveBreakdowns, combinedFleetOemRecords]);
+  const combinedFleetCounts = useMemo(() => totalFleetCounts(combinedFleetRecords), [combinedFleetRecords]);
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
@@ -2312,7 +2312,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     category: category.label,
     color: category.palette[index % category.palette.length],
   }))));
-  const fleetRegionInsights = availableRegions
+  const fleetRegionInsights = useMemo(() => availableRegions
     .filter((region) => !selectedRegion || region.code === selectedRegion.code)
     .map((region) => {
       const sites = region.sites
@@ -2328,13 +2328,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       const regionRequests = liveBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
       return { ...region, sites, ...(hasLmvFleet ? totalFleetCounts(totalFleetSelectionRows(combinedFleetRecords,{sites:sites.map(site=>site.name)})) : {...fleetChartCounts(records, regionRequests)}), lmv:lmvCounts(visibleLmv.filter(record => sites.some(site => recordBelongsToSite(record,site.name)))) };
-    }).filter(region => region.sites.length > 0);
+    }).filter(region => region.sites.length > 0), [availableRegions, selectedRegion, normalizedAllowedSites, dashboardSite, scopedEquipment, liveBreakdowns, visibleLmv, hasLmvFleet, combinedFleetRecords]);
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const showOemBreakdowns = fleetChartMode === "oem";
   const oemLive = !dashboardRangeActive || (dashboardFrom === todayKey && dashboardTo === todayKey);
   const oemFrom = oemLive ? "" : dashboardFrom;
   const oemTo = oemLive ? "" : dashboardTo;
-  const oemBreakdownRows = filterOemDelayedRows(buildOemBreakdownRows({ equipment: scopedEquipment, requests: scopedBreakdowns, from: oemFrom, to: oemTo }), Boolean(oemFrom || oemTo));
+  const oemBreakdownRows = useMemo(() => filterOemDelayedRows(buildOemBreakdownRows({ equipment: scopedEquipment, requests: scopedBreakdowns, from: oemFrom, to: oemTo }), Boolean(oemFrom || oemTo)), [scopedEquipment, scopedBreakdowns, oemFrom, oemTo]);
   const oemLocationRows = oemRowsForLocation(oemBreakdownRows, dashboardRegion, dashboardSite, availableRegions);
   const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: scopedEquipment, regions: fleetRegionInsights, oem: dashboardOem });
   const combinedFleetOemChart = buildOemBreakdownChart({rows:totalFleetOemChartRows(combinedFleetRecords),equipment:combinedFleetRecords,regions:fleetRegionInsights,oem:dashboardOem});
@@ -2551,11 +2551,22 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       && stagePipelineMatchesShift(record, stage)
       && stagePipelineMatchesDate(record, stage);
   });
+  // Work out each request's stage once, then count each site in one pass
+  // (previously every site x stage pair rescanned every request).
+  const stagePipelineStageOf = new Map(stagePipelineRequests.map((record) => [record, stagePipelineRequestStage(record)]));
+  const stagePipelineCounts = (records) => {
+    const counts = Object.fromEntries(stagePipelineStages.map((stage) => [stage.key, 0]));
+    for (const record of records) {
+      const stage = stagePipelineStageOf.get(record);
+      if (Object.hasOwn(counts, stage)) counts[stage] += 1;
+    }
+    return counts;
+  };
   const stagePipelineRows = stagePipelineSiteOptions.map((site) => {
-    const stageCounts = Object.fromEntries(stagePipelineStages.map((stage) => [stage.key, stagePipelineRequests.filter((record) => recordBelongsToSite(record, site) && stagePipelineRequestStage(record) === stage.key).length]));
+    const stageCounts = stagePipelineCounts(stagePipelineRequests.filter((record) => recordBelongsToSite(record, site)));
     return { site, counts: stageCounts, total: Object.values(stageCounts).reduce((sum, value) => sum + value, 0) };
   }).filter((row) => row.total > 0 || stagePipelineSiteOptions.length <= 8);
-  const stagePipelineTotals = Object.fromEntries(stagePipelineStages.map((stage) => [stage.key, stagePipelineRequests.filter((record) => stagePipelineRequestStage(record) === stage.key).length]));
+  const stagePipelineTotals = stagePipelineCounts(stagePipelineRequests);
   const stagePipelineTotal = Object.values(stagePipelineTotals).reduce((sum, value) => sum + value, 0);
   const stagePipelineDisplayRows = [...stagePipelineRows, { site: "All sites", siteKey: "all", counts: stagePipelineTotals, total: stagePipelineTotal }];
   const stagePipelineKey = (stage, site = "all") => `stage-pipeline:${stage}|${encodeURIComponent(site || "all")}`;
