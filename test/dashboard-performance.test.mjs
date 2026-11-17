@@ -42,3 +42,18 @@ test("production build separates framework, icons and large reporting libraries"
   const config = readFileSync(new URL("../vite.config.mjs", import.meta.url), "utf8");
   for (const chunk of ["react-vendor", "icons", "pdf-vendor", "image-export-vendor", "replay-vendor"]) assert.match(config, new RegExp(`return "${chunk}"`));
 });
+
+test("the chunk preload helper gets its own chunk so first load never pulls in the PDF library", () => {
+  const config = readFileSync(new URL("../vite.config.mjs", import.meta.url), "utf8");
+  assert.match(config, /\{ name: "preload-helper", test: \/vite\[\\\\\/\]preload-helper\/, priority: 2 \}/);
+  assert.match(config, /\{ name: vendorChunkName, priority: 1 \}/, "vendor groups rank below the helper group");
+  assert.doesNotMatch(config, /manualChunks/, "manualChunks would be ignored next to codeSplitting");
+});
+
+test("administrator-only database pages load on demand", () => {
+  assert.doesNotMatch(main, /^import .* from "\.\/(storage-management-page|data-housekeeping-page)\.jsx";/m);
+  assert.match(main, /const StorageManagementPage=createLazyFeature\(\(\)=>import\("\.\/storage-management-page\.jsx"\)/);
+  assert.match(main, /const RetentionRulesPage=createLazyFeature\(\(\)=>import\("\.\/data-housekeeping-page\.jsx"\),module=>module\.RetentionRulesPage/);
+  assert.match(main, /const PurgeDataPage=createLazyFeature\(\(\)=>import\("\.\/data-housekeeping-page\.jsx"\),module=>module\.PurgeDataPage/);
+  for (const page of ["Storage management", "Retention rules", "Purge data"]) assert.match(main, new RegExp(`\\["${page}", \\w+Page\\]`));
+});

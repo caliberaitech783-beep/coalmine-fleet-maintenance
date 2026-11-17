@@ -70,8 +70,6 @@ import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./
 import UserProfile from "./user-profile.jsx";
 import TelegramGate from "./telegram-gate.jsx";
 import DiagnosticsPage from "./diagnostics-page.jsx";
-import { PurgeDataPage, RetentionRulesPage } from "./data-housekeeping-page.jsx";
-import StorageManagementPage from "./storage-management-page.jsx";
 import TicketResolutionNotices from "./ticket-resolution-notices.jsx";
 import ReturnedCorrectionGate from "./returned-correction-gate.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
@@ -218,6 +216,10 @@ const RecoveryGuide=createLazyFeature(()=>import("./recovery-guide.jsx"),undefin
 const HelpTraining=createLazyFeature(()=>import("./help-training.jsx"),undefined,{compact:true,silent:true});
 const DashboardRecordBrowser=createLazyFeature(()=>import("./dashboard-record-browser.jsx"),undefined,{loadingLabel:"Loading records…"});
 const InfoPulseContent=createLazyFeature(()=>import("./info-pulse-content.jsx"),undefined,{loadingLabel:"Loading Info Pulse…"});
+// Administrator-only database pages load on demand so everyday users never download them.
+const StorageManagementPage=createLazyFeature(()=>import("./storage-management-page.jsx"),undefined,{loadingLabel:"Loading storage management…"});
+const RetentionRulesPage=createLazyFeature(()=>import("./data-housekeeping-page.jsx"),module=>module.RetentionRulesPage,{loadingLabel:"Loading retention rules…"});
+const PurgeDataPage=createLazyFeature(()=>import("./data-housekeeping-page.jsx"),module=>module.PurgeDataPage,{loadingLabel:"Loading purge data…"});
 
 const navigationFeaturePreloads = new Map([
   ["Full Backup", FullBackup],
@@ -231,6 +233,9 @@ const navigationFeaturePreloads = new Map([
   ["Request correction", RequestCorrections],
   ["Print helper", PrintHelperSetupPage],
   ["Recovery guide", RecoveryGuide],
+  ["Storage management", StorageManagementPage],
+  ["Retention rules", RetentionRulesPage],
+  ["Purge data", PurgeDataPage],
   ...ORGANISATION_PAGE_NAMES.map((name) => [name, OrganisationChartView]),
 ]);
 function preloadNavigationFeature(name) {
