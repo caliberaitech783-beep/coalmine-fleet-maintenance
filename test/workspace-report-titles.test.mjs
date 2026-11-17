@@ -12,13 +12,13 @@ test("workspace report names are visible and used by print, PDF, and Excel expor
   assert.match(source, /<h3 className="sectiontitle">\{workspaceReportTitles\.history\}<\/h3>/);
   assert.match(source, /<h3 className="sectiontitle">\{workspaceReportTitles\.idle\}<\/h3>/);
   assert.doesNotMatch(source, /<PrintButton/);
-  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} smartPrintItem \/>/);
+  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{exportColumns\} rows=\{sortedRows\} smartPrintItem \/>/);
 });
 
 test("the manager requests table has one Smart Export with Smart Print inside", () => {
   assert.ok(source.includes('printTitle={stableToolbar ? "Manager dashboard requests" : ""}'));
   assert.ok(source.includes('exportTitle={stableToolbar ? exportTitle : ""}'));
-  assert.ok(source.includes("{!stableToolbar && <ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} smartPrintItem />}"));
+  assert.ok(source.includes("{!stableToolbar && <ExportMenu title={exportTitle} columns={exportColumns} rows={sortedRows} smartPrintItem />}"));
 });
 
 test("Smart Print is included in table and ticket export menus", () => {

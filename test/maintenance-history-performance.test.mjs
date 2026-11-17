@@ -11,7 +11,7 @@ test("Maintenance Closed History pages rendered rows without dropping full data 
   assert.match(source, /lightweightHistory\s*\? sortedRows\.slice\(workflowPageStart, workflowPageStart \+ WORKFLOW_INITIAL_RENDER_ROWS\)/);
   assert.match(source, /recordCountOverride=\{lightweightHistory \? \{selected: sortedRows\.length, total: rows\.length\} : null\}/);
   assert.match(source, /const deletionRows = sortedRows\.filter/);
-  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{exportColumns\} rows=\{sortedRows\}/);
   assert.match(shared, /recordCountOverride \? `\$\{recordCountOverride\.selected\} of \$\{recordCountOverride\.total\} records`/);
 });
 

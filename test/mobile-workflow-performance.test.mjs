@@ -15,5 +15,5 @@ test("mobile workflow tables render large result sets in batches", () => {
 test("mobile workflow print and export still use every filtered row", () => {
   assert.doesNotMatch(source, /<PrintButton/);
   assert.match(source, /smartPrintColumns = columns, smartPrintRows = rows/);
-  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{exportColumns\} rows=\{sortedRows\}/);
 });
