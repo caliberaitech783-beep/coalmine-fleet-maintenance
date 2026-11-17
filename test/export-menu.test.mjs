@@ -26,7 +26,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
   assert.match(source, /const exportData = \{title, columns:exportView\?\.sourceRows === rows \? exportView\.columns : visibleColumns, rows:exportView\?\.sourceRows === rows \? exportView\.rows : rows/);
   assert.match(source, /<ExportMenu title=\{transformedExport\.title\} columns=\{transformedExport\.columns\} rows=\{transformedExport\.rows\}/);
-  assert.match(source,/<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source,/<ExportMenu title=\{exportTitle\} columns=\{exportColumns\} rows=\{sortedRows\}/);
   assert.match(source,/function MobileWorkflowTable\([^\n]*exportTitle = "Workflow report"/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);
   assert.match(server,/app\.post\('\/api\/exports\/pdf',requireSession/);
