@@ -26,7 +26,8 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   assert.match(source, /const \[breakdownSummaryFrom, setBreakdownSummaryFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const \[breakdownSummaryTo, setBreakdownSummaryTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
   assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
-  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = useMemo\(\(\) => splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
+  assert.match(source, /const fleetBreakdowns = useMemo\(\(\) => locationBreakdowns\.filter\(\(record\) => requestMatchesMovementShift\(record, "incoming"\)\)/);
+  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = useMemo\(\(\) => splitDashboardRequests\(fleetBreakdowns, dashboardFrom, dashboardTo\)/);
   assert.match(source, /const visibleBreakdowns = useMemo\(\(\) => historicalRequests\s*\.map/);
   assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);

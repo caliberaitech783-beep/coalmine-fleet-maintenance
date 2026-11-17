@@ -28,12 +28,16 @@ test('region, site and authorized scope intersect, including zero matches and re
   assert.deepEqual(scope({region:availableRegions[0]}).sites,['Sasti OC','Majri OC']);
   assert.deepEqual(scope().sites,['Sasti OC','Majri OC','Jayant OC']);
 });
-test('site and shift predicates are combined before dashboard exports receive requests',()=>{
+test('fleet breakdown counts use the opening shift after applying the selected site',()=>{
+  let splitRows=[];
   const values={useMemo:fn=>fn(),dashboardShift:'A',shiftRecords:[],selectedRegion:null,dashboardSite:'Sasti OC',activeSites:['Sasti OC'],recordBelongsToSite,
-    requestHasSelectedDashboardShift:r=>r.shift==='A',scopedBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2},{site:'Majri OC',shift:'A',id:3}]};
-  const code=source.slice(source.indexOf('  const locationBreakdowns ='),source.indexOf('  const {liveRequests:',source.indexOf('  const locationBreakdowns =')));
-  const rows=new Function(...Object.keys(values),code+'return locationBreakdowns;')(...Object.values(values));
-  assert.deepEqual(rows.map(r=>r.id),[1]);
+    requestMatchesMovementShift:r=>r.shift==='A',scopedBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2},{site:'Majri OC',shift:'A',id:3}],dashboardFrom:'',dashboardTo:'',
+    splitDashboardRequests:rows=>(splitRows=rows,{liveRequests:rows,historicalRequests:rows})};
+  const code=source.slice(source.indexOf('  const locationBreakdowns ='),source.indexOf('  const visibleBreakdowns =',source.indexOf('  const locationBreakdowns =')));
+  const rows=new Function(...Object.keys(values),code+'return {locationBreakdowns,fleetBreakdowns,liveBreakdowns};')(...Object.values(values));
+  assert.deepEqual(rows.locationBreakdowns.map(r=>r.id),[1,2]);
+  assert.deepEqual(rows.fleetBreakdowns.map(r=>r.id),[1]);
+  assert.deepEqual(splitRows.map(r=>r.id),[1]);
 });
 test('PDF, Excel and print models always reuse final table selection, independent of numbering or grouping',()=>{
   const shared=readFileSync(new URL('../src/shared-actions-table.jsx',import.meta.url),'utf8');

@@ -2094,8 +2094,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     const {assetIndex} = resolveEquipment(request);
     return assetIndex === null ? undefined : visibleEquipment[assetIndex];
   };
-  const locationBreakdowns = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site)) && requestHasSelectedDashboardShift(record)) : scopedBreakdowns.filter(requestHasSelectedDashboardShift), [selectedRegion,dashboardSite,scopedBreakdowns,activeSites,dashboardShift,shiftRecords]);
-  const {liveRequests: liveBreakdowns, historicalRequests} = useMemo(() => splitDashboardRequests(locationBreakdowns, dashboardFrom, dashboardTo), [locationBreakdowns,dashboardFrom,dashboardTo]);
+  const locationBreakdowns = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns, [selectedRegion,dashboardSite,scopedBreakdowns,activeSites]);
+  const fleetBreakdowns = useMemo(() => locationBreakdowns.filter((record) => requestMatchesMovementShift(record, "incoming")), [locationBreakdowns,dashboardShift,shiftRecords]);
+  const {liveRequests: liveBreakdowns, historicalRequests} = useMemo(() => splitDashboardRequests(fleetBreakdowns, dashboardFrom, dashboardTo), [fleetBreakdowns,dashboardFrom,dashboardTo]);
   const visibleBreakdowns = useMemo(() => historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveEquipment,visibleEquipment]);
   const liveFleetCounts = useMemo(() => fleetChartCounts(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
