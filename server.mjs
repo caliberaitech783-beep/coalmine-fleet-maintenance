@@ -8309,7 +8309,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       };
     };
     const {shifts,fleetSnapshot,openingFleetSnapshot}=await requestFeedCache.read(loadFleet,JSON.stringify([countDay.day,revisions]),'dashboard-equipment');
-    const shiftRecords=shifts.filter(row=>!scope.restrictToScope||!Array.isArray(scope.allowedSites)||!scope.allowedSites.length||scope.allowedSites.some(site=>String(site||'').trim().toLowerCase()===String(row.site||'').trim().toLowerCase()));
+    const shiftRecords=shifts.filter(row=>!scope.restrictToScope||reportScopeIncludesSite({sites:scope.allowedSites},row.site));
     const scopedFleet=scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope);
     const scopedOpeningFleet=scopeDashboardEquipmentRecords(openingFleetSnapshot,authorization.session,authorization.user,scope);
     const breakdownCountChange=dailyCountChange(

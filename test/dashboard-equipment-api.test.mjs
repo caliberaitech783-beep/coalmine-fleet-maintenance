@@ -175,6 +175,8 @@ test('dashboard equipment API is authenticated, uncached, scoped, and always ret
   assert.match(route,/dashboardFleetSnapshot\(records,activeFleetRequests\)/);
   assert.match(route,/scopeDashboardEquipmentRecords\(fleetSnapshot,authorization\.session,authorization\.user,scope\)/);
   assert.match(route,/records:scopedFleet/);
+  assert.match(route,/const shiftRecords=shifts\.filter\(row=>!scope\.restrictToScope\|\|reportScopeIncludesSite\(\{sites:scope\.allowedSites\},row\.site\)\)/);
+  assert.doesNotMatch(route,/scope\.allowedSites\.some\(site=>String\(site/);
   assert.match(route,/breakdownCountChange/);
   assert.match(route,/res\.json\(payload\)/);
   assert.doesNotMatch(route,/masterAccess|mobileMasterAccess/);
