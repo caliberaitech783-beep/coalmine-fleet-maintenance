@@ -24,8 +24,8 @@ test('IST midnight boundary and timestamp fallback', () => {
   assert.deepEqual(activeTodayBreakdowns(rows,''),[]);
 });
 test('badge and drilldown share the same active selection', () => {
-  assert.ok(source.includes('const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey)'));
+  assert.ok(source.includes('const todayBreakdownRows = activeTodayBreakdowns(fleetBreakdowns, todayKey)'));
   assert.ok(source.includes('formatCountDelta(todayBreakdownRows.length)'));
-  assert.ok(source.includes('day === todayKey ? todayBreakdownRows : activeTodayBreakdowns(scopedBreakdowns, day)'));
+  assert.ok(source.includes('day === todayKey ? todayBreakdownRows : activeTodayBreakdowns(fleetBreakdowns, day)'));
   assert.ok(source.includes('entered-today:${todayKey}'));
 });

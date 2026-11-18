@@ -2104,6 +2104,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestHasSelectedDashboardShift = (record = {}) => dashboardShift === "all" || [
     record.start,record.createdAt,record.acceptedAt,record.inProgressAt,record.closedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,record.idealRequestedAt,record.idealApprovedAt,
   ].some((value)=>requestMatchesDashboardShift(record,value));
+  const dashboardActivityTimestamps = (record = {}) => [
+    record.start,record.startedAt,record.createdAt,record.acceptedAt,record.inProgressAt,
+    record.closedAt,record.completedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,
+    record.idealRequestedAt,record.idleRequestedAt,record.idealApprovedAt,
+  ].filter(Boolean);
+  const requestHasSelectedDashboardActivity = (record = {}) => dashboardShift === "all" || dashboardActivityTimestamps(record).some((value) => {
+    const date = requestDateKey(value);
+    return requestMatchesDashboardShift(record,value) && (!dashboardFrom || date >= dashboardFrom) && (!dashboardTo || date <= dashboardTo);
+  });
   const dashboardMovementShiftTimestamp = (record = {}, metric = "") => {
     if (metric === "outgoing") return record.closedAt || record.completedAt;
     if (metric === "idle") return record.idealRequestedAt || record.idleRequestedAt || record.start || record.startedAt || record.createdAt;
@@ -2125,19 +2134,25 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectedRegion = availableRegions.find((region) => region.code === dashboardRegion);
   const selectedSites = useMemo(() => (selectedRegion?.sites || [...new Set([...availableRegions.flatMap(region => region.sites), ...scopedEquipment.map(record => record.currentLocation || record.location || record.site), ...scopedBreakdowns.map(record => record.site)].filter(Boolean))]).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))), [selectedRegion,availableRegions,scopedEquipment,scopedBreakdowns,normalizedAllowedSites]);
   const activeSites = useMemo(() => dashboardSite !== "all" ? [dashboardSite] : selectedSites, [dashboardSite,selectedSites]);
-  const visibleEquipment = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment, [selectedRegion,dashboardSite,scopedEquipment,activeSites]);
-  const resolveEquipment = useMemo(() => createFleetAssetResolver(visibleEquipment), [visibleEquipment]);
-  const equipmentForRequest = (request = {}) => {
-    const {assetIndex} = resolveEquipment(request);
-    return assetIndex === null ? undefined : visibleEquipment[assetIndex];
-  };
+  const locationEquipment = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment, [selectedRegion,dashboardSite,scopedEquipment,activeSites]);
   const locationBreakdowns = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns, [selectedRegion,dashboardSite,scopedBreakdowns,activeSites]);
+  const dashboardActivityBreakdowns = useMemo(() => locationBreakdowns.filter(requestHasSelectedDashboardActivity), [locationBreakdowns,dashboardShift,shiftRecords,dashboardFrom,dashboardTo]);
+  const resolveLocationEquipment = useMemo(() => createFleetAssetResolver(locationEquipment), [locationEquipment]);
+  const shiftEquipmentIndexes = useMemo(() => new Set(dashboardActivityBreakdowns.map((request) => resolveLocationEquipment(request, {allowTransferred:true}).assetIndex).filter((index) => index !== null)), [dashboardActivityBreakdowns,resolveLocationEquipment]);
+  const visibleEquipment = useMemo(() => dashboardShift === "all" ? locationEquipment : locationEquipment.filter((_record,index) => shiftEquipmentIndexes.has(index)), [dashboardShift,locationEquipment,shiftEquipmentIndexes]);
+  const equipmentForRequest = (request = {}) => {
+    const {assetIndex} = resolveLocationEquipment(request);
+    return assetIndex === null ? undefined : locationEquipment[assetIndex];
+  };
   const fleetBreakdowns = useMemo(() => locationBreakdowns.filter((record) => requestMatchesMovementShift(record, "incoming")), [locationBreakdowns,dashboardShift,shiftRecords]);
   const {liveRequests: liveBreakdowns, historicalRequests} = useMemo(() => splitDashboardRequests(fleetBreakdowns, dashboardFrom, dashboardTo), [fleetBreakdowns,dashboardFrom,dashboardTo]);
   const visibleBreakdowns = useMemo(() => historicalRequests
-    .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveEquipment,visibleEquipment]);
+    .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveLocationEquipment,locationEquipment]);
   const liveFleetCounts = useMemo(() => fleetChartCounts(visibleEquipment, liveBreakdowns), [visibleEquipment,liveBreakdowns]);
-  const visibleLmv = useMemo(() => lmvFleet.records.filter(record => (!selectedRegion || selectedRegion.sites.some(site => recordBelongsToSite(record,site))) && (dashboardSite === "all" || recordBelongsToSite(record,dashboardSite))), [lmvFleet.records, selectedRegion, dashboardSite]);
+  const locationLmv = useMemo(() => lmvFleet.records.filter(record => (!selectedRegion || selectedRegion.sites.some(site => recordBelongsToSite(record,site))) && (dashboardSite === "all" || recordBelongsToSite(record,dashboardSite))), [lmvFleet.records, selectedRegion, dashboardSite]);
+  const resolveLocationLmv = useMemo(() => createFleetAssetResolver(locationLmv), [locationLmv]);
+  const shiftLmvIndexes = useMemo(() => new Set(dashboardActivityBreakdowns.map((request) => resolveLocationLmv(request, {allowTransferred:true}).assetIndex).filter((index) => index !== null)), [dashboardActivityBreakdowns,resolveLocationLmv]);
+  const visibleLmv = useMemo(() => dashboardShift === "all" ? locationLmv : locationLmv.filter((_record,index) => shiftLmvIndexes.has(index)), [dashboardShift,locationLmv,shiftLmvIndexes]);
   const hasLmvFleet = visibleLmv.length > 0;
   const combinedFleetReady = equipmentLoaded;
   const combinedFleetOemRecords = useMemo(() => filterOemDelayedRows(buildOemBreakdownRows({equipment:visibleEquipment,requests:liveBreakdowns})).map(row=>row.record), [visibleEquipment, liveBreakdowns]);
@@ -2146,9 +2161,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const breakdownCountReady = dashboardShift === "all" && equipmentLoaded && Boolean(breakdownCountChange);
   const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
-  const todayBreakdownRows = activeTodayBreakdowns(scopedBreakdowns, todayKey).filter(request => String(request.equipmentGroup || '').trim().toUpperCase() !== 'LMV');
+  const todayBreakdownRows = activeTodayBreakdowns(fleetBreakdowns, todayKey).filter(request => String(request.equipmentGroup || '').trim().toUpperCase() !== 'LMV');
   const resolveLmvToday = createFleetAssetResolver(visibleLmv);
-  const lmvTodayIndexes = new Set(activeTodayBreakdowns(scopedBreakdowns, todayKey).map(request => resolveLmvToday(request, {allowTransferred:true}).assetIndex).filter(index => index !== null));
+  const lmvTodayIndexes = new Set(activeTodayBreakdowns(fleetBreakdowns, todayKey).map(request => resolveLmvToday(request, {allowTransferred:true}).assetIndex).filter(index => index !== null));
   const todayLmvBreakdownRecords = visibleLmv.filter((record,index) => record.lmvRoadStatus === "offroad" && lmvTodayIndexes.has(index));
   const todayBreakdownDirection = todayBreakdownRows.length ? "up" : "flat";
   const trendAvailableSites = useMemo(()=>[...new Set((selectedRegion || dashboardSite !== "all" ? activeSites : availableRegions.flatMap((region) => region.sites))
@@ -2189,7 +2204,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const activeThroughputSite = selectedThroughputRegion && throughputSiteOptions.includes(throughputSite) ? throughputSite : "all";
   const throughputSites = useMemo(()=>selectedThroughputRegion ? (activeThroughputSite === "all" ? throughputSiteOptions : [activeThroughputSite]) : trendAvailableSites,[selectedThroughputRegion,activeThroughputSite,throughputSiteOptions,trendAvailableSites]);
   const inThroughputScope = (record) => !selectedThroughputRegion || throughputSites.some((site) => recordBelongsToSite(record, site));
-  const throughputRequests = useMemo(()=>locationBreakdowns.filter(inThroughputScope),[locationBreakdowns,selectedThroughputRegion,throughputSites]);
+  const throughputRequests = useMemo(()=>dashboardActivityBreakdowns.filter(inThroughputScope),[dashboardActivityBreakdowns,selectedThroughputRegion,throughputSites]);
   const throughputEquipment = useMemo(()=>visibleEquipment.filter(inThroughputScope),[visibleEquipment,selectedThroughputRegion,throughputSites]);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
   const movementRequestRowsForShift = (records, start, end, metric = "all", type = "") => movementRequestRows(records, start, end, metric)
@@ -2357,24 +2372,24 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)))
         .filter((site) => dashboardSite === "all" || site === dashboardSite)
         .map((site) => {
-          const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
+          const records = visibleEquipment.filter((record) => recordBelongsToSite(record, site));
           const siteRequests = liveBreakdowns.filter((request) => recordBelongsToSite(request, site));
           const lmv = lmvCounts(visibleLmv.filter(record => recordBelongsToSite(record,site)));
           const fleet = fleetChartCounts(records,siteRequests);
           return { name: site, ...(hasLmvFleet ? totalFleetCounts(totalFleetSelectionRows(combinedFleetRecords,{site})) : fleet), lmv };
         });
-      const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
+      const records = visibleEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       const regionRequests = liveBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
       return { ...region, sites, ...(hasLmvFleet ? totalFleetCounts(totalFleetSelectionRows(combinedFleetRecords,{sites:sites.map(site=>site.name)})) : {...fleetChartCounts(records, regionRequests)}), lmv:lmvCounts(visibleLmv.filter(record => sites.some(site => recordBelongsToSite(record,site.name)))) };
-    }).filter(region => region.sites.length > 0), [availableRegions, selectedRegion, normalizedAllowedSites, dashboardSite, scopedEquipment, liveBreakdowns, visibleLmv, hasLmvFleet, combinedFleetRecords]);
+    }).filter(region => region.sites.length > 0), [availableRegions, selectedRegion, normalizedAllowedSites, dashboardSite, visibleEquipment, liveBreakdowns, visibleLmv, hasLmvFleet, combinedFleetRecords]);
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const showOemBreakdowns = fleetChartMode === "oem";
   const oemLive = !dashboardRangeActive || (dashboardFrom === todayKey && dashboardTo === todayKey);
   const oemFrom = oemLive ? "" : dashboardFrom;
   const oemTo = oemLive ? "" : dashboardTo;
-  const oemBreakdownRows = useMemo(() => filterOemDelayedRows(buildOemBreakdownRows({ equipment: scopedEquipment, requests: scopedBreakdowns, from: oemFrom, to: oemTo }), Boolean(oemFrom || oemTo)), [scopedEquipment, scopedBreakdowns, oemFrom, oemTo]);
+  const oemBreakdownRows = useMemo(() => filterOemDelayedRows(buildOemBreakdownRows({ equipment: visibleEquipment, requests: fleetBreakdowns, from: oemFrom, to: oemTo }), Boolean(oemFrom || oemTo)), [visibleEquipment, fleetBreakdowns, oemFrom, oemTo]);
   const oemLocationRows = oemRowsForLocation(oemBreakdownRows, dashboardRegion, dashboardSite, availableRegions);
-  const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: scopedEquipment, regions: fleetRegionInsights, oem: dashboardOem });
+  const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: visibleEquipment, regions: fleetRegionInsights, oem: dashboardOem });
   const combinedFleetOemChart = buildOemBreakdownChart({rows:totalFleetOemChartRows(combinedFleetRecords),equipment:combinedFleetRecords,regions:fleetRegionInsights,oem:dashboardOem});
   const mainFleetOemChart = hasLmvFleet ? combinedFleetOemChart : oemChart;
   // Only the header adds BD Balance and OEM BD; chart and report counts stay separate.
@@ -2646,7 +2661,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const rowsForAssetDrilldown = (key = "") => {
     if (key.startsWith("entered-today:")) {
       const day = key.slice(14);
-      return requestAssetRows(day === todayKey ? todayBreakdownRows : activeTodayBreakdowns(scopedBreakdowns, day));
+      return requestAssetRows(day === todayKey ? todayBreakdownRows : activeTodayBreakdowns(fleetBreakdowns, day));
     }
     if (key.startsWith("balance:")) {
       const [metric, from, to, site] = key.slice(8).split("|");
@@ -2672,7 +2687,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const hierarchyBalance = key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:");
       const accountWide = key === "fleet-breakdown:account" || key === "fleet-breakdown:balance" || hierarchyBalance;
       const offroadCategory = key.startsWith("offroad-site:") ? key.slice(13).split("|")[1] || "" : "";
-      return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
+      return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, accountWide ? fleetBreakdowns : liveBreakdowns) === "offroad"
         && (key !== "fleet-breakdown:balance" || !combinedFleetOemRecords.includes(record))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
         && ((key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles") || ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())));
@@ -2750,7 +2765,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
   const requestDrilldownKey = (key = "") => key === "open-cases" || key.startsWith("stage-pipeline:") || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix)) || key.startsWith("entered-today:");
-  const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) || key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:") ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
+  const fleetDrilldownRequests = (key = "") => ["fleet-breakdown:account", "fleet-breakdown:balance"].includes(key) || key.startsWith("offroad-site:") || key.startsWith("fleet-breakdown:region:") ? fleetBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   // Building fleetAssetRequestDetails links every visible asset to its active
   // request. Do it only while a drilldown is open; the closed dashboard does
@@ -2977,7 +2992,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
           </div>
             {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
-              {dashboardShift!=='all'&&<p role="status">Fleet Opening/In/Out and availability include all shifts so the opening-to-closing balance reconciles. The selected shift still applies to request-based charts.</p>}
+              {dashboardShift!=='all'&&<p role="status">Fleet totals, availability and request charts include only activity assigned to the selected shift.</p>}
               {unverifiedMovementSites.length>0&&<p role="alert">Movement history needs review at {unverifiedMovementSites.map(site=>site.site).join(', ')}. Unverified Opening/In/Out figures are hidden; availability remains the fleet snapshot. {unverifiedMovementSites.flatMap(site=>site.issues).filter((issue,index,all)=>all.indexOf(issue)===index).join(' ')}</p>}
             <div className="mine-breakdown-movement-kpis">
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: availabilityKpis.offRoad, className: "active-balance", snapshotKey: "offroad" }, { label: "Running with BD", value: movementRequestRowsForShift(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "runningbd").length, className: "runningbd" }, { label: "Idle Vehicles", value: availabilityKpis.idle, className: "idle", snapshotKey: "idle" }].map(item=>({...item,value:!item.snapshotKey&&['all','outgoing'].includes(item.className)&&unverifiedMovementSites.length?'—':item.value})).map((item) => <div {...listAction(item.snapshotKey || movementKey(item.className), `${item.label} ${item.snapshotKey ? 'vehicles' : 'requests'}`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && !unverifiedMovementSites.length && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{item.snapshotKey ? availabilityStatusLabel : breakdownSummaryPeriodLabel}</small></div>)}

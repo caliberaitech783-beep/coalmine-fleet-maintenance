@@ -30,14 +30,21 @@ test('region, site and authorized scope intersect, including zero matches and re
 });
 test('fleet breakdown counts use the opening shift after applying the selected site',()=>{
   let splitRows=[];
-  const values={useMemo:fn=>fn(),dashboardShift:'A',shiftRecords:[],selectedRegion:null,dashboardSite:'Sasti OC',activeSites:['Sasti OC'],recordBelongsToSite,
-    requestMatchesMovementShift:r=>r.shift==='A',scopedBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2},{site:'Majri OC',shift:'A',id:3}],dashboardFrom:'',dashboardTo:'',
+  const values={useMemo:fn=>fn(),requestMatchesMovementShift:r=>r.shift==='A',locationBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2}],dashboardShift:'A',shiftRecords:[],dashboardFrom:'',dashboardTo:'',
     splitDashboardRequests:rows=>(splitRows=rows,{liveRequests:rows,historicalRequests:rows})};
-  const code=source.slice(source.indexOf('  const locationBreakdowns ='),source.indexOf('  const visibleBreakdowns =',source.indexOf('  const locationBreakdowns =')));
-  const rows=new Function(...Object.keys(values),code+'return {locationBreakdowns,fleetBreakdowns,liveBreakdowns};')(...Object.values(values));
-  assert.deepEqual(rows.locationBreakdowns.map(r=>r.id),[1,2]);
+  const code=source.slice(source.indexOf('  const fleetBreakdowns ='),source.indexOf('  const visibleBreakdowns =',source.indexOf('  const fleetBreakdowns =')));
+  const rows=new Function(...Object.keys(values),code+'return {fleetBreakdowns,liveBreakdowns};')(...Object.values(values));
   assert.deepEqual(rows.fleetBreakdowns.map(r=>r.id),[1]);
   assert.deepEqual(splitRows.map(r=>r.id),[1]);
+});
+
+test('selected shift scopes fleet totals, availability, OEM data and drilldowns to shift activity',()=>{
+  assert.match(source,/const dashboardActivityBreakdowns = useMemo\(\(\) => locationBreakdowns\.filter\(requestHasSelectedDashboardActivity\)/);
+  assert.match(source,/const visibleEquipment = useMemo\(\(\) => dashboardShift === "all" \? locationEquipment : locationEquipment\.filter/);
+  assert.match(source,/const throughputRequests = useMemo\(\(\)=>dashboardActivityBreakdowns\.filter\(inThroughputScope\)/);
+  assert.match(source,/buildOemBreakdownRows\(\{ equipment: visibleEquipment, requests: fleetBreakdowns/);
+  assert.match(source,/\? fleetBreakdowns : \["road-availability"/);
+  assert.doesNotMatch(source,/availability include all shifts/);
 });
 test('PDF, Excel and print models always reuse final table selection, independent of numbering or grouping',()=>{
   const shared=readFileSync(new URL('../src/shared-actions-table.jsx',import.meta.url),'utf8');

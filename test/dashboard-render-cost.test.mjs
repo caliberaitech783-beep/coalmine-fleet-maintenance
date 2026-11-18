@@ -67,16 +67,16 @@ test("asset matching by door and chassis is unchanged with cached identity text"
 
 test("the dashboard keeps its heavy fleet calculations cached between redraws", () => {
   for (const [name, deps] of [
-    ["visibleLmv", "lmvFleet.records, selectedRegion, dashboardSite"],
+    ["visibleLmv", "dashboardShift,locationLmv,shiftLmvIndexes"],
     ["combinedFleetOemRecords", "visibleEquipment, liveBreakdowns"],
     ["combinedFleetRecords", "visibleEquipment, liveBreakdowns, combinedFleetOemRecords"],
     ["combinedFleetCounts", "combinedFleetRecords"],
-    ["oemBreakdownRows", "scopedEquipment, scopedBreakdowns, oemFrom, oemTo"],
+    ["oemBreakdownRows", "visibleEquipment, fleetBreakdowns, oemFrom, oemTo"],
   ]) {
     assert.match(dashboard, new RegExp(`const ${name} = useMemo\\(\\(\\) => [^\\n]*, \\[${deps.replace(/\./g, "\\.")}\\]\\);`), `${name} is memoised on its inputs`);
   }
   assert.match(dashboard, /const fleetRegionInsights = useMemo\(\(\) => availableRegions\n/);
-  assert.match(dashboard, /\.filter\(region => region\.sites\.length > 0\), \[availableRegions, selectedRegion, normalizedAllowedSites, dashboardSite, scopedEquipment, liveBreakdowns, visibleLmv, hasLmvFleet, combinedFleetRecords\]\);/);
+  assert.match(dashboard, /\.filter\(region => region\.sites\.length > 0\), \[availableRegions, selectedRegion, normalizedAllowedSites, dashboardSite, visibleEquipment, liveBreakdowns, visibleLmv, hasLmvFleet, combinedFleetRecords\]\);/);
 });
 
 test("the stage pipeline works out each request's stage once instead of per site and stage", () => {
