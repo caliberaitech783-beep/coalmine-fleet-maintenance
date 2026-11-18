@@ -184,6 +184,7 @@ import {maintenanceMetersRequired} from "../maintenance-meter-required.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
+import {MisTelegramCodeFields,MisSignInMethodSwitch,requestMisTelegramCode,verifyMisTelegramCode} from "./mis-telegram-code.jsx";
 import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
 import {authenticatedApiRequest,createSessionExpiryGuard,removeMatchingStoredSession} from "./session-expiry-guard.mjs";
 import {siteUpdateSafety} from "./site-update-safety.mjs";
@@ -727,6 +728,11 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [password, setPassword] = useState("");
   const passwordInputRef = useRef(null);
   const [rememberMe, setRememberMe] = useState(false);
+  // MIS only: sign in with a Telegram code instead of the password.
+  const [misCodeMode,setMisCodeMode]=useState(false);
+  const [misCode,setMisCode]=useState('');
+  const [misCodeRequest,setMisCodeRequest]=useState('');
+  const [misCodeSending,setMisCodeSending]=useState(false);
   const [preferredLanguage, setPreferredLanguage] = useState(() => preferredLanguageCodes()[0] || "en");
   const [secondaryLanguage, setSecondaryLanguage] = useState(() => {
     const [first, second] = preferredLanguageCodes();
@@ -790,8 +796,33 @@ function Login({ onLogin, theme, toggleTheme }) {
     }
     onLogin(JSON.parse(session));
   };
+  const misHandoffReady=()=>/^[A-Za-z0-9_-]{43}$/.test(misHandoff.state)&&/^[A-Za-z0-9_-]{43}$/.test(misHandoff.challenge);
+  const sendMisTelegramCode = async () => {
+    if(misCodeSending)return;
+    if(!misHandoffReady()){window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start');return;}
+    if(!username.trim()){setError('Enter your Pulse username first.');document.getElementById('login-username')?.focus();return;}
+    setMisCodeSending(true);setError('');setNotice('');
+    try{
+      const data=await requestMisTelegramCode({username,handoff:misHandoff});
+      setMisCodeRequest(data.requestToken||'');setMisCode('');setNotice(data.message||'Check Telegram for your code.');
+      setTimeout(()=>document.getElementById('login-telegram-code')?.focus(),0);
+    }catch(sendError){setError(sendError.message);}
+    finally{setMisCodeSending(false);}
+  };
   const signIn = async () => {
     if(working)return;
+    if(misPortal&&misCodeMode){
+      if(!misHandoffReady()){window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start');return;}
+      setWorking(true);setError('');
+      try{
+        const data=await verifyMisTelegramCode({requestToken:misCodeRequest,code:misCode,remember:rememberMe,handoff:misHandoff});
+        const target=new URL(data.redirectUrl);
+        if(target.origin!=='https://pulse-ll.cmll.in'||target.pathname!=='/api/mis-credentials/callback')throw new Error('Invalid MIS sign-in destination.');
+        setMisCode('');window.location.assign(target.toString());
+      }catch(codeError){setError(codeError.message);}
+      finally{setWorking(false);}
+      return;
+    }
     if (dieselPortal && (!username.trim() || !password)) {
       setError(!username.trim() ? 'Username is required.' : 'Password is required.');
       document.getElementById(!username.trim() ? 'login-username' : 'login-password')?.focus();
@@ -1016,6 +1047,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               autoFocus={!coarsePointerDevice()}
             />
           </div>
+          {misPortal&&misCodeMode?<MisTelegramCodeFields code={misCode} onCodeChange={setMisCode} requested={Boolean(misCodeRequest)} sending={misCodeSending} canSend={Boolean(username.trim())} onSend={sendMisTelegramCode}/>:<>
           <label className="login-label" htmlFor="login-password">{misPortal?'Pulse password':'Password'}</label>
           <div className="login-input">
             <LockKeyhole aria-hidden="true" />
@@ -1036,6 +1068,8 @@ function Login({ onLogin, theme, toggleTheme }) {
               {showPassword ? <EyeOff /> : <Eye />}
             </button>
           </div>
+          </>}
+          {misPortal&&<MisSignInMethodSwitch codeMode={misCodeMode} onChange={mode=>{setMisCodeMode(mode);setError('');setNotice('');}}/>}
           <fieldset className="login-language">
             <legend className="login-label">Preferred languages · पसंदीदा भाषाएँ</legend>
             <div className="login-language-options">
@@ -1070,7 +1104,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <button
             type="submit"
             className="primary"
-            disabled={working || (!dieselPortal && (!username.trim() || !password))}
+            disabled={working || (!dieselPortal && (!username.trim() || (misPortal&&misCodeMode ? !(misCodeRequest&&misCode.length===6) : !password)))}
           >
             {working ? "Signing in…" : "Sign in"} <ChevronRight />
           </button>
