@@ -12,6 +12,7 @@ import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdow
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
+import {useDieselSharedSignIn} from './diesel-shared-signin.jsx';
 import { compressImageDataUrl, readBlobDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
@@ -12130,6 +12131,7 @@ function App() {
     [accountWorkspace,setAccountWorkspace]=useNavigationState("main.accountWorkspace", "accounts"),
     [accountDirectoryView,setAccountDirectoryView]=useNavigationState("main.accountDirectoryView", "directory");
   useMisSharedSignIn(session);
+  useDieselSharedSignIn(session);
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);

@@ -26,6 +26,7 @@ import {prepareMisCredentials} from './mis-credentials.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
+import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -1631,6 +1632,12 @@ installMisPulseBridge(app,{identity:misCredentialIdentity,
 });
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
+const dieselSharedSignIn=registerDieselSharedSignIn(app,{
+  pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
+  secret:process.env.DIESEL_SSO_CLIENT_SECRET,
+  enabled:process.env.DIESEL_SSO_ENABLED,
+  dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
+});
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
@@ -9165,6 +9172,8 @@ async function initializeDatabase(){
     await pool.query("CREATE INDEX CONCURRENTLY IF NOT EXISTS users_login_lookup ON master_records ((lower(trim(record_data->>'login')))) WHERE master_name='Users & employees'")
       .catch(error=>console.error('The login lookup index could not be created; lookups continue without it.',error.message));
     await misSharedSignIn.initialize();
+    await dieselSharedSignIn.initialize()
+      .catch(error=>console.error('Diesel sign-in initialization failed:',error.message));
     await misCredentialIdentity.initialize();
     await misLoginHandoff.initialize();
     databaseReady=true;
