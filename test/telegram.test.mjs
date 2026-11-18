@@ -242,7 +242,7 @@ test("The webhook subscribes to join requests and re-registers when the list cha
   };
   await ensureTelegramWebhook("https://bdms.cmll.in", { env, fetchImpl });
   const set = calls.find((call) => call.method === "setWebhook");
-  assert.deepEqual(set.body.allowed_updates, ["message", "my_chat_member", "chat_join_request"]);
+  assert.deepEqual(set.body.allowed_updates, ["message", "my_chat_member", "chat_join_request", "callback_query"]);
 });
 
 test("Only Caliber Pulse administrators are invited to and admitted into the admin group", () => {
