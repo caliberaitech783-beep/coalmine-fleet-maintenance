@@ -6,6 +6,7 @@ import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { createFeedCache } from "../request-feed-cache.mjs";
 import { fleetChartCounts } from "../dashboard-equipment-metrics.mjs";
 import * as access from "../dashboard-equipment-access.mjs";
+import { reportScopeIncludesSite } from "../region-scope.mjs";
 
 test("the daily count window rolls over at midnight in India regardless of device timezone", () => {
   const before = indiaCountDayWindow("2026-09-19T18:29:59.999Z");
@@ -46,7 +47,7 @@ test("the dashboard endpoint gives the same result on both devices for the same 
   const queries = [];
   let user = {site:"Sasti OB | Majri OB"};
   const session = {role:"normal",assignedRole:"Production User"};
-  const dependencies = {...access,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
+  const dependencies = {...access,reportScopeIncludesSite,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
     app:{get(_path,...handlers){handler=handlers.at(-1);}},
     requireSession() {},
     currentDashboardAuthorization:async()=>({session,user}),

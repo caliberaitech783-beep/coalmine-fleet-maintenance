@@ -6,6 +6,7 @@ import {createFeedCache} from '../request-feed-cache.mjs';
 import {liveEquipmentMetrics, fleetChartCounts} from '../dashboard-equipment-metrics.mjs';
 import {dailyCountChange,indiaCountDayWindow} from '../src/fleet-count-trend.mjs';
 import * as access from '../dashboard-equipment-access.mjs';
+import {reportScopeIncludesSite} from '../region-scope.mjs';
 
 const assets = Object.freeze([
   Object.freeze({id:1,door:'V-01',chassisNo:'CH-01',category:'Vehicle',currentLocation:'Majri OB',status:'Off road'}),
@@ -82,7 +83,7 @@ test('actual read-only dashboard route derives status before enforcing every rol
   let handlers,authorization;
   const queries=[];
   const {isLmvAsset}=await import('../fleet-registry.mjs');
-  const dependencies={...access,isLmvAsset,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
+  const dependencies={...access,reportScopeIncludesSite,isLmvAsset,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,requestFeedCache:createFeedCache(),
     app:{get(path,...registered){assert.equal(path,'/api/dashboard/equipment');handlers=registered;}},
     requireSession(req,res,next){next();},
     currentDashboardAuthorization:async()=>authorization,
