@@ -31,6 +31,17 @@ export function pulseApplicationProfile(row,application){
 }
 export function installPulseApplicationIdentity(app,{pool,sessionStore}){
  const handlers={};
+ // One place issues an application grant, whichever way the person proved who they are
+ // (password, or a Telegram sign-in code). "Remember me" on the MIS sign-in page makes
+ // the grant last 30 days instead of 7.
+ async function issueGrant(row,application,profile,{remember=false}={}){
+  const token=randomUUID(),grant=randomBytes(32).toString('base64url');
+  const grantDays=application==='MIS'&&remember===true?30:7;
+  await sessionStore.create({token,...profile});
+  await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application),token,grantDays]);
+  await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
+  return {grant,token};
+ }
  const cors=(req,res)=>{
   const origin=req.headers?.origin;
   if(origin&&origin!==hrOrigin){res.status(403).json({error:'Origin is not allowed.'});return false;}
@@ -62,12 +73,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    if(!profile)return res.status(403).json({error:`Your Pulse account is not enabled for ${application}, is inactive, or requires its first password change. Contact your administrator.`});
    await pool.query('DELETE FROM application_login_attempts WHERE key=$1',[key]);
    await pool.query("DELETE FROM application_login_attempts WHERE created_at<NOW()-INTERVAL '20 minutes'");
-   const token=randomUUID(),grant=randomBytes(32).toString('base64url');
-   // "Remember me" on the MIS sign-in page: the grant lasts 30 days instead of 7.
-   const grantDays=application==='MIS'&&req.body?.remember===true?30:7;
-   await sessionStore.create({token,...profile});
-   await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application),token,grantDays]);
-   await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
+   const {grant,token}=await issueGrant(row,application,profile,{remember:req.body?.remember===true});
    req.audit={eventType:'Security',module:'Authentication',action:`${application} login`,actorLogin:profile.login,actorName:profile.name,actorRole:profile.assignedRole,targetType:'User account',targetReference:String(row.id),changedFields:[]};req.auditSessionToken=token;
    res.json({grant,profile});
   });
@@ -92,5 +98,5 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    res.json({ok:true});
   });
  }
- return {handlers,initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);`)};
+ return {handlers,issueGrant,profile:row=>pulseApplicationProfile(row,'MIS'),initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);`)};
 }

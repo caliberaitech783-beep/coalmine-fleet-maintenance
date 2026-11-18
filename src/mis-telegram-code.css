@@ -1,0 +1,7 @@
+/* MIS sign-in with a Telegram code (mis-telegram-code.jsx). */
+.loginbox .mis-telegram-send{width:100%;min-height:44px;margin-top:10px;border:1px solid var(--login-blue);border-radius:9px;background:transparent;color:var(--login-blue);font-weight:700;font-size:13px;cursor:pointer}
+.loginbox .mis-telegram-send:disabled{opacity:.5;cursor:not-allowed}
+.loginbox .mis-telegram-hint{display:block;margin-top:6px;color:#687991;font-size:11px;font-weight:400;line-height:1.45;letter-spacing:normal;text-transform:none}
+.loginbox .mis-signin-switch{display:block;width:max-content;min-height:36px;margin-top:8px;padding:0;border:0;background:none;color:var(--login-blue);font-size:12px;font-weight:700;text-decoration:underline;cursor:pointer}
+:root[data-theme="dark"] .loginbox .mis-telegram-hint{color:#9ba9bd}
+:root[data-theme="dark"] .loginbox .mis-telegram-send,:root[data-theme="dark"] .loginbox .mis-signin-switch{color:#c9b8f2;border-color:#8f74d4}

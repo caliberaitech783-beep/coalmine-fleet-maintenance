@@ -5,7 +5,7 @@ const clean=(value)=>String(value??'').trim();
 const TELEGRAM_TEXT_LIMIT=4096;
 const TELEGRAM_CAPTION_LIMIT=1024;
 // Password reset OTPs are personal and must never reach a shared group.
-const PRIVATE_PURPOSES=new Set(['passwordResetOtp']);
+const PRIVATE_PURPOSES=new Set(['passwordResetOtp','misSignInOtp']);
 
 export function telegramConfiguration(env=process.env){
   const botToken=clean(env.TELEGRAM_BOT_TOKEN);

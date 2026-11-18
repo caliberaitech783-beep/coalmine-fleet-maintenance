@@ -1630,7 +1630,21 @@ installMisPulseBridge(app,{identity:misCredentialIdentity,
    req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Complete Pulse-II vehicle transfer',targetType:'Vehicle transfer',targetReference:result.record.transferNo,...details};}},
  equipmentChanges:{...equipmentMasterChanges,authorize:async profile=>{const user=await currentUserRecord(profile);const permissions=resolveMobileAccess({user}).permissions;if(!isBdmsAdministrator(user)||(!masterAccessAllows(permissions,'Equipment master')&&!masterAccessAllows(permissions,'Equipment master','mobileMasterAccess')))throw Object.assign(new Error('Your Pulse login cannot change the Equipment master.'),{status:403});return String(user?.name||user?.employee||profile.login||'Pulse-II user');}},
 });
-const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity});
+// MIS sign-in by a 6-digit code in the person's own Telegram chat with the Pulse bot.
+const misTelegramSignIn={
+ findUser:async username=>{
+  const {rows}=await authPool.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
+  let matches=loginRecordCandidates(rows,username);
+  const exact=matches.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);if(exact.length)matches=exact;
+  return matches.length===1?matches[0]:null;
+ },
+ linkedChat:login=>linkedTelegramChat(login),
+ send:(chatId,message)=>sendTelegramText({chatId,purpose:'misSignInOtp',privateChat:true,message}),
+ newCode:()=>generatePasswordResetOtp(),
+ hashCode:code=>hashPassword(code),
+ checkCode:(code,hash)=>verifyPassword(code,hash),
+};
+const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity,telegram:misTelegramSignIn});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
