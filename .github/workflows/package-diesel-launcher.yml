@@ -1,0 +1,181 @@
+name: Package the Diesel launcher for operator deployment
+
+on:
+  push:
+    branches: [codex/diesel-launcher-operator-package]
+    paths: [.github/workflows/package-diesel-launcher.yml]
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE: 44d473d5bf3c3bdedb884c781bbdc5309e23bb3d
+  ROLLBACK: c83cc7c720020000fbed0a6e36383700c31fd70d
+  LIVE_URL: https://pulse.cmll.in
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 44d473d5bf3c3bdedb884c781bbdc5309e23bb3d
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Confirm the exact release and rollback boundary
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git rev-parse HEAD^)" = "$ROLLBACK"
+          test "$(git diff --name-only "$ROLLBACK" "$CANDIDATE")" = "src/main.jsx"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+      - run: npm ci
+      - name: Run the standard focused UI checks and the launcher tests
+        run: |
+          node --test \
+            test/branding.test.mjs \
+            test/caliber-activity-loader.test.mjs \
+            test/dashboard-*.test.mjs \
+            test/deployment-session-continuity.test.mjs \
+            test/desktop-*.test.mjs \
+            test/fleet-registry-dashboard.test.mjs \
+            test/header-*.test.mjs \
+            test/hierarchy-master-ui.test.mjs \
+            test/login-view-labels.test.mjs \
+            test/master-filter-layout.test.mjs \
+            test/master-load-recovery.test.mjs \
+            test/masters-dropdown.test.mjs \
+            test/mobile-access.test.mjs \
+            test/navigation-visibility.test.mjs \
+            test/normal-header-responsive.test.mjs \
+            test/notification-popover.test.mjs \
+            test/production-maintenance-header.test.mjs \
+            test/region-master-ui.test.mjs \
+            test/report-parameter-filter.test.mjs \
+            test/report-table-filters.test.mjs \
+            test/report-zip-download.test.mjs \
+            test/request-column-filters.test.mjs \
+            test/request-form-features.test.mjs \
+            test/smart-search.test.mjs \
+            test/super-operational-workspaces.test.mjs \
+            test/topbar-readable-typography.test.mjs \
+            test/user-privileges.test.mjs \
+            test/workspace-usability-features.test.mjs \
+            test/login-application-options.test.mjs
+
+  package:
+    needs: checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: candidate
+            commit: 44d473d5bf3c3bdedb884c781bbdc5309e23bb3d
+          - version: rollback
+            commit: c83cc7c720020000fbed0a6e36383700c31fd70d
+    env:
+      PACKAGE: fleet-diesel-launcher-${{ matrix.version }}.zip
+      SOURCE_SHA: ${{ matrix.commit }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ matrix.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+      - name: Build the complete immutable release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          npm ci
+          npm run build
+          node scripts/prepare-recovery-assets.mjs
+          printf '%s' "$SOURCE_SHA" > DEPLOYMENT_SHA
+          zip -qr "$RUNNER_TEMP/$PACKAGE" . -x '.git/*' 'node_modules/.cache/*'
+          test "$(unzip -p "$RUNNER_TEMP/$PACKAGE" DEPLOYMENT_SHA)" = "$SOURCE_SHA"
+          unzip -tq "$RUNNER_TEMP/$PACKAGE" > /dev/null
+      - name: Upload the ZIP unchanged
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/${{ env.PACKAGE }}
+          archive: false
+          retention-days: 1
+          if-no-files-found: error
+      - name: Verify and record artifact integrity
+        env:
+          UPLOAD_SHA256: ${{ steps.upload.outputs.artifact-digest }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          digest="$(sha256sum "$RUNNER_TEMP/$PACKAGE" | cut -d' ' -f1)"
+          test "$digest" = "$UPLOAD_SHA256"
+          printf '%s  %s\nSource commit %s. Artifact ID %s.\n' "$digest" "$PACKAGE" "$SOURCE_SHA" "$ARTIFACT_ID" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  operator:
+    name: Exclusive operator deployment window
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 34
+    permissions: {}
+    concurrency:
+      group: coalmine-fleet-production
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - name: Confirm current production and hold its deployment lock
+        run: |
+          set -euo pipefail
+          health_url="$LIVE_URL/api/health?diesel-launcher=$GITHUB_RUN_ID"
+          read_healthy_commit() {
+            curl --fail --silent --show-error --max-time 12 -H 'Cache-Control: no-cache' "$health_url-$SECONDS" |
+              jq -er 'select(.status=="ok" and .database=="connected" and .scheduledJobsEnabled==true) | .commit'
+          }
+          current="$(read_healthy_commit)"
+          if [[ "$current" != "$ROLLBACK" ]]; then
+            echo "::error::The live version no longer matches the rollback package. Stop deployment."
+            exit 1
+          fi
+          printf 'Operator lock acquired. Previous live commit %s. Candidate %s.\n' "$ROLLBACK" "$CANDIDATE"
+          deadline=$((SECONDS+1500))
+          stable_since=-1
+          candidate_seen=false
+          while (( SECONDS < deadline )); do
+            current="$(read_healthy_commit)" || current=""
+            case "$current" in
+              "$CANDIDATE")
+                if [[ "$candidate_seen" == false ]]; then
+                  candidate_seen=true
+                  if (( SECONDS+330 > deadline )); then deadline=$((SECONDS+330)); fi
+                  echo "Candidate is healthy. Holding at least five minutes for verification and rollback."
+                fi
+                if (( stable_since < 0 )); then stable_since=$SECONDS; fi
+                if (( SECONDS-stable_since >= 300 )); then
+                  echo "The candidate stayed healthy for five minutes."
+                  exit 0
+                fi
+                ;;
+              "$ROLLBACK")
+                stable_since=-1
+                if [[ "$candidate_seen" == true ]]; then
+                  echo "The rollback version is healthy again."
+                  exit 1
+                fi
+                ;;
+              "")
+                stable_since=-1
+                ;;
+              *)
+                echo "::error::Production has moved to another commit. Stop deployment."
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error::The operator deployment window expired."
+          exit 1
