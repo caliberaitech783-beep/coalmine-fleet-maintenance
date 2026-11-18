@@ -4,6 +4,7 @@ const digest=value=>createHash('sha256').update(String(value)).digest('base64url
 const random=()=>randomBytes(32).toString('base64url');
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const issuerCookie='__Host-pulse_mis_signin',stateCookie='__Host-mis_signin_state',handoffCookie='__Host-mis_signin_ready';
+export { issuerCookie as pulseSsoSessionCookie };
 const cookieOptions={httpOnly:true,secure:true,sameSite:'lax',path:'/'};
 const cookie=(req,name)=>String(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='))?.slice(name.length+1)||'';
 export function misSignInAllowed(profile){

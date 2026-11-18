@@ -12,6 +12,7 @@ import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdow
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
+import {useDieselSharedSignIn} from './diesel-shared-signin.jsx';
 import { compressImageDataUrl, readBlobDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
@@ -325,6 +326,7 @@ import {
   Briefcase,
   MapPinned,
   Tags,
+  Fuel,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -879,6 +881,9 @@ function Login({ onLogin, theme, toggleTheme }) {
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
           <button type="button" className="login-mis-link" aria-pressed={misPortal} onClick={()=>window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start')}><FileBarChart /><span><strong>MIS</strong>Open MIS sign in</span></button>
           <button type="button" className="login-hr-link" aria-pressed={hrPortal} disabled={working} onClick={() => selectLoginPortal(false, true)}><Users /><span><strong>HR</strong>Open HR sign in</span></button>
+          <a className="login-diesel-link" href="https://pulse-lll.cmll.in/" aria-label="Open Diesel application">
+            <Fuel aria-hidden="true" /><span><strong>Diesel</strong>Open application</span>
+          </a>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>
@@ -12141,6 +12146,7 @@ function App() {
     [accountWorkspace,setAccountWorkspace]=useNavigationState("main.accountWorkspace", "accounts"),
     [accountDirectoryView,setAccountDirectoryView]=useNavigationState("main.accountDirectoryView", "directory");
   useMisSharedSignIn(session);
+  useDieselSharedSignIn(session);
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);
