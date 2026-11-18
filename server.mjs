@@ -8309,6 +8309,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       };
     };
     const {shifts,fleetSnapshot,openingFleetSnapshot}=await requestFeedCache.read(loadFleet,JSON.stringify([countDay.day,revisions]),'dashboard-equipment');
+    // Match authorized site aliases so scoped users receive the same shift list as their dashboard data.
     const shiftRecords=shifts.filter(row=>!scope.restrictToScope||reportScopeIncludesSite({sites:scope.allowedSites},row.site));
     const scopedFleet=scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope);
     const scopedOpeningFleet=scopeDashboardEquipmentRecords(openingFleetSnapshot,authorization.session,authorization.user,scope);
