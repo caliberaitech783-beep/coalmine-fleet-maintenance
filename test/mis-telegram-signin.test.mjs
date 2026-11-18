@@ -4,7 +4,8 @@ import {PGlite} from '@electric-sql/pglite';
 import {createHash,randomBytes} from 'node:crypto';
 import {initializeSingleLogin} from '../single-login.mjs';
 import {installPulseApplicationIdentity} from '../pulse-application-identity.mjs';
-import {installMisLoginHandoff,MIS_TELEGRAM_CODE_ATTEMPTS,MIS_TELEGRAM_CODES_PER_HOUR} from '../mis-login-handoff.mjs';
+import {installMisLoginHandoff,MIS_TELEGRAM_CODE_ATTEMPTS,MIS_TELEGRAM_CODES_PER_HOUR,MIS_TELEGRAM_APPROVALS_PER_HOUR} from '../mis-login-handoff.mjs';
+import {parseTelegramUpdate,TELEGRAM_WEBHOOK_UPDATES} from '../telegram.mjs';
 import {hashPassword,verifyPassword} from '../password-auth.mjs';
 import {createSessionStore} from '../auth-session.mjs';
 import {loginRecordCandidates} from '../mobile-access.mjs';
@@ -23,12 +24,15 @@ async function harness({chats={owner:'111'},sendFails=false}={}){
   linkedChat:async login=>chats[String(login).toLowerCase()]||'',
   send:async(chatId,message)=>{if(sendFails)throw Error('Telegram down');sent.push({chatId,message});},
   newCode:()=>codes[next++%codes.length],hashCode:code=>hashPassword(code),checkCode:(code,hash)=>verifyPassword(code,hash),
+  sendButtons:async(chatId,message,replyMarkup)=>{if(sendFails)throw Error('Telegram down');sent.push({chatId,message,replyMarkup});return {messageId:7};},
+  answer:async options=>{answers.push(options);},
  };
+ const answers=[];
  const handoff=installMisLoginHandoff(app,{pool,identity,telegram});await handoff.initialize();
  for(const login of ['owner','nochat'])await db.query("INSERT INTO master_records(master_name,record_data) VALUES('Users & employees',$1)",[JSON.stringify({login,employee:login,userType:'Mobile User',passwordHash:hashPassword('pulse-test-password'),misAccess:true,misDesktopAccess:['Dashboard']})]);
  const call=async(path,body,ip='10.0.0.1')=>{let value;const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(data){value=data;return this}};await routes.get(path)({body,headers:{},ip},res,e=>{throw e});return {status:res.statusCode,value}};
  const attempt=()=>{const verifier=randomBytes(32).toString('base64url'),state=randomBytes(32).toString('base64url');return {verifier,handoff:{state,challenge:createHash('sha256').update(verifier).digest('base64url')}};};
- return {db,call,sent,attempt};
+ return {db,call,sent,attempt,answers,handoff};
 }
 
 test('a Telegram code signs in to MIS once, only for the sign-in that asked for it, and honours Remember me',async()=>{
@@ -84,4 +88,70 @@ test('a new code replaces the earlier one',async()=>{
  assert.equal((await call('/api/mis-login/telegram-verify',{requestToken:first,code:'123456',...handoff})).status,401);
  assert.equal((await call('/api/mis-login/telegram-verify',{requestToken:second,code:'654321',...handoff})).status,200);
  }finally{await db.close()}
+});
+
+// ---- Sign in by tapping Approve in Telegram (no code to type) ----
+const tap=(handoff,message,which,fromId='111')=>{
+ const button=message.replyMarkup.inline_keyboard[0].find(b=>b.callback_data.startsWith(which==='approve'?'misa:':'misr:'));
+ return handoff.handleTelegramCallback(parseTelegramUpdate({callback_query:{id:'cb1',from:{id:Number(fromId)},data:button.callback_data,message:{message_id:7,chat:{id:Number(fromId)}}}}));
+};
+
+test('Telegram Approve opens MIS once, only in the browser that asked, with the number shown on both',async()=>{
+ const {db,call,sent,attempt,answers,handoff}=await harness();try{
+ const {verifier,handoff:ask}=attempt();
+ const asked=await call('/api/mis-login/telegram-approval',{username:'owner',...ask});
+ assert.equal(asked.status,202);assert.ok(asked.value.number>=10&&asked.value.number<100);
+ assert.equal(sent.length,1);assert.equal(sent[0].chatId,'111');
+ assert.ok(sent[0].message.includes(String(asked.value.number)),'Telegram shows the same number as the screen');
+ assert.ok(sent[0].replyMarkup.inline_keyboard[0][0].text.includes(String(asked.value.number)));
+ const {requestToken}=asked.value;
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...ask})).value.status,'pending');
+ assert.equal(await tap(handoff,sent[0],'approve','999'),true);
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...ask})).value.status,'pending','another Telegram account cannot approve');
+ await tap(handoff,sent[0],'approve');
+ assert.match(answers.at(-1).text,/Approved/);
+ const other=attempt().handoff;
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...other})).value.status,'pending','another browser cannot use the approval');
+ const done=await call('/api/mis-login/telegram-approval/status',{requestToken,remember:true,...ask});
+ assert.equal(done.value.status,'approved');
+ const target=new URL(done.value.redirectUrl);assert.equal(target.origin+target.pathname,'https://pulse-ll.cmll.in/api/mis-credentials/callback');
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...ask})).value.status,'expired','opens MIS once only');
+ const exchanged=await call('/api/integrations/mis/exchange',{code:target.searchParams.get('code'),state:ask.state,verifier});
+ assert.equal(exchanged.status,200);assert.equal(exchanged.value.profile.login,'owner');assert.equal(exchanged.value.remember,true);
+ await tap(handoff,sent[0],'approve');assert.match(answers.at(-1).text,/ended or was already answered/);
+ }finally{await db.close()}
+});
+
+test('Reject, expiry, unknown users, delivery failure and request limits',async()=>{
+ const {db,call,sent,attempt,answers,handoff}=await harness();try{
+ let ask=attempt().handoff;
+ let {requestToken}=(await call('/api/mis-login/telegram-approval',{username:'owner',...ask})).value;
+ await tap(handoff,sent.at(-1),'reject');assert.match(answers.at(-1).text,/Rejected/);
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...ask})).value.status,'rejected');
+ ask=attempt().handoff;
+ ({requestToken}=(await call('/api/mis-login/telegram-approval',{username:'owner',...ask})).value);
+ await db.query("UPDATE mis_telegram_signin_approvals SET expires_at=NOW()-INTERVAL '1 second' WHERE status='pending'");
+ await tap(handoff,sent.at(-1),'approve');assert.match(answers.at(-1).text,/ended/);
+ assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken,...ask})).value.status,'expired');
+ const before=sent.length;
+ for(const username of ['nobody','nochat']){
+  const quiet=await call('/api/mis-login/telegram-approval',{username,...attempt().handoff});
+  assert.equal(quiet.status,202);assert.ok(quiet.value.number>=10);
+  assert.equal((await call('/api/mis-login/telegram-approval/status',{requestToken:quiet.value.requestToken,...attempt().handoff})).value.status,'pending');
+ }
+ assert.equal(sent.length,before,'no message for unknown users or users without Telegram');
+ for(let i=2;i<MIS_TELEGRAM_APPROVALS_PER_HOUR;i++)assert.equal((await call('/api/mis-login/telegram-approval',{username:'owner',...attempt().handoff})).status,202);
+ assert.equal((await call('/api/mis-login/telegram-approval',{username:'owner',...attempt().handoff})).status,429);
+ assert.equal(await handoff.handleTelegramCallback(parseTelegramUpdate({callback_query:{id:'x',from:{id:111},data:'something-else'}})),false,'other buttons are left alone');
+ }finally{await db.close()}
+ const failing=await harness({sendFails:true});try{
+  const asked=await failing.call('/api/mis-login/telegram-approval',{username:'owner',...failing.attempt().handoff});
+  assert.equal(asked.status,502);
+ }finally{await failing.db.close()}
+});
+
+test('the Pulse bot listens for button taps',()=>{
+ assert.ok(TELEGRAM_WEBHOOK_UPDATES.includes('callback_query'));
+ assert.deepEqual(parseTelegramUpdate({callback_query:{id:'5',from:{id:42},data:'misa:abc',message:{message_id:9,chat:{id:42}}}}),
+  {kind:'callback',callbackId:'5',fromId:'42',data:'misa:abc',chatId:'42',messageId:9});
 });

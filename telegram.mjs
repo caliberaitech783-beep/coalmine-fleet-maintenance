@@ -5,7 +5,7 @@ const clean=(value)=>String(value??'').trim();
 const TELEGRAM_TEXT_LIMIT=4096;
 const TELEGRAM_CAPTION_LIMIT=1024;
 // Password reset OTPs are personal and must never reach a shared group.
-const PRIVATE_PURPOSES=new Set(['passwordResetOtp','misSignInOtp']);
+const PRIVATE_PURPOSES=new Set(['passwordResetOtp','misSignInOtp','misSignInApproval']);
 
 export function telegramConfiguration(env=process.env){
   const botToken=clean(env.TELEGRAM_BOT_TOKEN);
@@ -68,6 +68,13 @@ export async function sendTelegramText({message,purpose='',settings,chatId,priva
   return {sent:true,chatId:target,messageId:result?.message_id};
 }
 
+// Answers a button tap (the small notice Telegram shows) and replaces the message text so its buttons go away.
+export async function answerTelegramCallback({callbackId,text='',chatId='',messageId=null,newText=''},{env=process.env,fetchImpl=fetch}={}){
+  await telegramRequest('answerCallbackQuery',{env,fetchImpl,json:{callback_query_id:clean(callbackId),text:clean(text).slice(0,190)}});
+  if(clean(chatId)&&messageId&&clean(newText))
+    await telegramRequest('editMessageText',{env,fetchImpl,json:{chat_id:clean(chatId),message_id:messageId,text:telegramPlainText(newText)}}).catch(()=>{});
+}
+
 export async function sendTelegramDocument({buffer,filename='caliber-pulse-report.pdf',caption='',purpose='',settings,chatId},{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(env);
   assertReady(config,purpose,settings,'',clean(chatId)||config.chatId);
@@ -123,6 +130,10 @@ export function newTelegramLinkToken(){
 // Reads the parts of a webhook update the account-link flow needs: a private
 // "/start <token>" or "/stop", or the user blocking the bot.
 export function parseTelegramUpdate(update){
+  const query=update?.callback_query;
+  if(query?.id&&query.from?.id&&typeof query.data==='string')
+    return {kind:'callback',callbackId:String(query.id),fromId:String(query.from.id),data:query.data.slice(0,64),
+      chatId:query.message?.chat?.id?String(query.message.chat.id):'',messageId:query.message?.message_id||null};
   const message=update?.message;
   if(message?.chat?.type==='private'&&typeof message.text==='string'){
     const [command,argument='']=message.text.trim().split(/\s+/,2);
@@ -154,7 +165,8 @@ export async function telegramBotUsername({env=process.env,fetchImpl=fetch}={}){
 }
 
 // Join requests let the bot admit only Caliber Pulse administrators to the admin group.
-export const TELEGRAM_WEBHOOK_UPDATES=['message','my_chat_member','chat_join_request'];
+// callback_query: taps on Approve / Reject buttons (MIS sign-in approval).
+export const TELEGRAM_WEBHOOK_UPDATES=['message','my_chat_member','chat_join_request','callback_query'];
 
 export async function ensureTelegramWebhook(baseUrl,{env=process.env,fetchImpl=fetch}={}){
   const config=telegramConfiguration(env);

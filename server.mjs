@@ -132,7 +132,7 @@ import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {telegramConfiguration,telegramStatus,telegramPurposeEnabled,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails} from './telegram.mjs';
+import {telegramConfiguration,telegramStatus,telegramPurposeEnabled,sendTelegramText,sendTelegramDocument,telegramWebhookSecret,newTelegramLinkToken,parseTelegramUpdate,telegramBotUsername,ensureTelegramWebhook,normalizeTelegramRequirement,telegramRequiredFor,createTelegramJoinRequestLink,answerTelegramJoinRequest,telegramChatMemberStatus,telegramSiteGroupDetails,answerTelegramCallback} from './telegram.mjs';
 import {TELEGRAM_SITES,telegramSiteName,telegramUserHasSite,normalizeTelegramSiteGroups} from './telegram-site-groups.mjs';
 import {telegramChatMember} from './telegram.mjs';
 import {createMembershipChecker,membershipOnboardingPath,REQUIRED_SITE_LINKS,requiredTelegramSites} from './telegram-membership.mjs';
@@ -1640,6 +1640,8 @@ const misTelegramSignIn={
  },
  linkedChat:login=>linkedTelegramChat(login),
  send:(chatId,message)=>sendTelegramText({chatId,purpose:'misSignInOtp',privateChat:true,message}),
+ sendButtons:(chatId,message,replyMarkup)=>sendTelegramText({chatId,purpose:'misSignInApproval',privateChat:true,message,replyMarkup}),
+ answer:options=>answerTelegramCallback(options),
  newCode:()=>generatePasswordResetOtp(),
  hashCode:code=>hashPassword(code),
  checkCode:(code,hash)=>verifyPassword(code,hash),
@@ -4250,7 +4252,10 @@ app.post('/api/telegram/webhook',async(req,res)=>{
   const update=parseTelegramUpdate(req.body);
   const reply=(chatId,text)=>sendTelegramText({message:text,chatId}).catch(error=>console.error('Telegram reply failed.',error.message));
   try{
-    if(update.kind==='blocked')await disconnectTelegramChat(update.chatId);
+    if(update.kind==='callback'){
+      // Approve / Reject on an MIS sign-in request; any other button just gets its spinner cleared.
+      if(!await misLoginHandoff.handleTelegramCallback(update))await answerTelegramCallback({callbackId:update.callbackId}).catch(()=>{});
+    }else if(update.kind==='blocked')await disconnectTelegramChat(update.chatId);
     else if(update.kind==='stop'){
       await disconnectTelegramChat(update.chatId);
       await reply(update.chatId,'Caliber Pulse alerts are turned off for this Telegram account. To turn them on again, open pulse.cmll.in, click your profile icon and choose Connect Telegram.');
