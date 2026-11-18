@@ -30,7 +30,7 @@ test('region, site and authorized scope intersect, including zero matches and re
 });
 test('fleet breakdown counts use the opening shift after applying the selected site',()=>{
   let splitRows=[];
-  const values={useMemo:fn=>fn(),requestMatchesMovementShift:r=>r.shift==='A',locationBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2}],dashboardShift:'A',shiftRecords:[],dashboardFrom:'',dashboardTo:'',
+  const values={useMemo:fn=>fn(),requestMatchesMovementShift:r=>r.shift==='A',locationBreakdowns:[{site:'Sasti OC',shift:'A',id:1},{site:'Sasti OC',shift:'B',id:2}],dashboardShift:'A',shiftRecords:[],dashboardFrom:'',dashboardTo:'',now:new Date(0),
     splitDashboardRequests:rows=>(splitRows=rows,{liveRequests:rows,historicalRequests:rows})};
   const code=source.slice(source.indexOf('  const fleetBreakdowns ='),source.indexOf('  const visibleBreakdowns =',source.indexOf('  const fleetBreakdowns =')));
   const rows=new Function(...Object.keys(values),code+'return {fleetBreakdowns,liveBreakdowns};')(...Object.values(values));

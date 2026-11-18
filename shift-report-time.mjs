@@ -51,6 +51,44 @@ function shiftEffectiveForDate(shift, value) {
   return (!shift.effectiveFrom || shift.effectiveFrom <= date) && (!shift.effectiveTo || date <= shift.effectiveTo);
 }
 
+function shiftEffectiveOnBusinessDate(shift, date) {
+  return (!shift.effectiveFrom || shift.effectiveFrom <= date) && (!shift.effectiveTo || date <= shift.effectiveTo);
+}
+
+function previousLocalDate(date) {
+  const epoch = indiaDateTimeEpoch(`${date}T00:00:00`);
+  return Number.isFinite(epoch) ? localDateKey(new Date(epoch - 86400000)) : '';
+}
+
+export function shiftWindowForDate(date, {site = '', shifts = [], shift = ALL_SHIFTS_KEY} = {}) {
+  const selected = clean(shift).toUpperCase();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean(date)) || !selected || selected.toLowerCase() === ALL_SHIFTS_KEY) return null;
+  const siteKey = canonicalSiteName(site);
+  const record = safeShiftRecords(shifts).find((item) => canonicalSiteName(item.site) === siteKey
+    && clean(item.shiftCode).toUpperCase() === selected && shiftEffectiveOnBusinessDate(item,date));
+  if (!record) return null;
+  const start = indiaDateTimeEpoch(`${date}T${record.startTime}`);
+  let end = indiaDateTimeEpoch(`${date}T${record.endTime}`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (end <= start) end += 86400000;
+  return {start,end,record,date};
+}
+
+export function timestampMatchesShiftWindow(value, {site = '', shifts = [], shift = ALL_SHIFTS_KEY, from = '', to = '', now = new Date()} = {}) {
+  const selected = clean(shift).toUpperCase();
+  if (!selected || selected.toLowerCase() === ALL_SHIFTS_KEY) return true;
+  const epoch = indiaDateTimeEpoch(value), nowEpoch = indiaDateTimeEpoch(now);
+  const localDate = localDateKey(value);
+  if (!Number.isFinite(epoch) || !Number.isFinite(nowEpoch) || !localDate) return false;
+  const first = clean(from || to), last = clean(to || from);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(last) || first > last) return false;
+  return [localDate,previousLocalDate(localDate)].some((businessDate) => {
+    if (businessDate < first || businessDate > last) return false;
+    const window = shiftWindowForDate(businessDate,{site,shifts,shift:selected});
+    return Boolean(window && nowEpoch >= window.start && epoch >= window.start && epoch < window.end && epoch <= nowEpoch);
+  });
+}
+
 export function resolveShiftForTimestamp(value, {site = '', shifts = []} = {}) {
   const siteKey = canonicalSiteName(site);
   const candidates = safeShiftRecords(shifts)

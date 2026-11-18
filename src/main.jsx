@@ -141,7 +141,7 @@ import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../depar
 import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
-import { ALL_SHIFTS_KEY, formatShiftDateTime, shiftFilterOptions, timestampMatchesShift } from "../shift-report-time.mjs";
+import { ALL_SHIFTS_KEY, formatShiftDateTime, shiftFilterOptions, timestampMatchesShift, timestampMatchesShiftWindow } from "../shift-report-time.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading as defaultReportPdfHeading } from "../report-refinements.mjs";
 import {downtimePdfHeading} from './downtime-matrix-export.mjs';
 const reportPdfHeading = (title,rows,columns) => downtimePdfHeading(title,rows,columns,defaultReportPdfHeading);
@@ -2081,7 +2081,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardIsLive = !dashboardTo || dashboardTo === todayKey;
   const filteredDateLabel = !dashboardRangeActive ? "All time" : dashboardFrom === dashboardTo ? formatDisplayDate(dashboardTo) : formatDisplayDateRange(dashboardFrom, dashboardTo);
   const shiftOptionsForDashboard = typeof shiftFilterOptions === "function" ? shiftFilterOptions : () => [];
-  const timestampMatchesDashboardShift = typeof timestampMatchesShift === "function" ? timestampMatchesShift : (_value, {shift = "all"} = {}) => !shift || shift === "all";
+  const timestampMatchesDashboardShift = typeof timestampMatchesShiftWindow === "function" ? timestampMatchesShiftWindow : (_value, {shift = "all"} = {}) => !shift || shift === "all";
   const dashboardShiftOptions = useMemo(() => shiftOptionsForDashboard(shiftRecords), [shiftRecords]);
   useEffect(() => {
     if (dashboardShift === "all" || dashboardShiftOptions.some((option) => option.key === dashboardShift)) return;
@@ -2100,7 +2100,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const restrictToScope=equipmentScope?.restrictToScope===true;
   const scopedEquipment=useMemo(()=>normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords,[normalizedAllowedSites,equipmentRecords,restrictToScope]);
   const scopedBreakdowns=useMemo(()=>equipmentLoaded?(normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests):[],[equipmentLoaded,normalizedAllowedSites,requests,restrictToScope]);
-  const requestMatchesDashboardShift = (record = {}, value) => timestampMatchesDashboardShift(value,{site:record.site||record.reportSite||record.currentLocation||record.location,shifts:shiftRecords,shift:dashboardShift});
+  const requestMatchesDashboardShift = (record = {}, value) => timestampMatchesDashboardShift(value,{site:record.site||record.reportSite||record.currentLocation||record.location,shifts:shiftRecords,shift:dashboardShift,from:dashboardFrom,to:dashboardTo,now});
   const requestHasSelectedDashboardShift = (record = {}) => dashboardShift === "all" || [
     record.start,record.createdAt,record.acceptedAt,record.inProgressAt,record.closedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,record.idealRequestedAt,record.idealApprovedAt,
   ].some((value)=>requestMatchesDashboardShift(record,value));
@@ -2109,10 +2109,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     record.closedAt,record.completedAt,record.verifiedAt,record.firstTripAt,record.productionFirstTripAt,
     record.idealRequestedAt,record.idleRequestedAt,record.idealApprovedAt,
   ].filter(Boolean);
-  const requestHasSelectedDashboardActivity = (record = {}) => dashboardShift === "all" || dashboardActivityTimestamps(record).some((value) => {
-    const date = requestDateKey(value);
-    return requestMatchesDashboardShift(record,value) && (!dashboardFrom || date >= dashboardFrom) && (!dashboardTo || date <= dashboardTo);
-  });
+  const requestHasSelectedDashboardActivity = (record = {}) => dashboardShift === "all" || dashboardActivityTimestamps(record).some((value) => requestMatchesDashboardShift(record,value));
   const dashboardMovementShiftTimestamp = (record = {}, metric = "") => {
     if (metric === "outgoing") return record.closedAt || record.completedAt;
     if (metric === "idle") return record.idealRequestedAt || record.idleRequestedAt || record.start || record.startedAt || record.createdAt;
@@ -2136,7 +2133,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const activeSites = useMemo(() => dashboardSite !== "all" ? [dashboardSite] : selectedSites, [dashboardSite,selectedSites]);
   const locationEquipment = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment, [selectedRegion,dashboardSite,scopedEquipment,activeSites]);
   const locationBreakdowns = useMemo(() => selectedRegion || dashboardSite !== "all" ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns, [selectedRegion,dashboardSite,scopedBreakdowns,activeSites]);
-  const dashboardActivityBreakdowns = useMemo(() => locationBreakdowns.filter(requestHasSelectedDashboardActivity), [locationBreakdowns,dashboardShift,shiftRecords,dashboardFrom,dashboardTo]);
+  const dashboardActivityBreakdowns = useMemo(() => locationBreakdowns.filter(requestHasSelectedDashboardActivity), [locationBreakdowns,dashboardShift,shiftRecords,dashboardFrom,dashboardTo,now.getTime()]);
   const resolveLocationEquipment = useMemo(() => createFleetAssetResolver(locationEquipment), [locationEquipment]);
   const shiftEquipmentIndexes = useMemo(() => new Set(dashboardActivityBreakdowns.map((request) => resolveLocationEquipment(request, {allowTransferred:true}).assetIndex).filter((index) => index !== null)), [dashboardActivityBreakdowns,resolveLocationEquipment]);
   const visibleEquipment = useMemo(() => dashboardShift === "all" ? locationEquipment : locationEquipment.filter((_record,index) => shiftEquipmentIndexes.has(index)), [dashboardShift,locationEquipment,shiftEquipmentIndexes]);
@@ -2144,7 +2141,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     const {assetIndex} = resolveLocationEquipment(request);
     return assetIndex === null ? undefined : locationEquipment[assetIndex];
   };
-  const fleetBreakdowns = useMemo(() => locationBreakdowns.filter((record) => requestMatchesMovementShift(record, "incoming")), [locationBreakdowns,dashboardShift,shiftRecords]);
+  const fleetBreakdowns = useMemo(() => locationBreakdowns.filter((record) => requestMatchesMovementShift(record, "incoming")), [locationBreakdowns,dashboardShift,shiftRecords,dashboardFrom,dashboardTo,now.getTime()]);
   const {liveRequests: liveBreakdowns, historicalRequests} = useMemo(() => splitDashboardRequests(fleetBreakdowns, dashboardFrom, dashboardTo), [fleetBreakdowns,dashboardFrom,dashboardTo]);
   const visibleBreakdowns = useMemo(() => historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}}), [historicalRequests,resolveLocationEquipment,locationEquipment]);
