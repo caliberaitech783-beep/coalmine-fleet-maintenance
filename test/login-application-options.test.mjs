@@ -30,3 +30,12 @@ test('MIS and HR open the Pulse-II sign-in and workspace in the current tab',()=
  assert.ok(links.includes('<a className="login-hr-link" href="https://pulse-ll.cmll.in/hr/?signin=1">'));
  assert.doesNotMatch(links,/target="_blank"|hrpulse\.cmll\.in/);
 });
+
+test('Diesel selects the existing credentials form and keeps the Pulse handoff in the same tab', () => {
+  assert.ok(source.includes('aria-pressed={dieselPortal}'));
+  assert.ok(source.includes("query.get('dieselSignIn') === '1'"));
+  assert.ok(source.includes("window.location.assign('https://pulse-lll.cmll.in/api/sign-in/start')"));
+  assert.ok(source.includes("dieselPortal?'Diesel sign in'"));
+  assert.ok(source.includes("'Username is required.' : 'Password is required.'"));
+  assert.doesNotMatch(source, /<a className="login-diesel-link"/);
+});
