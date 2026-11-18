@@ -10,7 +10,8 @@ test("dashboard region selection exposes its sites and filters every scoped data
   assert.match(source, /const \[dashboardSite, setDashboardSite\] = useState\("all"\)/);
   assert.match(source, /const selectedSites = useMemo\(\(\) => \(selectedRegion\?\.sites \|\|/);
   assert.match(source, /const activeSites = useMemo\(\(\) => dashboardSite !== "all" \? \[dashboardSite\] : selectedSites/);
-  assert.match(source, /visibleEquipment = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
+  assert.match(source, /locationEquipment = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
+  assert.match(source, /visibleEquipment = useMemo\(\(\) => dashboardShift === "all" \? locationEquipment : locationEquipment\.filter/);
   assert.doesNotMatch(source, /visibleUsers = selectedRegion/);
   assert.match(source, /locationBreakdowns = useMemo\(\(\) => selectedRegion \|\| dashboardSite !== "all" \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
   assert.doesNotMatch(source, /selectedRegion && <label className="mine-site-filter">/);
