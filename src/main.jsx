@@ -385,6 +385,7 @@ import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
 import "./dashboard-night.css";
 import "./no-motion.css";
+import "./hr-portal.css";
 import { APP_VERSION } from "./app-version.js";
 import { formatCountDelta } from "./fleet-count-trend.mjs";
 import DateInput from "./date-input.mjs";
@@ -673,11 +674,30 @@ function AuthModeTabs({ mode, onModeChange }) {
 // Touch devices open the keyboard the moment a field is focused, which resizes the viewport and makes
 // the login form jump on load; only desktop browsers get the username field focused automatically.
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+const hrWorkspaceOrigin = 'https://hrpulse.cmll.in';
+
 function Login({ onLogin, theme, toggleTheme }) {
+  const [hrPortal, setHrPortal] = useState(false);
+  const [hrWorkspace, setHrWorkspace] = useState(false);
+  const hrFrame = useRef(null);
+
+  useEffect(() => {
+    function updateHrWorkspace(event) {
+      const frame = hrFrame.current;
+      if (!frame || event.origin !== hrWorkspaceOrigin || event.source !== frame.contentWindow ||
+          event.data?.type !== 'caliber-hr:workspace' || typeof event.data.open !== 'boolean') return;
+      setHrWorkspace(event.data.open);
+    }
+    window.addEventListener('message', updateHrWorkspace);
+    return () => window.removeEventListener('message', updateHrWorkspace);
+  }, []);
+
   const [accountsPortal,setAccountsPortal]=useState(false);
   const [misPortal,setMisPortal]=useState(()=>new URLSearchParams(window.location.search).get('login')==='mis');
   const [misHandoff]=useState(()=>{const query=new URLSearchParams(window.location.search);return {state:query.get('misState')||'',challenge:query.get('misChallenge')||''};});
-  const selectLoginPortal = (accounts) => {
+  const selectLoginPortal = (accounts, hr = false) => {
+    setHrPortal(hr);
+    setHrWorkspace(false);
     setMisPortal(false);
     const url=new URL(window.location.href);for(const key of ['login','misState','misChallenge'])url.searchParams.delete(key);window.history.replaceState(null,'',url.pathname+url.search+url.hash);
     setAccountsPortal(accounts);
@@ -845,7 +865,7 @@ function Login({ onLogin, theme, toggleTheme }) {
     }
   };
   return (
-    <div className={`login${accountsPortal?' accounts-login':''}`}>
+    <div className={`login${accountsPortal?' accounts-login':''}${hrWorkspace?' login-hr-workspace':''}`}>
       <section className="login-visual" aria-label="Caliber Pulse fleet operations">
         <div className="login-grid" aria-hidden="true" />
         <div className="login-schematic" aria-hidden="true">
@@ -853,12 +873,12 @@ function Login({ onLogin, theme, toggleTheme }) {
         </div>
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
-          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
+          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal&&!hrPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
           <button type="button" className="login-mis-link" aria-pressed={misPortal} onClick={()=>window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start')}><FileBarChart /><span><strong>MIS</strong>Open MIS sign in</span></button>
-          <a className="login-hr-link" href="https://hrpulse.cmll.in" target="_self" aria-label="Open HR application in this window"><Users /><span><strong>HR</strong>Open application</span></a>
+          <button type="button" className="login-hr-link" aria-pressed={hrPortal} disabled={working} onClick={() => selectLoginPortal(false, true)}><Users /><span><strong>HR</strong>Open HR sign in</span></button>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>
@@ -881,7 +901,19 @@ function Login({ onLogin, theme, toggleTheme }) {
       </section>
       <main>
         <ThemeToggle theme={theme} onToggle={toggleTheme} className="login-theme-toggle" />
-        {passwordChange ? <form
+        {hrPortal && loginMode === 'signin' ? <div className="loginbox login-hr-panel">
+          <div className="login-hr-options">
+            <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(''); setNotice(''); }} />
+            {notice && <p role="status">{notice}</p>}
+          </div>
+          <iframe
+            ref={hrFrame}
+            className="login-hr-frame"
+            title="Caliber HR"
+            src={hrWorkspaceOrigin + '/?embedded=pulse'}
+            allow="camera https://hrpulse.cmll.in; microphone https://hrpulse.cmll.in"
+          />
+        </div> : passwordChange ? <form
           className="loginbox password-change-box"
           onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
         >
