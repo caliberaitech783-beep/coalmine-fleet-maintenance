@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('Fleet is the default and portals have explicit selectors',()=>{
   assert.match(source,/\[accountsPortal,setAccountsPortal\]=useState\(false\)/);
-  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal&&!hrPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
+  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal&&!hrPortal&&!dieselPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
   assert.match(source,/aria-pressed=\{accountsPortal\} onClick=\{\(\)=>selectLoginPortal\(true\)\}/);
   assert.match(source,/<strong>Fleet<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
@@ -29,4 +29,13 @@ test('MIS keeps its handoff while HR opens inside Pulse',()=>{
  assert.ok(links);assert.match(links,/className="login-mis-link"/);assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));assert.match(links,/<strong>MIS<\/strong>/);assert.match(links, /<button type="button" className="login-hr-link" aria-pressed=\{hrPortal\}/);
  assert.match(source, /<iframe[\s\S]*?title="Caliber HR"[\s\S]*?embedded=pulse/);
  assert.match(source, /event\.origin !== hrWorkspaceOrigin \|\| event\.source !== frame\.contentWindow/);
+});
+
+test('Diesel selects the existing credentials form and keeps the Pulse handoff in the same tab', () => {
+  assert.ok(source.includes('aria-pressed={dieselPortal}'));
+  assert.ok(source.includes("query.get('dieselSignIn') === '1'"));
+  assert.ok(source.includes("window.location.assign('https://pulse-lll.cmll.in/api/sign-in/start')"));
+  assert.ok(source.includes("dieselPortal?'Diesel sign in'"));
+  assert.ok(source.includes("'Username is required.' : 'Password is required.'"));
+  assert.doesNotMatch(source, /<a className="login-diesel-link"/);
 });

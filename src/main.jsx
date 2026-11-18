@@ -679,6 +679,10 @@ const coarsePointerDevice = () => typeof window !== "undefined" && typeof window
 const hrWorkspaceOrigin = 'https://hrpulse.cmll.in';
 
 function Login({ onLogin, theme, toggleTheme }) {
+  const [dieselPortal, setDieselPortal] = useState(() => {
+    const query = new URLSearchParams(window.location.search);
+    return query.get('login') === 'diesel' || query.get('dieselSignIn') === '1';
+  });
   const [hrPortal, setHrPortal] = useState(false);
   const [hrWorkspace, setHrWorkspace] = useState(false);
   const hrFrame = useRef(null);
@@ -697,11 +701,18 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [accountsPortal,setAccountsPortal]=useState(false);
   const [misPortal,setMisPortal]=useState(()=>new URLSearchParams(window.location.search).get('login')==='mis');
   const [misHandoff]=useState(()=>{const query=new URLSearchParams(window.location.search);return {state:query.get('misState')||'',challenge:query.get('misChallenge')||''};});
-  const selectLoginPortal = (accounts, hr = false) => {
+  const selectLoginPortal = (accounts, hr = false, diesel = false) => {
+    setDieselPortal(diesel);
     setHrPortal(hr);
     setHrWorkspace(false);
     setMisPortal(false);
-    const url=new URL(window.location.href);for(const key of ['login','misState','misChallenge'])url.searchParams.delete(key);window.history.replaceState(null,'',url.pathname+url.search+url.hash);
+    const url = new URL(window.location.href);
+    for (const key of ['login', 'misState', 'misChallenge']) url.searchParams.delete(key);
+    if (url.searchParams.has('dieselSignIn') && !diesel) {
+      for (const key of ['dieselSignIn', 'state', 'code_challenge']) url.searchParams.delete(key);
+    }
+    if (diesel) url.searchParams.set('login', 'diesel');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     setAccountsPortal(accounts);
     setLoginRoles([]);
     setSelectedLoginRole('');
@@ -773,10 +784,19 @@ function Login({ onLogin, theme, toggleTheme }) {
       sessionStorage.setItem("nerveCenterSession", session);
       localStorage.removeItem("nerveCenterSession");
     }
+    if (dieselPortal && new URLSearchParams(window.location.search).get('dieselSignIn') !== '1') {
+      window.location.assign('https://pulse-lll.cmll.in/api/sign-in/start');
+      return;
+    }
     onLogin(JSON.parse(session));
   };
   const signIn = async () => {
     if(working)return;
+    if (dieselPortal && (!username.trim() || !password)) {
+      setError(!username.trim() ? 'Username is required.' : 'Password is required.');
+      document.getElementById(!username.trim() ? 'login-username' : 'login-password')?.focus();
+      return;
+    }
     setWorking(true);
     setError("");
     try {
@@ -875,15 +895,15 @@ function Login({ onLogin, theme, toggleTheme }) {
         </div>
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
-          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal&&!hrPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
+          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal&&!hrPortal&&!dieselPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
           <button type="button" className="login-mis-link" aria-pressed={misPortal} onClick={()=>window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start')}><FileBarChart /><span><strong>MIS</strong>Open MIS sign in</span></button>
           <button type="button" className="login-hr-link" aria-pressed={hrPortal} disabled={working} onClick={() => selectLoginPortal(false, true)}><Users /><span><strong>HR</strong>Open HR sign in</span></button>
-          <a className="login-diesel-link" href="https://pulse-lll.cmll.in/" aria-label="Open Diesel application">
-            <Fuel aria-hidden="true" /><span><strong>Diesel</strong>Open application</span>
-          </a>
+          <button type="button" className="login-diesel-link" aria-pressed={dieselPortal} disabled={working} onClick={() => selectLoginPortal(false, false, true)}>
+            <Fuel aria-hidden="true" /><span><strong>Diesel</strong>Open Diesel sign in</span>
+          </button>
         </div>
         <div className="login-message">
           <div className="eyebrow"><span /> {accountsPortal?'Secure accounts workspace':'Mission-critical maintenance'}</div>
@@ -961,6 +981,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           {resetRequest && <button type="button" className="reset-start-over" onClick={() => { setResetRequest(null); setResetOtp(""); setNewPassword(""); setConfirmation(""); setError(""); }}>Request another OTP</button>}
         </form> : <form
           className="loginbox"
+          noValidate={dieselPortal && (!username.trim() || !password)}
           onSubmit={(event) => {
             event.preventDefault();
             signIn();
@@ -968,9 +989,9 @@ function Login({ onLogin, theme, toggleTheme }) {
         >
           <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <AuthModeTabs mode="signin" onModeChange={(mode) => { if(misPortal&&mode==='reset'){setError('Reset your shared Pulse password using Fleet sign in, or ask your administrator.');return;}setLoginMode(mode); setError(""); setNotice(""); }} />
-          <small className="login-kicker"><LockKeyhole /> {misPortal?'SECURE MIS PORTAL':accountsPortal?'SECURE ACCOUNTS PORTAL':'SECURE OPERATIONS PORTAL'}</small>
-          <h2>{misPortal?'MIS sign in':accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
-          <p>{misPortal?'Enter your existing Pulse username and password. You will continue automatically to Pulse-II.':accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
+          <small className="login-kicker"><LockKeyhole /> {dieselPortal?'SECURE DIESEL PORTAL':misPortal?'SECURE MIS PORTAL':accountsPortal?'SECURE ACCOUNTS PORTAL':'SECURE OPERATIONS PORTAL'}</small>
+          <h2>{dieselPortal?'Diesel sign in':misPortal?'MIS sign in':accountsPortal?'Accounts sign in':'Welcome Back'}</h2>
+          <p>{dieselPortal?'Enter your Pulse username and password to open Diesel.':misPortal?'Enter your existing Pulse username and password. You will continue automatically to Pulse-II.':accountsPortal?'Sign in with your authorised Accounts user ID.':'Sign in to access your fleet operations workspace.'}</p>
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
           {!misPortal&&!accountsPortal&&loginRoles.length>0&&<label>Choose your assigned workspace<select required value={selectedLoginRole} onChange={event=>setSelectedLoginRole(event.target.value)}><option value="">Select workspace</option>{loginRoles.map(role=><option key={role}>{role}</option>)}</select></label>}
           <label className="login-label" htmlFor="login-username">{misPortal?'Pulse username':'User name'}</label>
@@ -982,6 +1003,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
+                if (dieselPortal && !username.trim()) { setError('Username is required.'); return; }
                 passwordInputRef.current?.focus();
               }}
               placeholder="Enter your user name"
@@ -1048,7 +1070,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <button
             type="submit"
             className="primary"
-            disabled={working || !username.trim() || !password}
+            disabled={working || (!dieselPortal && (!username.trim() || !password))}
           >
             {working ? "Signing in…" : "Sign in"} <ChevronRight />
           </button>
