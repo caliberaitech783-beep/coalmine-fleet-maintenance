@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('Fleet is the default and portals have explicit selectors',()=>{
   assert.match(source,/\[accountsPortal,setAccountsPortal\]=useState\(false\)/);
-  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal&&!hrPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
+  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
   assert.match(source,/aria-pressed=\{accountsPortal\} onClick=\{\(\)=>selectLoginPortal\(true\)\}/);
   assert.match(source,/<strong>Fleet<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
@@ -24,9 +24,7 @@ test('mobile application tiles wrap in two columns, with a single column on narr
   assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
 
-test('MIS keeps its handoff while HR opens inside Pulse',()=>{
+test('MIS uses the existing Pulse handoff, and HR is launched from Pulse-II',()=>{
  const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
- assert.ok(links);assert.match(links,/className="login-mis-link"/);assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));assert.match(links,/<strong>MIS<\/strong>/);assert.match(links, /<button type="button" className="login-hr-link" aria-pressed=\{hrPortal\}/);
- assert.match(source, /<iframe[\s\S]*?title="Caliber HR"[\s\S]*?embedded=pulse/);
- assert.match(source, /event\.origin !== hrWorkspaceOrigin \|\| event\.source !== frame\.contentWindow/);
+ assert.ok(links);assert.match(links,/className="login-mis-link"/);assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));assert.match(links,/<strong>MIS<\/strong>/);assert.doesNotMatch(links,/login-hr-link|hrpulse\.cmll\.in/);
 });
