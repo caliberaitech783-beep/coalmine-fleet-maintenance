@@ -784,7 +784,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         if(!/^[A-Za-z0-9_-]{43}$/.test(misHandoff.state)||!/^[A-Za-z0-9_-]{43}$/.test(misHandoff.challenge)){
           window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start');return;
         }
-        const response=await fetch('/api/mis-login/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,...misHandoff})});
+        const response=await fetch('/api/mis-login/authorize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password,remember:rememberMe===true,...misHandoff})});
         const data=await readApiJson(response,'Could not sign in to MIS.');
         const target=new URL(data.redirectUrl);
         if(target.origin!=='https://pulse-ll.cmll.in'||target.pathname!=='/api/mis-credentials/callback')throw new Error('Invalid MIS sign-in destination.');

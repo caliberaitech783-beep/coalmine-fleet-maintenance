@@ -25,19 +25,22 @@ export function installMisLoginHandoff(app,{pool,identity}){
   if(res.statusCode>=400||!result?.grant)return res.json(result);
   const code=randomBytes(32).toString('base64url');
   await pool.query('DELETE FROM mis_login_codes WHERE expires_at<=NOW()');
-  await pool.query("INSERT INTO mis_login_codes(code_hash,challenge,state,grant_token,expires_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '60 seconds')",[digest(code),challenge,state,result.grant]);
+  await pool.query("INSERT INTO mis_login_codes(code_hash,challenge,state,grant_token,expires_at,remember) VALUES($1,$2,$3,$4,NOW()+INTERVAL '60 seconds',$5)",[digest(code),challenge,state,result.grant,req.body?.remember===true]);
   const target=new URL(callback);target.searchParams.set('code',code);target.searchParams.set('state',state);
   res.json({redirectUrl:target.toString()});
  }));
  app.post('/api/integrations/mis/exchange',safe(async(req,res)=>{
   const {code,state,verifier}=req.body||{};
   if(!valid(code)||!valid(state)||!valid(verifier))return res.status(400).json({error:'Invalid MIS sign-in handoff.'});
-  const {rows}=await pool.query('DELETE FROM mis_login_codes WHERE code_hash=$1 AND challenge=$2 AND state=$3 AND expires_at>NOW() RETURNING grant_token',[digest(code),proof(verifier),state]);
+  const {rows}=await pool.query('DELETE FROM mis_login_codes WHERE code_hash=$1 AND challenge=$2 AND state=$3 AND expires_at>NOW() RETURNING grant_token,remember',[digest(code),proof(verifier),state]);
   if(!rows[0])return res.status(401).json({error:'MIS sign-in expired. Start again from Pulse.'});
   const validationReq=Object.assign(Object.create(req),{body:{grant:rows[0].grant_token}});
   const result=await capture(identity.handlers['/api/integrations/mis/validate'],validationReq,res);
   if(res.statusCode>=400||!result?.profile)return res.json(result);
-  res.json({grant:rows[0].grant_token,profile:result.profile});
+  res.json({grant:rows[0].grant_token,profile:result.profile,remember:rows[0].remember===true});
  }));
- return {initialize:()=>pool.query('CREATE TABLE IF NOT EXISTS mis_login_codes(code_hash TEXT PRIMARY KEY,challenge TEXT NOT NULL,state TEXT NOT NULL,grant_token TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL)')};
+ return {initialize:async()=>{
+  await pool.query('CREATE TABLE IF NOT EXISTS mis_login_codes(code_hash TEXT PRIMARY KEY,challenge TEXT NOT NULL,state TEXT NOT NULL,grant_token TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL)');
+  await pool.query('ALTER TABLE mis_login_codes ADD COLUMN IF NOT EXISTS remember BOOLEAN NOT NULL DEFAULT false');
+ }};
 }

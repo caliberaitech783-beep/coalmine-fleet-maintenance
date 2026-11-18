@@ -63,15 +63,17 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    await pool.query('DELETE FROM application_login_attempts WHERE key=$1',[key]);
    await pool.query("DELETE FROM application_login_attempts WHERE created_at<NOW()-INTERVAL '20 minutes'");
    const token=randomUUID(),grant=randomBytes(32).toString('base64url');
+   // "Remember me" on the MIS sign-in page: the grant lasts 30 days instead of 7.
+   const grantDays=application==='MIS'&&req.body?.remember===true?30:7;
    await sessionStore.create({token,...profile});
-   await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+INTERVAL '7 days')",[digest(grant),application,row.id,version(row.record_data,application),token]);
+   await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application),token,grantDays]);
    await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
    req.audit={eventType:'Security',module:'Authentication',action:`${application} login`,actorLogin:profile.login,actorName:profile.name,actorRole:profile.assignedRole,targetType:'User account',targetReference:String(row.id),changedFields:[]};req.auditSessionToken=token;
    res.json({grant,profile});
   });
   route('validate',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '7 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
    const row=rows[0],profile=pulseApplicationProfile(row,application);
    if(!profile||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
@@ -79,7 +81,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   });
   if(application==='HR')route('directory',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '7 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
    const row=rows[0],profile=pulseApplicationProfile(row,application);
    if(!profile||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Pulse sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
