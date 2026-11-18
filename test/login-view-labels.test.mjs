@@ -9,7 +9,7 @@ test("login uses one account form and lets the saved user type choose the worksp
   const login=source.slice(source.indexOf("function Login"),source.indexOf("function Side"));
   assert.doesNotMatch(login, /setRole|Choose your access role|Desktop View|Mobile View/);
   assert.match(source, /body: JSON\.stringify\(\{ username, password, portal:accountsPortal\?'accounts':'operations', selectedRole:selectedLoginRole \}\)/);
-  assert.match(login, /<h2>\{misPortal\?'MIS sign in':accountsPortal\?'Accounts sign in':'Welcome Back'\}<\/h2>/);
+  assert.match(login, /<h2>\{dieselPortal\?'Diesel sign in':misPortal\?'MIS sign in':accountsPortal\?'Accounts sign in':'Welcome Back'\}<\/h2>/);
   assert.match(source, /<b>One secure login<\/b>/);
   assert.doesNotMatch(server, /filterRowsByRequestedRole|requestedRole/);
   assert.match(server, /const loginRows=loginRecordCandidates\(userRows,username\)/);
@@ -29,7 +29,7 @@ test("Enter moves from the login user name to the password and the form submits 
   const login = source.slice(source.indexOf("function Login"), source.indexOf("function Side"));
 
   assert.match(login, /const passwordInputRef = useRef\(null\)/);
-  assert.match(login, /if \(event\.key !== "Enter"\) return;\s*event\.preventDefault\(\);\s*passwordInputRef\.current\?\.focus\(\);/);
+  assert.match(login, /if \(event\.key !== "Enter"\) return;\s*event\.preventDefault\(\);\s*if \(dieselPortal && !username\.trim\(\)\) \{ setError\('Username is required\.'\); return; \}\s*passwordInputRef\.current\?\.focus\(\);/);
   assert.match(login, /<input id="login-password"\s*ref=\{passwordInputRef\}/);
   assert.match(login, /onSubmit=\{\(event\) => \{\s*event\.preventDefault\(\);\s*signIn\(\);\s*\}\}/);
 });
