@@ -61,6 +61,7 @@ function previousLocalDate(date) {
 }
 
 export function shiftWindowForDate(date, {site = '', shifts = [], shift = ALL_SHIFTS_KEY} = {}) {
+  // The selected date is the shift's business date; an overnight end belongs to the following calendar day.
   const selected = clean(shift).toUpperCase();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(clean(date)) || !selected || selected.toLowerCase() === ALL_SHIFTS_KEY) return null;
   const siteKey = canonicalSiteName(site);
@@ -75,6 +76,7 @@ export function shiftWindowForDate(date, {site = '', shifts = [], shift = ALL_SH
 }
 
 export function timestampMatchesShiftWindow(value, {site = '', shifts = [], shift = ALL_SHIFTS_KEY, from = '', to = '', now = new Date()} = {}) {
+  // A future shift is empty, while a running shift is capped at the verified current time.
   const selected = clean(shift).toUpperCase();
   if (!selected || selected.toLowerCase() === ALL_SHIFTS_KEY) return true;
   const epoch = indiaDateTimeEpoch(value), nowEpoch = indiaDateTimeEpoch(now);
