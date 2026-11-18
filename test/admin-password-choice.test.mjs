@@ -134,5 +134,10 @@ test('admin password fields require confirmation without browser minimum-length 
   assert.match(form, /name="confirmation"[^>]+required/);
   assert.match(form, /registered phone number/);
   assert.match(form, /name="requireChange"[^>]+defaultChecked/);
-  assert.match(ui, /disabled=\{working \|\| !username\.trim\(\) \|\| !password\}/);
+  // The sign-in button still needs a user name and a password (Diesel checks on submit; the
+  // MIS Telegram-code sign-in needs the 6-digit code instead of the password).
+  const signInButton = ui.slice(ui.lastIndexOf('<button', ui.indexOf('{working ? "Signing in…" : "Sign in"}')), ui.indexOf('{working ? "Signing in…" : "Sign in"}'));
+  assert.match(signInButton, /disabled=\{working \|\|/);
+  assert.match(signInButton, /!username\.trim\(\)/);
+  assert.match(signInButton, /!password\b/);
 });
