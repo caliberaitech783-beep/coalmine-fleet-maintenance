@@ -46,3 +46,31 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  for(let i=0;i<10;i++)await call('/api/integrations/mis/authenticate',{username:'missing',password:'wrong'});assert.equal((await call('/api/integrations/mis/authenticate',{username:'missing',password:'wrong'})).status,429);
  }finally{await db.close()}
 });
+
+test('Remember me on the MIS sign-in gives a 30-day grant and tells Pulse-II; without it the grant stays 7 days',async()=>{
+ const db=new PGlite();try{
+ await db.exec(`CREATE TABLE app_metadata(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE master_records(id BIGSERIAL PRIMARY KEY,master_name TEXT,record_data JSONB);CREATE TABLE auth_sessions(token UUID PRIMARY KEY,role TEXT,employee_name TEXT,login_name TEXT,user_type TEXT,assigned_role TEXT,permissions JSONB,created_at TIMESTAMPTZ DEFAULT NOW(),last_seen_at TIMESTAMPTZ DEFAULT NOW(),session_public_id TEXT UNIQUE DEFAULT gen_random_uuid()::text);`);
+ const pool={query:(sql,params)=>sql.split(';').filter(x=>x.trim()).length>1?db.exec(sql):db.query(sql,params)};
+ await initializeSingleLogin(pool);
+ const routes=new Map(),app={post:(url,fn)=>routes.set(url,fn),options(){}};
+ const identity=installPulseApplicationIdentity(app,{pool,sessionStore:createSessionStore(pool)});await identity.initialize();
+ const handoff=installMisLoginHandoff(app,{pool,identity});await handoff.initialize();
+ await db.query("INSERT INTO master_records(master_name,record_data) VALUES('Users & employees',$1)",[JSON.stringify({login:'owner',employee:'Person',userType:'Mobile User',passwordHash:hashPassword('pulse-test-password'),misAccess:true,misDesktopAccess:['Dashboard']})]);
+ const call=async(path,body)=>{let value;const res={statusCode:200,set(){return this},status(code){this.statusCode=code;return this},json(data){value=data;return this}};await routes.get(path)({body,headers:{},ip:'127.0.0.1'},res,e=>{throw e});return {status:res.statusCode,value}};
+ const signIn=async remember=>{
+  const verifier=randomBytes(32).toString('base64url'),state=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
+  const authorized=await call('/api/mis-login/authorize',{username:'owner',password:'pulse-test-password',state,challenge,...(remember===undefined?{}:{remember})});assert.equal(authorized.status,200);
+  const code=new URL(authorized.value.redirectUrl).searchParams.get('code');
+  const completed=await call('/api/integrations/mis/exchange',{code,state,verifier});assert.equal(completed.status,200);
+  const {rows}=await db.query("SELECT ROUND(EXTRACT(EPOCH FROM expires_at-NOW())/86400) AS days FROM application_identity_grants ORDER BY expires_at DESC LIMIT 1");
+  return {remember:completed.value.remember,days:Number(rows[0].days),grant:completed.value.grant};
+ };
+ for(const value of [undefined,false,'true'])assert.deepEqual((({remember,days})=>({remember,days}))(await signIn(value)),{remember:false,days:7});
+ const kept=await signIn(true);assert.equal(kept.remember,true);assert.equal(kept.days,30);
+ // A remembered sign-in stays valid after its Pulse session passes 7 days; an ordinary one does not.
+ await db.query("UPDATE auth_sessions SET created_at=NOW()-INTERVAL '20 days'");
+ assert.equal((await call('/api/integrations/mis/validate',{grant:kept.grant})).status,200);
+ await db.query("UPDATE application_identity_grants SET expires_at=NOW()-INTERVAL '1 second'");
+ assert.equal((await call('/api/integrations/mis/validate',{grant:kept.grant})).status,401);
+ }finally{await db.close()}
+});
