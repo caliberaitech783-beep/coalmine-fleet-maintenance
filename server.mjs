@@ -27,6 +27,7 @@ import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
+import {DIESEL_FEED_MASTERS,dieselMasterFeed} from './diesel-master-feed.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -224,8 +225,9 @@ const masterReadCache=createFeedCache({ttlMs:300_000});
 // The user record read for the Telegram membership check on every request, and the user and
 // privilege records behind the live Dashboard authorization, are held the same way, per login.
 const misBridgeFeedCache=createFeedCache({ttlMs:20_000}),misBridgeFleetCache=createFeedCache({ttlMs:30_000});
+const dieselMasterFeedCache=createFeedCache({ttlMs:60_000});
 const membershipUserRecords=new Map(),dashboardAuthorizations=new Map();
-const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
+const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();dieselMasterFeedCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
 // Closes every shared read window now and again once the write has answered.
 function closeFeedWindows(res){
   requestFeedCache.clear();clearMisReadWindows();
@@ -1653,6 +1655,8 @@ const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   secret:process.env.DIESEL_SSO_CLIENT_SECRET,
   enabled:process.env.DIESEL_SSO_ENABLED,
   dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
+  // Read once a minute at most, however many Diesel users open Master Data.
+  readMasters:()=>dieselMasterFeedCache.read(async()=>dieselMasterFeed((await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[DIESEL_FEED_MASTERS])).rows)),
 });
 
 app.get('/api/app-version',(_req,res)=>{
