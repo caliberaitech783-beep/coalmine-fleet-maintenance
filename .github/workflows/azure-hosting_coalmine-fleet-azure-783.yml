@@ -361,6 +361,11 @@ jobs:
           echo "Front Door-only production origin verification failed"
           exit 1
 
+      - name: Verify Diesel sign-in readiness
+        timeout-minutes: 6
+        shell: bash
+        run: bash scripts/verify-diesel-sign-in.sh
+
       - name: Stop staging slot
         if: always()
         run: az webapp stop --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging

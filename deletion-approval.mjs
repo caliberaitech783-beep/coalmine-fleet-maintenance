@@ -25,7 +25,7 @@ CREATE INDEX IF NOT EXISTS deletion_approvals_session_created ON deletion_approv
 const SECURITY_TABLES = new Set(['auth_sessions','password_change_sessions','password_reset_sessions',
  'telegram_link_tokens','hr_credential_attempts','hr_credential_grants','mis_credential_attempts',
  'mis_credential_grants','application_login_attempts','application_identity_grants',
- 'mis_login_codes','mis_sso_codes','mis_sso_grants','mis_sso_pending']);
+ 'mis_login_codes','mis_sso_codes','mis_sso_grants','mis_sso_pending','diesel_sso']);
 export function destructiveTables(sql) {
   // TRUNCATE in a revision trigger event list describes when the trigger runs.
   const clean = String(sql).replace(/\/\*[\s\S]*?\*\//g,' ').replace(/--[^\n]*/g,' ')
