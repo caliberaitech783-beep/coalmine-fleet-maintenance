@@ -67,6 +67,9 @@ test('real shared session reader blocks normal and privileged APIs while allowin
   for(const session of [{login:'a',role:'normal'},{login:'a',role:'super',permissions:{adminLevel:'Manager'}},{login:'a',role:'super',permissions:{adminLevel:'Super Admin'}}]){
     const read=new Function('sessionStore','membershipOnboardingPath','telegramMembershipFor',`${snippet};return readSession;`)({get:async()=>session},membershipOnboardingPath,async()=>({allowed:false}));
     await assert.rejects(read({headers:{},path:'/api/requests'}),error=>error.status===403&&error.code==='TELEGRAM_MEMBERSHIP_REQUIRED');
+    for(const operation of ['authorize','continue','exchange','validate']) {
+      assert.equal(await read({headers:{},path:'/api/diesel-sso/'+operation}),session);
+    }
     assert.equal(await read({headers:{},path:'/api/telegram/link'}),session);
     if(session.permissions?.adminLevel==='Super Admin')assert.equal(await read({headers:{},path:'/api/telegram/site-groups/membership'}),session);
     else await assert.rejects(read({headers:{},path:'/api/telegram/site-groups/membership'}));

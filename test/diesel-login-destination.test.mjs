@@ -18,10 +18,10 @@ test('Diesel selected on the launcher or on a shared login link takes priority o
   assert.match(routing, /if \(locationGate\.phase!=='open'\)[^\n]+\n\s*if \(isDieselLogin\(window\.location\.search\)\) return <DieselSharedSignIn[^\n]+\n\s*if \(session\.userType/);
 });
 
-test('a pending membership check keeps Diesel pending and a successful retry opens its verified callback', async () => {
-  const hold = () => Promise.resolve(Response.json({error:'Verify your site groups.'}, {status:403}));
+test('Diesel shows access errors and a successful retry opens its verified callback', async () => {
+  const hold = () => Promise.resolve(Response.json({error:'Access denied.'}, {status:403}));
   const pending = await completeDieselHandoff(search, 'test-session', undefined, hold);
-  assert.deepEqual(pending, {membership:true, message:'Verify your site groups.'});
+  assert.deepEqual(pending, {message:'Access denied.'});
   const result = await completeDieselHandoff(search, 'test-session', undefined, async (path, options) => {
     assert.equal(path, '/api/diesel-sso/continue');
     assert.deepEqual(JSON.parse(options.body), {state, challenge});

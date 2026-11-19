@@ -19,7 +19,7 @@ export async function completeDieselHandoff(search, token, signal, fetcher) {
   });
   if (!response.ok) {
     const details = await response.json().catch(() => ({}));
-    return { membership: response.status === 403, message: details.error || 'Pulse could not complete Diesel sign-in. Please try again.' };
+    return { message: details.error || 'Pulse could not complete Diesel sign-in. Please try again.' };
   }
   const { redirectUrl } = await response.json();
   const target = new URL(redirectUrl);

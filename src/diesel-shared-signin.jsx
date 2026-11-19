@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import TelegramGate from './telegram-gate.jsx';
 import { completeDieselHandoff, dieselStart } from './diesel-handoff.mjs';
 
 export function DieselSharedSignIn({ token, logout }) {
@@ -32,6 +31,5 @@ export function DieselSharedSignIn({ token, logout }) {
         </div>
       </>}
     </section>
-    {result?.membership && <TelegramGate token={token} logout={logout}/>}
   </main>;
 }
