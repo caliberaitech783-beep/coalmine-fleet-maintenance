@@ -169,6 +169,11 @@ jobs:
         shell: bash
         run: bash scripts/configure-azure-performance.sh
 
+      - name: Keep Diesel sign-in settings on both slots
+        timeout-minutes: 8
+        shell: bash
+        run: bash scripts/pin-diesel-sign-in-settings.sh
+
       - name: Start staging slot and discover its URL
         shell: bash
         run: |

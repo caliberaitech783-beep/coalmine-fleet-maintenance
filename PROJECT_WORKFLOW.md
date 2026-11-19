@@ -64,6 +64,10 @@ Verify a downloaded ZIP with `node scripts/verify-selective-media-backup.mjs <fi
 
 Diesel (`https://pulse-lll.cmll.in`) shows Pulse's Site, Region, Equipment, Employee and Driver masters read-only at the top of its Master Data. Its server reads them from `POST /api/diesel-sso/masters` with the shared Diesel sign-in secret and the grant of a person signed in to Pulse now; an expired or revoked Pulse session gets 401. `diesel-master-feed.mjs` builds the reply from Region master (regions and their sites), Equipment master, C-Dir Employee master and C-Dir Contact master (phone and email only). Drivers are the directory employees whose designation names a driver or operator, excluding data-entry operators. Vacant posts, logins, privileges, date of birth, UAN, Aadhaar and emergency contacts are not sent. The read is held for 60 s and cleared by any write. Nothing in Pulse is changed by this feed.
 
+### Diesel sign-in settings and slot swaps
+
+`DIESEL_SSO_CLIENT_SECRET` and `DIESEL_SSO_ENABLED` must exist on both the production and staging slots as deployment slot settings. When they sat on one slot only, the swap on 19 November 2026 left production without them and Diesel sign-in stopped until the deploy job was re-run. Before each staging deployment, `scripts/pin-diesel-sign-in-settings.sh` copies the secret from production (or from staging when production has none) and pins both settings on both slots, writing only where something is missing. A write to production restarts it once. Values are never printed.
+
 ## MIS shared sign-in
 
 Pulse authorizes the separate application at `https://pulseii.cmll.in` through `mis-shared-signin.mjs`. MIS users, MIS managers and eligible administrators reuse their Pulse identity without copying passwords into the MIS database. Short-lived, single-use codes use S256 PKCE and browser-bound state; MIS creates its own session and rechecks the linked Pulse session on authenticated requests. HR, Accounts and Tender identities are excluded. `MIS_SSO_MODE=off` disables this handoff; Pulse defaults to issuer mode. MIS owns a separate repository, App Service and `caliber_mis` database.
