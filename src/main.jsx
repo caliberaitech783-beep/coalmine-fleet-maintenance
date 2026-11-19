@@ -12,7 +12,8 @@ import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdow
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
-import {useDieselSharedSignIn} from './diesel-shared-signin.jsx';
+import {DieselSharedSignIn} from './diesel-shared-signin.jsx';
+import {isDieselLogin} from './diesel-handoff.mjs';
 import { compressImageDataUrl, readBlobDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
 import BdmsAssistant from './bdms-assistant.jsx';
@@ -459,7 +460,8 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
     fetch: nativeFetch, getToken: () => authToken, deviceId: clientDeviceId,
     onExpired: (token) => {
       clearStoredSession(token);
-      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
+      if (isDieselLogin(window.location.search)) window.location.reload();
+      else window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
     },
   });
   window.__sessionExpiryFetch = true;
@@ -754,7 +756,10 @@ function Login({ onLogin, theme, toggleTheme }) {
     } else {
       return;
     }
-    window.history.replaceState(null, "", window.location.pathname);
+    params.delete(SESSION_EXPIRED_PARAM);
+    params.delete("updated");
+    const remaining = isDieselLogin(params) ? "?" + params.toString() : "";
+    window.history.replaceState(null, "", window.location.pathname + remaining);
   }, []);
   const saveSession = (data) => {
     authToken = data.token;
@@ -12179,7 +12184,6 @@ function App() {
     [accountWorkspace,setAccountWorkspace]=useNavigationState("main.accountWorkspace", "accounts"),
     [accountDirectoryView,setAccountDirectoryView]=useNavigationState("main.accountDirectoryView", "directory");
   useMisSharedSignIn(session);
-  useDieselSharedSignIn(session);
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([active]);
   const requestLoadSequence = useRef(0);
@@ -12699,6 +12703,7 @@ function App() {
   ]);
   if (!session || new URLSearchParams(window.location.search).get('login')==='mis') return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (locationGate.phase!=='open') return <SignInLocationScreen gate={locationGate} onSignOut={logout}/>;
+  if (isDieselLogin(window.location.search)) return <DieselSharedSignIn key={session.token} token={session.token} logout={logout}/>;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>
     <main>{accountWorkspace==="directory"?<CdirModule token={session.token} ReportSection={ReportSection} initialView={accountDirectoryView} onViewChange={setAccountDirectoryView}/> :ibossAccountsAllowed(session)?<IbossAccounts token={session.token} permissions={session.permissions} ReportSection={ReportSection} />:<p>Accounts access is not available. Contact your administrator.</p>}</main>
@@ -12866,7 +12871,7 @@ function SiteUpdateCountdown() {
 
 createRoot(document.getElementById("root")).render(
   <ApplicationErrorBoundary>
-    <SiteUpdateCountdown />
+    {!isDieselLogin(window.location.search) && <SiteUpdateCountdown />}
     <App />
   </ApplicationErrorBoundary>,
 );
