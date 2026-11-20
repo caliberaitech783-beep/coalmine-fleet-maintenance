@@ -8465,6 +8465,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Breakdown category and sub-category are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
       return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
+    // Trial workflow authority is valid only when its HR menu and site scope are saved together.
     if(master==='Users & employees'){
       const trialError=records.map(hrTrialAccessError).find(Boolean);
       if(trialError)return res.status(400).json({error:trialError});
