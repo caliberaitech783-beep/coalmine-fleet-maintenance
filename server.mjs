@@ -160,6 +160,7 @@ import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request
 import {AUDIT_HIDDEN_EVENT_TYPES,auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {requestDeletionBlocker,requestDeletionSnapshot,normalizeDeletionReferences,REQUEST_BULK_DELETE_LIMIT} from './request-deletion.mjs';
 import {duplicateUsername,lockUsernamesForWrite} from './user-username.mjs';
+import {hrTrialAccessError,prepareHrTrialAccess} from './hr-trial-access.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
@@ -8464,6 +8465,10 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Breakdown category and sub-category are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
       return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
+    if(master==='Users & employees'){
+      const trialError=records.map(hrTrialAccessError).find(Boolean);
+      if(trialError)return res.status(400).json({error:trialError});
+    }
     let prepared;
     try{
       prepared=records.map((record,index)=>{
@@ -8474,7 +8479,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
-          return prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)))));
+          return prepareHrTrialAccess(prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))))));
         }
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
@@ -8725,6 +8730,9 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       storedRecord=prepareMisCredentials(storedRecord,previousRecord);
       if(hrAccessManagementRequested(record,previousRecord)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage HR access.'});
       storedRecord=prepareHrCredentials(storedRecord,previousRecord);
+      const trialError=hrTrialAccessError(storedRecord);
+      if(trialError)return res.status(400).json({error:trialError});
+      storedRecord=prepareHrTrialAccess(storedRecord);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');

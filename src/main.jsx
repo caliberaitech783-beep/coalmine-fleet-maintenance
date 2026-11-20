@@ -8,6 +8,8 @@ import {useLmvFleet,LmvFleetControls,LmvFleetView,LmvFleetDialog,LmvReportsPage}
 import {lmvCounts,lmvRowsForMode,LMV_DETAIL_COLUMNS} from "../lmv-fleet.mjs";
 import {MIS_APPLICATION_URL,MIS_PERMISSION_OPTIONS,MIS_ALL_PERMISSIONS,normalizedMisSelection,misAccessEnabled} from '../mis-permissions.mjs';
 import {HR_APPLICATION_URL,HR_PERMISSION_OPTIONS,HR_ALL_PERMISSIONS,normalizedHrSelection,hrAccessEnabled} from '../hr-permissions.mjs';
+import HrTrialAccessFields from './hr-trial-access-fields.jsx';
+import {hrTrialAccessError} from '../hr-trial-access.mjs';
 import {subCategoriesForRepairType,requestRequiresSubCategory} from "../breakdown-sub-category.mjs";
 import { useNavigationState, configureNavigation, resetNavigation } from './navigation-state.jsx';
 import {summarizeUserSessions} from '../user-session-summary.mjs';
@@ -3592,6 +3594,7 @@ const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenanc
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["hrAccess","HR portal access","checkbox"],["hrDesktopAccess","HR desktop menus","multi-checkbox"],["hrMobileAccess","HR mobile menus","multi-checkbox"],
+  ["hrAccountStatus","HR account status"],["hrTrialAssignments","Trial role and site assignments"],
   ["misAccess","MIS application access","checkbox"],["misDesktopAccess","MIS desktop menus","multi-checkbox"],["misMobileAccess","MIS mobile menus","multi-checkbox"],
   ["tenderAccess","Tender application access","checkbox"],
   ["tenderDesktopAccess","Tender desktop menus","multi-checkbox"],
@@ -4880,13 +4883,15 @@ function MisApplicationAccessFields({record={},onEnabled}){
  </section>;
 }
 
-function HrApplicationAccessFields({record={},onEnabled}){
+function HrApplicationAccessFields({record={},siteOptions=[],onEnabled}){
  const [enabled,setEnabled]=useState(()=>hrAccessEnabled(record));
  const [desktop,setDesktop]=useState(()=>normalizedHrSelection(record.hrDesktopAccess));
  const [mobile,setMobile]=useState(()=>normalizedHrSelection(record.hrMobileAccess));
+ const requireEmployeeMaster=assignments=>{if(!assignments.length)return;setDesktop(current=>[...new Set([...current,'Employee Master'])]);setMobile(current=>[...new Set([...current,'Employee Master'])]);};
  return <section className="view-menu-access full"><header><div><b>HR portal access</b><small>Uses this employee’s existing Pulse username and password. HR menu privileges remain separate.</small></div><a href={HR_APPLICATION_URL} target="_blank" rel="noopener noreferrer">Open HR</a></header>
  <label><input type="checkbox" name="hrAccess" checked={enabled} onChange={event=>{setEnabled(event.target.checked);onEnabled?.(event.target.checked);}}/> Enable HR portal login</label>
  {[['desktop',desktop,setDesktop],['mobile',mobile,setMobile]].map(([view,selected,setSelected])=><fieldset key={view} className="user-access-field access-section-card"><legend>HR · {view==='desktop'?'Desktop':'Mobile'} menus and masters</legend><input type="hidden" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value=""/><div><AccessSelectAll label="Select all HR menus and masters" options={HR_ALL_PERMISSIONS} selected={selected} onChange={setSelected}/>{HR_PERMISSION_OPTIONS.map(option=><label key={option.key}><input type="checkbox" name={view==='desktop'?'hrDesktopAccess':'hrMobileAccess'} value={option.key} checked={selected.includes(option.key)} onChange={event=>setSelected(current=>event.target.checked?[...current,option.key]:current.filter(key=>key!==option.key))}/><span><b>{option.label}</b><small>{option.group}</small></span></label>)}</div></fieldset>)}
+ <HrTrialAccessFields record={record} siteOptions={siteOptions} onAssignmentsChange={requireEmployeeMaster}/>
  </section>;
 }
 
@@ -4938,7 +4943,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       </label>)}</div>}
     </fieldset>
     <div className="full" hidden={roleSection!=="mis"}><MisApplicationAccessFields record={record} /></div>
-    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record} onEnabled={(enabled) => setAccountRole(current => enabled ? current || "HR Application User" : current === "HR Application User" ? "" : current)}/></div>
+    <div className="full" hidden={roleSection!=="hr"}><HrApplicationAccessFields record={record} siteOptions={siteOptions} onEnabled={(enabled) => setAccountRole(current => enabled ? current || "HR Application User" : current === "HR Application User" ? "" : current)}/></div>
     {isDesktopUser&&<fieldset className="account-role-field full"><legend>Additional workspaces</legend>{['Account User','Tender User'].map(role=><label key={role}><input type="checkbox" checked={selectedRoles.includes(role)} onChange={event=>toggleRole(role,event.target.checked)} /> {role}</label>)}</fieldset>}
     {selectedRoles.includes('Account User')&&<fieldset className="account-role-field full"><legend>Accounts privileges</legend><p>Only selected Accounts sections will be accessible.</p><input type="hidden" name="accountAccess" value="" /><div>{ACCOUNT_PRIVILEGES.map(option=><label key={option}><input type="checkbox" name="accountAccess" value={option} checked={selectedAccounts.includes(option)} onChange={event=>setSelectedAccounts(current=>event.target.checked?[...current,option]:current.filter(value=>value!==option))} /><span>{option}</span></label>)}</div></fieldset>}
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
@@ -5184,6 +5189,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onDeleteSelecte
       record.login = record.login.toUpperCase();
       record.employee = record.employee.toUpperCase();
       applyUserRoleDefaults(record);
+      const trialError=hrTrialAccessError(record);
+      if(trialError){alert(trialError);return;}
       if(!record.userType){alert('Select at least one user role.');return;}
     }
     if (name === "Users & employees" && record.userType === "Mobile User" && assignedUserRoles(record).some(role=>!["Tender User","Account User"].includes(role)) && !record.site) {
@@ -8720,6 +8727,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       updated.employee = updated.employee.toUpperCase();
     }
     if (name === "Users & employees") applyUserRoleDefaults(updated);
+    if(name==='Users & employees'){
+      const trialError=hrTrialAccessError(updated);
+      if(trialError){alert(trialError);return;}
+    }
     if(name==='Users & employees'&&!updated.userType){alert('Select at least one user role.');return;}
     if (name === "Users & employees" && updated.userType === "Mobile User" && !updated.site) {
       alert("Select at least one site for this user.");
