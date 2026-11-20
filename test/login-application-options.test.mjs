@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('Fleet is the default and portals have explicit selectors',()=>{
   assert.match(source,/\[accountsPortal,setAccountsPortal\]=useState\(false\)/);
-  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal&&!dieselPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
+  assert.match(source,/aria-pressed=\{!accountsPortal&&!misPortal&&!hrPortal&&!dieselPortal\} onClick=\{\(\)=>selectLoginPortal\(false\)\}/);
   assert.match(source,/aria-pressed=\{accountsPortal\} onClick=\{\(\)=>selectLoginPortal\(true\)\}/);
   assert.match(source,/<strong>Fleet<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
@@ -24,11 +24,11 @@ test('mobile application tiles wrap in two columns, with a single column on narr
   assert.match(css,/@media\(max-width:360px\)\{.login-application-links\{grid-template-columns:minmax\(0,1fr\)\}\}/);
 });
 
-test('MIS and HR open the Pulse-II sign-in and workspace in the current tab',()=>{
- const links=source.split('<div className="login-application-links">')[1].split('</div>')[0];
- assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));
- assert.ok(links.includes('<a className="login-hr-link" href="https://pulse-ll.cmll.in/hr/?signin=1">'));
- assert.doesNotMatch(links,/target="_blank"|hrpulse\.cmll\.in/);
+test('MIS keeps its handoff while HR opens inside Pulse',()=>{
+ const links=source.match(/<div className="login-application-links">[\s\S]*?<\/div>/)?.[0];
+ assert.ok(links);assert.match(links,/className="login-mis-link"/);assert.ok(links.includes('https://pulse-ll.cmll.in/api/mis-credentials/start'));assert.match(links,/<strong>MIS<\/strong>/);assert.match(links, /<button type="button" className="login-hr-link" aria-pressed=\{hrPortal\}/);
+ assert.match(source, /<iframe[\s\S]*?title="Caliber HR"[\s\S]*?embedded=pulse/);
+ assert.match(source, /event\.origin !== hrWorkspaceOrigin \|\| event\.source !== frame\.contentWindow/);
 });
 
 test('Diesel selects the existing credentials form and keeps the Pulse handoff in the same tab', () => {
