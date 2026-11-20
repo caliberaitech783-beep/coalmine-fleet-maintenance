@@ -4,7 +4,8 @@ export const HR_TRIAL_ROLES=['HR Manager','Driver Trainer','PM','Office HR','Reg
 export const HR_TRIAL_ALL_SITES_ROLES=['Director','Trial Admin'];
 export const HR_ACCOUNT_STATUSES=['Active','Inactive'];
 
-const siteDirectory=new Map(REGION_DATA.flatMap(region=>region.sites.map(name=>[name.toLowerCase(),{code:name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,''),name,region:region.code}])));
+const trialSiteCodes={'Sasti OC':'WCL-SASTI','Majri OC':'WCL-MAJRI','Dhoptala OC (2nd)':'WCL-DHOPTALA','Gauri Pauni OC (2nd)':'WCL-GAURI','Lalpeth OC':'WCL-LALPETH','Jayant OC':'NCL-JAYANT','Dudhichua OC':'NCL-DUDW','Dudhichua East OC':'NCL-DUDE'};
+const siteDirectory=new Map(REGION_DATA.flatMap(region=>region.sites.map(name=>[name.toLowerCase(),{code:trialSiteCodes[name]||name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,''),name,region:region.code}])));
 
 export function normalizeHrTrialAssignments(raw){
   let values=raw;

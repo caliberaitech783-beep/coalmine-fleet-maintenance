@@ -5,7 +5,7 @@ import {hrTrialAccessError,normalizeHrTrialAssignments,prepareHrTrialAccess} fro
 const valid={hrAccess:true,hrDesktopAccess:'Employee Master',hrAccountStatus:'Active',hrTrialAssignments:JSON.stringify([{role:'Regional HR',sites:['Sasti OC']}])};
 
 test('Trial roles are stored together with stable site identity and derived region',()=>{
-  assert.deepEqual(normalizeHrTrialAssignments(valid.hrTrialAssignments),[{role:'Regional HR',allSites:false,sites:[{code:'SASTI-OC',name:'Sasti OC',region:'WCL'}]}]);
+  assert.deepEqual(normalizeHrTrialAssignments(valid.hrTrialAssignments),[{role:'Regional HR',allSites:false,sites:[{code:'WCL-SASTI',name:'Sasti OC',region:'WCL'}]}]);
   assert.equal(hrTrialAccessError(valid),'');
 });
 
