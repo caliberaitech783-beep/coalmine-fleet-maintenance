@@ -13,9 +13,11 @@ export const REQUIRED_SITE_LINKS={
   'Lalpeth OC':'https://t.me/+LuSNfCNrAWhkOTM1',
 };
 
-// Only onboarding and session lifecycle are available before verification.
+// Diesel authenticates with Pulse credentials independently of Telegram enrollment.
 export function membershipOnboardingPath(path){
-  return ['/api/telegram/me','/api/telegram/link','/api/logout','/api/session-status','/api/session-heartbeat'].includes(path);
+  return ['/api/telegram/me','/api/telegram/link','/api/logout','/api/session-status','/api/session-heartbeat',
+    '/api/diesel-sso/authorize','/api/diesel-sso/continue','/api/diesel-sso/exchange','/api/diesel-sso/validate',
+  ].includes(path);
 }
 
 export function requiredTelegramSites(user={}){

@@ -11,7 +11,7 @@ import {publicUserRecord,hashPassword} from '../password-auth.mjs';
 import {createSessionStore} from '../auth-session.mjs';
 
 const password='existing-pulse-password';
-const base={login:'FLEET.ONE',employee:'Person',userType:'Mobile User',userRoles:'Production User',passwordHash:hashPassword(password),hrAccess:true,hrDesktopAccess:['Dashboard'],hrMobileAccess:['Holiday & Leave']};
+const base={login:'FLEET.ONE',employee:'Person',userType:'Mobile User',userRoles:'Production User',passwordHash:hashPassword(password),hrAccess:true,hrDesktopAccess:['Dashboard'],hrMobileAccess:['Holiday & Leave'],hrAccountStatus:'Active',hrTrialAssignments:[{role:'PM',sites:[{code:'WCL-SASTI',name:'Sasti OC',region:'WCL'}],allSites:false}]};
 test('HR uses Pulse identity without separate credentials and retains saved menu privileges',()=>{
  const user=prepareHrCredentials({...base,hrLogin:'HR.ONE',hrPassword:password,hrPasswordHash:'ignored'});
  assert.equal(user.passwordHash,base.passwordHash);assert.equal(user.login,base.login);assert.equal(user.userRoles,base.userRoles);
@@ -29,9 +29,11 @@ test('HR uses Pulse credentials and grants only the selected desktop/mobile menu
  assert.equal(hrCredentialProfile({record_data:{...base,hrAccess:false}}),null);
  assert.equal(hrCredentialProfile({record_data:{...base,hrAccess:false,userRoles:'HR User'}}),null);
  for(const bad of [{active:false},{status:'Inactive'},{passwordHash:''},{mustChangePassword:true},{hrDesktopAccess:[],hrMobileAccess:[]}])assert.equal(hrCredentialProfile({record_data:{...base,...bad}}),null);
- const profile=hrCredentialProfile({record_data:base});
+ const profile=hrCredentialProfile({id:1,record_data:base});
  assert.deepEqual(profile.permissions.hrDesktopAccess,['Dashboard']);
  assert.deepEqual(profile.permissions.hrMobileAccess,['Holiday & Leave']);
+ assert.equal(profile.userId,'1');
+ assert.deepEqual(profile.permissions.hrTrialAssignments,[{role:'PM',allSites:false,sites:[{code:'WCL-SASTI',name:'Sasti OC',region:'WCL'}]}]);
  assert.equal(hrCredentialProfile({record_data:{...base,userType:'Super Admin',adminLevel:'Admin',hrAccess:false}}),null,'disabled independent credentials must not fall back to administrator access');
  const admin=hrCredentialProfile({record_data:{login:'admin',passwordHash:hashPassword('administrator-password'),userType:'Super Admin',adminLevel:'Admin'}});
  assert.deepEqual(admin.permissions.hrDesktopAccess,HR_ALL_PERMISSIONS);

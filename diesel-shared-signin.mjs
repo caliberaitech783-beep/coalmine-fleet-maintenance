@@ -7,7 +7,7 @@ const bearer = request => String(request.headers.authorization || '').replace(/^
 const cookie = (request, name) => String(request.headers.cookie || '').split(';')
   .map(entry => entry.trim()).find(entry => entry.startsWith(name + '='))?.slice(name.length + 1) || '';
 
-export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin }) {
+export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin, readMasters }) {
   let callback;
   if (proof(secret) && enabled === '1') {
     const origin = new URL(dieselOrigin || 'https://pulse-lll.cmll.in');
@@ -92,6 +92,19 @@ export function registerDieselSharedSignIn(app, { pool, requireSession, readSess
     if (response.headersSent) return;
     if (!profile?.login) return response.sendStatus(401);
     response.json({ profile: { login: profile.login, name: profile.name } });
+  }));
+  // Diesel's read-only copy of the Site, Region, Equipment, Employee and Driver masters. Diesel's
+  // server asks with the shared secret and the grant of a person who is signed in to Pulse now.
+  app.post('/api/diesel-sso/masters', serverRoute(async (request, response) => {
+    const { grant } = request.body || {};
+    if (!proof(grant)) return response.sendStatus(401);
+    const { rows } = await pool.query(
+      'SELECT session_token FROM diesel_sso WHERE grant_hash = $1 AND grant_expires_at > now()', [digest(grant)]);
+    const profile = await profileFor(rows[0]?.session_token, request, response);
+    if (response.headersSent) return;
+    if (!profile?.login) return response.sendStatus(401);
+    if (!readMasters) return response.sendStatus(404);
+    response.json({ masters: await readMasters() });
   }));
   app.post('/api/diesel-sso/revoke', serverRoute(async (request, response) => {
     const { grant } = request.body || {};

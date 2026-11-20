@@ -1,29 +1,35 @@
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { completeDieselHandoff, dieselStart } from './diesel-handoff.mjs';
 
-export function useDieselSharedSignIn(session) {
+export function DieselSharedSignIn({ token, logout }) {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState(null);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('dieselSignIn') !== '1' || !session?.token) return;
-    const state = params.get('state');
-    const challenge = params.get('code_challenge');
     const controller = new AbortController();
-
-    async function completeSignIn() {
-      const response = await fetch('/api/diesel-sso/continue', {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + session.token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ state, challenge }),
-        signal: controller.signal,
+    setResult(null);
+    completeDieselHandoff(window.location.search, token, controller.signal, window.fetch)
+      .then(outcome => {
+        if (controller.signal.aborted) return;
+        if (outcome.destination) window.location.replace(outcome.destination);
+        else setResult(outcome);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResult({ message: 'Pulse could not open Diesel. Please try again.' });
       });
-      if (!response.ok || controller.signal.aborted) return;
-      const { redirectUrl } = await response.json();
-      if (!controller.signal.aborted && redirectUrl) window.location.replace(redirectUrl);
-    }
-
-    void completeSignIn().catch(() => {});
     return () => controller.abort();
-  }, [session?.token]);
+  }, [token, attempt]);
+
+  return <main className="sign-in-location-screen">
+    <section className="sign-in-location-card" aria-live="polite">
+      <h1>{result ? 'Diesel sign-in' : 'Opening Diesel…'}</h1>
+      {result && <>
+        <p>{result.message}</p>
+        <div className="sign-in-location-actions">
+          <button type="button" className="primary" onClick={() => setAttempt(value => value + 1)}>Try again</button>
+          <a href={dieselStart}>Restart Diesel sign-in</a>
+          <button type="button" className="secondary" onClick={logout}>Sign out</button>
+        </div>
+      </>}
+    </section>
+  </main>;
 }

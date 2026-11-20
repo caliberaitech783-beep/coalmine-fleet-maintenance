@@ -27,6 +27,7 @@ import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
+import {DIESEL_FEED_MASTERS,dieselMasterFeed} from './diesel-master-feed.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -159,6 +160,7 @@ import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request
 import {AUDIT_HIDDEN_EVENT_TYPES,auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {requestDeletionBlocker,requestDeletionSnapshot,normalizeDeletionReferences,REQUEST_BULK_DELETE_LIMIT} from './request-deletion.mjs';
 import {duplicateUsername,lockUsernamesForWrite} from './user-username.mjs';
+import {hrTrialAccessError,prepareHrTrialAccess} from './hr-trial-access.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
@@ -224,8 +226,9 @@ const masterReadCache=createFeedCache({ttlMs:300_000});
 // The user record read for the Telegram membership check on every request, and the user and
 // privilege records behind the live Dashboard authorization, are held the same way, per login.
 const misBridgeFeedCache=createFeedCache({ttlMs:20_000}),misBridgeFleetCache=createFeedCache({ttlMs:30_000});
+const dieselMasterFeedCache=createFeedCache({ttlMs:60_000});
 const membershipUserRecords=new Map(),dashboardAuthorizations=new Map();
-const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
+const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();dieselMasterFeedCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
 // Closes every shared read window now and again once the write has answered.
 function closeFeedWindows(res){
   requestFeedCache.clear();clearMisReadWindows();
@@ -1653,6 +1656,8 @@ const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   secret:process.env.DIESEL_SSO_CLIENT_SECRET,
   enabled:process.env.DIESEL_SSO_ENABLED,
   dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
+  // Read once a minute at most, however many Diesel users open Master Data.
+  readMasters:()=>dieselMasterFeedCache.read(async()=>dieselMasterFeed((await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[DIESEL_FEED_MASTERS])).rows)),
 });
 
 app.get('/api/app-version',(_req,res)=>{
@@ -8460,6 +8465,11 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     if(master==='Breakdown Sub-Category'&&records.some(record=>!String(record.repairType||'').trim()||!String(record.subCategory||'').trim()))return res.status(400).json({error:'Breakdown category and sub-category are required.'});
     if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
       return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
+    // Trial workflow authority is valid only when its HR menu and site scope are saved together.
+    if(master==='Users & employees'){
+      const trialError=records.map(hrTrialAccessError).find(Boolean);
+      if(trialError)return res.status(400).json({error:trialError});
+    }
     let prepared;
     try{
       prepared=records.map((record,index)=>{
@@ -8470,7 +8480,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
-          return prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)))));
+          return prepareHrTrialAccess(prepareHrCredentials(prepareMisCredentials(initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))))));
         }
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
@@ -8721,6 +8731,9 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       storedRecord=prepareMisCredentials(storedRecord,previousRecord);
       if(hrAccessManagementRequested(record,previousRecord)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel))return res.status(403).json({error:'Only administrators can manage HR access.'});
       storedRecord=prepareHrCredentials(storedRecord,previousRecord);
+      const trialError=hrTrialAccessError(storedRecord);
+      if(trialError)return res.status(400).json({error:trialError});
+      storedRecord=prepareHrTrialAccess(storedRecord);
       const client=await pool.connect();
       try{
         await client.query('BEGIN');

@@ -7,17 +7,19 @@ import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {verifyPassword} from './password-auth.mjs';
 import {loginRecordCandidates} from './mobile-access.mjs';
 import {misAccessEnabled,misProfilePermissions,MIS_ALL_PERMISSIONS} from './mis-permissions.mjs';
+import {normalizeHrTrialAssignments} from './hr-trial-access.mjs';
 const digest=value=>createHash('sha256').update(String(value)).digest('hex');
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const hrOrigin='https://hrpulse.cmll.in';
-const version=(user,application)=>digest(application==='HR'?`${user.login}:${user.passwordHash}:${JSON.stringify(hrProfilePermissions(user))}`:`${user.login}:${user.passwordHash}`);
+const hrTrialPermissions=user=>({hrAccountStatus:user.hrAccountStatus||'Active',hrTrialAssignments:normalizeHrTrialAssignments(user.hrTrialAssignments)});
+const version=(user,application)=>digest(application==='HR'?`${user.login}:${user.passwordHash}:${JSON.stringify({...hrProfilePermissions(user),...hrTrialPermissions(user)})}`:`${user.login}:${user.passwordHash}`);
 export function pulseApplicationProfile(row,application){
  const user=row?.record_data||{};
  if(!row||!user.passwordHash||user.mustChangePassword===true||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
  if(application==='HR'&&hrAccessEnabled(user)){
   const permissions=hrProfilePermissions(user);
   if(!permissions.hrDesktopAccess.length&&!permissions.hrMobileAccess.length)return null;
-  return {role:'normal',userType:'HR Application User',assignedRole:'HR Application User',login:String(user.login),name:user.employee||user.name||user.login,permissions:{...permissions,sharedPulseCredentials:true}};
+  return {role:'normal',userType:'HR Application User',assignedRole:'HR Application User',userId:String(row.id),login:String(user.login),name:user.employee||user.name||user.login,permissions:{...permissions,...hrTrialPermissions(user),sharedPulseCredentials:true}};
  }
  const admin=/super/i.test(user.userType||'')&&['admin','super admin'].includes(String(user.adminLevel||'Admin').toLowerCase());
  if(application==='MIS'){

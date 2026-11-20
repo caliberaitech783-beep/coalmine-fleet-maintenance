@@ -86,7 +86,7 @@ export default function DowntimeMatrixReport({requests,equipment,ReportSection,o
     <div className="downtime-site-tabs" role="group" aria-label="Downtime matrix site">
       {sites.map(value=><button type="button" key={value} aria-pressed={selectedSite===value} onClick={()=>setSite(value)}><span>{value}</span></button>)}
     </div>
-    <p>Only breakdowns that started within the selected period are shown, including the To minute. Earlier breakdowns are excluded even if still ongoing or closed during this period. Durations are clipped to the selected period. Overlaps count once in available hours. Available hours repeat for each breakdown of the same machine and are provisional when the period includes future time.</p>
+    <p>Breakdowns active during the selected period are shown, including those that started earlier and remained ongoing or closed during this period. The To minute is included. Durations are clipped to the selected period and ongoing downtime is counted up to the current time. Overlaps count once in available hours. Available hours repeat for each breakdown of the same machine and are provisional when the period includes future time.</p>
     <ReportSection title="Custom Breakdown Report" exportTransform={view=>downtimeMatrixExport(view,{site:selectedSite,rangeLabel})} description={`${rangeLabel} · ${selectedSite || 'No sites'} · ${visible.length} machines with breakdowns · One row per breakdown`} rows={details} columns={columns} rowKey={r=>r.key} emptyMessage="No breakdowns for the selected period and site." />
   </section>;
 }

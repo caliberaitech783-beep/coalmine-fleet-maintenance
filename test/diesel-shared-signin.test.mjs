@@ -5,6 +5,7 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import express from 'express';
 import { registerDieselSharedSignIn } from '../diesel-shared-signin.mjs';
+import { protectDeletionPool } from '../deletion-approval.mjs';
 import { pulseSsoSessionCookie } from '../mis-shared-signin.mjs';
 
 test('Diesel authorization codes are browser-bound, single-use and tied to active Pulse sessions', async () => {
@@ -18,7 +19,7 @@ test('Diesel authorization codes are browser-bound, single-use and tied to activ
   const session = '59bdc66b-7078-4e0b-8a3b-b60ead7e6691';
   let active = true;
   const issuer = registerDieselSharedSignIn(app, {
-    pool: database,
+    pool: protectDeletionPool(database),
     secret,
     enabled: '1',
     requireSession: (_request, _response, next) => next(),
@@ -33,6 +34,8 @@ test('Diesel authorization codes are browser-bound, single-use and tied to activ
     const base = 'http://127.0.0.1:' + server.address().port + '/api/diesel-sso/';
     const authorize = options => fetch(base + 'authorize?' + new URLSearchParams({ state, code_challenge: challenge }), { redirect: 'manual', ...options });
     assert.match((await authorize()).headers.get('location'), /^\/\?dieselSignIn=1/);
+    await database.query(`INSERT INTO diesel_sso (code_hash, state, challenge, session_token, code_expires_at)
+      VALUES ('expired-code', $1, $2, $3, now() - interval '1 second')`, [state, challenge, session]);
     const authorized = await authorize({ headers: { Cookie: pulseSsoSessionCookie + '=' + session } });
     const callback = new URL(authorized.headers.get('location'));
     assert.equal(callback.origin, 'https://pulse-lll.cmll.in');
