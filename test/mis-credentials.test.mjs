@@ -31,6 +31,18 @@ test('shared Pulse password, per-application authorization, revocation, rate lim
  assert.equal((await call('/api/integrations/hr/authenticate',credentials,{origin:'https://untrusted.example'})).status,403);
  assert.equal((await call('/api/integrations/hr/validate',{grant:mis.value.grant})).status,401);
  for(const row of (await db.query('SELECT token FROM auth_sessions')).rows)assert.equal(await createSessionStore(pool).get(row.token),null);
+ const linked=await call('/api/integrations/mis/open-hr',{grant:mis.value.grant});
+ assert.equal(linked.status,200);
+ assert.equal(linked.value.profile.permissions.application,'HR');
+ assert.equal((await call('/api/integrations/hr/validate',{grant:linked.value.grant})).status,200);
+ assert.equal((await call('/api/integrations/mis/validate',{grant:linked.value.grant})).status,401);
+ await call('/api/integrations/hr/logout',{grant:linked.value.grant});
+ assert.equal((await call('/api/integrations/mis/validate',{grant:mis.value.grant})).status,200);
+ const after=await call('/api/integrations/mis/open-hr',{grant:mis.value.grant});
+ assert.equal(after.status,200);
+ await call('/api/integrations/mis/logout',{grant:mis.value.grant});
+ assert.equal((await call('/api/integrations/hr/validate',{grant:after.value.grant})).status,401);
+ assert.equal((await call('/api/integrations/mis/open-hr',{grant:mis.value.grant})).status,401);
  const verifier=randomBytes(32).toString('base64url'),state=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
  const authorized=await call('/api/mis-login/authorize',{...credentials,state,challenge});assert.equal(authorized.status,200);assert.equal(authorized.value.grant,undefined);
  const target=new URL(authorized.value.redirectUrl);assert.equal(target.origin,'https://pulse-ll.cmll.in');const code=target.searchParams.get('code');

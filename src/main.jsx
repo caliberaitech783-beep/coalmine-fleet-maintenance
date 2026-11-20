@@ -357,7 +357,6 @@ import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
 import "./manager-scroll.css";
 import "./user-sessions.css";
-import "./hr-portal.css";
 import "./backup-administration.css";
 import "./daily-bd-balance.css";
 import "./print-preview.css";
@@ -681,35 +680,17 @@ function AuthModeTabs({ mode, onModeChange }) {
 // Touch devices open the keyboard the moment a field is focused, which resizes the viewport and makes
 // the login form jump on load; only desktop browsers get the username field focused automatically.
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-const hrWorkspaceOrigin = 'https://hrpulse.cmll.in';
 
 function Login({ onLogin, theme, toggleTheme }) {
   const [dieselPortal, setDieselPortal] = useState(() => {
     const query = new URLSearchParams(window.location.search);
     return query.get('login') === 'diesel' || query.get('dieselSignIn') === '1';
   });
-  const [hrPortal, setHrPortal] = useState(false);
-  const [hrWorkspace, setHrWorkspace] = useState(false);
-  const hrFrame = useRef(null);
-
-  useEffect(() => {
-    function updateHrWorkspace(event) {
-      const frame = hrFrame.current;
-      if (!frame || event.origin !== hrWorkspaceOrigin || event.source !== frame.contentWindow ||
-          event.data?.type !== 'caliber-hr:workspace' || typeof event.data.open !== 'boolean') return;
-      setHrWorkspace(event.data.open);
-    }
-    window.addEventListener('message', updateHrWorkspace);
-    return () => window.removeEventListener('message', updateHrWorkspace);
-  }, []);
-
   const [accountsPortal,setAccountsPortal]=useState(false);
   const [misPortal,setMisPortal]=useState(()=>new URLSearchParams(window.location.search).get('login')==='mis');
   const [misHandoff]=useState(()=>{const query=new URLSearchParams(window.location.search);return {state:query.get('misState')||'',challenge:query.get('misChallenge')||''};});
-  const selectLoginPortal = (accounts, hr = false, diesel = false) => {
+  const selectLoginPortal = (accounts, diesel = false) => {
     setDieselPortal(diesel);
-    setHrPortal(hr);
-    setHrWorkspace(false);
     setMisPortal(false);
     const url = new URL(window.location.href);
     for (const key of ['login', 'misState', 'misChallenge']) url.searchParams.delete(key);
@@ -905,7 +886,7 @@ function Login({ onLogin, theme, toggleTheme }) {
     }
   };
   return (
-    <div className={`login${accountsPortal?' accounts-login':''}${hrWorkspace?' login-hr-workspace':''}`}>
+    <div className={`login${accountsPortal?' accounts-login':''}`}>
       <section className="login-visual" aria-label="Caliber Pulse fleet operations">
         <div className="login-grid" aria-hidden="true" />
         <div className="login-schematic" aria-hidden="true">
@@ -913,13 +894,13 @@ function Login({ onLogin, theme, toggleTheme }) {
         </div>
         <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-application-links">
-          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal&&!hrPortal&&!dieselPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
+          <button type="button" className="login-fleet-link" aria-pressed={!accountsPortal&&!misPortal&&!dieselPortal} onClick={()=>selectLoginPortal(false)}><Truck /><span><strong>Fleet</strong>Open Fleet sign in</span></button>
           <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           <button type="button" className="login-accounts-link" aria-pressed={accountsPortal} onClick={()=>selectLoginPortal(true)}><Landmark /><span><strong>Accounts</strong>Open Accounts sign in</span></button>
           <a className="login-tender-link" href="https://tender.cmll.in" aria-label="Open Tender application"><FileBarChart /><span><strong>Tender</strong>Open application</span></a>
           <button type="button" className="login-mis-link" aria-pressed={misPortal} onClick={()=>window.location.assign('https://pulse-ll.cmll.in/api/mis-credentials/start')}><FileBarChart /><span><strong>MIS</strong>Open MIS sign in</span></button>
-          <button type="button" className="login-hr-link" aria-pressed={hrPortal} disabled={working} onClick={() => selectLoginPortal(false, true)}><Users /><span><strong>HR</strong>Open HR sign in</span></button>
-          <button type="button" className="login-diesel-link" aria-pressed={dieselPortal} disabled={working} onClick={() => selectLoginPortal(false, false, true)}>
+          <a className="login-hr-link" href="https://pulse-ll.cmll.in/hr/?signin=1"><Users /><span><strong>HR</strong>Open HR in Pulse-II</span></a>
+          <button type="button" className="login-diesel-link" aria-pressed={dieselPortal} disabled={working} onClick={() => selectLoginPortal(false, true)}>
             <Fuel aria-hidden="true" /><span><strong>Diesel</strong>Open Diesel sign in</span>
           </button>
         </div>
@@ -944,19 +925,7 @@ function Login({ onLogin, theme, toggleTheme }) {
       </section>
       <main>
         <ThemeToggle theme={theme} onToggle={toggleTheme} className="login-theme-toggle" />
-        {hrPortal && loginMode === 'signin' ? <div className="loginbox login-hr-panel">
-          <div className="login-hr-options">
-            <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(''); setNotice(''); }} />
-            {notice && <p role="status">{notice}</p>}
-          </div>
-          <iframe
-            ref={hrFrame}
-            className="login-hr-frame"
-            title="Caliber HR"
-            src={hrWorkspaceOrigin + '/?embedded=pulse'}
-            allow="camera https://hrpulse.cmll.in; microphone https://hrpulse.cmll.in"
-          />
-        </div> : passwordChange ? <form
+        {passwordChange ? <form
           className="loginbox password-change-box"
           onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
         >

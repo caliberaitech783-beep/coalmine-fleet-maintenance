@@ -79,24 +79,51 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    req.audit={eventType:'Security',module:'Authentication',action:`${application} login`,actorLogin:profile.login,actorName:profile.name,actorRole:profile.assignedRole,targetType:'User account',targetReference:String(row.id),changedFields:[]};req.auditSessionToken=token;
    res.json({grant,profile});
   });
+  if(application==='MIS')route('open-hr',async(req,res)=>{
+   const parent=req.body?.grant;
+   if(!valid(parent))return res.status(401).json({error:'Pulse sign-in expired.'});
+   const parentHash=digest(parent);
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g
+   JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees'
+   JOIN auth_sessions s ON s.token=g.session_token
+   JOIN user_current_sessions c ON c.session_id=s.session_public_id
+   WHERE g.grant_hash=$1 AND g.application='MIS' AND g.expires_at>NOW() AND s.permissions->>'application'='MIS'`,[parentHash]);
+   const row=rows[0];
+   if(!pulseApplicationProfile(row,'MIS')||row.credential_version!==version(row.record_data,'MIS'))return res.status(401).json({error:'Pulse sign-in expired.'});
+   const profile=pulseApplicationProfile(row,'HR');
+   if(!profile)return res.status(403).json({error:'HR access is not assigned to your Pulse account.'});
+   const grant=randomBytes(32).toString('base64url');
+   const result=await pool.query(`INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at)
+     SELECT $1,'HR',user_id,$2,session_token,LEAST(expires_at,NOW()+INTERVAL '1 hour')
+     FROM application_identity_grants WHERE grant_hash=$3 AND application='MIS' AND expires_at>NOW()`,
+     [digest(grant),version(row.record_data,'HR'),parentHash]);
+   if(!result.rowCount)return res.status(401).json({error:'Pulse sign-in expired.'});
+   res.json({grant,profile});
+  });
   route('validate',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
+    AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
+    AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
    const row=rows[0],profile=pulseApplicationProfile(row,application);
-   if(!profile||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
+   if(!profile||(row.session_application==='MIS'&&application==='HR'&&!pulseApplicationProfile(row,'MIS'))||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
    res.json({profile});
   });
   if(application==='HR')route('directory',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND s.permissions->>'application'=$2`,[digest(grant),application]);
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
+    AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
+    AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
    const row=rows[0],profile=pulseApplicationProfile(row,application);
-   if(!profile||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Pulse sign-in expired or account access changed. Sign in again.'});
+   if(!profile||(row.session_application==='MIS'&&application==='HR'&&!pulseApplicationProfile(row,'MIS'))||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Pulse sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
    res.json(await loadHrDirectory({pool,profile,user:row.record_data,masterNames:CDIR_MASTER_NAMES,buildDirectory:cdirDirectoryFromMasters,mergeSuperiors:mergeCdirReportingSuperiors,viewerContext:cdirViewerContext,forViewer:cdirDirectoryForViewer}));
   });
   route('logout',async(req,res)=>{
-   if(valid(req.body?.grant))await pool.query('WITH revoked AS (DELETE FROM application_identity_grants WHERE grant_hash=$1 AND application=$2 RETURNING session_token) DELETE FROM auth_sessions WHERE token IN (SELECT session_token FROM revoked)',[digest(req.body.grant),application]);
+   if(valid(req.body?.grant))await pool.query('WITH revoked AS (DELETE FROM application_identity_grants WHERE grant_hash=$1 AND application=$2 RETURNING session_token) DELETE FROM auth_sessions WHERE token IN (SELECT session_token FROM revoked) AND permissions->>\'application\'=$2',[digest(req.body.grant),application]);
    res.json({ok:true});
   });
  }
