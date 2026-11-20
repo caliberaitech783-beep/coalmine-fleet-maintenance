@@ -19,7 +19,7 @@ test('HR-only creation and editing recognise enabled HR as a user role',()=>{
 });
 
 test('HR enable callback selects HR for an empty account without replacing existing roles',()=>{
-  const callback=source.match(/<HrApplicationAccessFields record=\{record\} onEnabled=\{([^\n]+)\}\/></)[1];
+  const callback=source.match(/<HrApplicationAccessFields record=\{record\}[^\n]*?onEnabled=\{([^\n]+)\}\/></)[1];
   for(const initial of ['', 'User','Maintenance User','HR Application User']){
     let role=initial;
     const enabled=new Function('setAccountRole',`return (${callback});`)(update=>{role=update(role);});
