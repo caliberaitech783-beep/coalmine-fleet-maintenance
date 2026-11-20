@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {downtimeMatrix} from '../src/downtime-matrix.mjs';
 import {downtimeMatrixRange,customBreakdownRange,downtimeMatrixDetails} from '../src/downtime-matrix.mjs';
-test('custom report includes only openings in the selected overnight window',()=>{
+test('custom report includes earlier breakdowns overlapping the selected overnight window',()=>{
   const records=[
     {ref:'old-open',door:'S1',site:'Sasti OC',start:'2026-10-24T21:59:59'},
     {ref:'old-closed',door:'S1',site:'Sasti OC',start:'2026-10-24T20:00',closedAt:'2026-10-24T23:00'},
@@ -13,10 +13,38 @@ test('custom report includes only openings in the selected overnight window',()=
   ];
   const rows=customBreakdownRange(records,[],'2026-10-24T22:00','2026-10-25T00:00',Date.parse('2026-10-25T02:00+05:30'));
   const details=downtimeMatrixDetails(rows);
-  assert.deepEqual(details.map(row=>row.ref),['at-start','new-open']);
-  assert.deepEqual(details.map(row=>row.eventHours),[0.5,1]);
-  assert.equal(rows[0].available,0.5);
-  assert.deepEqual(customBreakdownRange(records.slice(0,2),[],'2026-10-24T22:00','2026-10-25T00:00',Date.parse('2026-10-25T02:00+05:30')),[]);
+  assert.deepEqual(details.map(row=>row.ref),['old-open','old-closed','at-start','new-open']);
+  assert.deepEqual(details.map(row=>row.eventHours),[2,1,0.5,1]);
+  assert.deepEqual(details.map(row=>row.status),['Ongoing','Closed','Closed','Ongoing']);
+  assert.equal(rows[0].available,0);
+});
+
+test('custom report includes week-old ongoing breakdowns and excludes events outside the period',()=>{
+  const records=[
+    {ref:'ongoing',door:'S1',site:'Mine',start:'2026-11-13T08:00'},
+    {ref:'ended-before',door:'S2',site:'Mine',start:'2026-11-13T08:00',closedAt:'2026-11-19T23:59:59'},
+    {ref:'ended-at-start',door:'S3',site:'Mine',start:'2026-11-13T08:00',closedAt:'2026-11-20T00:00'},
+    {ref:'future',door:'S4',site:'Mine',start:'2026-11-21T00:00'},
+  ];
+  const rows=customBreakdownRange(records,[],'2026-11-20T00:00','2026-11-21T00:00',Date.parse('2026-11-20T12:00+05:30'));
+  const [detail]=downtimeMatrixDetails(rows);
+  assert.equal(rows.length,1);
+  assert.equal(detail.ref,'ongoing');
+  assert.equal(detail.status,'Ongoing');
+  assert.equal(detail.eventHours,12);
+  assert.equal(detail.available,12);
+  assert.equal(detail.end,new Date('2026-11-20T12:00+05:30').toISOString());
+});
+
+test('custom historical report includes earlier breakdowns closed after the selected period',()=>{
+  const rows=customBreakdownRange([
+    {ref:'later-closed',door:'S1',site:'Mine',start:'2026-11-13T08:00',closedAt:'2026-11-22T10:00'},
+  ],[],'2026-11-20T00:00','2026-11-21T00:00',Date.parse('2026-11-23T12:00+05:30'));
+  const [detail]=downtimeMatrixDetails(rows);
+  assert.equal(detail.ref,'later-closed');
+  assert.equal(detail.status,'Closed');
+  assert.equal(detail.eventHours,24);
+  assert.equal(detail.available,0);
 });
 test('range counts overlapping events once and clips to custom multi-day period',()=>{
   const now=Date.parse('2026-10-15T00:00:00+05:30');
