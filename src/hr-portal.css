@@ -1,0 +1,55 @@
+.login main .login-hr-panel {
+  padding-bottom: 0;
+}
+
+.login-hr-frame {
+  display: block;
+  width: 100%;
+  /* The embedded form needs room for its submit button and help text. */
+  height: 570px;
+  border: 0;
+  margin-top: 12px;
+}
+
+@media (min-width: 901px) {
+  .login:not(.login-hr-workspace) > main:has(> .login-hr-panel) {
+    /* Center against the viewport even when the launcher makes the grid taller. */
+    align-self: start;
+    min-height: 100svh;
+    padding-block: 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-hr-frame {
+    height: 630px;
+  }
+}
+
+.login.login-hr-workspace {
+  display: block;
+}
+
+.login-hr-workspace .login-visual,
+.login-hr-workspace .login-theme-toggle,
+.login-hr-workspace .login-hr-options {
+  display: none;
+}
+
+.login-hr-workspace main .login-hr-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #faf5f8;
+}
+
+.login-hr-workspace .login-hr-frame {
+  height: 100%;
+  margin: 0;
+}
