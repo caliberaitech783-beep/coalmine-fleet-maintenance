@@ -6,7 +6,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {prepareHrCredentials} from '../hr-credentials.mjs';
 import {pulseApplicationProfile,installPulseApplicationIdentity} from '../pulse-application-identity.mjs';
 const hrCredentialProfile=row=>pulseApplicationProfile(row,'HR');
-import {HR_ALL_PERMISSIONS,hrAccessManagementRequested} from '../hr-permissions.mjs';
+import {HR_ALL_PERMISSIONS,HR_PERMISSION_OPTIONS,hrAccessManagementRequested} from '../hr-permissions.mjs';
 import {publicUserRecord,hashPassword} from '../password-auth.mjs';
 import {createSessionStore} from '../auth-session.mjs';
 
@@ -43,6 +43,14 @@ test('HR access assignments remain administrator-only',()=>{
  const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
  assert.ok(source.includes("records.some(record=>hrAccessManagementRequested(record))&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel)"));
  assert.ok(source.includes("hrAccessManagementRequested(record,previousRecord)&&!['Admin','Super Admin'].includes(req.session?.permissions?.adminLevel)"));
+});
+test('HR access exposes every exact-name privilege from the missing-privileges checklist',()=>{
+ const expected=[
+  'Attendance Management','Payroll Management','Asset Management','Calendar','Compliance & Statutory','Recruitment Management','Training and Development','Performance Management','Administration & Settings','Others',
+  'Trial Form','Approval Master','Trial Hierarchy Configuration','Telegram Hierarchy','Employee Transfer','Leave / OD / Gatepass','Biometric Integration','Attendance Review & Corrections','Attendance Policy','Salary Scheme','Payroll Processing','Loan and Advances','Expense Claims','Asset Register','Asset Configuration',
+ ];
+ assert.deepEqual(HR_PERMISSION_OPTIONS.filter(option=>expected.includes(option.key)).map(option=>option.key),expected);
+ assert.ok(expected.every(permission=>HR_ALL_PERMISSIONS.includes(permission)));
 });
 test('embedded PostgreSQL: shared Pulse password, menu permissions, revocation, logout, expiry and throttling',async()=>{
  const db=new PGlite();
