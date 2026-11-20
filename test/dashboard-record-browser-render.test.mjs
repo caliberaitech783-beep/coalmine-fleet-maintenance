@@ -69,7 +69,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const timingColumns = ["Closed", "MIS verified at", "First trip time"];
-  const row = {id: "case-1", requestReference: "JOB-1", requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Closed",
+  const row = {id: "case-1", requestReference: "JOB-1", requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Closed", repairType: "Accidental", subCategory: "Structural Damage",
     requestStart: "2026-09-10 10:00:00", requestExpectedCompletion: "2026-09-10 18:00:00", requestClosed: "2026-09-10 11:00:00", requestVerified: "2026-09-10 12:00:00", requestFirstTrip: "2026-09-10 11:30:00"};
   for (const [title, event, expected] of [
     ["Production Request", "production", ["Closed"]], ["Closed", "closed", ["Closed"]],
@@ -92,9 +92,13 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
     assert.equal(exported.rows.length, 1, title);
     assert.equal(table.printTitle, table.exportTitle, title);
+    assert.ok(columns.some(column => column.label === "Repair type"), title);
+    assert.ok(columns.some(column => column.label === "Breakdown sub-category"), title);
+    assert.equal(exported.columns.find(column => column.label === "Repair type").value(exported.rows[0]), "Accidental", title);
+    assert.equal(exported.columns.find(column => column.label === "Breakdown sub-category").value(exported.rows[0]), "Structural Damage", title);
     assert.doesNotMatch(html, /1 of 1 records/); // The shared toolbar owns the only count.
     assert.equal(table.toolbarPortal, true);
-    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 16 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0), title);
+    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 18 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0), title);
     // Every lifecycle list shows opening meter readings; lists with a Closed column add the closing readings.
     assert.equal(columns.some(column => column.label === "Closing HMR"), expected.includes("Closed"), title);
     assert.ok(columns.some(column => column.label === "Opening KMR"), title);
@@ -107,7 +111,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
     if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-26 11:00:00 AM", title);
     const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
-    assert.ok(empty.includes(`colSpan="${16 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
+    assert.ok(empty.includes(`colSpan="${18 + expected.length + (expected.includes("Closed") ? 2 : 0) + (event === "idle" ? 3 : 0)}"`), `${title}: empty table alignment`);
   }
 });
 
