@@ -63,7 +63,7 @@ test('the Diesel master feed needs the shared secret and a live Pulse grant', as
     const response = await post({ grant });
     assert.equal(response.status, 200);
     const reply = await response.json();
-    assert.deepEqual(Object.keys(reply.masters), ['region', 'site', 'equipment', 'employee', 'driver', 'shift']);
+    assert.deepEqual(Object.keys(reply.masters), ['region', 'site', 'equipment', 'employee', 'driver', 'shift', 'company']);
     assert.equal(reply.erpDrivers, false);
     active = false;
     assert.equal((await post({ grant })).status, 401);
@@ -130,4 +130,16 @@ test('LMVs and ERP DG sets join the Equipment master once each, without demo veh
     ['2', 'T-101', '', 'Sasti OC'], ['lmv:20', 'LMV-7', 'LMV', 'Sasti OC'], ['erp-dg:900', 'DG-01', 'DG set', 'Majri OC']]);
   assert.equal(equipment[2].make, 'Kirloskar');
   assert.equal(dieselMasterFeed(feedRows, [], null).equipment.length, 2);
+});
+
+test('the Company master sends the ERP company code, name and plain address columns only', () => {
+  const companies = dieselMasterFeed(rows, [], [], [
+    { COMPANYCODE: 'CMLL', COMPANYNAME: 'Caliber Mining and Logistics Ltd', COMPANYSHORTNAME: 'CMLL', COMPANYTYPECODE: 'PUBLIC', CITY: 'Chandrapur', STATECODE: 'MH',
+      PINCODE: '442401', PHONENO: '', MOBILENO: '9000000000', EMAILID: 'info@example.test', GSTNO: '27ABCDE1234F1Z5', BANKACCOUNTNO: '1234567890', TDSLOGINPASSWORD: 'secret' },
+    { COMPANYCODE: 'X', COMPANYNAME: '' },
+  ]).company;
+  assert.deepEqual(companies, [{ id: 'erp-company:CMLL', code: 'CMLL', name: 'Caliber Mining and Logistics Ltd', shortName: 'CMLL', type: 'PUBLIC', owner: '',
+    city: 'Chandrapur', state: 'MH', pinCode: '442401', phone: '9000000000', email: 'info@example.test', registrationNo: '27ABCDE1234F1Z5' }]);
+  assert.doesNotMatch(JSON.stringify(companies), /1234567890|secret/);
+  assert.deepEqual(dieselMasterFeed(rows, [], [], null).company, []);
 });

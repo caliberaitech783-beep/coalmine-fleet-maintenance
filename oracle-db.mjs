@@ -351,6 +351,23 @@ export async function oracleLatestFleetDrivers({refresh=false} = {}) {
   finally { fleetDriversPromise = null; }
 }
 
+// The ERP company master, every column, for Diesel's Company Master. Only plain values are returned;
+// the feed decides which columns leave Pulse.
+export async function oracleCompanyMaster() {
+  const pool = await oraclePool();
+  const connection = await pool.getConnection();
+  try {
+    connection.callTimeout = 15000;
+    const result = await connection.execute('SELECT * FROM cmpl.company ORDER BY companyname', [],
+      {outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 1000});
+    return (result.rows || []).map(row => Object.fromEntries(Object.entries(row)
+      .filter(([, value]) => ['string', 'number'].includes(typeof value) || value instanceof Date)
+      .map(([key, value]) => [key, value instanceof Date ? value.toISOString().slice(0, 10) : String(value)])));
+  } finally {
+    await connection.close();
+  }
+}
+
 // Everyone the ERP has recorded driving or operating a machine: one row per employee code, with the
 // latest logbook or transfer that names them. Diesel's Driver Master is built from this.
 export async function oracleFleetDriverRoster() {

@@ -3,7 +3,7 @@ import {equipmentMasterWithDoor} from './equipment-door.mjs';
 import {CDIR_MASTERS} from './cdir-masters.mjs';
 
 // The masters Diesel shows read-only at the top of its Master Data: Site, Region,
-// Equipment, Employee, Driver and Shift. Only the listed fields leave Pulse; logins,
+// Equipment, Employee, Driver, Shift and Company. Only the listed fields leave Pulse; logins,
 // privileges, date of birth, UAN and Aadhaar stay here.
 export const DIESEL_FEED_MASTERS=['Region master','Equipment master','LMV master','Shift Master',CDIR_MASTERS.employee,CDIR_MASTERS.contact];
 
@@ -49,7 +49,23 @@ export function createErpDriverReader({read,ttlMs=30*60_000,waitMs=12_000,now=Da
   };
 }
 
-export function dieselMasterFeed(rows=[],erpDrivers=[],erpDgSets=[]){
+// Company Master columns, each read from the first ERP company column whose name fits. Only the company
+// code and name are certain; the others stay blank when the ERP names its column differently. Nothing
+// else from the ERP row (bank, tax-login or image columns) is sent.
+const companyColumns=[
+  ['code',/^COMPANYCODE$/],['name',/^COMPANYNAME$/],['shortName',/SHORTNAME/],['type',/^COMP(ANY)?TYPE(CODE|NAME)?$/],
+  ['owner',/OWNERNAME/],['city',/CITY/],['state',/STATE/],['pinCode',/PIN/],['phone',/PHONE|MOBILE/],['email',/E_?MAIL/],
+  ['registrationNo',/^(GST(IN)?(NO)?|REGISTRATIONNO|REGNO)$/],
+];
+function companyMaster(erpCompanies){
+  return (erpCompanies||[]).map(row=>{
+    const keys=Object.keys(row);
+    const record=Object.fromEntries(companyColumns.map(([field,pattern])=>[field,text(row[keys.find(key=>pattern.test(key.toUpperCase())&&text(row[key]))])]));
+    return {id:'erp-company:'+record.code,...record};
+  }).filter(record=>record.code&&record.name);
+}
+
+export function dieselMasterFeed(rows=[],erpDrivers=[],erpDgSets=[],erpCompanies=[]){
   const of=name=>rows.filter(row=>row.master_name===name).map(row=>({...row.record_data,id:String(row.id)}));
   const region=of('Region master').map(record=>({id:record.id,...pick(record,['name','code','state']),
     sites:displaySiteSelection(record.sites).join(' | ')}));
@@ -76,5 +92,5 @@ export function dieselMasterFeed(rows=[],erpDrivers=[],erpDgSets=[]){
   });
   const shift=of('Shift Master').map(record=>({id:record.id,...pick(record,shiftKeys),
     site:displaySiteName(record.site||record.siteName),shiftName:text(record.shiftName||record.shift)}));
-  return {region,site,equipment,employee,driver:driverMaster(employee,erpDrivers||[]),shift};
+  return {region,site,equipment,employee,driver:driverMaster(employee,erpDrivers||[]),shift,company:companyMaster(erpCompanies)};
 }
