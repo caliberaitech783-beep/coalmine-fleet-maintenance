@@ -49,7 +49,7 @@ test('a Telegram code signs in to MIS once, only for the sign-in that asked for 
  assert.equal((await call('/api/mis-login/telegram-verify',{requestToken,code:'123456',...handoff})).status,401,'used once only');
  const exchanged=await call('/api/integrations/mis/exchange',{code:target.searchParams.get('code'),state:handoff.state,verifier});
  assert.equal(exchanged.status,200);assert.equal(exchanged.value.profile.login,'owner');assert.equal(exchanged.value.remember,true);
- const {rows}=await db.query('SELECT ROUND(EXTRACT(EPOCH FROM expires_at-NOW())/86400) AS days FROM application_identity_grants');assert.equal(Number(rows[0].days),30);
+ const {rows}=await db.query('SELECT ROUND(EXTRACT(EPOCH FROM expires_at-NOW())/86400) AS days FROM application_identity_grants');assert.equal(Number(rows[0].days),40);
  }finally{await db.close()}
 });
 

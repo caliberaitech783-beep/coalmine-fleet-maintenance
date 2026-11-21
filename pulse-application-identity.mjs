@@ -9,6 +9,13 @@ import {loginRecordCandidates} from './mobile-access.mjs';
 import {misAccessEnabled,misProfilePermissions,MIS_ALL_PERMISSIONS} from './mis-permissions.mjs';
 import {normalizeHrTrialAssignments} from './hr-trial-access.mjs';
 const digest=value=>createHash('sha256').update(String(value)).digest('hex');
+// A remembered MIS sign-in lasts REMEMBER_DAYS. Logins in ALWAYS_REMEMBER_LOGINS (default: the
+// owner) are remembered on every MIS sign-in, ticked or not; everyone else needs the tick.
+export const REMEMBER_DAYS=40;
+export function alwaysRemembered(login,env=process.env){
+ const wanted=String(login??'').trim().toLowerCase();
+ return Boolean(wanted)&&String(env.ALWAYS_REMEMBER_LOGINS??'mohitchadda').split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).includes(wanted);
+}
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const hrOrigin='https://hrpulse.cmll.in';
 const hrTrialPermissions=user=>({hrAccountStatus:user.hrAccountStatus||'Active',hrTrialAssignments:normalizeHrTrialAssignments(user.hrTrialAssignments)});
@@ -35,10 +42,10 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
  const handlers={};
  // One place issues an application grant, whichever way the person proved who they are
  // (password, or a Telegram sign-in code). "Remember me" on the MIS sign-in page makes
- // the grant last 30 days instead of 7.
+ // the grant last REMEMBER_DAYS (40) instead of 7; the owner's MIS grant always does.
  async function issueGrant(row,application,profile,{remember=false}={}){
   const token=randomUUID(),grant=randomBytes(32).toString('base64url');
-  const grantDays=application==='MIS'&&remember===true?30:7;
+  const grantDays=application==='MIS'&&(remember===true||alwaysRemembered(profile?.login))?REMEMBER_DAYS:7;
   await sessionStore.create({token,...profile});
   await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application),token,grantDays]);
   await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
@@ -102,7 +109,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   });
   route('validate',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
    AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
     AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
     AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
@@ -113,7 +120,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   });
   if(application==='HR')route('directory',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '30 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
    AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
     AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
     AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
