@@ -351,6 +351,60 @@ export async function oracleLatestFleetDrivers({refresh=false} = {}) {
   finally { fleetDriversPromise = null; }
 }
 
+// Everyone the ERP has recorded driving or operating a machine: one row per employee code, with the
+// latest logbook or transfer that names them. Diesel's Driver Master is built from this.
+export async function oracleFleetDriverRoster() {
+  const pool = await oraclePool();
+  const connection = await pool.getConnection();
+  try {
+    connection.callTimeout = 20000;
+    const result = await connection.execute(
+      `SELECT ranked.operator_code, ranked.driver_name, ranked.source_type, ranked.vehicle_no,
+              TO_CHAR(ranked.log_date, 'YYYY-MM-DD') AS last_date,
+              site.locationname AS location_name,
+              equipment.equipmentid, equipment.equipmentno, equipment.equipmentname
+       FROM (
+         SELECT candidates.*, ROW_NUMBER() OVER (
+           PARTITION BY operator_code ORDER BY log_date DESC, log_tno DESC, source_type
+         ) AS result_rank
+         FROM (
+           SELECT log.operatorcode AS operator_code, emp.employeename AS driver_name,
+                  log.equipmenttno AS equipment_tno, CAST(NULL AS VARCHAR2(200)) AS vehicle_no,
+                  log.locationcode AS location_code, log.equipmentlogbookdate AS log_date,
+                  log.tno AS log_tno, 'Equipment logbook' AS source_type
+           FROM cmpl.equipmentlogbook log
+           JOIN cmpl.employee emp ON emp.employeecode = log.operatorcode
+           WHERE TRIM(emp.employeename) IS NOT NULL AND log.equipmentlogbookdate <= SYSDATE
+           UNION ALL
+           SELECT log.operatorcode, emp.employeename, log.equipmenttno, log.vehicleno,
+                  log.locationcode, log.vehiclelogbookdate, log.tno, 'Vehicle logbook'
+           FROM cmpl.vehiclelogbook log
+           JOIN cmpl.employee emp ON emp.employeecode = log.operatorcode
+           WHERE TRIM(emp.employeename) IS NOT NULL AND log.vehiclelogbookdate <= SYSDATE
+           UNION ALL
+           SELECT transfer.drivercode, emp.employeename, transfer.equipmenttno, CAST(NULL AS VARCHAR2(200)),
+                  transfer.tolocationcode, transfer.equipmenttransferdate, transfer.tno, 'Equipment transfer'
+           FROM cmpl.equipmenttransfer transfer
+           JOIN cmpl.employee emp ON emp.employeecode = transfer.drivercode
+           WHERE TRIM(emp.employeename) IS NOT NULL AND transfer.equipmenttransferdate <= SYSDATE
+         ) candidates
+       ) ranked
+       LEFT JOIN cmpl.equipment equipment ON equipment.tno = ranked.equipment_tno
+       LEFT JOIN cmpl.location site ON site.locationcode = ranked.location_code
+       WHERE ranked.result_rank = 1`, [],
+      {outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000},
+    );
+    return (result.rows || []).map(row => ({
+      code: String(row.OPERATOR_CODE ?? ''), name: String(row.DRIVER_NAME ?? ''),
+      source: String(row.SOURCE_TYPE ?? ''), lastDate: String(row.LAST_DATE ?? ''),
+      location: String(row.LOCATION_NAME ?? ''),
+      vehicle: String(row.EQUIPMENTID ?? row.EQUIPMENTNO ?? row.VEHICLE_NO ?? row.EQUIPMENTNAME ?? ''),
+    }));
+  } finally {
+    await connection.close();
+  }
+}
+
 export async function oracleEquipmentTransfers(fromDate = null) {
   fromDate = transferSyncDate(fromDate);
   const pool = await oraclePool();

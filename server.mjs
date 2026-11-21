@@ -27,7 +27,7 @@ import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
-import {DIESEL_FEED_MASTERS,dieselMasterFeed} from './diesel-master-feed.mjs';
+import {DIESEL_FEED_MASTERS,createErpDriverReader,dieselMasterFeed} from './diesel-master-feed.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
 import {bdmsChatConversation} from './telegram-bdms-conversation.mjs';
@@ -106,7 +106,7 @@ import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {maintenanceMetersRequired,requireMaintenanceMeters} from './maintenance-meter-required.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
-import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth,oracleLatestFleetDrivers} from './oracle-db.mjs';
+import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleFleetDriverRoster,oracleHealth,oracleLatestFleetDrivers} from './oracle-db.mjs';
 import {withFleetDriverNames} from './fleet-driver-names.mjs';
 import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
@@ -227,6 +227,7 @@ const masterReadCache=createFeedCache({ttlMs:300_000});
 // privilege records behind the live Dashboard authorization, are held the same way, per login.
 const misBridgeFeedCache=createFeedCache({ttlMs:20_000}),misBridgeFleetCache=createFeedCache({ttlMs:30_000});
 const dieselMasterFeedCache=createFeedCache({ttlMs:60_000});
+const dieselErpDrivers=createErpDriverReader({read:oracleConfigured?oracleFleetDriverRoster:undefined,onError:error=>console.error('ERP driver list for Diesel could not be read.',error.message)});
 const membershipUserRecords=new Map(),dashboardAuthorizations=new Map();
 const clearMisReadWindows=()=>{misBridgeFeedCache.clear();misBridgeFleetCache.clear();dieselMasterFeedCache.clear();membershipUserRecords.clear();dashboardAuthorizations.clear();};
 // Closes every shared read window now and again once the write has answered.
@@ -1657,7 +1658,7 @@ const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   enabled:process.env.DIESEL_SSO_ENABLED,
   dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
   // Read once a minute at most, however many Diesel users open Master Data.
-  readMasters:()=>dieselMasterFeedCache.read(async()=>dieselMasterFeed((await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[DIESEL_FEED_MASTERS])).rows)),
+  readMasters:async()=>{const [rows,erpDrivers]=await Promise.all([dieselMasterFeedCache.read(async()=>(await pool.query('SELECT id,master_name,record_data FROM master_records WHERE master_name=ANY($1::text[]) ORDER BY created_at ASC,id ASC',[DIESEL_FEED_MASTERS])).rows),dieselErpDrivers()]);return {masters:dieselMasterFeed(rows,erpDrivers),erpDrivers:Boolean(erpDrivers)};},
 });
 
 app.get('/api/app-version',(_req,res)=>{

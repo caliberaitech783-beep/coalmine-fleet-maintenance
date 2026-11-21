@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import express from 'express';
-import { dieselMasterFeed } from '../diesel-master-feed.mjs';
+import { createErpDriverReader, dieselMasterFeed } from '../diesel-master-feed.mjs';
 import { registerDieselSharedSignIn } from '../diesel-shared-signin.mjs';
 import { protectDeletionPool } from '../deletion-approval.mjs';
 import { CDIR_MASTERS } from '../cdir-masters.mjs';
@@ -43,7 +43,7 @@ test('the Diesel master feed needs the shared secret and a live Pulse grant', as
     requireSession: (_request, _response, next) => next(),
     readSession: async request => active && request.headers.authorization === 'Bearer ' + session ? { login: 'operator', name: 'Operator' } : null,
     checkLocation: async () => false,
-    readMasters: async () => dieselMasterFeed(rows),
+    readMasters: async () => ({ masters: dieselMasterFeed(rows), erpDrivers: false }),
   });
   await issuer.initialize();
   await database.query(`INSERT INTO diesel_sso (code_hash, state, challenge, session_token, code_expires_at, grant_hash, grant_expires_at)
@@ -59,11 +59,54 @@ test('the Diesel master feed needs the shared secret and a live Pulse grant', as
     assert.equal((await post({ grant: 'x'.repeat(43) })).status, 401);
     const response = await post({ grant });
     assert.equal(response.status, 200);
-    assert.deepEqual(Object.keys((await response.json()).masters), ['region', 'site', 'equipment', 'employee', 'driver']);
+    const reply = await response.json();
+    assert.deepEqual(Object.keys(reply.masters), ['region', 'site', 'equipment', 'employee', 'driver']);
+    assert.equal(reply.erpDrivers, false);
     active = false;
     assert.equal((await post({ grant })).status, 401);
   } finally {
     server.close();
     await database.close();
   }
+});
+
+test('the Driver master lists every ERP driver, not only the few in the staff directory', () => {
+  const erp = [
+    { code: 'D100', name: 'Suresh Yadav', source: 'Vehicle logbook', lastDate: '2026-11-18', location: 'SASTI OB', vehicle: 'T-101' },
+    { code: 'D200', name: 'Mahesh Patel', source: 'Equipment logbook', lastDate: '2026-11-20', location: 'Majri OC', vehicle: 'EX-7' },
+    { code: 'E001', name: 'RAVI  KUMAR', source: 'Equipment transfer', lastDate: '2026-10-01', location: '', vehicle: 'T-300' },
+    // Same code as a directory person with another name: never joined, so no phone is borrowed.
+    { code: 'E002', name: 'Someone Else', source: 'Vehicle logbook', lastDate: '2026-09-01', location: 'Majri OC', vehicle: 'T-9' },
+    { code: '', name: 'No code', source: 'Vehicle logbook', lastDate: '2026-11-20' },
+  ];
+  const drivers = dieselMasterFeed(rows, erp).driver;
+  assert.deepEqual(drivers.map(driver => driver.empId), ['D200', 'D100', 'E001', 'E002']);
+  assert.deepEqual(drivers[1], { id: 'erp:D100', empId: 'D100', name: 'Suresh Yadav', site: 'Sasti OC', vehicle: 'T-101',
+    lastDate: '2026-11-18', source: 'Vehicle logbook', designation: '', department: '', status: '', phone: '' });
+  assert.deepEqual([drivers[2].designation, drivers[2].phone, drivers[2].site], ['TIPPER DRIVER', '9000000001', 'Sasti OC']);
+  assert.equal(drivers[3].phone, '');
+  assert.equal(drivers.filter(driver => driver.source === 'Pulse directory').length, 0, 'the joined directory driver is not listed twice');
+  assert.deepEqual(dieselMasterFeed(rows, null).driver.map(driver => [driver.empId, driver.source]), [['E001', 'Pulse directory']]);
+});
+
+test('the ERP driver list is served from the last read and waits only on the first one', async () => {
+  let clock = 0, calls = 0, fail = false;
+  const errors = [];
+  const reader = createErpDriverReader({ ttlMs: 1000, waitMs: 20, now: () => clock, onError: error => errors.push(error.message),
+    read: async () => { calls++; if (fail) throw new Error('ORA-down'); return [{ code: 'D' + calls }]; } });
+  assert.deepEqual(await reader(), [{ code: 'D1' }]);
+  clock = 500;
+  assert.deepEqual(await reader(), [{ code: 'D1' }]);
+  assert.equal(calls, 1);
+  clock = 2000;
+  assert.deepEqual(await reader(), [{ code: 'D1' }], 'an old list is served at once while it refreshes');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(await reader(), [{ code: 'D2' }]);
+  fail = true; clock = 5000;
+  assert.deepEqual(await reader(), [{ code: 'D2' }]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(errors, ['ORA-down']);
+  assert.equal(await createErpDriverReader({})(), null);
+  const slow = createErpDriverReader({ waitMs: 10, read: () => new Promise(resolve => setTimeout(() => resolve([]), 200)) });
+  assert.equal(await slow(), null, 'a slow ERP does not hold the feed');
 });

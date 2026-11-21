@@ -13,9 +13,42 @@ const equipmentKeys=['door','reg','currentLocation','equipmentName','category','
   'acquisitionDate','make','model','manufacturerSerialNo','engineNo','chassisNo','documentStatus','asset','status'];
 const employeeKeys=['empId','name','site','category','designation','department','reportingTo','status','gender','doj','staffLevel','localStatus'];
 // Drivers and machine operators, not the office "Data Entry Operator" designations.
-const drives=designation=>/\b(driver|operator)\b/i.test(designation)&&!/\b(data|entry|computer)\b/i.test(designation);
+const drives=designation=>/\b(drivers?|operators?|opr|optr)\b/i.test(designation)&&!/\b(data|entry|computer)\b/i.test(designation);
+const nameKey=value=>text(value).toUpperCase().replace(/[^A-Z0-9]/g,'');
 
-export function dieselMasterFeed(rows=[]){
+// The ERP holds every driver and operator; the directory is a staff list with only a few of them.
+// A directory person joins an ERP driver only when both the employee code and the name agree.
+function driverMaster(employee,erpDrivers){
+  const staff=new Map(employee.filter(person=>person.empId).map(person=>[person.empId.toLowerCase()+'|'+nameKey(person.name),person]));
+  const joined=new Set();
+  const fromErp=erpDrivers.filter(driver=>text(driver.code)&&text(driver.name)).map(driver=>{
+    const person=staff.get(text(driver.code).toLowerCase()+'|'+nameKey(driver.name));
+    if(person)joined.add(person);
+    return {id:'erp:'+text(driver.code),empId:text(driver.code),name:text(driver.name),site:displaySiteName(driver.location)||text(person?.site),
+      vehicle:text(driver.vehicle),lastDate:text(driver.lastDate),source:text(driver.source),
+      designation:text(person?.designation),department:text(person?.department),status:text(person?.status),phone:text(person?.phone)};
+  }).sort((first,second)=>second.lastDate.localeCompare(first.lastDate)||first.name.localeCompare(second.name));
+  const directoryOnly=employee.filter(person=>drives(person.designation)&&!joined.has(person)).map(person=>({
+    id:person.id,empId:person.empId,name:person.name,site:person.site,vehicle:'',lastDate:'',source:'Pulse directory',
+    designation:person.designation,department:person.department,status:person.status,phone:person.phone}));
+  return [...fromErp,...directoryOnly];
+}
+
+// Serves the last ERP driver list at once and refreshes it in the background when it is old.
+// Only the first read after a restart waits for the ERP, and then for a bounded time.
+export function createErpDriverReader({read,ttlMs=30*60_000,waitMs=12_000,now=Date.now,onError}={}){
+  let rows=null,readAt=0,pending=null;
+  const refresh=()=>pending??=Promise.resolve().then(read).then(next=>{rows=next;readAt=now();},error=>onError?.(error)).finally(()=>{pending=null;});
+  return async()=>{
+    if(!read)return null;
+    if(rows&&now()-readAt<ttlMs)return rows;
+    const refreshed=refresh();
+    if(!rows)await Promise.race([refreshed,new Promise(resolve=>setTimeout(resolve,waitMs).unref())]);
+    return rows;
+  };
+}
+
+export function dieselMasterFeed(rows=[],erpDrivers=[]){
   const of=name=>rows.filter(row=>row.master_name===name).map(row=>({...row.record_data,id:String(row.id)}));
   const region=of('Region master').map(record=>({id:record.id,...pick(record,['name','code','state']),
     sites:displaySiteSelection(record.sites).join(' | ')}));
@@ -31,5 +64,5 @@ export function dieselMasterFeed(rows=[]){
     const contact=contacts.get(text(record.empId).toLowerCase())||{};
     return {id:record.id,...pick(record,employeeKeys),site:displaySiteName(record.site),phone:text(contact.contact),email:text(contact.email)};
   });
-  return {region,site,equipment,employee,driver:employee.filter(record=>drives(record.designation))};
+  return {region,site,equipment,employee,driver:driverMaster(employee,erpDrivers||[])};
 }

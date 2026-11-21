@@ -104,7 +104,9 @@ export function registerDieselSharedSignIn(app, { pool, requireSession, readSess
     if (response.headersSent) return;
     if (!profile?.login) return response.sendStatus(401);
     if (!readMasters) return response.sendStatus(404);
-    response.json({ masters: await readMasters() });
+    // erpDrivers is false when the ERP driver list could not be read and the Driver master holds directory drivers only.
+    const { masters, erpDrivers } = await readMasters();
+    response.json({ masters, erpDrivers });
   }));
   app.post('/api/diesel-sso/revoke', serverRoute(async (request, response) => {
     const { grant } = request.body || {};
