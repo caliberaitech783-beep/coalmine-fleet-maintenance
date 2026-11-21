@@ -5,7 +5,7 @@ import {CDIR_MASTERS} from './cdir-masters.mjs';
 // The masters Diesel shows read-only at the top of its Master Data: Site, Region,
 // Equipment, Employee, Driver and Shift. Only the listed fields leave Pulse; logins,
 // privileges, date of birth, UAN and Aadhaar stay here.
-export const DIESEL_FEED_MASTERS=['Region master','Equipment master','Shift Master',CDIR_MASTERS.employee,CDIR_MASTERS.contact];
+export const DIESEL_FEED_MASTERS=['Region master','Equipment master','LMV master','Shift Master',CDIR_MASTERS.employee,CDIR_MASTERS.contact];
 
 const text=value=>String(value??'').trim().slice(0,1024);
 const pick=(record,keys)=>Object.fromEntries(keys.map(key=>[key,text(record[key])]));
@@ -49,17 +49,26 @@ export function createErpDriverReader({read,ttlMs=30*60_000,waitMs=12_000,now=Da
   };
 }
 
-export function dieselMasterFeed(rows=[],erpDrivers=[]){
+export function dieselMasterFeed(rows=[],erpDrivers=[],erpDgSets=[]){
   const of=name=>rows.filter(row=>row.master_name===name).map(row=>({...row.record_data,id:String(row.id)}));
   const region=of('Region master').map(record=>({id:record.id,...pick(record,['name','code','state']),
     sites:displaySiteSelection(record.sites).join(' | ')}));
   const site=region.flatMap(record=>record.sites.split(' | ').filter(Boolean).map(name=>({
     id:record.id+':'+name,name,region:record.name,regionCode:record.code,state:record.state})));
-  const equipment=of('Equipment master').map(record=>{
+  const shownEquipment=record=>{
     const shown=equipmentMasterWithDoor(record);
     return {id:record.id,...pick(shown,equipmentKeys),
       currentLocation:displaySiteName(shown.currentLocation||shown.location||shown.site)};
-  });
+  };
+  // One asset is listed once: an LMV or DG set already in the Equipment master is not added again.
+  const identity=row=>text(row.chassisNo||row.manufacturerSerialNo||row.door||row.reg).replace(/[^a-z0-9]/gi,'').toUpperCase();
+  const equipment=of('Equipment master').map(shownEquipment);
+  const known=new Set(equipment.map(identity).filter(Boolean));
+  const add=record=>{const key=identity(record);if(key&&known.has(key))return;if(key)known.add(key);equipment.push(record);};
+  // Sample LMVs that Pulse seeds for demonstrations are not real vehicles.
+  for(const record of of('LMV master').filter(record=>record.demo!==true))add({...shownEquipment(record),id:'lmv:'+record.id,group:text(record.group)||'LMV'});
+  for(const record of erpDgSets||[])add({id:'erp-dg:'+text(record.oracleEquipmentTno),...pick({...record,door:record.equipmentId||record.oracleEquipmentNo,
+    reg:record.registrationNo||record.vrnNo},equipmentKeys),currentLocation:displaySiteName(record.currentLocation),group:text(record.group)||'DG set'});
   const contacts=new Map(of(CDIR_MASTERS.contact).filter(record=>text(record.empId)).map(record=>[text(record.empId).toLowerCase(),record]));
   const employee=of(CDIR_MASTERS.employee).filter(record=>text(record.name)&&text(record.status).toUpperCase()!=='VACANT').map(record=>{
     const contact=contacts.get(text(record.empId).toLowerCase())||{};

@@ -113,3 +113,21 @@ test('the ERP driver list is served from the last read and waits only on the fir
   const slow = createErpDriverReader({ waitMs: 10, read: () => new Promise(resolve => setTimeout(() => resolve([]), 200)) });
   assert.equal(await slow(), null, 'a slow ERP does not hold the feed');
 });
+
+test('LMVs and ERP DG sets join the Equipment master once each, without demo vehicles', () => {
+  const feedRows = [...rows,
+    { id: 20, master_name: 'LMV master', record_data: { door: 'LMV-7', reg: 'MH34XY0007', currentLocation: 'Sasti OB', make: 'Mahindra', model: 'Bolero', chassisNo: 'CH-7' } },
+    { id: 21, master_name: 'LMV master', record_data: { door: 'DEMO-LMV-WCL-1-1', reg: 'DEMO-LMV-WCL-1-1', group: 'LMV', demo: true } },
+    // The same tipper as Equipment master row 2, by registration.
+    { id: 22, master_name: 'LMV master', record_data: { door: 'T-101', reg: 'MH34AB1234' } },
+  ];
+  const dg = [
+    { oracleEquipmentTno: '900', equipmentId: 'DG-01', equipmentName: 'DG SET 125 KVA', currentLocation: 'MAJRI OC', category: 'PLANT', group: '', make: 'Kirloskar', manufacturerSerialNo: 'K-1' },
+    { oracleEquipmentTno: '901', equipmentId: 'DG-01', equipmentName: 'DG SET 125 KVA again', manufacturerSerialNo: 'K-1' },
+  ];
+  const equipment = dieselMasterFeed(feedRows, [], dg).equipment;
+  assert.deepEqual(equipment.map(record => [record.id, record.door, record.group, record.currentLocation]), [
+    ['2', 'T-101', '', 'Sasti OC'], ['lmv:20', 'LMV-7', 'LMV', 'Sasti OC'], ['erp-dg:900', 'DG-01', 'DG set', 'Majri OC']]);
+  assert.equal(equipment[2].make, 'Kirloskar');
+  assert.equal(dieselMasterFeed(feedRows, [], null).equipment.length, 2);
+});

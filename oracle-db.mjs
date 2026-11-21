@@ -460,10 +460,29 @@ export async function oracleEquipmentTransfers(fromDate = null) {
   }
 }
 
-export async function oracleEquipmentMasterRecords() {
+const FLEET_EQUIPMENT = `UPPER(TRIM(equipment.equipmenttypecode)) = 'ASSET'
+         AND UPPER(TRIM(equipment.equipmentcategorycode)) IN ('VEHICLE', 'EQUIPMENT')`;
+// A diesel generator by its group, item or name: "DG", "D.G.", "DG SET", "GENSET" or "GENERATOR" as a word.
+const DG_WORD = `'(^|[^A-Z])(DG|D\\.G\\.?|GENSET|GEN SET|GENERATOR)([^A-Z]|$)'`;
+const DG_SETS = `NOT (${FLEET_EQUIPMENT})
+         AND (REGEXP_LIKE(UPPER(equipment.equipmentname), ${DG_WORD})
+           OR REGEXP_LIKE(UPPER(equipment.equipmentgroupcode), ${DG_WORD})
+           OR REGEXP_LIKE(UPPER(equipment.equipmentcategorycode), ${DG_WORD})
+           OR EXISTS (SELECT 1 FROM cmpl.equipmentgroup equipment_group
+                      WHERE equipment_group.equipmentgroupcode = equipment.equipmentgroupcode
+                        AND REGEXP_LIKE(UPPER(equipment_group.equipmentgroupname), ${DG_WORD}))
+           OR EXISTS (SELECT 1 FROM cmpl.item item
+                      WHERE item.itemcode = equipment.itemcode AND REGEXP_LIKE(UPPER(item.itemname), ${DG_WORD})))`;
+
+export const oracleEquipmentMasterRecords = () => oracleEquipmentRecords(FLEET_EQUIPMENT);
+// DG sets the ERP keeps outside the vehicle and equipment asset categories, for Diesel's Equipment Master.
+export const oracleDgSetRecords = () => oracleEquipmentRecords(DG_SETS, 20000);
+
+async function oracleEquipmentRecords(where, callTimeout) {
   const pool = await oraclePool();
   const connection = await pool.getConnection();
   try {
+    if (callTimeout) connection.callTimeout = callTimeout;
     const result = await connection.execute(
       `SELECT equipment.tno AS oracle_tno,
               equipment.equipmentno AS oracle_equipment_no,
@@ -491,8 +510,7 @@ export async function oracleEquipmentMasterRecords() {
               equipment.assetno AS asset_no,
               equipment.doctypecode AS document_status
        FROM cmpl.equipment equipment
-       WHERE UPPER(TRIM(equipment.equipmenttypecode)) = 'ASSET'
-         AND UPPER(TRIM(equipment.equipmentcategorycode)) IN ('VEHICLE', 'EQUIPMENT')
+       WHERE ${where}
        ORDER BY equipment.tno ASC`,
       [],
       { outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000 },
