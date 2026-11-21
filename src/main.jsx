@@ -3261,7 +3261,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
     case "site": return <td><MapPin /> {r.site}</td>;
-    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>;
+    case "complaint": return <td className="request-reason-cell" data-export-value={r.complaint || "—"}><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>;
     case "openingHmr": return <td>{breakdownMeterValue(r, "HMR")}</td>;
     case "openingKmr": return <td>{breakdownMeterValue(r, "KMR")}</td>;
     case "closingHmr": return <td>{breakdownMeterValue(r, "HMR", "closing")}</td>;
@@ -3412,14 +3412,14 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <MapPin /> {r.site}
                 </td>
-                {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>}
+                {showReason && <td className="request-reason-cell" data-export-value={r.complaint || "—"}><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>}
                 <td>{breakdownMeterValue(r, "HMR")}</td>
                 <td>{breakdownMeterValue(r, "KMR")}</td>
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showUserRole && <td>{r.requesterRole || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
-                {showCompletionDetails && <><td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.maintenanceWork || "—"} language={r.maintenanceWorkLanguage} /></div></td><td>{requestMeterReadings(r, "closing").HMR || "—"}</td><td>{requestMeterReadings(r, "closing").KMR || "—"}</td></>}
+                {showCompletionDetails && <><td className="request-reason-cell" data-export-value={r.maintenanceWork || "—"}><div className="request-reason-text"><TranslatedText text={r.maintenanceWork || "—"} language={r.maintenanceWorkLanguage} /></div></td><td>{requestMeterReadings(r, "closing").HMR || "—"}</td><td>{requestMeterReadings(r, "closing").KMR || "—"}</td></>}
                 {showBreakdownDays && <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>}
                 <td>{r.category}</td>
                 <td>{r.delayedReason || "—"}</td>
@@ -7002,7 +7002,7 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
+                      <td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td data-export-value={request.complaint || "—"}><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
                       <td>{formatTwelveHourDateTime(request.start)}</td><td>{formatTwelveHourDateTime(request.expectedCompletionAt)}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
@@ -10676,7 +10676,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, closingTimeSortMe
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
-              {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.complaint} language={row.complaintLanguage} /></div>{row.complaintMediaAvailable && <ComplaintMediaView request={row} token={authToken} Dialog={Modal} />}</td>}
+              {showReason && <td className="request-reason-cell" data-export-value={row.complaint || "—"}><div className="request-reason-text"><TranslatedText text={row.complaint} language={row.complaintLanguage} /></div>{row.complaintMediaAvailable && <ComplaintMediaView request={row} token={authToken} Dialog={Modal} />}</td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}{showUserRole && <td>{row.requesterRole || "—"}</td>}
               {startedFirst ? <>{startedCell(row)}{closedByCell(row)}{verifiedCells(row)}</> : <>{verifiedCells(row)}{closedByCell(row)}{startedCell(row)}</>}
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
@@ -10685,7 +10685,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, closingTimeSortMe
               <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} label={`${days} ${days === 1 ? "day" : "days"}`} /></td>
               {showEtc && <td className="etc-cell"><EtcCountdown request={row} etcLabel={etcLabel} /></td>}
               <td><MaintenanceRemarks remarks={row.dailyRemarks} category={row.category} /></td>
-              {showWorkCompletion && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
+              {showWorkCompletion && <td className="request-reason-cell" data-export-value={row.maintenanceWork || "—"}><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
               {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").KMR || "—"}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
               {showProductionFirstTrip && <><td>{formatTwelveHourDateTime(productionFirstTripTimestamp(row), true)}</td><td>{row.productionFirstTripBy || "Pending"}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td><td className="request-reason-cell"><div className="request-reason-text">{row.productionFirstTripRemark || "—"}</div></td></>}

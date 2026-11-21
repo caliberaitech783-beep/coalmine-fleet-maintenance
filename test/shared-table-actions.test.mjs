@@ -57,6 +57,21 @@ test("table actions flatten conditional fragments and retain header filter callb
   assert.equal(tableCellText(h("input", {value:"Editable value"})), "Editable value");
 });
 
+test("shared exports retain scalar values rendered by rich cell components", () => {
+  const TranslatedText = () => h("span", {}, "rendered later");
+  const RichValue = () => h("span", {}, "rendered later");
+  const children = h(React.Fragment, {},
+    h("thead", {}, h("tr", {}, h("th", {}, "BD reason"), h("th", {}, "Work completion action taken"))),
+    h("tbody", {}, h("tr", {},
+      h("td", {}, h(TranslatedText, {text:"Hydraulic hose leakage"})),
+      h("td", {}, h(RichValue, {value:"Hose replaced and tested"})),
+    )),
+  );
+  const model = tableModel(children);
+  const dataRow = tableElements(tableElements(children)[1].props.children)[0];
+  assert.deepEqual(model.columns.map(column => column.value(dataRow)), ["Hydraulic hose leakage", "Hose replaced and tested"]);
+});
+
 test("table filters and numeric sort operate on rendered values without mutating source order", () => {
   const {columns} = tableModel(headers);
   const rows = [row("a", "Alpha", 10), row("b", "Beta", 2), row("c", "", 1)];

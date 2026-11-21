@@ -26,7 +26,17 @@ function elementText(node) {
   if (node.props["data-export-value"] !== undefined) return String(node.props["data-export-value"] ?? "");
   if (node.type === "input") return node.props.type === "checkbox" ? (node.props.checked ? "Yes" : "No") : String(node.props.value ?? "");
   if (node.type === "select" || node.type === "textarea") return String(node.props.value ?? "");
-  return tableCellText(node.props.children) || node.props.label || "";
+  const childText = tableCellText(node.props.children);
+  if (childText) return childText;
+  // Shared exports inspect the React table model before custom components render.
+  // Preserve scalar text/value props used by rich cells such as TranslatedText.
+  if (typeof node.type !== "string") {
+    for (const key of ["text", "value"]) {
+      const value = node.props[key];
+      if (typeof value === "string" || typeof value === "number") return String(value);
+    }
+  }
+  return node.props.label || "";
 }
 
 export function tableCellText(node) {
