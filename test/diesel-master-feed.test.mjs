@@ -16,6 +16,7 @@ const rows = [
   { id: 4, master_name: CDIR_MASTERS.employee, record_data: { name: 'Anita Rao', empId: 'E002', site: 'Sasti OC', designation: 'Data Entry Operator', status: 'ACTIVE' } },
   { id: 5, master_name: CDIR_MASTERS.employee, record_data: { name: 'Vacant post', site: 'Sasti OC', designation: 'Excavator Operator', status: 'VACANT' } },
   { id: 6, master_name: CDIR_MASTERS.contact, record_data: { name: 'Ravi Kumar', empId: 'e001', contact: '9000000001', emergencyContact: '9000000002', email: 'ravi@example.test' } },
+  { id: 8, master_name: 'Shift Master', record_data: { site: 'Sasti OB', shiftName: 'First', shiftCode: 'A', startTime: '06:00', endTime: '14:00', effectiveFrom: '2026-01-01', effectiveTo: '', status: 'Active', remarks: '' } },
   { id: 7, master_name: 'Users & employees', record_data: { login: 'ravi', passwordHash: 'secret' } },
 ];
 
@@ -28,6 +29,8 @@ test('Diesel receives the site, region, equipment, employee and driver masters w
   assert.deepEqual(feed.employee.map(employee => employee.name), ['Ravi Kumar', 'Anita Rao']);
   assert.equal(feed.employee[0].phone, '9000000001');
   assert.deepEqual(feed.driver.map(driver => driver.empId), ['E001']);
+  assert.deepEqual(feed.shift, [{ id: '8', site: 'Sasti OC', shiftName: 'First', shiftCode: 'A', startTime: '06:00', endTime: '14:00',
+    effectiveFrom: '2026-01-01', effectiveTo: '', status: 'Active', remarks: '' }]);
   assert.doesNotMatch(JSON.stringify(feed), /passwordHash|1990-01-01|100200300400|XXXX1234|9000000002|"login"/);
 });
 
@@ -60,7 +63,7 @@ test('the Diesel master feed needs the shared secret and a live Pulse grant', as
     const response = await post({ grant });
     assert.equal(response.status, 200);
     const reply = await response.json();
-    assert.deepEqual(Object.keys(reply.masters), ['region', 'site', 'equipment', 'employee', 'driver']);
+    assert.deepEqual(Object.keys(reply.masters), ['region', 'site', 'equipment', 'employee', 'driver', 'shift']);
     assert.equal(reply.erpDrivers, false);
     active = false;
     assert.equal((await post({ grant })).status, 401);

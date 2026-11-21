@@ -3,14 +3,15 @@ import {equipmentMasterWithDoor} from './equipment-door.mjs';
 import {CDIR_MASTERS} from './cdir-masters.mjs';
 
 // The masters Diesel shows read-only at the top of its Master Data: Site, Region,
-// Equipment, Employee and Driver. Only the listed fields leave Pulse; logins,
+// Equipment, Employee, Driver and Shift. Only the listed fields leave Pulse; logins,
 // privileges, date of birth, UAN and Aadhaar stay here.
-export const DIESEL_FEED_MASTERS=['Region master','Equipment master',CDIR_MASTERS.employee,CDIR_MASTERS.contact];
+export const DIESEL_FEED_MASTERS=['Region master','Equipment master','Shift Master',CDIR_MASTERS.employee,CDIR_MASTERS.contact];
 
 const text=value=>String(value??'').trim().slice(0,1024);
 const pick=(record,keys)=>Object.fromEntries(keys.map(key=>[key,text(record[key])]));
 const equipmentKeys=['door','reg','currentLocation','equipmentName','category','group','itemName','itemSpecification',
   'acquisitionDate','make','model','manufacturerSerialNo','engineNo','chassisNo','documentStatus','asset','status'];
+const shiftKeys=['site','shiftName','shiftCode','startTime','endTime','effectiveFrom','effectiveTo','status','remarks'];
 const employeeKeys=['empId','name','site','category','designation','department','reportingTo','status','gender','doj','staffLevel','localStatus'];
 // Drivers and machine operators, not the office "Data Entry Operator" designations.
 const drives=designation=>/\b(drivers?|operators?|opr|optr)\b/i.test(designation)&&!/\b(data|entry|computer)\b/i.test(designation);
@@ -64,5 +65,7 @@ export function dieselMasterFeed(rows=[],erpDrivers=[]){
     const contact=contacts.get(text(record.empId).toLowerCase())||{};
     return {id:record.id,...pick(record,employeeKeys),site:displaySiteName(record.site),phone:text(contact.contact),email:text(contact.email)};
   });
-  return {region,site,equipment,employee,driver:driverMaster(employee,erpDrivers||[])};
+  const shift=of('Shift Master').map(record=>({id:record.id,...pick(record,shiftKeys),
+    site:displaySiteName(record.site||record.siteName),shiftName:text(record.shiftName||record.shift)}));
+  return {region,site,equipment,employee,driver:driverMaster(employee,erpDrivers||[]),shift};
 }
