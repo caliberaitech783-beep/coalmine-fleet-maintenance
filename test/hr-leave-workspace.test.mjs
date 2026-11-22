@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {pulseLeaveProfile} from '../pulse-application-identity.mjs';
 
 test('an active Pulse user receives only the leave, OD and gate-pass HR scope',()=>{
@@ -16,4 +17,10 @@ test('inactive and first-login Pulse accounts cannot receive a leave-only grant'
   const base={login:'operator.one',passwordHash:'hash'};
   for(const record_data of [{...base,active:false},{...base,status:'Inactive'},{...base,mustChangePassword:true},{...base,passwordHash:''}])
     assert.equal(pulseLeaveProfile({id:42,record_data}),null);
+});
+
+test('the Pulse HR menu can open the leave workspace for signed-in users',async()=>{
+  const source=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(source,/const canOpenAdminPage = \(name\) => \{\s*if\(name==='Leave \/ OD \/ Gatepass'\)return true;/);
+  assert.match(source,/renderedActive === "Leave \/ OD \/ Gatepass" \? \(\s*<HrLeaveWorkspace/);
 });

@@ -12321,6 +12321,7 @@ function App() {
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
+    if(name==='Leave / OD / Gatepass')return true;
     if(session?.assignedRole==='HR User')return ['Dashboard','Reports','Tickets','CD','Employee Tenure Report','Employee Transfer','Directory Update Approvals','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
     if(session?.assignedRole==='HR Manager')return ['CD','Employee Tenure Report','Employee Transfer','Directory Update Approvals','Record Deletion Approvals'].includes(name)||isCdirMaster(name);
     if(name==="User Sessions")return canViewUserSessions(session);
