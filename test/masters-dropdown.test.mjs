@@ -41,7 +41,7 @@ test("reports opens as a graphical dropdown of report sub types", async () => {
 
 test("switching any top-level menu closes its peers and selecting a report closes all menus", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
-  const names = ["Masters", "Whatsapp", "Workspaces", "Reports", "Admin", "Cdir", "Iboss"];
+  const names = ["Masters", "Whatsapp", "Workspaces", "Reports", "Admin", "Cdir", "Hr", "Iboss"];
   const state = Object.fromEntries(names.map(name => [name, false]));
   const setters = names.map(name => value => {state[name] = typeof value === 'function' ? value(state[name]) : value;});
   const closeBody = source.match(/const closeMenus = \(\) => \{([\s\S]*?)\n  \};/)[1];
@@ -49,7 +49,8 @@ test("switching any top-level menu closes its peers and selecting a report close
   const closeMenus = () => close(...setters);
   for (const name of names) {
     const expression = `closeMenus(); set${name}Open(!${name.toLowerCase()}Open);`;
-    assert.ok(source.includes(expression), `${name} closes peers before toggling`);
+    const sourceExpression = name === "Hr" ? `closeMenus();setHrOpen(!hrOpen);` : expression;
+    assert.ok(source.includes(sourceExpression), `${name} closes peers before toggling`);
     const toggle = new Function('closeMenus', `set${name}Open`, `${name.toLowerCase()}Open`, expression);
     toggle(closeMenus, setters[names.indexOf(name)], state[name]);
     assert.deepEqual(names.filter(key => state[key]), [name]);
