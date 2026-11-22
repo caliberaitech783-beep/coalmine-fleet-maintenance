@@ -1,3 +1,4 @@
+export const hrOfficeSite=label=>/\b(head|corporate)\s*office\b|\bHO\b|\bCO\b/i.test(String(label||''));
 export async function loadHrDirectory({pool,profile,user,masterNames,buildDirectory,mergeSuperiors,viewerContext,forViewer}){
  const access=new Set([...(profile.permissions?.hrDesktopAccess||[]),...(profile.permissions?.hrMobileAccess||[])]);
  if(!['Employee Master','Employee Directory','Reports & MIS'].some(menu=>access.has(menu)))throw Object.assign(new Error('Employee report access is not assigned.'),{status:403});
@@ -8,7 +9,11 @@ export async function loadHrDirectory({pool,profile,user,masterNames,buildDirect
  const directory=mergeSuperiors(buildDirectory(masters,{generated:new Date().toISOString()}),users.map(row=>row.record_data||{}));
  const viewer=viewerContext({session:{...profile,role:/super/i.test(user.userType||'')?'super':profile.role,permissions:{...profile.permissions,adminLevel:user.adminLevel}},user,sites:directory.sites||[]});
  const visible=forViewer(directory,viewer);
- const sites=(visible.sites||[]).map(site=>({id:site.id,label:site.label,region:site.group||'OTHER'}));
+ /* Owner, 22 Nov 2026: an HR login posted at sites (Majri, Sasti and the other OB / COAL sites) never receives the
+    Corporate / Head Office staff. Admins, office logins and logins without assigned sites keep every site and office. */
+ const own=new Set(viewer.siteIds||[]),ownSites=(visible.sites||[]).filter(site=>own.has(site.id));
+ const siteOnly=viewer.profile!=='admin-user'&&ownSites.length>0&&!ownSites.some(site=>hrOfficeSite(site.label));
+ const sites=(visible.sites||[]).filter(site=>!(siteOnly&&hrOfficeSite(site.label))).map(site=>({id:site.id,label:site.label,region:site.group||'OTHER'}));
  const byId=new Map(sites.map(site=>[site.id,site]));
  const rows=[];
  for(const [key,people] of Object.entries(visible.matrix||{})){
