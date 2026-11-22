@@ -696,6 +696,11 @@ function HrLeaveWorkspace({token}){
     return()=>{active=false;};
   },[token]);
   const send=()=>{if(handoff&&frame.current?.contentWindow)frame.current.contentWindow.postMessage({type:'caliber-pulse:hr-session',session:handoff,mode:'leave'},hrWorkspaceOrigin);};
+  useEffect(()=>{
+    const ready=event=>{if(event.origin===hrWorkspaceOrigin&&event.source===frame.current?.contentWindow&&event.data?.type==='caliber-hr:ready'&&event.data?.mode==='leave')send();};
+    window.addEventListener('message',ready);
+    return()=>window.removeEventListener('message',ready);
+  },[handoff]);
   return <section className="hr-leave-workspace" aria-label="Leave, OD and gate pass">
     {error?<div className="panel"><h2>HR request workspace</h2><p role="alert">{error}</p></div>:!handoff?<div className="panel" role="status">Opening Leave / OD / Gatepass…</div>:<iframe ref={frame} title="Leave, OD and gate pass" src={hrWorkspaceOrigin+'/?embedded=pulse&mode=leave'} onLoad={send}/>}
   </section>;

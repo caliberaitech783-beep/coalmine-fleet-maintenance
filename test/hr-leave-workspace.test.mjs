@@ -23,4 +23,5 @@ test('the Pulse HR menu can open the leave workspace for signed-in users',async(
   const source=await readFile(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.match(source,/const canOpenAdminPage = \(name\) => \{\s*if\(name==='Leave \/ OD \/ Gatepass'\)return true;/);
   assert.match(source,/renderedActive === "Leave \/ OD \/ Gatepass" \? \(\s*<HrLeaveWorkspace/);
+  assert.match(source,/event\.data\?\.type==='caliber-hr:ready'[\s\S]*?send\(\)/);
 });
