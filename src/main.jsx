@@ -683,6 +683,24 @@ function AuthModeTabs({ mode, onModeChange }) {
 const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 const hrWorkspaceOrigin = 'https://hrpulse.cmll.in';
 
+function HrLeaveWorkspace({token}){
+  const[handoff,setHandoff]=useState(null),[error,setError]=useState('');
+  const frame=useRef(null);
+  useEffect(()=>{
+    let active=true;
+    setError('');setHandoff(null);
+    fetch('/api/integrations/hr/open-leave',{method:'POST',headers:{Authorization:`Bearer ${token}`}})
+      .then(response=>readApiJson(response,'Could not open the HR request workspace.'))
+      .then(value=>{if(active)setHandoff(value);})
+      .catch(failure=>{if(active)setError(failure.message);});
+    return()=>{active=false;};
+  },[token]);
+  const send=()=>{if(handoff&&frame.current?.contentWindow)frame.current.contentWindow.postMessage({type:'caliber-pulse:hr-session',session:handoff,mode:'leave'},hrWorkspaceOrigin);};
+  return <section className="hr-leave-workspace" aria-label="Leave, OD and gate pass">
+    {error?<div className="panel"><h2>HR request workspace</h2><p role="alert">{error}</p></div>:!handoff?<div className="panel" role="status">Opening Leave / OD / Gatepass…</div>:<iframe ref={frame} title="Leave, OD and gate pass" src={hrWorkspaceOrigin+'/?embedded=pulse&mode=leave'} onLoad={send}/>}
+  </section>;
+}
+
 function Login({ onLogin, theme, toggleTheme }) {
   const [dieselPortal, setDieselPortal] = useState(() => {
     const query = new URLSearchParams(window.location.search);
@@ -1192,6 +1210,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [cdirOpen, setCdirOpen] = useState(false);
   const [cdirSelectionClosed, setCdirSelectionClosed] = useState(false);
+  const [hrOpen, setHrOpen] = useState(false);
+  const [hrSelectionClosed, setHrSelectionClosed] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSelectionClosed, setAdminSelectionClosed] = useState(false);
   const [ibossOpen, setIbossOpen] = useState(false);
@@ -1218,6 +1238,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setReportsOpen(false);
     setAdminOpen(false);
     setCdirOpen(false);
+    setHrOpen(false);
     setIbossOpen(false);
   };
   useEffect(() => {
@@ -1488,6 +1509,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ClockMenu down label="C-Dir Masters" centerLabel="C-Dir" icon={BookUser} items={cdirMasterNav} hours={cdirMasterNav.map((_, index, all) => 3.4 + index * 5.2 / Math.max(1, all.length - 1))} active={active} onSelect={selectMaster} />
           </div>
         </div>}
+        <div className={`masters-menu hr-menu${hrOpen ? " open" : ""}${hrSelectionClosed ? " selection-closed" : ""}`} onPointerLeave={()=>setHrSelectionClosed(false)}>
+          <div className="nav-config-row"><button className={`header-nav-item${active==="Leave / OD / Gatepass"?" active":""}`} data-nav="hr" aria-haspopup="menu" aria-expanded={hrOpen} onClick={()=>{setHrSelectionClosed(false);closeMenus();setHrOpen(!hrOpen);}}><span className="header-nav-icon" aria-hidden="true"><Users /></span><span className="nav-label">HR</span><ChevronDown className="masters-chevron"/></button></div>
+          <div className="masters-dropdown hr-dropdown" role="menu"><div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active==="Leave / OD / Gatepass"?" active":""}`} data-workspace="hr-leave" onClick={event=>selectDropdownPage("Leave / OD / Gatepass",event,setHrSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Users/><i className="workspace-icon-glow"/></span><span className="nav-label">Leave / OD / Gatepass</span></button></div></div>
+        </div>
         {session?.role === "super" && visibleIbossNav.length > 0 && <div
           className={`masters-menu iboss-menu${ibossOpen ? " open" : ""}${ibossSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setIbossSelectionClosed(false)}
@@ -12085,13 +12110,14 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
   const productionFirstTripReportRows=useMemo(()=>productionFirstTripSourceRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[productionFirstTripSourceRows]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="cdir-update"){setDirectoryView("updates");setSection("directory");return;}if(target?.kind==="cdir-deletion"){setDirectoryView("deletions");setSection("directory");return;}if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showDirectoryMenu&&<button data-nav="directory" className={section === "directory" ? "active" : ""} onClick={() => setSection("directory")}><BookOpen /> Directory (CD)</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}<button data-nav="hr" className={section === "hr-leave" ? "active" : ""} onClick={()=>setSection("hr-leave")}><Users/> HR</button><BdmsAssistant session={session} token={authToken} /><AnnouncementHistoryButton token={authToken} /></nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {if(target?.kind==="cdir-update"){setDirectoryView("updates");setSection("directory");return;}if(target?.kind==="cdir-deletion"){setDirectoryView("deletions");setSection("directory");return;}if(target?.kind==="employee-transfer"){setDirectoryView("transfer");setSection("directory");return;}const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} apiToken={authToken} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&<Dashboard requests={misDashboardRequests} requestsLoaded={dashboardRequestsReady} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} />}
       {!embedded&&section==="directory"&&showDirectoryMenu&&<CdirModule token={session?.token || authToken} ReportSection={ReportSection} initialView={directoryView} onViewChange={setDirectoryView}/>}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
+      {!embedded&&section==="hr-leave"&&<HrLeaveWorkspace token={session?.token||authToken}/>}
       {!embedded&&!showDashboardMenu&&!showDirectoryMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
       {(embedded||section==="profile")&&showRequestsMenu&&<div ref={operationalWorkspaceRef} data-operational={isProductionWorker || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       {vehicleHistoryTarget && isMaintenance ? <VehicleRepairHistoryPage vehicle={vehicleHistoryTarget} rows={requestRows} onBack={() => setVehicleHistoryTarget(null)} /> : <>
@@ -12654,6 +12680,8 @@ function App() {
     <EmployeeTenureReport token={session?.token || authToken} ReportSection={ReportSection} />
   ) : renderedActive === "CD" ? (
     <CaliberDirectoryPage token={session?.token || authToken} />
+  ) : renderedActive === "Leave / OD / Gatepass" ? (
+    <HrLeaveWorkspace token={session?.token || authToken} />
   ) : renderedActive === "Manager Profile" ? (
     <ManagerDashboard canCreateRequest={activeNavigationPermissions.desktopManagerCreateRequest === true} onCreateRequest={addRequest} managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} TimelineButton={RequestTimelineButton} />
   ) : renderedActive === "Tickets" ? (

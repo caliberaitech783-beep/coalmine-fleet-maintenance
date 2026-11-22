@@ -1256,3 +1256,7 @@
 .app > aside nav .repair-master-submenu button.workspace-menu-item { gap:8px; padding:6px; }
 .repair-master-submenu .workspace-icon { width:30px; height:30px; flex:0 0 30px; border-radius:9px; }
 .app > aside nav .repair-master-submenu button.workspace-menu-item .nav-label { white-space:normal; text-align:left; }
+.hr-leave-workspace{height:calc(100vh - var(--navigation-header-height,72px) - 24px);min-height:640px;background:#fff;border:1px solid #e6dff0;border-radius:14px;overflow:hidden}
+.hr-leave-workspace>iframe{display:block;width:100%;height:100%;border:0;background:#faf7fb}
+.hr-leave-workspace>.panel{margin:24px}
+.hr-dropdown{min-width:230px}

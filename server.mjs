@@ -17,7 +17,7 @@ import {hourlyBreakdownSiteSchedules} from './hourly-breakdown-schedule.mjs';
 import {registerInactiveUsers} from './inactive-users.mjs';
 import {prepareHrCredentials} from './hr-credentials.mjs';
 import {hrAccessManagementRequested} from './hr-permissions.mjs';
-import {installPulseApplicationIdentity} from './pulse-application-identity.mjs';
+import {installPulseApplicationIdentity,pulseLeaveProfile} from './pulse-application-identity.mjs';
 import {installMisPulseBridge} from './mis-pulse-bridge.mjs';
 import {createMisVehicleTransfers} from './mis-vehicle-transfer.mjs';
 import {createEquipmentMasterChanges,registerEquipmentMasterChanges} from './equipment-master-changes.mjs';
@@ -1587,6 +1587,21 @@ const deletionApproval=installDeletionApproval(app,{
   }),
 });
 const misCredentialIdentity=installPulseApplicationIdentity(app,{pool:authPool,sessionStore:authSessionStore});
+app.post('/api/integrations/hr/open-leave',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session?.login||'').trim().toLowerCase();
+    const name=String(req.session?.name||'').trim().toLowerCase();
+    const {rows}=await authPool.query(`SELECT id,record_data FROM master_records
+      WHERE master_name='Users & employees' AND (
+        ($1<>'' AND lower(trim(record_data->>'login'))=$1) OR
+        ($2<>'' AND lower(trim(record_data->>'employee'))=$2)
+      ) ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END,created_at DESC LIMIT 1`,[login,name]);
+    const row=rows[0],profile=pulseLeaveProfile(row);
+    if(!profile)return res.status(403).json({error:'Your Pulse account cannot open the HR request workspace. Contact your administrator.'});
+    const {grant}=await misCredentialIdentity.issueGrant(row,'HR',profile,{scope:'leave'});
+    res.set('Cache-Control','no-store').json({grant,profile});
+  }catch(error){next(error)}
+});
 // Equipment master: one shared OTP to the authorised mobiles approves each staged change set,
 // from Pulse or from Pulse-II. Direct writes to the master are closed.
 const equipmentMasterChangeService=createEquipmentMasterChanges({pool,

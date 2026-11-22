@@ -19,7 +19,14 @@ export function alwaysRemembered(login,env=process.env){
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const hrOrigin='https://hrpulse.cmll.in';
 const hrTrialPermissions=user=>({hrAccountStatus:user.hrAccountStatus||'Active',hrTrialAssignments:normalizeHrTrialAssignments(user.hrTrialAssignments)});
-const version=(user,application)=>digest(application==='HR'?`${user.login}:${user.passwordHash}:${JSON.stringify({...hrProfilePermissions(user),...hrTrialPermissions(user)})}`:`${user.login}:${user.passwordHash}`);
+const version=(user,application,scope='full')=>digest(application==='HR'
+ ?`${scope}:${user.login}:${user.passwordHash}:${scope==='leave'?JSON.stringify({site:user.site||user.location||'',assignedRole:user.userRoles||user.userGroup||user.userType||''}):JSON.stringify({...hrProfilePermissions(user),...hrTrialPermissions(user)})}`
+ :`${user.login}:${user.passwordHash}`);
+export function pulseLeaveProfile(row){
+ const user=row?.record_data||{};
+ if(!row||!user.passwordHash||user.mustChangePassword===true||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
+ return {role:'normal',userType:'Pulse Leave User',assignedRole:'Pulse Leave User',userId:String(row.id),login:String(user.login),name:user.employee||user.name||user.login,permissions:{application:'HR',hrDesktopAccess:['Leave / OD / Gatepass'],hrMobileAccess:['Leave / OD / Gatepass'],site:user.site||user.location||'',sharedPulseCredentials:true,leaveOnly:true}};
+}
 export function pulseApplicationProfile(row,application){
  const user=row?.record_data||{};
  if(!row||!user.passwordHash||user.mustChangePassword===true||user.active===false||['false','inactive','disabled','terminated'].includes(String(user.status||user.active||'').toLowerCase()))return null;
@@ -43,11 +50,11 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
  // One place issues an application grant, whichever way the person proved who they are
  // (password, or a Telegram sign-in code). "Remember me" on the MIS sign-in page makes
  // the grant last REMEMBER_DAYS (40) instead of 7; the owner's MIS grant always does.
- async function issueGrant(row,application,profile,{remember=false}={}){
+ async function issueGrant(row,application,profile,{remember=false,scope='full'}={}){
   const token=randomUUID(),grant=randomBytes(32).toString('base64url');
   const grantDays=application==='MIS'&&(remember===true||alwaysRemembered(profile?.login))?REMEMBER_DAYS:7;
   await sessionStore.create({token,...profile});
-  await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application),token,grantDays]);
+  await pool.query("INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at) VALUES($1,$2,$3,$4,$5,NOW()+make_interval(days=>$6::int))",[digest(grant),application,row.id,version(row.record_data,application,scope),token,grantDays]);
   await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
   return {grant,token};
  }
@@ -113,8 +120,8 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
     AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
     AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
-   const row=rows[0],profile=pulseApplicationProfile(row,application);
-   if(!profile||(row.session_application==='MIS'&&application==='HR'&&!pulseApplicationProfile(row,'MIS'))||row.credential_version!==version(row.record_data,application))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
+   const row=rows[0],leaveScope=application==='HR'&&Boolean(row)&&row.credential_version===version(row.record_data,'HR','leave'),profile=leaveScope?pulseLeaveProfile(row):pulseApplicationProfile(row,application);
+   if(!profile||(row.session_application==='MIS'&&application==='HR'&&!pulseApplicationProfile(row,'MIS'))||row.credential_version!==version(row.record_data,application,leaveScope?'leave':'full'))return res.status(401).json({error:'Sign-in expired or account access changed. Sign in again.'});
    await pool.query("UPDATE auth_sessions SET last_seen_at=NOW() WHERE token=$1 AND last_seen_at<NOW()-INTERVAL '30 seconds'",[row.session_token]);
    res.json({profile});
   });
