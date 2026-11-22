@@ -25,3 +25,9 @@ test('the Pulse HR menu can open the leave workspace for signed-in users',async(
   assert.match(source,/renderedActive === "Leave \/ OD \/ Gatepass" \? \(\s*<HrLeaveWorkspace/);
   assert.match(source,/event\.data\?\.type==='caliber-hr:ready'[\s\S]*?send\(\)/);
 });
+
+test('the embedded HR workspace fills the available Pulse page',async()=>{
+  const css=await readFile(new URL('../src/topbar.css',import.meta.url),'utf8');
+  assert.match(css,/\.normal>main:has\(>\.hr-leave-workspace\)\{max-width:none;width:100%;padding:0\}/);
+  assert.match(css,/\.hr-leave-workspace\{height:calc\(100vh - var\(--navigation-header-height,72px\)\);[^}]*border:0;border-radius:0/);
+});
