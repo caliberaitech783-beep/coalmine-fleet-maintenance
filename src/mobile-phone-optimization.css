@@ -644,7 +644,6 @@
     gap: 2px;
   }
 
-  .top .live-temperature-chip,
   .top .ai-feeder-trigger > span,
   .top .theme-toggle-label {
     display: none;

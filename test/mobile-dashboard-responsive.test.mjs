@@ -14,7 +14,7 @@ test("the dashboard phone pass stays in the established mobile layer", () => {
 
 test("phone dashboard chrome cannot widen or cover the page", () => {
   assert.match(css, /\.top\s*\{[\s\S]*?grid-template-columns:\s*36px minmax\(0, 1fr\) auto/);
-  assert.match(css, /\.top \.live-temperature-chip,[\s\S]*?display:\s*none/);
+  assert.match(css, /\.top \.ai-feeder-trigger > span,[\s\S]*?display:\s*none/);
   assert.match(css, /\.body > \.mine-dashboard\s*\{[\s\S]*?margin:\s*-18px/);
   assert.match(css, /\.mine-dashboard > \.dashboard-filter-bar\s*\{[\s\S]*?position:\s*relative/);
   assert.match(filterCss, /\.dashboard-filter-bar > \.dashboard-banner-toggle\s*\{[^}]*position:\s*absolute;[^}]*right:\s*8px;[^}]*display:\s*grid/);
