@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {requestCategoryLabel,REPAIR_CLASSIFICATION_START} from '../repair-classification.mjs';
 const display=request=>requestCategoryLabel(request,{preserveLegacy:true});
+
+test('edited version-1 component categories override stale classification snapshots without modifying saved history',()=>{
+ const request={ref:'REQ-1795409435535',createdAt:'2026-11-23 10:21:06',category:'SUPER STRUCTURE',classification:{version:1,repairType:'Breakdown',breakdownCategory:'OTHER',breakdownSubCategory:'custom'}};
+ const before=JSON.stringify(request);
+ assert.equal(display(request),'SUPER STRUCTURE');
+ assert.equal(requestCategoryLabel(request),'SUPER STRUCTURE');
+ assert.equal(JSON.stringify(request),before);
+ for(const category of ['Breakdown','Preventive','Accidental','Scheduled','Maintenance request','Vehicle','Equipment']){
+  assert.equal(display({...request,category,classification:{...request.classification,breakdownCategory:'ENGINE'}}),'ENGINE');
+ }
+});
 test('older requests keep the exact saved original category instead of Unclassified',()=>{
  for(const category of ['Aggregate Repair','WGM','TYRE SYSTEM','Preventive','AC System']){
   const request={createdAt:'2026-10-28T16:59:59+05:30',start:'2026-10-30T10:00:00+05:30',category};

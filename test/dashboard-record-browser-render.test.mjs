@@ -20,6 +20,28 @@ const {code} = await transformWithOxc(source, "record-browser.jsx", {jsx: {runti
 const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) => descendants(child, test))
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
+test('main and BD drilldown tables and exports show the category edited in Maintenance over its old snapshot',()=>{
+ const bindings={requestCategoryLabel,BreakdownReasonHistory:({reason})=>reason||'—',React,...model,matchesSmartSearch,calculateBreakdownMinutes,formatBreakdownDaysHours,requestStatusSortRank,filterRecordsByDate,
+  useEffect:React.useEffect,useId:React.useId,useRef:React.useRef,useState:React.useState,useMemo:React.useMemo,useDeferredValue:React.useDeferredValue,createRowSearchIndex,
+  ChevronLeft:()=>null,ChevronRight:()=>null,RotateCcw:()=>null,Eye:()=>null};
+ const Browser=new Function(...Object.keys(bindings),`${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
+ const row={id:'edited',requestReference:'REQ-1795409435535',door:'V342 -2353856',currentLocation:'Jayant OC',category:'Vehicle',requestStatus:'Accepted',requestStart:'2026-11-23 10:17:56',repairCategory:'SUPER STRUCTURE',breakdownCategory:'OTHER'};
+ const request={ref:row.requestReference,createdAt:'2026-11-23 10:21:06',category:'SUPER STRUCTURE',classification:{version:1,repairType:'Breakdown',breakdownCategory:'OTHER',breakdownSubCategory:'custom'}};
+ for(const bdBalanceColumns of [false,true]){
+  let table;
+  const html=renderToStaticMarkup(React.createElement(Browser,{rows:[row],classificationRequests:[request],regions:REGION_DATA,rowsAreScoped:true,showBreakdownCategory:true,bdBalanceColumns,requestRecords:!bdBalanceColumns,
+   Status:({children})=>children,formatDate:formatDisplayDateTime,ActionsTable:props=>{table=props;return React.createElement('table',null,props.children);}}));
+  assert.match(html,/<td>SUPER STRUCTURE<\/td>/);
+  assert.doesNotMatch(html,/<td>OTHER<\/td>/);
+  const columns=tableModel(table.children).columns;
+  const rows=descendants(descendants(table.children,node=>node.type==='tbody'),node=>node.type==='tr');
+  const exported=tableExportModel(rows,columns,columns.map(column=>column.key));
+  const category=exported.columns.find(column=>column.label==='Breakdown Category');
+  assert.equal(category.value(exported.rows[0]),'SUPER STRUCTURE');
+  assert.equal(exported.rows.length,1);
+ }
+});
+
 test('LMV report category override changes only displayed labels and preserves ordinary reports', () => {
   const bindings = {requestCategoryLabel,BreakdownReasonHistory: () => null,React,...model,matchesSmartSearch,calculateBreakdownMinutes,formatBreakdownDaysHours,requestStatusSortRank,filterRecordsByDate,
     useEffect:React.useEffect,useId:React.useId,useRef:React.useRef,useState:initial=>React.useState(initial && typeof initial==='object' && 'region' in initial ? {...initial,category:'Unclassified'} : initial),

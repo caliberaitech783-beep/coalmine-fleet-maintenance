@@ -7368,7 +7368,7 @@ async function withMaintenanceArrivalGuard(req,reference,write,sharedClient=null
     if(!sharedClient)await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,complaint,oem_responsibility AS "oemResponsibility",category,sub_category AS "subCategory",created_at AS "createdAt",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
+    const {rows}=await client.query(`SELECT reference AS ref,site,complaint,oem_responsibility AS "oemResponsibility",category,classification,sub_category AS "subCategory",created_at AS "createdAt",${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE archived_at IS NULL AND reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND (verified_at IS NULL OR status='Running BD') FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -7585,6 +7585,9 @@ async function saveRequestClassification(client,req,before,input=req.body?.class
   if(before.classification?.version!==1)return before;
   const classification=updateClassification(before.classification,input);
   const unchanged=['repairType','breakdownCategory','breakdownSubCategory'].every(key=>classification[key]===before.classification[key]);
+  // Unrelated edits must retain complete saved classifications, including
+  // historical custom values no longer offered by the current masters.
+  if(unchanged&&(req.session.assignedRole!=='Maintenance User'||['repairType','breakdownCategory','breakdownSubCategory'].every(key=>classification[key])))return before;
   const problem=classificationError(classification,req.session.assignedRole==='Maintenance User',unchanged?undefined:await readClassificationMasters(client));
   if(problem)throw Object.assign(new Error(`${before.ref}: ${problem}`),{status:400});
   const category=classification.breakdownCategory || before.category;

@@ -90,5 +90,11 @@ export const requestCategoryLabel = (request = {}, {preserveLegacy = false, lega
       : request.classification?.version === 1 || Boolean(request.breakdownCategory || request.classification?.breakdownCategory);
     if (!usesNewClassification) return String(request.category || legacyCategory || '').trim() || 'Unclassified';
   }
+  // Maintenance's saved component category is authoritative for version-1
+  // requests. Older edits could update it without updating the JSON snapshot.
+  // Historical feeds also used this field for a repair type or fleet category;
+  // those values must still fall back to the detailed classification.
+  const savedCategory=categoryLabel(request.category);
+  if(request.classification?.version===1&&savedCategory&&!['PREVENTIVE','BREAKDOWN','ACCIDENTAL','SCHEDULED','MAINTENANCE REQUEST','VEHICLE','EQUIPMENT','UNCLASSIFIED','—','-'].includes(savedCategory))return savedCategory;
   return categoryLabel(request.breakdownCategory || request.classification?.breakdownCategory) || 'Unclassified';
 };
