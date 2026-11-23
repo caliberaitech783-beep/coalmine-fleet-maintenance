@@ -3,10 +3,31 @@ import {createReadStream,createWriteStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {Readable,Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
+import http from 'node:http';
+import https from 'node:https';
+
+// Front Door answers a range with "Connection: close" every few minutes. Node's
+// built-in fetch then stops the whole process (assert(!this.paused)) if bytes
+// are still being written to disk when that connection ends, so a multi-GB copy
+// died before any retry could run. The core HTTP client treats the same close
+// as an ordinary end or error, which the per-range retry below handles.
+export function coreFetch(url,{method='GET',headers,signal}={}){
+  return new Promise((resolve,reject)=>{
+    const address=new URL(url);
+    const request=(address.protocol==='http:'?http:https).request(address,{method,headers:Object.fromEntries(new Headers(headers)),signal},response=>{
+      const answerHeaders=new Headers();
+      for(const [name,value] of Object.entries(response.headers))for(const item of [].concat(value))answerHeaders.append(name,item);
+      const bodiless=method==='HEAD'||[204,205,304].includes(response.statusCode);
+      if(bodiless)response.resume();
+      resolve(new Response(bodiless?null:Readable.toWeb(response),{status:response.statusCode,headers:answerHeaders}));
+    });
+    request.once('error',reject);request.end();
+  });
+}
 
 // Bounded range downloads keep large media archives off heap and retry only
 // immutable reads. Never publish a truncated or unauthenticated checksum copy.
-export async function downloadRecoveryArchive({url,headers={},target,checksum,concurrency=4,chunkBytes=8*1024*1024,fetchImpl=fetch}){
+export async function downloadRecoveryArchive({url,headers={},target,checksum,concurrency=4,chunkBytes=8*1024*1024,fetchImpl=coreFetch}){
   if(!/^[a-f0-9]{64}$/.test(checksum||''))throw Error('Expected recovery checksum is required');
   // Front Door's byte ranges must refer to the same uncompressed bytes as HEAD.
   const transferHeaders=new Headers(headers);

@@ -2,6 +2,7 @@
 // in memory or protected runner files; only authenticated encrypted data leaves it.
 import {execFileSync} from 'node:child_process';
 import {readFile,writeFile,rm,mkdir} from 'node:fs/promises';
+import {readdirSync,rmSync} from 'node:fs';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
@@ -9,6 +10,9 @@ import {encryptStream} from '../backup-crypto.mjs';
 
 const group=process.env.AZURE_RESOURCE_GROUP||'coalmine-fleet-maintenance-rg',app=process.env.AZURE_WEBAPP_NAME||'coalmine-fleet-azure-783';
 const output=process.env.RUNNER_TEMP||'.',base='https://pulse.cmll.in';
+// A copy that stopped part way is not a backup. On 16, 17 and 23 November 2026
+// a crashed run left one behind and the workflow retained it as an artifact.
+process.on('exit',()=>{try{const folder=path.join(output,'full-recovery');for(const name of readdirSync(folder))if(name.endsWith('.partial'))rmSync(path.join(folder,name),{force:true});}catch{}});
 const errors=[];
 function az(args,optional=false){try{const value=execFileSync('az',[...args,'--only-show-errors','-o','json'],{encoding:'utf8',maxBuffer:64*1024*1024,stdio:['ignore','pipe','pipe']});return value.trim()?JSON.parse(value):null;}catch(error){const code=/\(([A-Za-z][A-Za-z0-9]+)\)/.exec(String(error.stderr||''))?.[1]||error.code||error.name;const failure=args.slice(0,3).join(' ')+': '+code;if(!optional)throw Error('Azure recovery collection failed at '+failure);errors.push(failure);return null;}}
 const settings=az(['webapp','config','appsettings','list','-g',group,'-n',app]);
@@ -62,22 +66,34 @@ await encryptStream(Readable.from([JSON.stringify(snapshot)]),encrypted,await re
 await writeFile(path.join(output,'full-recovery','azure-status.json'),JSON.stringify(summary,null,2));
 // Matches the application's established large-body transport through Front Door.
 const headers={'Content-Type':'text/plain','x-full-backup-key':serviceKey};
+// The application's own refusal text, or a note that the edge answered instead,
+// so a failed run says why. Never the request, its headers or the service key.
+async function refusal(response){
+  const text=await response.text().catch(()=>'');
+  try{return String(JSON.parse(text).error||'').slice(0,160);}catch{return /^\s*</.test(text)?'edge page, not the application':'';}
+}
 async function call(route,options={}){
   for(let attempt=0;attempt<4;attempt++){
     try{
       const response=await fetch(base+route,{...options,headers:{...headers,...options.headers},signal:AbortSignal.timeout(route.endsWith('/download')?1800000:60000)});
       if(response.ok)return response;
-      if(![429,502,503,504].includes(response.status)||route.endsWith('/run')||attempt===3)throw Error('Backup service HTTP '+response.status);
+      if(![429,502,503,504].includes(response.status)||route.endsWith('/run')||attempt===3){const reason=await refusal(response);throw Error('Backup service HTTP '+response.status+(reason?': '+reason:''));}
     }catch(error){if(route.endsWith('/run')||attempt===3||/HTTP (?!429|502|503|504)/.test(error.message))throw error;}
     await new Promise(resolve=>setTimeout(resolve,5000));
   }
 }
-let uploaded=false;
+let uploaded=false,lastAnswer='';
 for(let i=0;i<30;i++){
   try{await call('/api/full-backup-system/snapshot',{method:'POST',body:JSON.stringify({archive:(await readFile(encrypted)).toString('base64'),summary})});uploaded=true;break;}
-  catch{await new Promise(resolve=>setTimeout(resolve,10000));}
+  catch(error){lastAnswer=[error?.message,error?.cause?.code].filter(Boolean).join(' / ').slice(0,240);await new Promise(resolve=>setTimeout(resolve,10000));}
 }
-if(!uploaded)throw Error('Encrypted Azure inventory saved to workflow artifact, but upload to production failed.');
+if(!uploaded){
+  const failure=Error('Encrypted Azure inventory saved to workflow artifact, but upload to production failed. Last answer: '+(lastAnswer||'none')+'.');
+  if(process.env.CREATE_FULL_BACKUP==='true')throw failure;
+  // 12, 13 and 22 November 2026: this refusal also cost the day's off-site copy
+  // of the full archive. Report the run as failed, but still take that copy.
+  console.error(failure.message);process.exitCode=1;
+}
 if(process.env.CREATE_FULL_BACKUP==='true'){
   const job=await (await call('/api/full-backup-system/run',{method:'POST',body:'{}'})).json();
   for(let i=0;i<120;i++){
