@@ -2,7 +2,7 @@
 // punch screen). The browser shows its own "Allow location?" prompt. Owner's
 // rule: pressing Block keeps the app closed; a device that cannot find a
 // location is let in and shown as "Not available". The server decides.
-import {SITE_COORDINATES, DEFAULT_COORDINATES} from "./live-temperature.mjs";
+import {SITE_COORDINATES, DEFAULT_COORDINATES} from "./site-coordinates.mjs";
 
 export const SIGN_IN_LOCATION_NOTICE = "Pulse needs your location to open. It is recorded at every sign-in, for attendance and security.";
 // v2: answers saved under the first version (when Block still opened the app) must be asked again.

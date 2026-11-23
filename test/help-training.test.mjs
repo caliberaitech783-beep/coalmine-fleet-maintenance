@@ -54,7 +54,7 @@ test("department user guides list the full clip coverage", () => {
 
 test("normal user header renders Help and Training", async () => {
   const source = await readFile("src/main.jsx", "utf8");
-  assert.match(source, /<HelpTraining role=\{mobileRole\} location=\{assignedLocation\} \/>/);
+  assert.match(source, /<HelpTraining role=\{mobileRole\} \/>/);
 });
 
 test("operational user header displays the Help and Training control as an icon only", async () => {
@@ -65,6 +65,6 @@ test("operational user header displays the Help and Training control as an icon 
 
 test("manager header renders Help and Training only for manager accounts", async () => {
   const source = await readFile("src/main.jsx", "utf8");
-  assert.match(source, /adminPermissions\.adminLevel === "Manager" && <HelpTraining roles=\{adminPermissions\.managerRoles\} location=\{profileLocation\} \/>/);
+  assert.match(source, /adminPermissions\.adminLevel === "Manager" && <HelpTraining roles=\{adminPermissions\.managerRoles\} \/>/);
 });
 

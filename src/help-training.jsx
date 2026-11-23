@@ -2,16 +2,13 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {CheckCircle2, CircleHelp, Languages, PlayCircle, X} from "lucide-react";
 import {userGuideStorageKey, userGuideVideo, userGuidesForRoles} from "./help-training.mjs";
-import {formatTemperature} from "./live-temperature.mjs";
-import {useLiveTemperature} from "./live-temperature-chip.jsx";
 import "./help-training.css";
 
-export default function HelpTraining({role = "", roles = [], location = ""}) {
+export default function HelpTraining({role = "", roles = []}) {
   const guides = useMemo(() => userGuidesForRoles([role, ...(Array.isArray(roles) ? roles : [roles])]), [role, roles]);
   const [selectedRole, setSelectedRole] = useState("");
   const guide = guides.find((option) => option.role === selectedRole) || guides[0] || null;
   const [open, setOpen] = useState(false);
-  const temperature = useLiveTemperature(location, open);
   const [language, setLanguage] = useState("en");
   const [showCoachmark, setShowCoachmark] = useState(false);
   const closeButtonRef = useRef(null);
@@ -73,7 +70,6 @@ export default function HelpTraining({role = "", roles = [], location = ""}) {
       <section className="help-training-dialog" role="dialog" aria-modal="true" aria-labelledby="help-training-title">
         <header>
           <span className="help-training-heading-lead">
-            <span className={`help-training-weather${temperature.error ? " is-error" : Number.isFinite(temperature.celsius) ? "" : " is-loading"}`} role="status" aria-live="polite" title={temperature.error ? "Outside temperature unavailable" : `Outside temperature${temperature.place ? ` at ${temperature.place}` : ""}, refreshed every 10 minutes`}>{formatTemperature(temperature.celsius)}</span>
             <span className="help-training-heading-icon"><CircleHelp /></span>
           </span>
           <span><h2 id="help-training-title">{guide.title}</h2><p>Watch the complete role guide without leaving your workspace.</p></span>
