@@ -7,7 +7,7 @@ const bearer = request => String(request.headers.authorization || '').replace(/^
 const cookie = (request, name) => String(request.headers.cookie || '').split(';')
   .map(entry => entry.trim()).find(entry => entry.startsWith(name + '='))?.slice(name.length + 1) || '';
 
-export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin, readMasters }) {
+export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin, readMasters, readEmployee }) {
   let callback;
   if (proof(secret) && enabled === '1') {
     const origin = new URL(dieselOrigin || 'https://pulse-lll.cmll.in');
@@ -91,7 +91,8 @@ export function registerDieselSharedSignIn(app, { pool, requireSession, readSess
     const profile = await profileFor(rows[0]?.session_token, request, response);
     if (response.headersSent) return;
     if (!profile?.login) return response.sendStatus(401);
-    response.json({ profile: { login: profile.login, name: profile.name } });
+    const employee = await readEmployee?.(profile);
+    response.json({ profile: { login: profile.login, name: profile.name, ...(employee ? {empId: employee.empId} : {}) } });
   }));
   // Diesel's read-only copy of the Site, Region, Equipment, Employee and Driver masters. Diesel's
   // server asks with the shared secret and the grant of a person who is signed in to Pulse now.
