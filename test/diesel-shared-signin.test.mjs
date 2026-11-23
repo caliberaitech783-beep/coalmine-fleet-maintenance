@@ -18,6 +18,7 @@ test('Diesel authorization codes are browser-bound, single-use and tied to activ
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   const session = '59bdc66b-7078-4e0b-8a3b-b60ead7e6691';
   let active = true;
+  let employee;
   const issuer = registerDieselSharedSignIn(app, {
     pool: protectDeletionPool(database),
     secret,
@@ -26,6 +27,10 @@ test('Diesel authorization codes are browser-bound, single-use and tied to activ
     readSession: async request => active && request.headers.authorization === 'Bearer ' + session
       ? { login: 'operator', name: 'Operator', permissions: { admin: true } } : null,
     checkLocation: async () => false,
+    readEmployee: async profile => {
+      assert.equal(profile.login, 'operator');
+      return employee;
+    },
   });
   await issuer.initialize();
   const server = app.listen(0, '127.0.0.1');
@@ -53,6 +58,9 @@ test('Diesel authorization codes are browser-bound, single-use and tied to activ
     const { grant } = await responses.find(response => response.ok).json();
     const valid = await post('validate', { grant });
     assert.deepEqual(await valid.json(), { profile: { login: 'operator', name: 'Operator' } });
+    employee = {empId:'E001',phone:'private',passwordHash:'private'};
+    assert.deepEqual(await (await post('validate', { grant })).json(),
+      { profile: { login:'operator', name:'Operator', empId:'E001' } });
     active = false;
     assert.equal((await post('validate', { grant })).status, 401);
     active = true;

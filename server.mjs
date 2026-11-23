@@ -27,6 +27,7 @@ import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
 import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
 import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
+import {createDieselEmployeeReader} from './diesel-employee-link.mjs';
 import {DIESEL_FEED_MASTERS,createErpDriverReader,dieselMasterFeed} from './diesel-master-feed.mjs';
 import {accountLedgerQueries} from './iboss-account-ledger.mjs';
 import {bdmsChatAnswer,bdmsChatCanRead,bdmsChatFlow,bdmsChatQueryAllowed,bdmsChatIntent} from './telegram-bdms-chatbot.mjs';
@@ -1671,6 +1672,7 @@ const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCred
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
+  readEmployee:createDieselEmployeeReader(authPool),
   secret:process.env.DIESEL_SSO_CLIENT_SECRET,
   enabled:process.env.DIESEL_SSO_ENABLED,
   dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
