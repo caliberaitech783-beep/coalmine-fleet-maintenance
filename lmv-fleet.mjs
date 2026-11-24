@@ -2,6 +2,9 @@ import {REGION_DATA} from './region-scope.mjs';
 import {recordBelongsToSite} from './site-location.mjs';
 import {equipmentRoadStatus,createFleetAssetResolver} from './dashboard-equipment-metrics.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
+import {isLmvAsset} from './fleet-registry.mjs';
+
+export const lmvDoorLabel = (record = {}) => String(record.equipmentName || '').trim() || record.door || record.reg || record.registration || record.registrationNumber || '';
 
 export const LMV_COLOR = '#14b8a6';
 export const LMV_DEMO_SEED = 'lmv_demo_fleet_5_per_site_v1';
@@ -61,7 +64,7 @@ export function lmvSiteSummary(records=[],regions=REGION_DATA) {
 }
 export const LMV_DETAIL_COLUMNS=[
   {key:'site',label:'Site name',value:row=>row.currentLocation||row.location||row.site},
-  {key:'door',label:'Door / registration',value:row=>row.door||row.equipmentName},
+  {key:'door',label:'Door / registration',value:row=>isLmvAsset(row)?lmvDoorLabel(row):row.door||row.equipmentName},
   {key:'make',label:'Make',value:row=>row.make},
   {key:'model',label:'Model',value:row=>row.model},
   {key:'group',label:'Equipment group',value:row=>row.group||'LMV'},
