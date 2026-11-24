@@ -35,7 +35,7 @@ test('service credential denies missing and mismatched values',()=>{
   assert.equal(validServiceKey('',''),false);assert.equal(validServiceKey('abc','abcd'),false);assert.equal(validServiceKey('abc','abd'),false);assert.equal(validServiceKey('abc','abc'),true);
 });
 test('full schedule defaults include every weekday with independent retention',()=>{
-  const settings=fullDefaults();assert.equal(settings.scheduleTime,'03:00');assert.equal(settings.weekdays.length,7);assert.equal(settings.maxBackups,14);
+  const settings=fullDefaults();assert.equal(settings.scheduleTime,'03:00');assert.equal(settings.weekdays.length,7);assert.equal(settings.maxBackups,3);
 });
 
 test('full backup packages actual PostgreSQL data, media and secrets encrypted, with honest missing coverage',async()=>{

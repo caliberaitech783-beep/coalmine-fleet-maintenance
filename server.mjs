@@ -3324,7 +3324,18 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
   }catch(error){next(error)}
 });
 
-registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha,record:appendScheduledBackupAudit,enqueue:reportQueue});
+// Owner rule (24 Nov 2026): every delete on the Azure server is also sent personally to Mohit and Anoop.
+const fullBackupDeleteAlertLogins=()=>String(process.env.FULL_BACKUP_DELETE_ALERT_LOGINS??'mohitchadda,anoop').split(/[,;\s]+/).map(value=>value.trim().toLowerCase()).filter(Boolean);
+async function sendFullBackupDeleteNotice(message){
+  const logins=fullBackupDeleteAlertLogins();
+  const results=await deliverToTelegramUsers({logins,message,purpose:'fullBackupHousekeeping',reportType:'System notification',target:'Full backup delete'});
+  const sent=new Set(results.filter(item=>item.status==='Sent').map(item=>String(item.login).toLowerCase()));
+  const missing=logins.filter(login=>!sent.has(login));
+  // A delete notice is never lost silently: the administrators' group shows who could not be reached.
+  if(missing.length)await deliverToTelegramGroup({reportType:'System notification',target:'Full backup delete',purpose:'fullBackupHousekeeping',message:`${message}\n\nPersonal copy NOT delivered to: ${missing.join(', ')} (Telegram not connected in Pulse, or delivery failed).`});
+}
+// Backup results and old-backup removals go to the administrators' Telegram group.
+registerFullBackup(app,{pool,root,storageRoot:backupStorageRoot,requireSuper,requireAdministrator,isReady:()=>databaseReady,scheduledJobsEnabled,commit:deploymentSha,record:appendScheduledBackupAudit,enqueue:reportQueue,notify:message=>deliverToTelegramGroup({reportType:'System notification',target:'Full backup',purpose:'fullBackupHousekeeping',message}),notifyDelete:sendFullBackupDeleteNotice});
 
 app.get('/api/backups',requireSuper,requireAdministrator,async(_req,res,next)=>{
   try{
