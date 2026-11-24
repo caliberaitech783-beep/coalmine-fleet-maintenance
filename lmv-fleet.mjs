@@ -4,7 +4,12 @@ import {equipmentRoadStatus,createFleetAssetResolver} from './dashboard-equipmen
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {isLmvAsset} from './fleet-registry.mjs';
 
-export const lmvDoorLabel = (record = {}) => String(record.equipmentName || '').trim() || record.door || record.reg || record.registration || record.registrationNumber || '';
+export function lmvDoorLabel(record = {}) {
+  const door = String(record.equipmentName || '').trim() || String(record.door || '').trim();
+  const registration = String(record.reg || record.registration || record.registrationNumber || '').trim();
+  const identity = value => value.replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return door && registration && identity(door) !== identity(registration) ? `${door} · ${registration}` : door || registration;
+}
 
 export const LMV_COLOR = '#14b8a6';
 export const LMV_DEMO_SEED = 'lmv_demo_fleet_5_per_site_v1';
