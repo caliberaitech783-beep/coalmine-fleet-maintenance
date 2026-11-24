@@ -2,6 +2,7 @@ import {createCipheriv,createDecipheriv,randomBytes,publicEncrypt,privateDecrypt
 import {createReadStream,createWriteStream} from 'node:fs';
 import {open,stat,writeFile,appendFile,rm} from 'node:fs/promises';
 import {pipeline} from 'node:stream/promises';
+import {Transform} from 'node:stream';
 
 export function encryptionHeader(publicKey){
   const key=randomBytes(32),iv=randomBytes(12);
@@ -12,9 +13,15 @@ export function encryptionHeader(publicKey){
 export async function encryptStream(input,output,publicKey){
   const {header,cipher}=encryptionHeader(publicKey);
   await writeFile(output,header,{flag:'wx',mode:0o600});
+  let written=0;
+  const count=new Transform({transform(chunk,_encoding,done){written+=chunk.length;done(null,chunk);}});
   try{
-    await pipeline(input,cipher,createWriteStream(output,{flags:'a',mode:0o600}));
-    await appendFile(output,cipher.getAuthTag());
+    await pipeline(input,cipher,count,createWriteStream(output,{flags:'a',mode:0o600}));
+    const tag=cipher.getAuthTag();await appendFile(output,tag);
+    // A full shared drive has reported success while keeping a shorter file (21 and 23 Nov 2026); such a file can never be decrypted.
+    const expected=header.length+written+tag.length,actual=(await stat(output)).size;
+    if(actual!==expected)throw Object.assign(Error(`Encrypted archive is incomplete on disk (${actual} of ${expected} bytes)`),{code:'ARCHIVE_INCOMPLETE'});
+    return {bytes:expected};
   }catch(error){await rm(output,{force:true});throw error;}
 }
 export async function decryptFile(input,output,privateKey){
