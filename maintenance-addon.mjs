@@ -7,7 +7,7 @@ export const supportsMaintenanceAddon=value=>['wgm','scheduledservice'].includes
 export async function createMaintenanceAddon(client,req,original,draft,dependencies){
   const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
   if(req.session?.assignedRole!=='Maintenance User')fail('Only Maintenance Users can create an add-on while closing a request.',403);
-  if(!supportsMaintenanceAddon(original.category))fail('Add-on requests are available only when closing WGM or Schedule Service.');
+  if(!supportsMaintenanceAddon(original.classification?.repairType || original.category))fail('Add-on requests are available only when closing WGM or Schedule Service.');
   if(req.body?.ideal || req.body?.status!=='Closed')fail('Close the original request without marking the vehicle Idle when creating an add-on.');
   if(!draft || typeof draft!=='object' || Array.isArray(draft))fail('Enter the add-on request details.');
   const classification=newClassification(draft.classification,dependencies.now?.() ?? Date.now());

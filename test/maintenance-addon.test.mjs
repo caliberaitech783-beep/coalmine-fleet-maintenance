@@ -6,7 +6,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {addonRepairTypeKey,supportsMaintenanceAddon,createMaintenanceAddon} from '../maintenance-addon.mjs';
 
 test('WGM and both service spellings support add-ons; unrelated repairs do not',()=>{
-  for(const value of ['WGM','wgm','Schedule Service','SCHEDULED SERVICE'])assert.equal(supportsMaintenanceAddon(value),true);
+  for(const value of ['WGM','wgm','Schedule Service','SCHEDULED SERVICE','Scheduled'])assert.equal(supportsMaintenanceAddon(value),true);
   assert.equal(addonRepairTypeKey('Schedule Service'),addonRepairTypeKey('Scheduled Service'));
   assert.equal(supportsMaintenanceAddon('Engine'),false);
 });
@@ -48,6 +48,7 @@ test('add-on creation and linked closure commit together and roll back together'
     draft.category='wgm';await assert.rejects(()=>save(),/different repair type/);assert.deepEqual(await statuses(),['Open','Open']);draft.category='Engine';
     conflict={ref:'REQ-OTHER'};await assert.rejects(()=>save(),/still open/);assert.deepEqual(await statuses(),['Open','Open']);conflict=null;
     failTimeline=true;await assert.rejects(()=>save({targetReferences:['REQ-OLD','REQ-LINKED']}),/Timeline failed/);assert.deepEqual(await statuses(),['Open','Open']);failTimeline=false;
+    original.classification={version:1,repairType:'Scheduled'};original.category='Legacy service label';
     const saved=await save({targetReferences:['REQ-OLD','REQ-LINKED']});
     assert.equal(saved.rows.length,2);assert.equal(saved.addonRequest.status,'Open');assert.equal(saved.addonRequest.door,'D17');assert.equal(saved.addonRequest.chassis,'CH17');assert.equal(saved.addonRequest.site,'Mine');
     assert.equal(saved.addonRequest.category,'Engine');assert.equal(saved.addonRequest.start.toISOString(),'2026-10-26T12:30:00.000Z');
@@ -56,7 +57,7 @@ test('add-on creation and linked closure commit together and roll back together'
     assert.ok((await db.query("SELECT linked_request_references FROM maintenance_requests WHERE reference='REQ-OLD'")).rows[0].linked_request_references.includes('REQ-ADDON'));
     await assert.rejects(()=>save(),/already in use/);assert.equal((await db.query('SELECT count(*)::int AS n FROM maintenance_requests')).rows[0].n,3);
     await assert.rejects(()=>createMaintenanceAddon(client,{...req,session:{assignedRole:'Production User'}},original,draft,dependencies),/Only Maintenance/);
-    await assert.rejects(()=>createMaintenanceAddon(client,req,{...original,category:'Engine'},draft,dependencies),/only when closing/);
+    await assert.rejects(()=>createMaintenanceAddon(client,req,{...original,classification:null,category:'Engine'},draft,dependencies),/only when closing/);
     await assert.rejects(()=>createMaintenanceAddon(client,{...req,body:{status:'Closed',ideal:true}},original,draft,dependencies),/without marking/);
     await assert.rejects(()=>createMaintenanceAddon(client,req,{...original,category:'Schedule Service'},{...draft,category:'Scheduled Service'},dependencies),/different repair type/);
   }finally{await db.close();}

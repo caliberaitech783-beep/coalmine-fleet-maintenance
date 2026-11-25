@@ -10874,8 +10874,8 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
   const closeForm = useRef(null);
   const [addonPrompt,setAddonPrompt]=useState(false),[addonEditing,setAddonEditing]=useState(false),[addonCategory,setAddonCategory]=useState('');
   const addonDecision=useRef(false),addonDraft=useRef(null);
-  const repairTypeKey=value=>{const key=String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();return ['scheduleservice','scheduledservice'].includes(key)?'scheduledservice':key;};
-  const addonEligible=allowAddon && ['wgm','scheduledservice'].includes(repairTypeKey(request.category));
+  const repairTypeKey=value=>{const key=String(value||'').replace(/[^a-z0-9]/gi,'').toLowerCase();return ['scheduled','scheduleservice','scheduledservice'].includes(key)?'scheduledservice':key;};
+  const addonEligible=allowAddon && ['wgm','scheduledservice'].includes(repairTypeKey(request.classification?.repairType || request.category));
   const addonOptions=[...new Set(repairTypeRecords.map(row=>String(row.repairType||'').trim()).filter(value=>value && repairTypeKey(value)!==repairTypeKey(request.category)))];
   const cancelAddon=()=>{if(!submitLock.current){setAddonPrompt(false);setAddonEditing(false);setAddonCategory('');addonDecision.current=false;addonDraft.current=null;}};
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
@@ -11014,7 +11014,7 @@ function CloseRequestForm({ request, linkedRequests = [], equipmentRecords = [],
         <label>New complaint *<textarea name="complaint" required defaultValue={addonDraft.current?.complaint || ''} disabled={submitting} /></label>
         <p>The original request closes only when the add-on is saved. The vehicle will remain under maintenance.</p>
         {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-        <footer><button type="button" disabled={submitting} onClick={cancelAddon}>Cancel add-on</button><button className="primary" disabled={submitting || !repairTypesLoaded || !addonOptions.length}>{submitting?'Saving…':'Create add-on and close request'}</button></footer>
+        <footer><button type="button" disabled={submitting} onClick={cancelAddon}>Cancel add-on</button><button className="primary" disabled={submitting || (!classificationActive() && (!repairTypesLoaded || !addonOptions.length))}>{submitting?'Saving…':'Create add-on and close request'}</button></footer>
       </form>}
     </Modal>}
   </Modal>;

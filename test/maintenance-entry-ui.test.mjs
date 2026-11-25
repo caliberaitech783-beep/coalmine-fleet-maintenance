@@ -13,6 +13,7 @@ import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
 import { submitMaintenanceRequest } from '../request-submit.mjs';
 import DateInput from '../src/date-input.mjs';
 import {createSiteUpdateSafety} from '../src/site-update-safety.mjs';
+import {classificationError} from '../repair-classification.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -329,7 +330,7 @@ test('Hindi audio-only fallback does not insert English into a required field', 
 });
 
 const textContent = node => Array.isArray(node) ? node.map(textContent).join('') : React.isValidElement(node) ? textContent(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
-function closeHarness(request = {}, extraProps = {}) {
+function closeHarness(request = {}, extraProps = {}, scopeOverrides = {}) {
   const saved = [], alerts = [];
   const app = harness(closeCode, 'CloseRequestForm', {
     ...equipment,
@@ -338,6 +339,7 @@ function closeHarness(request = {}, extraProps = {}) {
     delayedReasonRequired: () => false, normalizeEquipmentGroup: value => value,
     TIME_24H_PATTERN: '.*', alert: value => alerts.push(value),
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] || ''; } },
+    ...scopeOverrides,
   });
   return {
     saved, alerts,
@@ -409,7 +411,7 @@ test('Running BD returns the vehicle to MIS without closing or asking for Idle',
 });
 
 
-for(const category of ['WGM','Schedule Service','Scheduled Service'])test(category+': Maintenance add-on prompt excludes the original repair type and saves with closure',async()=>{
+for(const category of ['WGM','Schedule Service','Scheduled Service','Scheduled'])test(category+': Maintenance add-on prompt excludes the original repair type and saves with closure',async()=>{
   const app=closeHarness({category,door:'D17',site:'Mine'}, {allowAddon:true,repairTypesLoaded:true,repairTypeRecords:[{repairType:'WGM'},{repairType:'Schedule Service'},{repairType:'Scheduled Service'},{repairType:'Engine'}]});
   await app.submit(app.render());
   let tree=app.render();
@@ -428,6 +430,23 @@ for(const category of ['WGM','Schedule Service','Scheduled Service'])test(catego
   await app.submit(app.render());
   assert.equal(app.saved.length,1);assert.equal(app.saved[0].addonRequest.category,'Engine');assert.equal(app.saved[0].addonRequest.complaint,'Coolant leak');assert.equal(app.saved[0].ideal,false);
 });
+for(const repairType of ['Scheduled','WGM'])test(`${repairType}: classified closure offers and saves an add-on without legacy master options`,async()=>{
+  const app=closeHarness({category:'Legacy label',classification:{version:1,repairType}}, {allowAddon:true,repairTypesLoaded:false,repairTypeRecords:[]}, {
+    classificationActive:()=>true,classificationError,RepairClassificationFields:Null,
+    classificationFromForm:form=>Object.fromEntries(['repairType','breakdownCategory','breakdownSubCategory'].map(key=>[key,form.get(key)])),
+  });
+  await app.submit(app.render());let tree=app.render();
+  assert.equal(app.saved.length,0);
+  all(tree,node=>node.type==='button'&&textContent(node)==='Yes — add-on request')[0].props.onClick();tree=app.render();
+  assert.equal(all(tree,node=>node.type==='button'&&textContent(node)==='Create add-on and close request')[0].props.disabled,false);
+  await all(tree,node=>node.type==='form').at(-1).props.onSubmit({preventDefault(){},stopPropagation(){},currentTarget:{repairType:'Breakdown',breakdownCategory:'DRIVELINE/AGGREGATE',breakdownSubCategory:'Engine',complaint:'Additional work identified'}});
+  await app.submit(app.render());
+  assert.equal(app.saved.length,1);
+  assert.equal(app.saved[0].addonRequest.classification.repairType,'Breakdown');
+  assert.equal(app.saved[0].addonRequest.category,'DRIVELINE/AGGREGATE');
+  assert.equal(app.saved[0].ideal,false);
+});
+
 test('cancelling an add-on keeps the original unsaved; No retains the normal Idle decision',async()=>{
   const app=closeHarness({category:'WGM'},{allowAddon:true});await app.submit(app.render());let tree=app.render();
   all(tree,node=>node.type==='button'&&textContent(node)==='Yes — add-on request')[0].props.onClick();tree=app.render();
