@@ -1,3 +1,4 @@
+import {lockBodyScroll} from './body-scroll-lock.mjs';
 import { useNavigationState } from './navigation-state.jsx';
 import React, {useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
@@ -59,8 +60,8 @@ export function WhatsAppReportSettingsDialog({token,onClose,onOpenReportSchedule
   };
 
   useEffect(()=>{
-    const previousFocus=document.activeElement, previousOverflow=document.body.style.overflow;
-    document.body.style.overflow='hidden';
+    const previousFocus=document.activeElement;
+    const unlockScroll=lockBodyScroll(document);
     dialogRef.current?.focus();
     const keydown=event=>{
       if(event.key==='Escape'){event.preventDefault();closeRef.current();}
@@ -72,7 +73,7 @@ export function WhatsAppReportSettingsDialog({token,onClose,onOpenReportSchedule
       else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===dialogRef.current)){event.preventDefault();first.focus();}
     };
     document.addEventListener('keydown',keydown);
-    return ()=>{document.body.style.overflow=previousOverflow;document.removeEventListener('keydown',keydown);previousFocus?.focus();};
+    return ()=>{unlockScroll();document.removeEventListener('keydown',keydown);previousFocus?.focus();};
   },[]);
 
   const request = async(path='',init={}) => readApiJson(await fetch(`/api/report-settings${path}`,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`}}),'Could not update WhatsApp delivery settings.');

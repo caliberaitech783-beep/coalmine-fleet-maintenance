@@ -1,3 +1,4 @@
+import {lockBodyScroll} from './body-scroll-lock.mjs';
 import React, {useEffect,useId,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Filter,ChevronLeft,ChevronRight,X,CalendarDays} from 'lucide-react';
@@ -21,10 +22,10 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
   const [month,setMonth]=useState((from||today).slice(0,7)),[preset,setPreset]=useState(''),[pickingEnd,setPickingEnd]=useState(false);
   const bounds=periodBounds(start,end,startTime,endTime);
   useEffect(()=>{
-    const element=dialog.current,focus=document.activeElement,overflow=document.body.style.overflow;
-    document.body.style.overflow='hidden';
+    const element=dialog.current,focus=document.activeElement;
+    const unlockScroll=lockBodyScroll(document);
     element.showModal();
-    return ()=>{element.close();document.body.style.overflow=overflow;if(focus?.isConnected)focus.focus();};
+    return ()=>{element.close();unlockScroll();if(focus?.isConnected)focus.focus();};
   },[]);
   function choosePreset(key) {
     const dates=presetDates(key,today);

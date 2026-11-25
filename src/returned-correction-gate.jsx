@@ -1,3 +1,4 @@
+import {lockBodyScroll} from './body-scroll-lock.mjs';
 import React,{useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {CorrectionCard} from './request-corrections.jsx';
@@ -32,9 +33,8 @@ export default function ReturnedCorrectionGate({token}){
     if(!blocked||!dialog.current)return undefined;
     const element=dialog.current;
     element.showModal();
-    const overflow=document.body.style.overflow;
-    document.body.style.overflow='hidden';
-    return ()=>{element.close();document.body.style.overflow=overflow;};
+    const unlockScroll=lockBodyScroll(document);
+    return ()=>{element.close();unlockScroll();};
   },[blocked]);
   if(!blocked)return null;
   return createPortal(<dialog className="returned-correction-gate" ref={dialog} onCancel={event=>event.preventDefault()} aria-labelledby="returned-correction-title">

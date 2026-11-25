@@ -1,3 +1,4 @@
+import {lockBodyScroll} from './body-scroll-lock.mjs';
 import {categoryLabel,categoriesForRepairType,subCategoriesForCategory,requestCategoryLabel} from '../repair-classification.mjs';
 import RepairClassificationFieldsView,{classificationFromForm} from './repair-classification-fields.jsx';
 import {classificationActive,classificationError} from '../repair-classification.mjs';
@@ -10336,8 +10337,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
     const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll(document);
     const focusableElements = () => Array.from(dialog.querySelectorAll(
       'button:not(:disabled), summary, [href], input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     )).filter((element) => element.getAttribute("aria-hidden") !== "true" && element.getClientRects().length > 0);
@@ -10374,7 +10374,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      unlockScroll();
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, []);
@@ -11415,8 +11415,7 @@ function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null,
   }, [closeAvailableAt]);
   useEffect(() => {
     const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll(document);
     panelRef.current?.focus();
     const closeOnEscape = (event) => {
       if (event.key === "Escape") closeRef.current();
@@ -11429,7 +11428,7 @@ function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null,
       }
     };
     document.addEventListener("keydown", closeOnEscape);
-    return () => { document.removeEventListener("keydown", closeOnEscape); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+    return () => { document.removeEventListener("keydown", closeOnEscape); unlockScroll(); previousFocus?.focus(); };
   }, []);
   return createPortal(<div className="ai-feeder-overlay pulse-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>

@@ -42,11 +42,11 @@ test("Region Master search reconciles the selected site with visible tabs", () =
 test("shared modal traps focus, supports Escape, locks scrolling and restores focus", () => {
   const modal = source.slice(source.indexOf("function Modal("), source.indexOf("function requestStartParts"));
   assert.match(modal, /const dialogRef = useRef\(null\)/);
-  assert.match(modal, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(modal, /const unlockScroll = lockBodyScroll\(document\)/);
   assert.match(modal, /event\.key === "Escape"/);
   assert.match(modal, /event\.key !== "Tab"/);
   assert.match(modal, /document\.activeElement === last/);
-  assert.match(modal, /document\.body\.style\.overflow = previousOverflow/);
+  assert.match(modal, /unlockScroll\(\)/);
   assert.match(modal, /previousFocus\?\.isConnected/);
   assert.match(modal, /ref=\{dialogRef\} tabIndex=\{-1\}/);
 });
