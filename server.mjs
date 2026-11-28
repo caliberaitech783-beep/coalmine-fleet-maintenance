@@ -380,7 +380,7 @@ const sessionStore=createSessionStore(pool,{cleanup:async()=>({skipped:true,reas
 const authSessionStore=createSessionStore(authPool,{cleanup:async()=>({skipped:true,reason:'Historical session cleanup requires owner WhatsApp OTP approval; security token expiry remains active.'})});
 const dashboardSessionStore=createSessionStore(dashboardReadPool);
 function selectDashboardReadPool(req,res,next){
-  if(req.method==='GET'&&(req.path==='/api/dashboard/equipment'||(req.path==='/api/requests'&&req.query.scope==='dashboard'))){
+  if(req.method==='GET'&&(req.path==='/api/dashboard/equipment'||req.path==='/api/lmv-fleet'||(req.path==='/api/requests'&&req.query.scope==='dashboard'))){
     req.dashboardReadPool=dashboardReadPool;
     req.dashboardSessionStore=dashboardSessionStore;
   }
@@ -6866,16 +6866,16 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       return res.status(403).json({error:'Your assigned role is not authorized to view maintenance requests.'});
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
     const dashboardScope=req.query.scope==='dashboard';
-    const projection=dashboardScope?dashboardRequestProjection:requestProjection;
+    const projection=dashboardScope?dashboardRequestProjection:requestProjection.replace(/\(SELECT (.+?) FROM production_first_trip_acceptances pfta WHERE pfta\.request_reference=maintenance_requests\.reference\)/g,'$1');
     // The acceptance table has one row per reference. Join it once for the
     // four first-trip fields, exposing only columns unique to the request table.
-    const source=dashboardScope?`maintenance_requests LEFT JOIN (
+    const source=`maintenance_requests LEFT JOIN (
       SELECT request_reference, production_first_trip_at, production_first_trip_by,
         production_first_trip_login, production_first_trip_remark
       FROM production_first_trip_acceptances
-    ) pfta ON pfta.request_reference=maintenance_requests.reference`:'maintenance_requests';
+    ) pfta ON pfta.request_reference=maintenance_requests.reference`;
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'&&!dashboardScope
-      ? {text:`SELECT ${projection} FROM maintenance_requests WHERE archived_at IS NULL AND requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
+      ? {text:`SELECT ${projection} FROM ${source} WHERE archived_at IS NULL AND requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${projection} FROM ${source} WHERE archived_at IS NULL ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'){

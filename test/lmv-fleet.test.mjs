@@ -121,12 +121,21 @@ test('each LMV mode reconciles and percentages use physical LMVs rather than cas
   assert.equal(summary.at(-1).bdPercent,40);
 });
 
-function setupApi({authorization,records=lmvDemoRecords(),requests=[]}) {
+function setupApi({authorization,records=lmvDemoRecords(),requests=[],dedicated=false}) {
   let handler;const queries=[];
-  registerLmvFleet({get(_path,_auth,callback){handler=callback;}},{requireSession(){},currentDashboardAuthorization:async()=>authorization,pool:{async query(sql){queries.push(sql);return {rows:sql.includes('FROM master_records')?records.map((record,index)=>({id:index+1,record_data:record})):requests};}}});
+  const client={async query(sql){queries.push(sql);return {rows:sql.includes('FROM master_records')?records.map((record,index)=>({id:index+1,record_data:record})):requests};}};
+  registerLmvFleet({get(_path,_auth,callback){handler=callback;}},{requireSession(){},currentDashboardAuthorization:async(_session,readClient)=>{assert.equal(readClient,client);return authorization;},pool:dedicated?{query(){assert.fail('LMV must not queue on the saturated shared pool');}}:client});
   const res={code:200,set(){},vary(){},status(code){this.code=code;return this;},json(data){this.data=data;return this;}};
-  return {queries,res,async run(){await handler({session:{}},res,error=>{throw error;});return res;}};
+  return {queries,res,async run(){await handler({session:{},...(dedicated?{dashboardReadPool:client}:{})},res,error=>{throw error;});return res;}};
 }
+
+test('LMV authorization and all fleet reads use the protected dashboard pool',async()=>{
+  const api=setupApi({authorization:{session:{role:'normal',assignedRole:'MIS User'},user:{site:'Majri OC'}},dedicated:true});
+  assert.equal((await api.run()).code,200);
+  assert.equal(api.queries.length,3);
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  assert.match(server,/req\.path==='\/api\/lmv-fleet'/);
+});
 
 test('LMV API uses current authorization and limits records to assigned sites',async()=>{
   const api=setupApi({authorization:{session:{role:'normal',assignedRole:'MIS User'},user:{site:'Majri OC'}}});

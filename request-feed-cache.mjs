@@ -33,6 +33,7 @@ export function requestFeedWriteInvalidates({method, path} = {}) {
 
 export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
   const entries = new Map();
+  const inFlight = new Map();
   let hits = 0;
   let reads = 0;
 
@@ -47,16 +48,24 @@ export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
       hits += 1;
       return entry.promise;
     }
+    // Writes can invalidate a window while its expensive full-feed read is
+    // still running. Wait for it before rebuilding; never serve that cleared
+    // result as the new revision, or launch another scan for every write.
+    const running = inFlight.get(feed);
+    if (running) return running.catch(() => {}).then(() => read(load, revision, feed));
     reads += 1;
     const promise = Promise.resolve().then(load);
     const candidate = {expiresAt: time + ttlMs, promise, revision, pending: true};
     entries.set(feed, candidate);
+    inFlight.set(feed, promise);
     // A failed read must not be served to the next caller, and its rejection is
     // reported to whoever asked for it, never as an unhandled rejection here.
     promise.then(() => {
+      if (inFlight.get(feed) === promise) inFlight.delete(feed);
       candidate.pending = false;
       candidate.expiresAt = now() + ttlMs;
     }, () => {
+      if (inFlight.get(feed) === promise) inFlight.delete(feed);
       if (entries.get(feed) === candidate) entries.delete(feed);
     });
     return promise;

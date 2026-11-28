@@ -8,7 +8,8 @@ export function registerLmvFleet(app,{pool,requireSession,currentDashboardAuthor
   app.get('/api/lmv-fleet',requireSession,async(req,res,next)=>{
     try {
       res.set('Cache-Control','private, no-store');res.vary('Authorization');
-      const authorization=await currentDashboardAuthorization(req.session);
+      const client=req.dashboardReadPool||pool;
+      const authorization=await currentDashboardAuthorization(req.session,client);
       if(!authorization)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
       const {session,user}=authorization;
       const reportsAllowed=session.role==='super'
@@ -17,12 +18,12 @@ export function registerLmvFleet(app,{pool,requireSession,currentDashboardAuthor
       if(!canReadDashboardEquipment(session)&&!reportsAllowed)return res.status(403).json({error:'You do not have access to LMV fleet reports.'});
       const scope=dashboardEquipmentScope(session,user);
       if(!dashboardEquipmentScopeIsUsable(scope))return res.status(409).json({error:'No LMV report site is assigned to this account.'});
-      const {rows:masters}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='LMV master' ORDER BY created_at ASC");
-      const {rows:equipment}=await pool.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC");
+      const {rows:masters}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='LMV master' ORDER BY created_at ASC");
+      const {rows:equipment}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC");
       const records=lmvRegistryRecords(masters.map(row=>({...row.record_data,id:row.id})),equipment.map(row=>({...row.record_data,id:row.id})));
       // Resolve against every active case before applying current-site scope;
       // transferred LMVs retain live availability without exposing case details.
-      const {rows:requests}=await pool.query(`SELECT reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",
+      const {rows:requests}=await client.query(`SELECT reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",
         door_number AS door,registration_number AS reg,chassis_number AS chassis,site,status,vehicle_idle AS "vehicleIdle",
         oem_responsibility AS "oemResponsibility",delayed_reason AS "delayedReason"
         FROM maintenance_requests WHERE archived_at IS NULL AND (lower(trim(status))<>'closed' OR vehicle_idle=TRUE)`);

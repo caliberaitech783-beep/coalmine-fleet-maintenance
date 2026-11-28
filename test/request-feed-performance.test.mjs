@@ -36,6 +36,7 @@ test('dashboard read keeps all active requests and first-trip details with one j
     app:{get(_path, _guard, run){handler=run;}}, requireSession(){},
     pool:{query:({text,values}) => db.query(text,values)}, ...projections,
     requestFeedCache:createFeedCache(), attachDailyRemarks:async rows => rows, requestsVisibleToSession:rows => rows,
+    currentUserRecord:async()=>({}),userSiteScope:()=>null,
   };
   new Function(...Object.keys(bindings), route)(...Object.values(bindings));
   const read = (scope) => new Promise((resolve,reject) => handler(
@@ -47,6 +48,17 @@ test('dashboard read keeps all active requests and first-trip details with one j
     ['with-trip','2026-11-10 15:30:00','Operator','operator','Confirmed'],
     ['without-trip',null,'','',''],
   ]);
+  await db.exec(`UPDATE maintenance_requests SET maintenance_work='Repair completed',
+    opening_meter_readings='{"HMR":"123"}',closing_meter_readings='{"HMR":"124"}',requester_login='producer'
+    WHERE reference='with-trip'`);
+  bindings.requestFeedCache.clear();
+  const legacy = (await db.query(`SELECT ${projections.requestProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`)).rows;
+  const workflow = await read('workflow');
+  assert.deepEqual(workflow,legacy,'the joined workflow retains every original field and value');
+  let own;
+  await handler({query:{},session:{role:'normal',assignedRole:'Production User',login:'producer'}},
+    {json:rows=>{own=rows;}},error=>{throw error;});
+  assert.deepEqual(own,legacy.filter(row=>row.requesterLogin==='producer'),'production users still read only their own requests');
 });
 
 function clock(start = 1000) {
@@ -119,12 +131,42 @@ test('a slow in-flight read is shared beyond TTL, without reviving a cleared res
   const follower = cache.read(() => {reads++; return ['duplicate'];}, 'r1');
   assert.equal(reads, 1);
   cache.clear();
-  const fresh = await cache.read(async () => {reads++; return ['fresh'];}, 'r1');
+  const refresh = cache.read(async () => {reads++; return ['fresh'];}, 'r1');
+  assert.equal(reads, 1, 'invalidating an active read does not start a competing scan');
   finish(['old']);
+  const fresh = await refresh;
   assert.deepEqual(await pending, ['old']);
   assert.deepEqual(await follower, ['old']);
   assert.deepEqual(await cache.read(async () => ['incorrect'], 'r1'), fresh);
   assert.equal(reads, 2);
+});
+
+test('a mutation burst cannot start parallel scans of the same feed', async () => {
+  const cache=createFeedCache();
+  let finish,active=0,peak=0,reads=0;
+  const load=async()=>{active++;peak=Math.max(peak,active);reads++;await new Promise(resolve=>{finish=resolve;});active--;return [reads];};
+  const first=cache.read(load,'before');
+  await Promise.resolve();
+  const followers=[];
+  for(let i=0;i<30;i++) {cache.clear();followers.push(cache.read(load,'after'));}
+  finish();await first;
+  // Followers start one fresh load after the previous generation is released.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(reads,2);
+  assert.equal(peak,1);
+  finish();
+  const results=await Promise.all(followers);
+  assert.ok(results.every(rows=>rows[0]===2),'all followers see the post-mutation read');
+});
+
+test('a failed superseded read releases queued readers for a fresh retry',async()=>{
+  const cache=createFeedCache();let fail;
+  const old=cache.read(()=>new Promise((_resolve,reject)=>{fail=reject;}),'before');
+  const rejected=assert.rejects(old,/failure/);
+  await Promise.resolve();cache.clear();
+  const fresh=cache.read(async()=>['fresh'],'after');
+  fail(Error('failure'));await rejected;
+  assert.deepEqual(await fresh,['fresh']);
 });
 
 test('equipment and remarks queries overlap and retain door mapping, history order and input rows', async () => {
