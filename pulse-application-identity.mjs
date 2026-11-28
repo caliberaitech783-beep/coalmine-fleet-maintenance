@@ -58,6 +58,19 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   await pool.query('DELETE FROM application_identity_grants WHERE expires_at<=NOW()');
   return {grant,token};
  }
+ // Caliber One (28 Nov 2026): an HR grant opened from a Pulse sign-in rides on that Pulse session, as
+ // Diesel does, instead of starting an HR session of its own. A new HR session would end the person's
+ // HR sign-in everywhere else (one session per application), and that HR would sign in again and end
+ // this one, round and round. It ends with the Pulse session, at most 7 days after Pulse sign-in.
+ async function attachPulseSessionGrant(row,application,sessionToken){
+  if(application!=='HR')throw new Error('Only HR rides on a Pulse session.');
+  const grant=randomBytes(32).toString('base64url');
+  const result=await pool.query(`INSERT INTO application_identity_grants(grant_hash,application,user_id,credential_version,session_token,expires_at,pulse_session)
+   SELECT $1,'HR',$2,$3,token,LEAST(created_at+INTERVAL '7 days',NOW()+INTERVAL '7 days'),true FROM auth_sessions
+   WHERE token=$4 AND COALESCE(NULLIF(permissions->>'application',''),'BDMS')='BDMS'`,[digest(grant),row.id,version(row.record_data,application),sessionToken]);
+  if(!result.rowCount)throw Object.assign(new Error('Pulse sign-in expired.'),{status:401});
+  return {grant,token:sessionToken};
+ }
  const cors=(req,res)=>{
   const origin=req.headers?.origin;
   if(origin&&origin!==hrOrigin){res.status(403).json({error:'Origin is not allowed.'});return false;}
@@ -116,7 +129,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   });
   route('validate',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND g.pulse_session AND COALESCE(NULLIF(s.permissions->>'application',''),'BDMS')='BDMS' AND s.created_at>NOW()-INTERVAL '7 days') OR ($2='HR' AND s.permissions->>'application'='MIS'
    AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
     AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
     AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
@@ -127,7 +140,7 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
   });
   if(application==='HR')route('directory',async(req,res)=>{
    const grant=req.body?.grant;if(!valid(grant))return res.status(401).json({error:'Sign-in expired.'});
-   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND s.permissions->>'application'='MIS'
+   const {rows}=await pool.query(`SELECT u.id,u.record_data,g.credential_version,g.session_token,s.permissions->>'application' AS session_application FROM application_identity_grants g JOIN master_records u ON u.id=g.user_id AND u.master_name='Users & employees' JOIN auth_sessions s ON s.token=g.session_token WHERE g.grant_hash=$1 AND g.application=$2 AND g.expires_at>NOW() AND EXISTS(SELECT 1 FROM user_current_sessions c WHERE c.session_id=s.session_public_id) AND s.created_at>NOW()-INTERVAL '40 days' AND (s.permissions->>'application'=$2 OR ($2='HR' AND g.pulse_session AND COALESCE(NULLIF(s.permissions->>'application',''),'BDMS')='BDMS' AND s.created_at>NOW()-INTERVAL '7 days') OR ($2='HR' AND s.permissions->>'application'='MIS'
    AND EXISTS(SELECT 1 FROM application_identity_grants parent WHERE parent.session_token=g.session_token
     AND parent.user_id=g.user_id AND parent.application='MIS' AND parent.expires_at>NOW()
     AND parent.credential_version=encode(sha256(convert_to(concat(u.record_data->>'login',':',u.record_data->>'passwordHash'),'UTF8')),'hex'))))`,[digest(grant),application]);
@@ -141,5 +154,5 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    res.json({ok:true});
   });
  }
- return {handlers,issueGrant,profile:row=>pulseApplicationProfile(row,'MIS'),initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);`)};
+ return {handlers,issueGrant,attachPulseSessionGrant,profile:row=>pulseApplicationProfile(row,'MIS'),initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);ALTER TABLE application_identity_grants ADD COLUMN IF NOT EXISTS pulse_session BOOLEAN NOT NULL DEFAULT false;`)};
 }

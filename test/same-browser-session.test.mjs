@@ -16,7 +16,8 @@ test('password-verified same-browser logins retain tabs without reviving replace
     const query = (sql, args) => {
       calls.push(sql);
       // PGlite is single-client; PostgreSQL supplies the transaction lock in production.
-      if (sql.includes('pg_advisory_xact_lock')) return {rows: []};
+      // Only the lock call itself; the sign-in rule's set-up also names the lock inside its trigger.
+      if (/^\s*SELECT pg_advisory_xact_lock/i.test(sql)) return {rows: []};
       return !args && sql.includes(';') ? db.exec(sql) : db.query(sql, args);
     };
     const pool = {query, connect: async () => ({query, release() {}})};

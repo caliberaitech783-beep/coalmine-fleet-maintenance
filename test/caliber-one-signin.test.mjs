@@ -5,6 +5,7 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import express from 'express';
 import { installCaliberOneSignIn, HR_ORIGIN } from '../caliber-one-signin.mjs';
+import { protectDeletionPool } from '../deletion-approval.mjs';
 import { completeHrHandoff, completeMisHandoff, hrBack, isHrLogin, isMisContinue, misManualUrl } from '../src/caliber-one-handoff.mjs';
 import { pulseTokenFrom, signOutTargets } from '../public/one/one-tabs.mjs';
 
@@ -13,6 +14,8 @@ import { pulseTokenFrom, signOutTargets } from '../public/one/one-tabs.mjs';
 const proofOf = value => createHash('sha256').update(value).digest('base64url');
 const state = 's'.repeat(43), verifier = 'v'.repeat(43), challenge = proofOf(verifier);
 const PULSE = 'p'.repeat(43);
+const PULSE_UUID = '7b0c1d7e-3a4f-4f7a-9d55-1c2b3a4d5e6f';
+const pulseHrProfile = { permissions: { application: 'HR' } };
 
 async function harness(t) {
   const db = new PGlite();
@@ -32,6 +35,13 @@ async function harness(t) {
       issued.push({ application, login: row.record_data.login, profile, options, grant, token });
       return { grant, token };
     },
+    // HR rides on the Pulse session (no new HR session), so it never signs HR out on another screen.
+    attachPulseSessionGrant: async (row, application) => {
+      const token = PULSE_UUID, grant = String.fromCharCode(97 + issued.length).repeat(43);
+      await db.query('INSERT INTO application_identity_grants(grant_hash,application,session_token) VALUES($1,$2,$3)', [grant, application, token]);
+      issued.push({ application, login: row.record_data.login, profile: pulseHrProfile, options: { pulseSession: true }, grant, token });
+      return { grant, token };
+    },
     handlers: { '/api/integrations/hr/validate': async (req, res) => {
       const { rows } = await db.query("SELECT 1 FROM application_identity_grants WHERE grant_hash=$1 AND application='HR'", [req.body.grant]);
       return rows[0] ? res.json({ profile: { login: 'owner', permissions: { application: 'HR' } } }) : res.status(401).json({ error: 'expired' });
@@ -41,7 +51,8 @@ async function harness(t) {
   const app = express();
   app.use(express.json());
   const signIn = installCaliberOneSignIn(app, {
-    pool: db, identity,
+    // The production pools are guarded (deletion-approval.mjs); sign-in records must still be deletable.
+    pool: protectDeletionPool(db), identity,
     requireSession: (req, res, next) => {
       const session = sessions[String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')];
       if (!session) return res.status(401).json({ error: 'Your sign-in has expired.' });

@@ -22,10 +22,12 @@ export const DELETION_SCHEMA = `CREATE TABLE IF NOT EXISTS deletion_approvals (
 CREATE INDEX IF NOT EXISTS deletion_approvals_session_created ON deletion_approvals(session_hash,created_at);`;
 
 // Authentication token expiry/revocation is deliberately independent of deletion approval.
+// Caliber One sign-in records (one-time HR codes, which grants a Pulse session opened) are the same kind (28 Nov 2026).
+// So are the current sign-ins per login and application and their limits (mohitchadda keeps 3, 28 Nov 2026).
 const SECURITY_TABLES = new Set(['auth_sessions','password_change_sessions','password_reset_sessions',
  'telegram_link_tokens','hr_credential_attempts','hr_credential_grants','mis_credential_attempts',
  'mis_credential_grants','application_login_attempts','application_identity_grants',
- 'mis_login_codes','mis_sso_codes','mis_sso_grants','mis_sso_pending','diesel_sso']);
+ 'mis_login_codes','mis_sso_codes','mis_sso_grants','mis_sso_pending','diesel_sso','user_current_sessions','session_limit_exceptions','caliber_one_codes','caliber_one_signins']);
 export function destructiveTables(sql) {
   // TRUNCATE in a revision trigger event list describes when the trigger runs.
   const clean = String(sql).replace(/\/\*[\s\S]*?\*\//g,' ').replace(/--[^\n]*/g,' ')
