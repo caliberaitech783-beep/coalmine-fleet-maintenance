@@ -10,6 +10,23 @@ import {createFeedCache} from '../request-feed-cache.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
+test('unchanged revisions keep one large response across polling windows, but a write rebuilds it',async()=>{
+  let time=0,reads=0,serialisations=0;
+  const ttl=Number(server.match(/const requestFeedCache=createFeedCache\(\{ttlMs:(\d[\d_]*)\}\)/)[1].replaceAll('_',''));
+  const cache=createFeedCache({ttlMs:ttl,now:()=>time});
+  const responses=createSharedFeedResponses({now:()=>time});
+  const load=async()=>{reads++;return [{ref:'REQ-'+reads}];};
+  const read=async revision=>{const rows=await cache.read(load,revision);return responses.body(rows,'super',()=>{serialisations++;return rows;});};
+  const first=await read('r1');
+  for(let i=0;i<8;i++){time+=30000;assert.equal(await read('r1'),first);}
+  assert.equal(reads,1);assert.equal(serialisations,1);
+  const changed=await read('r2');
+  assert.notEqual(changed,first);
+  cache.clear();
+  assert.notEqual(await read('r2'),changed,'an overlapping application write still invalidates immediately');
+  assert.equal(reads,3);
+});
+
 test('callers of one variant share one serialised body until the feed is read again', () => {
   const responses = createSharedFeedResponses();
   const rows = [{ref: 'REQ-1', site: 'A'}, {ref: 'REQ-2', site: 'B'}];

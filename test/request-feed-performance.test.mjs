@@ -243,7 +243,7 @@ test('a failed read is never handed to the next poll', async () => {
 
 test('the requests route shares the feed and business writes clear it', () => {
   assert.match(server, /import \{createFeedCache,requestFeedWriteInvalidates\} from '\.\/request-feed-cache\.mjs';/);
-  assert.match(server, /const requestFeedCache=createFeedCache\(\{ttlMs:30_000\}\);/);
+  assert.match(server, /const requestFeedCache=createFeedCache\(\{ttlMs:300_000\}\);/);
   const guard = server.slice(server.indexOf('const requestFeedCache=createFeedCache('), server.indexOf('const port=Number('));
   assert.match(guard, /if\(requestFeedWriteInvalidates\(req\)\)\{/);
   assert.match(guard, /requestFeedCache\.clear\(\);/);
