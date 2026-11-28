@@ -9,10 +9,11 @@ test('Fleet is the default and portals have explicit selectors',()=>{
   assert.match(source,/<strong>Fleet<\/strong>/);
   assert.match(source,/<strong>Accounts<\/strong>/);
 });
-test('Tender opens its application and Accident link is preserved',()=>{
+test('Tender opens its application; the dead Accident link is gone',()=>{
   assert.match(source,/<a className="login-tender-link" href="https:\/\/tender.cmll.in" aria-label="Open Tender application"/);
   assert.doesNotMatch(source,/className="login-tender-link" disabled/);
-  assert.match(source,/className="login-accident-link" href="https:\/\/bdms.cmll.in"/);
+  // Owner, 28 Nov 2026: bdms.cmll.in does not exist, so the Accident tile was removed.
+  assert.doesNotMatch(source,/login-accident-link|bdms\.cmll\.in/);
 });
 
 test('mobile application tiles wrap in two columns, with a single column on narrow phones',()=>{
