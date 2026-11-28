@@ -5,6 +5,7 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import express from 'express';
 import { installCaliberOneSignIn, HR_ORIGIN } from '../caliber-one-signin.mjs';
+import { protectDeletionPool } from '../deletion-approval.mjs';
 import { completeHrHandoff, completeMisHandoff, hrBack, isHrLogin, isMisContinue, misManualUrl } from '../src/caliber-one-handoff.mjs';
 import { pulseTokenFrom, signOutTargets } from '../public/one/one-tabs.mjs';
 
@@ -50,7 +51,8 @@ async function harness(t) {
   const app = express();
   app.use(express.json());
   const signIn = installCaliberOneSignIn(app, {
-    pool: db, identity,
+    // The production pools are guarded (deletion-approval.mjs); sign-in records must still be deletable.
+    pool: protectDeletionPool(db), identity,
     requireSession: (req, res, next) => {
       const session = sessions[String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')];
       if (!session) return res.status(401).json({ error: 'Your sign-in has expired.' });
