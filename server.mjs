@@ -2758,7 +2758,10 @@ async function readSession(req){
   // first answer serves both, so a request costs one session lookup and one membership check.
   if(req.pulseSessionLookup!==undefined)return req.pulseSessionLookup;
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  const session=await (req.dashboardSessionStore||sessionStore).get(token);
+  // Both the browser handoff and server-to-server checks must stay off the
+  // operational queue. profileFor also calls this reader with a fresh request.
+  const dieselSignIn=req.path.startsWith('/api/diesel-sso/');
+  const session=await (dieselSignIn?authSessionStore:req.dashboardSessionStore||sessionStore).get(token);
   if(session&&!membershipOnboardingPath(req.path)){
     const telegramServiceAccount=String(session.login||'').trim().toLowerCase()==='mis_sync_service';
     // These existing administrator-authorized routes remain available solely
@@ -2766,7 +2769,7 @@ async function readSession(req){
     const remediation=session.role==='super'&&session.permissions?.adminLevel!=='Manager'&&
       (req.path.startsWith('/api/telegram/site-groups')||req.path==='/api/telegram/settings');
     if(!remediation&&!telegramServiceAccount){
-      const status=await telegramMembershipFor(session.login,false,req.dashboardReadPool);
+      const status=await telegramMembershipFor(session.login,false,dieselSignIn?authPool:req.dashboardReadPool);
       if(!status.allowed){const error=new Error('Join and verify all assigned site Telegram groups to continue.');error.status=403;error.code='TELEGRAM_MEMBERSHIP_REQUIRED';throw error;}
     }
   }

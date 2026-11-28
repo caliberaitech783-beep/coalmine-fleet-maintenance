@@ -65,7 +65,8 @@ test('real shared session reader blocks normal and privileged APIs while allowin
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const snippet=source.slice(source.indexOf('async function readSession(req)'),source.indexOf('\nfunction sessionActivityDetails'));
   for(const session of [{login:'a',role:'normal'},{login:'a',role:'super',permissions:{adminLevel:'Manager'}},{login:'a',role:'super',permissions:{adminLevel:'Super Admin'}}]){
-    const read=new Function('sessionStore','membershipOnboardingPath','telegramMembershipFor',`${snippet};return readSession;`)({get:async()=>session},membershipOnboardingPath,async()=>({allowed:false}));
+    const store={get:async()=>session};
+    const read=new Function('sessionStore','authSessionStore','membershipOnboardingPath','telegramMembershipFor',`${snippet};return readSession;`)(store,store,membershipOnboardingPath,async()=>({allowed:false}));
     await assert.rejects(read({headers:{},path:'/api/requests'}),error=>error.status===403&&error.code==='TELEGRAM_MEMBERSHIP_REQUIRED');
     for(const operation of ['authorize','continue','exchange','validate']) {
       assert.equal(await read({headers:{},path:'/api/diesel-sso/'+operation}),session);

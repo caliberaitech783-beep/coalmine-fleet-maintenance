@@ -68,6 +68,8 @@ Diesel's authenticated `validate` reply also includes `profile.empId` when the l
 
 ### Diesel sign-in settings and slot swaps
 
+Diesel handoff, grant validation and protected master-feed session reads use `authSessionStore` and `authPool`, including the synthetic requests used by the issuer. They do not wait on the operational pool during a request-feed backlog. Sessions are still verified on every request; expiry, revocation, location checks and the existing membership policy remain enforced. The deployment refreshes its Azure federated login after staging verification and before the production readiness check, so that requesting the readiness probe's ARM token does not reuse an expired assertion. A failed probe still stops the swap; logs expose only the failed stage and a recognized Azure error identifier.
+
 `DIESEL_SSO_CLIENT_SECRET` and `DIESEL_SSO_ENABLED` must exist on both the production and staging slots as deployment slot settings. When they sat on one slot only, the swap on 19 November 2026 left production without them and Diesel sign-in stopped until the deploy job was re-run. Before each staging deployment, `scripts/pin-diesel-sign-in-settings.sh` copies the secret from production (or from staging when production has none) and pins both settings on both slots, writing only where something is missing. A write to production restarts it once. Values are never printed.
 
 ## MIS shared sign-in

@@ -234,6 +234,15 @@ jobs:
             sleep 5
           done
 
+      # Staging installation can outlast GitHub's federated assertion. Refresh
+      # it before the preflight requests its separate ARM access token.
+      - name: Refresh Azure credentials before production checks
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+
       - name: Verify production Telegram groups before swap
         shell: bash
         run: node scripts/verify-telegram-membership-readiness.mjs
