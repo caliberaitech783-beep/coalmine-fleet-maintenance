@@ -47,6 +47,9 @@ export function pulseApplicationProfile(row,application){
 }
 export function installPulseApplicationIdentity(app,{pool,sessionStore}){
  const handlers={};
+ // Set by Caliber One: told which sign-ins a person just signed out of (owner, 28 Nov 2026: signing
+ // out in one application signs out of all).
+ const hooks={signedOut:null};
  // One place issues an application grant, whichever way the person proved who they are
  // (password, or a Telegram sign-in code). "Remember me" on the MIS sign-in page makes
  // the grant last REMEMBER_DAYS (40) instead of 7; the owner's MIS grant always does.
@@ -150,9 +153,15 @@ export function installPulseApplicationIdentity(app,{pool,sessionStore}){
    res.json(await loadHrDirectory({pool,profile,user:row.record_data,masterNames:CDIR_MASTER_NAMES,buildDirectory:cdirDirectoryFromMasters,mergeSuperiors:mergeCdirReportingSuperiors,viewerContext:cdirViewerContext,forViewer:cdirDirectoryForViewer}));
   });
   route('logout',async(req,res)=>{
-   if(valid(req.body?.grant))await pool.query('WITH revoked AS (DELETE FROM application_identity_grants WHERE grant_hash=$1 AND application=$2 RETURNING session_token) DELETE FROM auth_sessions WHERE token IN (SELECT session_token FROM revoked) AND permissions->>\'application\'=$2',[digest(req.body.grant),application]);
+   if(valid(req.body?.grant)){
+    const {rows}=await pool.query('DELETE FROM application_identity_grants WHERE grant_hash=$1 AND application=$2 RETURNING session_token,pulse_session',[digest(req.body.grant),application]);
+    // A grant riding on a Pulse sign-in has no session of its own to end.
+    const own=rows.filter(row=>!row.pulse_session).map(row=>row.session_token);
+    if(own.length)await pool.query('DELETE FROM auth_sessions WHERE token=ANY($1::uuid[]) AND permissions->>\'application\'=$2',[own,application]);
+    if(rows.length&&hooks.signedOut)await hooks.signedOut({application,sessions:own,pulseSessions:rows.filter(row=>row.pulse_session).map(row=>row.session_token)});
+   }
    res.json({ok:true});
   });
  }
- return {handlers,issueGrant,attachPulseSessionGrant,profile:row=>pulseApplicationProfile(row,'MIS'),initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);ALTER TABLE application_identity_grants ADD COLUMN IF NOT EXISTS pulse_session BOOLEAN NOT NULL DEFAULT false;`)};
+ return {handlers,hooks,issueGrant,attachPulseSessionGrant,profile:row=>pulseApplicationProfile(row,'MIS'),initialize:()=>pool.query(`CREATE TABLE IF NOT EXISTS application_identity_grants(grant_hash TEXT PRIMARY KEY,application TEXT NOT NULL,user_id BIGINT NOT NULL,credential_version TEXT NOT NULL,session_token UUID NOT NULL,expires_at TIMESTAMPTZ NOT NULL);CREATE INDEX IF NOT EXISTS application_identity_grants_expiry ON application_identity_grants(expires_at);CREATE TABLE IF NOT EXISTS application_login_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,created_at TIMESTAMPTZ NOT NULL);ALTER TABLE application_identity_grants ADD COLUMN IF NOT EXISTS pulse_session BOOLEAN NOT NULL DEFAULT false;`)};
 }

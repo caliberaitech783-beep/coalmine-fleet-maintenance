@@ -23,19 +23,10 @@
       <button type="button" class="one-action one-install" hidden>Install app</button>
       <button type="button" class="one-action one-reload" title="Reload this tab" aria-label="Reload this tab">&#x21bb;</button>
       <button type="button" class="one-action one-window" title="Open this tab in its own window" aria-label="Open this tab in its own window">&#x2197;</button>
-      <button type="button" class="one-action one-signout" title="Sign out of Pulse, MIS, HR Pulse and Diesel on this computer" aria-label="Sign out all" hidden><span class="one-signout-long">Sign out all</span><span class="one-signout-short" aria-hidden="true">&#x23fb;</span></button>
     </div>
   </header>
-  <main class="one-stage">
-    <section class="one-waiting" aria-live="polite" hidden>
-      <h1>Sign in to Pulse first</h1>
-      <p><b class="one-waiting-name"></b> opens signed in by itself once you are signed in to Pulse. You sign in only once, in the Pulse tab.</p>
-      <div class="one-waiting-actions">
-        <button type="button" class="one-go-pulse">Go to the Pulse tab</button>
-        <button type="button" class="one-open-anyway">Open without Pulse</button>
-      </div>
-    </section>
-  </main>
+  <p class="one-hint" role="status" hidden>Sign in once here. Pulse, MIS, HR Pulse and Diesel all open together, and signing out of any one signs out of all.</p>
+  <main class="one-stage"></main>
   <noscript><p class="one-noscript">Caliber One needs JavaScript. Open <a href="https://pulse.cmll.in/">Pulse</a> directly.</p></noscript>
 </body>
 </html>

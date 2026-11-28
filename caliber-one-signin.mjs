@@ -6,7 +6,10 @@ import {pulseApplicationProfile} from './pulse-application-identity.mjs';
 // access rule (MIS needs MIS access, HR needs HR access) and its own grant, issued by the same
 // issueGrant as a password sign-in. The browser never receives a grant in a link: MIS gets a
 // one-time code its server exchanges (PKCE), HR Pulse a one-time code its page exchanges with the
-// verifier only it holds. "Sign out all" ends the grants opened this way together with Pulse.
+// verifier only it holds.
+// Signing out anywhere signs out everywhere (owner, 28 Nov 2026: "if a person signs out, it will
+// sign out from all"): a sign-out in Pulse, MIS, HR Pulse or Diesel ends the Pulse sign-in and every
+// MIS and HR sign-in it opened. Diesel and HR ride on the Pulse sign-in and end with it.
 export const HR_ORIGIN='https://hrpulse.cmll.in';
 export const MIS_CALLBACK='https://pulse-ll.cmll.in/api/mis-credentials/callback';
 const digest=value=>createHash('sha256').update(String(value)).digest('hex');
@@ -14,7 +17,7 @@ const proof=value=>createHash('sha256').update(String(value)).digest('base64url'
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const bearer=req=>String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim();
 
-export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRedirectFor}){
+export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRedirectFor,sessionStore=null}){
  const safe=handler=>async(req,res,next)=>{
   res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});
   try{await handler(req,res);}catch(error){next(error);}
@@ -33,8 +36,35 @@ export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRed
  // Remembers which grants a Pulse session opened, so Sign out all can end them.
  async function remember(req,application,token){
   await pool.query("DELETE FROM caliber_one_signins WHERE created_at<NOW()-INTERVAL '41 days'");
-  await pool.query('INSERT INTO caliber_one_signins(parent_hash,application,session_token) VALUES($1,$2,$3)',[digest(bearer(req)),application,token]);
+  await pool.query('INSERT INTO caliber_one_signins(parent_hash,application,session_token,parent_session) VALUES($1,$2,$3,$4)',[digest(bearer(req)),application,token,bearer(req)]);
  }
+ // Ends the MIS and HR sign-ins a Pulse sign-in opened; returns how many.
+ async function endOpened(pulseToken){
+  if(!pulseToken)return 0;
+  const {rows}=await pool.query('DELETE FROM caliber_one_signins WHERE parent_hash=$1 RETURNING application,session_token',[digest(pulseToken)]);
+  for(const {application,session_token:token} of rows){
+   await pool.query('DELETE FROM application_identity_grants WHERE session_token=$1 AND application=$2',[token,application]);
+   await pool.query("DELETE FROM auth_sessions WHERE token=$1 AND permissions->>'application'=$2",[token,application]);
+  }
+  return rows.length;
+ }
+ // Ends a Pulse sign-in with everything it opened. Only a Pulse (Fleet / Accounts) session, never an
+ // MIS, HR or Tender one. Diesel and HR grants riding on it stop at their next check.
+ async function endPulseSignIn(pulseToken){
+  if(!pulseToken)return;
+  await endOpened(pulseToken);
+  await pool.query('DELETE FROM application_identity_grants WHERE session_token=$1 AND pulse_session',[pulseToken]);
+  await pool.query("DELETE FROM auth_sessions WHERE token=$1 AND COALESCE(NULLIF(permissions->>'application',''),'BDMS')='BDMS'",[pulseToken]);
+ }
+ // A sign-out in MIS or HR Pulse: find the Pulse sign-in that opened it and end that too.
+ if(identity.hooks)identity.hooks.signedOut=async({sessions=[],pulseSessions=[]})=>{
+  const parents=new Set(pulseSessions);
+  if(sessions.length){
+   const {rows}=await pool.query('SELECT parent_session FROM caliber_one_signins WHERE session_token=ANY($1::uuid[]) AND parent_session IS NOT NULL',[sessions]);
+   for(const row of rows)parents.add(row.parent_session);
+  }
+  for(const parent of parents)await endPulseSignIn(parent);
+ };
  const audit=(req,profile,application)=>({eventType:'Security',module:'Authentication',action:`${application} login (Pulse sign-in)`,actorLogin:profile.login,actorName:profile.name,actorRole:profile.assignedRole,targetType:'User account',targetReference:String(profile.userId||profile.login),changedFields:[]});
 
  app.post('/api/mis-login/continue',requireSession,safe(async(req,res)=>{
@@ -90,18 +120,25 @@ export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRed
  // Ends the MIS and HR grants this Pulse session opened. The browser then signs out of Pulse
  // itself (/api/logout), which also ends Diesel, whose grant follows the Pulse session.
  app.post('/api/caliber-one/sign-out-all',requireSession,safe(async(req,res)=>{
-  const {rows}=await pool.query('DELETE FROM caliber_one_signins WHERE parent_hash=$1 RETURNING application,session_token',[digest(bearer(req))]);
-  for(const {application,session_token:token} of rows){
-   await pool.query('DELETE FROM application_identity_grants WHERE session_token=$1 AND application=$2',[token,application]);
-   await pool.query("DELETE FROM auth_sessions WHERE token=$1 AND permissions->>'application'=$2",[token,application]);
-  }
+  const signedOut=await endOpened(bearer(req));
   req.audit={eventType:'Security',module:'Authentication',action:'Sign out all (Caliber One)',targetType:'User account',targetReference:req.session.login||req.session.name,changedFields:[]};
-  res.json({ok:true,signedOut:rows.length});
+  res.json({ok:true,signedOut});
  }));
 
- return {initialize:async()=>{
+ // Caliber One asks every few seconds whether its Pulse sign-in still stands, so a sign-out in any
+ // tab (or on the server) closes the others. One indexed read on the sign-in pool; it records no
+ // activity and renews nothing.
+ app.get('/api/caliber-one/session',safe(async(req,res)=>{
+  req.audit=false;
+  const token=bearer(req);
+  res.json({signedIn:Boolean(sessionStore&&token&&await sessionStore.get(token))});
+ }));
+
+ return {endOpened,endPulseSignIn,initialize:async()=>{
   await pool.query('CREATE TABLE IF NOT EXISTS caliber_one_codes(code_hash TEXT PRIMARY KEY,application TEXT NOT NULL,challenge TEXT NOT NULL,state TEXT NOT NULL,grant_token TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL)');
   await pool.query('CREATE TABLE IF NOT EXISTS caliber_one_signins(parent_hash TEXT NOT NULL,application TEXT NOT NULL,session_token UUID NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
   await pool.query('CREATE INDEX IF NOT EXISTS caliber_one_signins_parent ON caliber_one_signins(parent_hash)');
+  await pool.query('ALTER TABLE caliber_one_signins ADD COLUMN IF NOT EXISTS parent_session UUID');
+  await pool.query('CREATE INDEX IF NOT EXISTS caliber_one_signins_session ON caliber_one_signins(session_token)');
  }};
 }

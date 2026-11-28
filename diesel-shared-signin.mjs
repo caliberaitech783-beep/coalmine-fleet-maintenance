@@ -7,7 +7,7 @@ const bearer = request => String(request.headers.authorization || '').replace(/^
 const cookie = (request, name) => String(request.headers.cookie || '').split(';')
   .map(entry => entry.trim()).find(entry => entry.startsWith(name + '='))?.slice(name.length + 1) || '';
 
-export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin, readMasters, readEmployee }) {
+export function registerDieselSharedSignIn(app, { pool, requireSession, readSession, checkLocation, secret, enabled, dieselOrigin, readMasters, readEmployee, onSignOut }) {
   let callback;
   if (proof(secret) && enabled === '1') {
     const origin = new URL(dieselOrigin || 'https://pulse-lll.cmll.in');
@@ -112,7 +112,11 @@ export function registerDieselSharedSignIn(app, { pool, requireSession, readSess
   app.post('/api/diesel-sso/revoke', serverRoute(async (request, response) => {
     const { grant } = request.body || {};
     if (!proof(grant)) return response.sendStatus(400);
-    await pool.query('DELETE FROM diesel_sso WHERE grant_hash = $1', [digest(grant)]);
+    const { rows } = await pool.query('DELETE FROM diesel_sso WHERE grant_hash = $1 RETURNING session_token', [digest(grant)]);
+    // signOut: the person pressed Sign out in Diesel, which signs out of every application
+    // (owner, 28 Nov 2026). Diesel also revokes a grant it refuses for lack of access: that one
+    // must leave the Pulse sign-in alone.
+    if (request.body.signOut === true && rows[0] && onSignOut) await onSignOut(rows[0].session_token);
     response.sendStatus(204);
   }));
 
