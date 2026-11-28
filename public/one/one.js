@@ -1,4 +1,4 @@
-import { APPS, STORAGE_KEY, appByKey, initialKey, frameAllow, keyFromShortcut, preloadOrder } from './one-tabs.mjs';
+import { APPS, STORAGE_KEY, PULSE_SESSION_KEY, SIGN_OUT_MESSAGE, appByKey, initialKey, frameAllow, keyFromShortcut, preloadOrder, pulseTokenFrom, signOutTargets } from './one-tabs.mjs';
 
 // Caliber One must never open inside one of its own tabs (a link to /one/ from inside Pulse).
 if (window.self !== window.top) {
@@ -13,14 +13,23 @@ function start() {
   const reloadButton = document.querySelector('.one-reload');
   const windowButton = document.querySelector('.one-window');
   const installButton = document.querySelector('.one-install');
+  const signOutButton = document.querySelector('.one-signout');
+  const waiting = document.querySelector('.one-waiting');
   const allow = frameAllow();
   const frames = new Map();
   const tabs = new Map();
+  const openedAnyway = new Set();
   let current = '';
   let preloadStarted = false;
+  // One sign-in: until Pulse is signed in, only the Pulse tab opens. MIS, HR Pulse and Diesel
+  // would each ask for a password of their own; after Pulse they open signed in.
+  let signedIn = false;
+  let checkedToken = '';
+  let checkedAt = 0;
 
   const readSaved = () => { try { return localStorage.getItem(STORAGE_KEY) || ''; } catch { return ''; } };
   const save = key => { try { localStorage.setItem(STORAGE_KEY, key); } catch { /* private window */ } };
+  const pulseToken = () => pulseTokenFrom([window.localStorage, window.sessionStorage]);
 
   for (const [index, app] of APPS.entries()) {
     const tab = document.createElement('button');
@@ -41,6 +50,8 @@ function start() {
     tabsNav.append(tab);
     tabs.set(app.key, tab);
   }
+
+  const mayOpen = key => key === 'pulse' || signedIn || openedAnyway.has(key);
 
   function frameFor(key) {
     if (frames.has(key)) return frames.get(key);
@@ -69,8 +80,11 @@ function start() {
     const app = appByKey(key);
     if (!app) return;
     current = key;
-    frameFor(key);
-    for (const [otherKey, frame] of frames) frame.classList.toggle('is-open', otherKey === key);
+    const open = mayOpen(key);
+    if (open) frameFor(key);
+    for (const [otherKey, frame] of frames) frame.classList.toggle('is-open', open && otherKey === key);
+    waiting.hidden = open;
+    if (!open) waiting.querySelector('.one-waiting-name').textContent = app.label;
     for (const [otherKey, tab] of tabs) {
       tab.setAttribute('aria-selected', String(otherKey === key));
       tab.tabIndex = otherKey === key ? 0 : -1;
@@ -82,14 +96,14 @@ function start() {
   }
 
   function startPreload() {
-    if (preloadStarted) return;
+    if (preloadStarted || !signedIn) return;
     preloadStarted = true;
-    const waiting = preloadOrder(current).filter(key => !frames.has(key));
+    const queue = preloadOrder(current).filter(key => !frames.has(key));
     const next = () => {
-      const key = waiting.shift();
+      const key = queue.shift();
       if (!key) return;
       if (document.visibilityState === 'hidden') {
-        document.addEventListener('visibilitychange', () => { waiting.unshift(key); next(); }, { once: true });
+        document.addEventListener('visibilitychange', () => { queue.unshift(key); next(); }, { once: true });
         return;
       }
       if (!frames.has(key)) frameFor(key);
@@ -97,6 +111,53 @@ function start() {
     };
     setTimeout(next, 3000);
   }
+
+  // Pulse is signed in when its saved sign-in is accepted. The same call renews the first-party
+  // cookie by which Pulse recognises the sign-in for Diesel.
+  async function checkPulse() {
+    const token = pulseToken();
+    if (!token) return false;
+    if (token === checkedToken && Date.now() - checkedAt < 60000) return signedIn;
+    checkedToken = token;
+    checkedAt = Date.now();
+    try {
+      const response = await fetch('/api/mis-sso/remember', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+      return response.ok;
+    } catch { return false; }
+  }
+  async function watchSignIn() {
+    const now = await checkPulse();
+    if (now !== signedIn) {
+      signedIn = now;
+      signOutButton.hidden = !signedIn;
+      if (signedIn) { show(current); startPreload(); }
+    }
+    setTimeout(watchSignIn, signedIn ? 15000 : 2000);
+  }
+  waiting.querySelector('.one-open-anyway').addEventListener('click', () => {
+    openedAnyway.add(current);
+    show(current);
+  });
+  waiting.querySelector('.one-go-pulse').addEventListener('click', () => show('pulse'));
+
+  // Sign out all: MIS and HR Pulse sign out of themselves, Pulse ends the MIS and HR sign-ins it
+  // opened and then its own, which also ends Diesel. Other computers are not signed out.
+  signOutButton.addEventListener('click', async () => {
+    if (!window.confirm('Sign out of Pulse, MIS, HR Pulse and Diesel on this computer?')) return;
+    signOutButton.disabled = true;
+    for (const { key, origin } of signOutTargets()) {
+      try { frames.get(key)?.contentWindow?.postMessage({ type: SIGN_OUT_MESSAGE }, origin); } catch { /* tab not open */ }
+    }
+    const token = pulseToken();
+    const headers = { Authorization: 'Bearer ' + token };
+    if (token) {
+      await fetch('/api/caliber-one/sign-out-all', { method: 'POST', headers }).catch(() => null);
+      await fetch('/api/logout', { method: 'POST', headers }).catch(() => null);
+    }
+    for (const store of [window.localStorage, window.sessionStorage]) { try { store.removeItem(PULSE_SESSION_KEY); } catch { /* ignore */ } }
+    // Gives MIS and HR Pulse a moment to finish signing out before every tab reloads.
+    setTimeout(() => { history.replaceState(null, '', '#pulse'); window.location.reload(); }, 1500);
+  });
 
   function onShortcut(event) {
     const key = keyFromShortcut(event, current);
@@ -149,5 +210,11 @@ function start() {
     if (key !== current) show(key);
   });
 
-  show(initialKey({ hash: window.location.hash, saved: readSaved() }));
+  (async () => {
+    signedIn = await checkPulse();
+    signOutButton.hidden = !signedIn;
+    const first = initialKey({ hash: window.location.hash, saved: readSaved() });
+    show(signedIn ? first : 'pulse');
+    setTimeout(watchSignIn, signedIn ? 15000 : 2000);
+  })();
 }

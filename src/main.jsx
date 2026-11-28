@@ -16,6 +16,8 @@ import { useNavigationState, configureNavigation, resetNavigation } from './navi
 import {summarizeUserSessions} from '../user-session-summary.mjs';
 import {useMisSharedSignIn} from './mis-shared-signin.jsx';
 import {DieselSharedSignIn} from './diesel-shared-signin.jsx';
+import {CaliberOneSignIn} from './caliber-one-signin.jsx';
+import {hrBack, isHrLogin, isMisContinue} from './caliber-one-handoff.mjs';
 import {isDieselLogin} from './diesel-handoff.mjs';
 import { compressImageDataUrl, readBlobDataUrl, AUDIO_MAX_BYTES } from "../media-policy.mjs";
 import {reportPortalTarget,sameReportView} from './report-portal-target.mjs';
@@ -12744,8 +12746,13 @@ function App() {
     profileLocation, requests, requestsError, requestsLoaded, requestState.updatedAt, dashboardRequestState, dashboardRequestsError, dashboardRequestsLoaded, responsiveMobile,
     session, theme,
   ]);
-  if (!session || new URLSearchParams(window.location.search).get('login')==='mis') return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
+  // Caliber One: HR Pulse sent a person who is not signed in to Pulse; HR Pulse shows its own sign-in.
+  if (!session && isHrLogin(window.location.search)) { window.location.replace(hrBack('signin')); return null; }
+  if (!session || (new URLSearchParams(window.location.search).get('login')==='mis' && !isMisContinue(window.location.search))) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (locationGate.phase!=='open') return <SignInLocationScreen gate={locationGate} onSignOut={logout}/>;
+  // Caliber One: already signed in to Pulse, so MIS and HR Pulse open without a second password.
+  if (isMisContinue(window.location.search)) return <CaliberOneSignIn key={session.token} application="MIS" token={session.token} logout={logout}/>;
+  if (isHrLogin(window.location.search)) return <CaliberOneSignIn key={session.token} application="HR" token={session.token} logout={logout}/>;
   if (isDieselLogin(window.location.search)) return <DieselSharedSignIn key={session.token} token={session.token} logout={logout}/>;
   if (session.userType === "Account User") return <div className="accounts-user-workspace">
     <header><CaliberBrand subtitle="Accounts" /><nav><button type="button" className={accountWorkspace==="accounts"?"active":""} onClick={()=>setAccountWorkspace("accounts")}>Accounts</button><button type="button" className={accountWorkspace==="directory"?"active":""} onClick={()=>setAccountWorkspace("directory")}><BookUser/> Directory</button><AnnouncementHistoryButton token={session.token} /><button type="button" onClick={logout}><LogOut /> Sign out</button></nav></header>

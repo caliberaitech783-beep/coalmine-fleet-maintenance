@@ -41,6 +41,25 @@ export function keyFromShortcut(event, currentKey, apps = APPS) {
   return null;
 }
 
+// One sign-in (Phase 2): Pulse keeps its sign-in as nerveCenterSession, in localStorage with
+// "Remember me" and in sessionStorage without; Caliber One shares both with the Pulse tab.
+export const PULSE_SESSION_KEY = 'nerveCenterSession';
+export function pulseTokenFrom(stores) {
+  for (const store of stores) {
+    try {
+      const token = JSON.parse(store?.getItem(PULSE_SESSION_KEY) || 'null')?.token;
+      if (typeof token === 'string' && token) return token;
+    } catch { /* unreadable storage or old value */ }
+  }
+  return '';
+}
+
+// Sign out all tells these tabs to sign out of their own website; Diesel follows the Pulse sign-in.
+export const SIGN_OUT_MESSAGE = 'caliber-one:sign-out';
+export function signOutTargets(apps = APPS) {
+  return apps.filter(app => app.key === 'mis' || app.key === 'hr').map(app => ({ key: app.key, origin: new URL(app.url).origin }));
+}
+
 // The tabs not yet open are loaded one after another once the first tab has loaded, so the first
 // switch to them is already instant. Order: the tabs after the open one, then those before it.
 export function preloadOrder(openKey, apps = APPS) {
