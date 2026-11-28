@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("Accident and Accounts links sit beneath the logo", async () => {
+test("Accounts sits beneath the logo and the dead Accident link is gone", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../src/user-sessions.css", import.meta.url), "utf8");
 
@@ -12,10 +12,8 @@ test("Accident and Accounts links sit beneath the logo", async () => {
   // The link lives in the proof row, immediately after Secure access.
   assert.match(source, /<CaliberBrand className="login-brand"[^>]*\/>\s*<div className="login-application-links">/);
   assert.match(proofRow[0], /login-accounts-link/);
-  assert.match(proofRow[0], /href="https:\/\/bdms\.cmll\.in"/);
-  assert.match(proofRow[0], /<AlertTriangle \/>/);
-  assert.match(proofRow[0], /<strong>Accident<\/strong>Open application/);
-  assert.match(proofRow[0], /aria-label="Open Accident application"/);
+  // Owner, 28 Nov 2026: bdms.cmll.in does not exist (no DNS record), so the Accident tile was removed.
+  assert.doesNotMatch(proofRow[0], /bdms\.cmll\.in|login-accident-link|<strong>Accident<\/strong>/);
 
   // It is no longer one of the sign-in tabs.
   const tabs = source.match(/function AuthModeTabs\([\s\S]*?\n\}/);
@@ -31,7 +29,7 @@ test("Accident and Accounts links sit beneath the logo", async () => {
   assert.match(styles, /\.login-application-links > :focus-visible\{/);
 });
 
-test("accident reporting stays reachable when the proof row is hidden on phones", async () => {
+test("the application links stay reachable when the proof row is hidden on phones", async () => {
   const styles = await readFile(new URL("../src/style.css", import.meta.url), "utf8");
 
   // The 900px breakpoint hides .login-proof; a later rule must bring it back
