@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Caliber One</title>
+  <meta name="description" content="Pulse, Pulse-II MIS, HR Pulse and Diesel as tabs of one window."/>
+  <meta name="theme-color" content="#3b1f6e"/>
+  <link rel="icon" type="image/png" sizes="64x64" href="/pulse-favicon-64.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/pulse-apple-touch-icon.png"/>
+  <link rel="manifest" href="/one/manifest.webmanifest"/>
+  <link rel="stylesheet" href="/one/one.css"/>
+  <script type="module" src="/one/one.js"></script>
+</head>
+<body>
+  <header class="one-bar">
+    <a class="one-brand" href="/one/" aria-label="Caliber One">
+      <img src="/pulse-symbol.png" alt="" width="26" height="26"/>
+      <span>Caliber <b>One</b></span>
+    </a>
+    <nav class="one-tabs" role="tablist" aria-label="Applications"></nav>
+    <div class="one-actions">
+      <button type="button" class="one-action one-install" hidden>Install app</button>
+      <button type="button" class="one-action one-reload" title="Reload this tab" aria-label="Reload this tab">&#x21bb;</button>
+      <button type="button" class="one-action one-window" title="Open this tab in its own window" aria-label="Open this tab in its own window">&#x2197;</button>
+    </div>
+  </header>
+  <main class="one-stage"></main>
+  <noscript><p class="one-noscript">Caliber One needs JavaScript. Open <a href="https://pulse.cmll.in/">Pulse</a> directly.</p></noscript>
+</body>
+</html>
