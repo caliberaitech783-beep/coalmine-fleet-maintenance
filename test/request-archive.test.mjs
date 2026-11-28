@@ -10,7 +10,7 @@ test('archive endpoints require administrator access and explicit actions',()=>{
   for(const route of ["app.get('/api/request-archives/preview'","app.get('/api/request-archives'","app.post('/api/request-archives'","app.post('/api/request-archives/:batchId/restore'"]){
     assert.ok(source.includes(`${route},requireSession,requireAdministrator,`));
   }
-  assert.ok(source.includes('FROM maintenance_requests WHERE archived_at IS NULL AND requester_login=$1'));
+  assert.ok(source.includes('FROM ${source} WHERE archived_at IS NULL AND requester_login=$1'));
   assert.ok(source.includes('FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC'));
   assert.ok(source.includes("FROM maintenance_requests WHERE archived_at IS NULL AND verified_at IS NULL AND ("));
 });

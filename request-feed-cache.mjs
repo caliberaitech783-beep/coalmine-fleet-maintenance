@@ -38,6 +38,8 @@ export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
   let reads = 0;
 
   function clear() {
+    // Invalidated rows cannot be reused; let their running query finish before
+    // starting the next generation so write bursts cannot exhaust the pool.
     entries.clear();
   }
 

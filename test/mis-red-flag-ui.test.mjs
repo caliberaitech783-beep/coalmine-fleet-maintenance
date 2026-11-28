@@ -373,7 +373,7 @@ test('nested red flag dialog alone handles Escape and Tab without closing the un
   const effects=[],listeners=new Set(),dialogs=[],focused=[];
   const document={activeElement:null,body:{style:{overflow:''}},querySelectorAll:()=>dialogs,
     addEventListener:(_event,listener)=>listeners.add(listener),removeEventListener:(_event,listener)=>listeners.delete(listener)};
-  const Modal=new Function('React','useRef','useEffect','document','X',`${compiledModal};return Modal;`)(React,value=>({current:value}),effect=>effects.push(effect),document,Null);
+  const Modal=new Function('React','useRef','useEffect','document','X','lockBodyScroll',`${compiledModal};return Modal;`)(React,value=>({current:value}),effect=>effects.push(effect),document,Null,lockBodyScroll);
   const closed=[];
   const mount=name=>{
     const input={getAttribute:()=>null,getClientRects:()=>[{width:180,height:36}],focus(){document.activeElement=input;focused.push(name);}};
@@ -400,3 +400,4 @@ test('nested red flag dialog alone handles Escape and Tab without closing the un
   assert.deepEqual(closed,['Arrival reason','Edit draft']);
   removeEdit();
 });
+import {lockBodyScroll} from '../src/body-scroll-lock.mjs';

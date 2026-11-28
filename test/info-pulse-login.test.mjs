@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import React from 'react';
+import {lockBodyScroll} from '../src/body-scroll-lock.mjs';
 import {transformWithOxc} from 'vite';
 
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -21,7 +22,7 @@ function harness(component, {prompt = () => new Promise(() => {}), start = 10000
   let now = start, cursor = 0, dirty = false, timerId = 0;
   const slots = [], effects = [], intervals = new Map(), listeners = new Map();
   const bindings = {
-    React, Date: {now: () => now},
+    React, lockBodyScroll, Date: {now: () => now},
     useState(initial) {
       const at = cursor++;
       if (!(at in slots)) slots[at] = typeof initial === 'function' ? initial() : initial;
