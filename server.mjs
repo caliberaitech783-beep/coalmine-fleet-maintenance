@@ -6800,7 +6800,11 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
     const etag=typeof privateVersionEtag==='function'?privateVersionEtag('info-pulse',revisions,{scope,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
     if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
-    const {rows}=await pool.query(`SELECT ${infoPulseProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`);
+    // Login prompts from different users used to launch identical full-table
+    // reads together. Share only the raw projection; authorization, site/role
+    // filtering and daily-history reads remain scoped to each caller below.
+    const readInfoFeed=async()=>(await pool.query(`SELECT ${infoPulseProjection} FROM maintenance_requests WHERE archived_at IS NULL ORDER BY created_at DESC`)).rows;
+    const rows=await requestFeedCache.read(readInfoFeed,JSON.stringify(revisions),'info-pulse');
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
     const payload={requests:await attachDailyRemarks(visibleRows),scope};
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload,{etag});
