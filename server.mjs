@@ -61,6 +61,7 @@ import {fleetErpUpdates} from './fleet-erp-sync.mjs';
 import {correctionErrorIsActionable,returnFailedCorrection,validateReturnedCorrection} from './request-correction-return.mjs';
 import {currentBirthdayNames} from './info-pulse-birthdays.mjs';
 import compression from 'compression';
+import {observeDatabaseQueries,requestWorkDuration} from './database-performance.mjs';
 import {createNotificationFeed} from './notification-feed.mjs';
 import {formatDisplayDate,formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
@@ -203,9 +204,10 @@ app.use((req,res,next)=>{
   const originalEnd=res.end;
   res.end=function(...args){
     const durationMs=Number(process.hrtime.bigint()-startedAt)/1e6;
+    const workDurationMs=requestWorkDuration(durationMs,req.notificationWaitMs);
     if(!res.headersSent)res.setHeader('Server-Timing',`app;dur=${durationMs.toFixed(1)}`);
-    if(req.path.startsWith('/api/')&&(durationMs>=slowRequestThresholdMs||(req.dashboardReadPool&&res.statusCode>=500))){
-      console.warn(JSON.stringify({event:'slow_http_request',method:req.method,path:req.path,status:res.statusCode,durationMs:Number(durationMs.toFixed(1)),databasePool:{total:pool?.totalCount??0,idle:pool?.idleCount??0,waiting:pool?.waitingCount??0},dashboard:!!req.dashboardReadPool,dashboardWaiting:dashboardReadPool.waitingCount}));
+    if(req.path.startsWith('/api/')&&(workDurationMs>=slowRequestThresholdMs||(req.dashboardReadPool&&res.statusCode>=500))){
+      console.warn(JSON.stringify({event:'slow_http_request',method:req.method,path:req.path,status:res.statusCode,durationMs:Number(durationMs.toFixed(1)),workDurationMs:Number(workDurationMs.toFixed(1)),databasePool:{total:pool?.totalCount??0,idle:pool?.idleCount??0,waiting:pool?.waitingCount??0},dashboard:!!req.dashboardReadPool,dashboardWaiting:dashboardReadPool.waitingCount}));
     }
     return originalEnd.apply(this,args);
   };
@@ -215,7 +217,9 @@ app.use((req,res,next)=>{
 // stops a poll that overlaps a write from repopulating stale rows, and clearing
 // again when the write has answered means the refresh that follows a click
 // always reads the database.
-const requestFeedCache=createFeedCache({ttlMs:30_000});
+// Each feed request checks database revisions before using this cache. Reusing an
+// unchanged generation also reuses its large serialised/compressed responses.
+const requestFeedCache=createFeedCache({ttlMs:300_000});
 // Users with the same role and site scope receive the same bytes for a feed read. The body is
 // serialised and compressed once per read and variant instead of once per user (45 MB of JSON on
 // 13 Nov 2026); it is tied to the rows object of that read, so it never outlives it.
@@ -339,24 +343,28 @@ const pool=protectDeletionPool(rawPool);
 // while the server was busy. TCP keepalives hold the idle connection through the platform's
 // idle limit on outbound connections (four minutes on Azure), so it is still usable when needed.
 const warmPoolOptions={idleTimeoutMillis:600000,keepAlive:true,keepAliveInitialDelayMillis:30000};
-const authPool=protectDeletionPool(new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,...warmPoolOptions}));
+const rawAuthPool=new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,...warmPoolOptions});
+const authPool=protectDeletionPool(rawAuthPool);
 // Owner rule (15 Nov 2026): a sign-in that refused its location cannot use Pulse. One small
 // read per sign-in on the sign-in pool, then remembered, so the busy main pool is not touched.
 const signInLocationGuard=createSignInLocationGuard(authPool);
 // Keep the initial Dashboard reads out of the shared work queue without
 // competing with password verification for the sign-in connections. Kept warm for the same
 // reason: the Dashboard is the first screen after sign-in.
-const dashboardReadPool=protectDeletionPool(new Pool({
+const rawDashboardReadPool=new Pool({
   connectionString:connectionString||undefined,
   ssl:databaseSsl,
   max:3,
   connectionTimeoutMillis:10000,
   statement_timeout:15000,
   ...warmPoolOptions,
-}));
+});
+const dashboardReadPool=protectDeletionPool(rawDashboardReadPool);
 // The notification LISTEN connection is held for the life of the process; it has a pool of its
 // own so it never takes one of the ten shared connections.
 const listenerPool=new Pool({connectionString:connectionString||undefined,ssl:databaseSsl,max:1,idleTimeoutMillis:0});
+for(const [name,db] of [['operational',rawPool],['sign-in',rawAuthPool],['dashboard',rawDashboardReadPool]])
+  observeDatabaseQueries(db,{name,thresholdMs:slowRequestThresholdMs});
 
 async function currentDataRevisions(keys,client=pool){
   const normalized=[...new Set(keys.map(value=>String(value||'').trim()).filter(Boolean))].sort();
@@ -6498,7 +6506,9 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     };
     let rows=await read();
     if(subscription&&rows.map((row)=>String(row.id)).join(',')===String(req.query.known||'')){
+      const waitStarted=performance.now();
       await subscription.promise;
+      req.notificationWaitMs=performance.now()-waitStarted;
       if(res.destroyed)return;
       rows=await read();
     }

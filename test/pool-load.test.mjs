@@ -232,8 +232,10 @@ test('the shared read windows close on feed-changing writes, on the bridge verif
 
 test('sign-in and Dashboard connections stay warm for ten minutes with TCP keepalives',()=>{
   assert.match(server,/const warmPoolOptions=\{idleTimeoutMillis:600000,keepAlive:true,keepAliveInitialDelayMillis:30000\};/);
-  assert.match(server,/const authPool=protectDeletionPool\(new Pool\(\{connectionString:connectionString\|\|undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,\.\.\.warmPoolOptions\}\)\);/);
-  const dashboard=slice('const dashboardReadPool=protectDeletionPool(new Pool({','}));');
+  assert.match(server,/const rawAuthPool=new Pool\(\{connectionString:connectionString\|\|undefined,ssl:databaseSsl,max:3,connectionTimeoutMillis:10000,\.\.\.warmPoolOptions\}\);/);
+  assert.match(server,/const authPool=protectDeletionPool\(rawAuthPool\);/);
+  const dashboard=slice('const rawDashboardReadPool=new Pool({','});');
+  assert.match(server,/const dashboardReadPool=protectDeletionPool\(rawDashboardReadPool\);/);
   assert.match(dashboard,/max:3,/);assert.match(dashboard,/\.\.\.warmPoolOptions,/);assert.doesNotMatch(dashboard,/idleTimeoutMillis:30000/);
   assert.match(server,/const rawPool=new Pool\(\{\n\s*connectionString:connectionString\|\|undefined,\n\s*ssl:databaseSsl,\n\s*max:10,/,'the shared pool size is unchanged');
 });
