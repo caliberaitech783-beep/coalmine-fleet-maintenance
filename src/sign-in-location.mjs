@@ -4,7 +4,7 @@
 // location is let in and shown as "Not available". The server decides.
 import {SITE_COORDINATES, DEFAULT_COORDINATES} from "./site-coordinates.mjs";
 
-export const SIGN_IN_LOCATION_NOTICE = "Pulse needs your location to open. It is recorded at every sign-in, for attendance and security.";
+export const SIGN_IN_LOCATION_NOTICE = "Your location is recorded when you sign in, for attendance and security.";
 // v2: answers saved under the first version (when Block still opened the app) must be asked again.
 const DONE_KEY = "pulse-sign-in-location-v2";
 
