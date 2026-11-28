@@ -17,7 +17,9 @@ const proof=value=>createHash('sha256').update(String(value)).digest('base64url'
 const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const bearer=req=>String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim();
 
-export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRedirectFor,sessionStore=null}){
+const cookieValue=(req,name)=>String(req.headers?.cookie||'').split(';').map(entry=>entry.trim()).find(entry=>entry.startsWith(name+'='))?.slice(name.length+1)||'';
+
+export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRedirectFor,sessionStore=null,readSession=null,checkLocation=null,sessionCookie='',dieselRedirect=null}){
  const safe=handler=>async(req,res,next)=>{
   res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});
   try{await handler(req,res);}catch(error){next(error);}
@@ -34,9 +36,31 @@ export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRed
   return rows[0]||null;
  }
  // Remembers which grants a Pulse session opened, so Sign out all can end them.
- async function remember(req,application,token){
+ async function remember(pulseToken,application,token){
   await pool.query("DELETE FROM caliber_one_signins WHERE created_at<NOW()-INTERVAL '41 days'");
-  await pool.query('INSERT INTO caliber_one_signins(parent_hash,application,session_token,parent_session) VALUES($1,$2,$3,$4)',[digest(bearer(req)),application,token,bearer(req)]);
+  await pool.query('INSERT INTO caliber_one_signins(parent_hash,application,session_token,parent_session) VALUES($1,$2,$3,$4)',[digest(pulseToken),application,token,pulseToken]);
+ }
+ // Opens MIS for a Pulse sign-in: a new MIS grant and the one-time link to Pulse-II's callback.
+ // Returns {error,status} when the person has no MIS access.
+ async function openMis(pulseToken,session,{state,challenge,remember:rememberDevice=false}){
+  const row=await userRow(session),profile=row&&identity.profile(row);
+  if(!profile)return {status:403,error:'Your Pulse account is not enabled for MIS. Contact your administrator.'};
+  const {grant,token}=await identity.issueGrant(row,'MIS',profile,{remember:rememberDevice});
+  await remember(pulseToken,'MIS',token);
+  return {profile,token,redirectUrl:await misRedirectFor({state,challenge,grant,remember:rememberDevice})};
+ }
+ // Opens HR Pulse for a Pulse sign-in: a grant riding on that sign-in and a one-time code for HR Pulse's page.
+ async function openHr(pulseToken,session,{state,challenge}){
+  const row=await userRow(session),profile=row&&pulseApplicationProfile(row,'HR');
+  if(!profile)return {status:403,error:'HR access is not assigned to your Pulse account. Contact your administrator.'};
+  // Rides on this Pulse session, so it never ends the person's HR sign-in on another screen.
+  const {grant,token}=await identity.attachPulseSessionGrant(row,'HR',pulseToken);
+  await remember(pulseToken,'HR',token);
+  const code=randomBytes(32).toString('base64url');
+  await pool.query('DELETE FROM caliber_one_codes WHERE expires_at<=NOW()');
+  await pool.query("INSERT INTO caliber_one_codes(code_hash,application,challenge,state,grant_token,expires_at) VALUES($1,'HR',$2,$3,$4,NOW()+INTERVAL '60 seconds')",[digest(code),challenge,state,grant]);
+  const target=new URL('/',HR_ORIGIN);target.searchParams.set('hrCode',code);target.searchParams.set('hrState',state);
+  return {profile,token,redirectUrl:target.toString()};
  }
  // Ends the MIS and HR sign-ins a Pulse sign-in opened; returns how many.
  async function endOpened(pulseToken){
@@ -70,30 +94,71 @@ export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRed
  app.post('/api/mis-login/continue',requireSession,safe(async(req,res)=>{
   const {state,challenge}=req.body||{};
   if(!valid(state)||!valid(challenge))return res.status(400).json({error:'Start MIS sign-in again from Pulse-II.'});
-  const row=await userRow(req.session),profile=row&&identity.profile(row);
-  if(!profile)return res.status(403).json({error:'Your Pulse account is not enabled for MIS. Contact your administrator.'});
-  const rememberDevice=req.body?.remember===true;
-  const {grant,token}=await identity.issueGrant(row,'MIS',profile,{remember:rememberDevice});
-  await remember(req,'MIS',token);
-  req.audit=audit(req,profile,'MIS');req.auditSessionToken=token;
-  res.json({redirectUrl:await misRedirectFor({state,challenge,grant,remember:rememberDevice})});
+  const opened=await openMis(bearer(req),req.session,{state,challenge,remember:req.body?.remember===true});
+  if(opened.error)return res.status(opened.status).json({error:opened.error});
+  req.audit=audit(req,opened.profile,'MIS');req.auditSessionToken=opened.token;
+  res.json({redirectUrl:opened.redirectUrl});
  }));
 
  app.post('/api/hr-login/continue',requireSession,safe(async(req,res)=>{
   const {state,challenge}=req.body||{};
   if(!valid(state)||!valid(challenge))return res.status(400).json({error:'Start HR sign-in again from HR Pulse.'});
-  const row=await userRow(req.session),profile=row&&pulseApplicationProfile(row,'HR');
-  if(!profile)return res.status(403).json({error:'HR access is not assigned to your Pulse account. Contact your administrator.'});
-  // Rides on this Pulse session, so it never ends the person's HR sign-in on another screen.
-  const {grant,token}=await identity.attachPulseSessionGrant(row,'HR',bearer(req));
-  await remember(req,'HR',token);
-  const code=randomBytes(32).toString('base64url');
-  await pool.query('DELETE FROM caliber_one_codes WHERE expires_at<=NOW()');
-  await pool.query("INSERT INTO caliber_one_codes(code_hash,application,challenge,state,grant_token,expires_at) VALUES($1,'HR',$2,$3,$4,NOW()+INTERVAL '60 seconds')",[digest(code),challenge,state,grant]);
-  req.audit=audit(req,profile,'HR');req.auditSessionToken=token;
-  const target=new URL('/',HR_ORIGIN);target.searchParams.set('hrCode',code);target.searchParams.set('hrState',state);
-  res.json({redirectUrl:target.toString()});
+  const opened=await openHr(bearer(req),req.session,{state,challenge});
+  if(opened.error)return res.status(opened.status).json({error:opened.error});
+  req.audit=audit(req,opened.profile,'HR');req.auditSessionToken=opened.token;
+  res.json({redirectUrl:opened.redirectUrl});
  }));
+
+ // The fast hand-over (owner, 28 Nov 2026: "taking lot of time"). MIS, HR Pulse and Diesel send a
+ // person who needs a sign-in to Pulse's home page, with their request in the address. That used to
+ // open the whole Pulse app in the tab (its files, its start-up reads of the dashboard and requests)
+ // only to press "continue" for the person: with three tabs opening at once, four Pulse apps started
+ // together. A person whose Pulse sign-in is in the browser (the HttpOnly sign-in cookie) is now sent
+ // straight on by the server, with the same checks and the same one-time codes. Anyone else, and any
+ // request this cannot answer, gets the Pulse app as before.
+ async function cookieSignIn(req){
+  if(!readSession||!sessionCookie)return null;
+  const token=cookieValue(req,sessionCookie);
+  if(!token)return null;
+  const asked={path:'/api/caliber-one/handoff',headers:{authorization:'Bearer '+token}};
+  let session;
+  // A sign-in rule still open (for example Telegram groups to join) is shown by the app.
+  try{session=await readSession(asked);}catch{return null;}
+  if(!session?.login&&!session?.name)return null;
+  if(checkLocation){
+   // The location rule answers on the response when it holds a sign-in back; here it must only say so.
+   const silent={set(){return silent;},status(){return silent;},json(){return silent;},end(){return silent;}};
+   if(await checkLocation(asked,silent,session))return null;
+  }
+  return {token,session};
+ }
+ app.get('/',async(req,res,next)=>{
+  try{
+   const query=req.query||{};
+   const kind=query.login==='mis'&&query.misManual!=='1'&&valid(query.misState)&&valid(query.misChallenge)?'MIS'
+    :query.hrSignIn==='1'&&valid(query.state)&&valid(query.code_challenge)?'HR'
+    :query.dieselSignIn==='1'&&valid(query.state)&&valid(query.code_challenge)&&dieselRedirect?'Diesel':'';
+   if(!kind)return next();
+   const signedIn=await cookieSignIn(req);
+   if(!signedIn)return next();
+   let target;
+   if(kind==='Diesel')target=await dieselRedirect(query.state,query.code_challenge,signedIn.token);
+   else{
+    const opened=kind==='MIS'?await openMis(signedIn.token,signedIn.session,{state:query.misState,challenge:query.misChallenge})
+     :await openHr(signedIn.token,signedIn.session,{state:query.state,challenge:query.code_challenge});
+    // No HR access: HR Pulse shows its own form with that message. No MIS access: the app says so.
+    if(opened.error){if(kind!=='HR')return next();target=HR_ORIGIN+'/?hrSso=noaccess';}
+    else{target=opened.redirectUrl;req.audit=audit(req,opened.profile,kind);req.auditSessionToken=opened.token;}
+   }
+   if(!target)return next();
+   res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer'});
+   res.redirect(303,target);
+  }catch(error){
+   // Never leave the tab on an error page: the app can still do the hand-over.
+   console.error('Caliber One fast hand-over failed; the Pulse app takes over:',error.message);
+   next();
+  }
+ });
 
  // HR Pulse's page swaps its one-time code for the grant, proving it started the sign-in.
  const hrCors=(req,res)=>{

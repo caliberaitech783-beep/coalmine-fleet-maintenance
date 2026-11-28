@@ -26,7 +26,7 @@ import {installCaliberOneSignIn} from './caliber-one-signin.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
-import {registerMisSharedSignIn} from './mis-shared-signin.mjs';
+import {registerMisSharedSignIn,pulseSsoSessionCookie} from './mis-shared-signin.mjs';
 import {registerDieselSharedSignIn} from './diesel-shared-signin.mjs';
 import {createDieselEmployeeReader} from './diesel-employee-link.mjs';
 import {DIESEL_FEED_MASTERS,createErpDriverReader,dieselMasterFeed} from './diesel-master-feed.mjs';
@@ -1679,7 +1679,10 @@ const misTelegramSignIn={
 };
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity,telegram:misTelegramSignIn});
 // Caliber One: a Pulse session opens MIS and HR Pulse without a second password (owner, 28 Nov 2026).
-const caliberOneSignIn=installCaliberOneSignIn(app,{pool:authPool,requireSession,identity:misCredentialIdentity,misRedirectFor:misLoginHandoff.redirectFor,sessionStore:authSessionStore});
+const caliberOneSignIn=installCaliberOneSignIn(app,{pool:authPool,requireSession,identity:misCredentialIdentity,misRedirectFor:misLoginHandoff.redirectFor,sessionStore:authSessionStore,
+  // The fast hand-over reads the sign-in from Pulse's own HttpOnly cookie, with the same rules as any request.
+  readSession,checkLocation:signInLocationGuard,sessionCookie:pulseSsoSessionCookie,
+  dieselRedirect:(state,challenge,token)=>dieselSharedSignIn.redirectFor(state,challenge,token)});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
@@ -2774,7 +2777,8 @@ async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
   // Both the browser handoff and server-to-server checks must stay off the
   // operational queue. profileFor also calls this reader with a fresh request.
-  const dieselSignIn=req.path.startsWith('/api/diesel-sso/');
+  // Caliber One's hand-over is a sign-in step too: it stays off the operational queue with Diesel's.
+  const dieselSignIn=req.path.startsWith('/api/diesel-sso/')||req.path.startsWith('/api/caliber-one/');
   const session=await (dieselSignIn?authSessionStore:req.dashboardSessionStore||sessionStore).get(token);
   if(session&&!membershipOnboardingPath(req.path)){
     const telegramServiceAccount=String(session.login||'').trim().toLowerCase()==='mis_sync_service';

@@ -54,10 +54,21 @@ export function pulseTokenFrom(stores) {
   return '';
 }
 
-// HR Pulse is told to open with the Pulse sign-in (?hrSso=start), also right after a sign-out; every
-// other tab opens at its home page.
-export function frameUrl(app) {
-  return app.key === 'hr' ? app.url + '?hrSso=start' : app.url;
+// HR Pulse is told to open with the Pulse sign-in (?hrSso=start), also right after a sign-out.
+// justSignedIn: the window signed in a moment ago, so MIS holds no sign-in of its own (a sign-out
+// anywhere ended it): MIS opens at its sign-in step and starts once, not twice. Every other tab,
+// and MIS when the window reopens already signed in, opens at its home page.
+export function frameUrl(app, { justSignedIn = false } = {}) {
+  if (app.key === 'hr') return app.url + '?hrSso=start';
+  if (app.key === 'mis' && justSignedIn) return app.url + 'api/mis-credentials/start';
+  return app.url;
+}
+
+// The tabs behind the open one load one at a time, each only when the window has been quiet for a
+// moment (no tab finished a page in the last quietMs), so the tab the person is looking at is not
+// slowed by the others. After maxWaitMs the next one loads anyway.
+export function preloadMayStart({ now, lastLoadAt, waitingSince, quietMs = 2000, maxWaitMs = 15000 }) {
+  return now - lastLoadAt >= quietMs || now - waitingSince >= maxWaitMs;
 }
 
 // A sign-out anywhere tells these tabs to sign out of their own website; Diesel and HR's grant

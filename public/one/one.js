@@ -1,4 +1,4 @@
-import { APPS, STORAGE_KEY, PULSE_SESSION_KEY, SIGN_OUT_MESSAGE, appByKey, frameUrl, initialKey, frameAllow, keyFromShortcut, preloadOrder, pulseTokenFrom, signOutTargets } from './one-tabs.mjs';
+import { APPS, STORAGE_KEY, PULSE_SESSION_KEY, SIGN_OUT_MESSAGE, appByKey, frameUrl, initialKey, frameAllow, keyFromShortcut, preloadMayStart, preloadOrder, pulseTokenFrom, signOutTargets } from './one-tabs.mjs';
 
 // Caliber One must never open inside one of its own tabs (a link to /one/ from inside Pulse).
 if (window.self !== window.top) {
@@ -19,6 +19,9 @@ function start() {
   const tabs = new Map();
   let current = '';
   let preloadStarted = false;
+  // When any tab last finished loading a page, and whether this window signed in itself just now.
+  let lastLoadAt = 0;
+  let justSignedIn = false;
   // One sign-in (owner, 28 Nov 2026): signed out, every tab shows the same single sign-in (Pulse's);
   // after it all four open. A sign-out in any tab signs out of all of them.
   let signedIn = false;
@@ -64,10 +67,11 @@ function start() {
     tabs.get(key).dataset.state = 'loading';
     frame.addEventListener('load', () => {
       tabs.get(key).dataset.state = 'ready';
+      lastLoadAt = Date.now();
       listenForShortcuts(frame);
       if (key === current) startPreload();
     });
-    frame.src = frameUrl(app);
+    frame.src = frameUrl(app, { justSignedIn });
     stage.append(frame);
     frames.set(key, frame);
     return frame;
@@ -96,15 +100,20 @@ function start() {
     if (preloadStarted || !signedIn) return;
     preloadStarted = true;
     const queue = preloadOrder(current).filter(key => !frames.has(key));
+    // One tab at a time, and only when the window has been quiet: the open tab goes first.
+    let waitingSince = Date.now();
     const next = () => {
-      const key = queue.shift();
-      if (!key || leaving) return;
+      if (leaving || !queue.length) return;
       if (document.visibilityState === 'hidden') {
-        document.addEventListener('visibilitychange', () => { queue.unshift(key); next(); }, { once: true });
+        document.addEventListener('visibilitychange', () => { waitingSince = Date.now(); next(); }, { once: true });
         return;
       }
+      if (!preloadMayStart({ now: Date.now(), lastLoadAt, waitingSince })) { setTimeout(next, 500); return; }
+      const key = queue.shift();
       if (!frames.has(key)) frameFor(key);
-      setTimeout(next, 2500);
+      lastLoadAt = Date.now();
+      waitingSince = Date.now();
+      setTimeout(next, 1000);
     };
     setTimeout(next, 1000);
   }
@@ -149,6 +158,7 @@ function start() {
     if (!signedIn) {
       if (token && await accepted(token)) {
         signedIn = true;
+        justSignedIn = true;
         liveToken = token;
         lastCheck = Date.now();
         show(current);
