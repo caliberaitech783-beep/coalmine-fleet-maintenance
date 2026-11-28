@@ -34,3 +34,17 @@ outside this pool-level instrumentation.
 
 No production records, retention settings, indexes or database extensions were
 changed during the investigation.
+
+## Follow-up from the newly available logs
+
+After the first release, live query sampling caught the Info Pulse projection
+running for over three seconds, and its new query timing event measured 4,652 ms
+without pool queueing. Unlike the workflow feed, this endpoint launched a full
+request-table read for each caller. It now shares that raw projection using the
+existing revision-validated feed cache. Authorization, role/site filtering and
+daily-history attachment still run separately for each caller. A concurrency
+regression verifies thirty simultaneous callers use one source read without
+sharing their filtered histories, and that revision changes and writes refresh it.
+
+Warning-level application file logging was enabled after release; the existing
+HTTP log capacity (35 MB) and retention (three days) were preserved.

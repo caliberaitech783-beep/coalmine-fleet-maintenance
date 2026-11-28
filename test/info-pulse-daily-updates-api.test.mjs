@@ -7,6 +7,7 @@ import {scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {approvedDelayedReason} from '../delayed-reason.mjs';
 import {requestsWithDoorNumbers} from '../equipment-door.mjs';
+import {createFeedCache} from '../request-feed-cache.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
 const helper = server.slice(server.indexOf('async function attachDailyRemarks('), server.indexOf('async function requestWorkflowWhatsAppLogins('));
@@ -33,7 +34,7 @@ async function load({sites = ['Sasti OB'], failRemarks = false, cached = false} 
   }};
   let handler, body, failure, cacheNamespace;
   const deps = {
-    pool, infoPulseProjection:'reference AS ref', requireSession(){}, approvedDelayedReason,requestsWithDoorNumbers,
+    pool, infoPulseProjection:'reference AS ref', requireSession(){}, approvedDelayedReason,requestsWithDoorNumbers,requestFeedCache:createFeedCache(),
     app:{get(path, ...handlers){handler=handlers.at(-1);}},
     currentDashboardAuthorization:async()=>({session:{role:'super'}, user:{}}),
     infoPulseRequestScope:()=>({sites:sites.map(canonicalSiteName), restrictToScope:true}), scopeInfoPulseRequests,
