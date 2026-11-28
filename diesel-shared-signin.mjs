@@ -121,6 +121,9 @@ export function registerDieselSharedSignIn(app, { pool, requireSession, readSess
   }));
 
   return {
+    // The one-time link back to Diesel for a Pulse sign-in, or null while Diesel sign-in is off.
+    // Used by Caliber One's fast hand-over, which has already checked the sign-in.
+    redirectFor: (state, challenge, token) => callback && ready && proof(state) && proof(challenge) ? issueCode(state, challenge, token) : null,
     async initialize() {
       if (!callback) return;
       await pool.query(`CREATE TABLE IF NOT EXISTS diesel_sso (
