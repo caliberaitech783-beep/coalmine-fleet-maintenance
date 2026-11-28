@@ -1679,11 +1679,12 @@ const misTelegramSignIn={
 };
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity,telegram:misTelegramSignIn});
 // Caliber One: a Pulse session opens MIS and HR Pulse without a second password (owner, 28 Nov 2026).
-const caliberOneSignIn=installCaliberOneSignIn(app,{pool:authPool,requireSession,identity:misCredentialIdentity,misRedirectFor:misLoginHandoff.redirectFor});
+const caliberOneSignIn=installCaliberOneSignIn(app,{pool:authPool,requireSession,identity:misCredentialIdentity,misRedirectFor:misLoginHandoff.redirectFor,sessionStore:authSessionStore});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
   readEmployee:createDieselEmployeeReader(authPool),
+  onSignOut:token=>caliberOneSignIn.endPulseSignIn(token),
   secret:process.env.DIESEL_SSO_CLIENT_SECRET,
   enabled:process.env.DIESEL_SSO_ENABLED,
   dieselOrigin:process.env.DIESEL_PUBLIC_ORIGIN,
@@ -2533,6 +2534,8 @@ app.post('/api/logout',requireSession,async(req,res,next)=>{
   try{
     const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
     req.audit={eventType:'Security',module:'Authentication',action:'Logout',targetType:'User account',targetReference:req.session.login||req.session.name,changedFields:[]};
+    // Signing out of Pulse signs out of the MIS and HR sign-ins it opened (Caliber One).
+    await caliberOneSignIn.endOpened(token).catch(error=>console.error('Caliber One sign-ins could not be ended:',error.message));
     await pool.query('DELETE FROM auth_sessions WHERE token=$1',[token]);
     res.status(204).end();
   }catch(error){next(error)}

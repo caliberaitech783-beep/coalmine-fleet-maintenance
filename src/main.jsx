@@ -416,6 +416,9 @@ const storedSession = (() => {
   }
 })();
 configureNavigation(storedSession);
+// Inside Caliber One (pulse.cmll.in/one) the tabs open MIS, HR, Diesel and Tender, and one sign-in opens
+// them all, so the sign-in page hides their own tiles there (owner, 28 Nov 2026).
+if (window.name === 'caliber-one-pulse') document.documentElement.classList.add('in-caliber-one');
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
 // Two languages chosen at sign-in. Language 1 is the reading and default speech

@@ -54,7 +54,14 @@ export function pulseTokenFrom(stores) {
   return '';
 }
 
-// Sign out all tells these tabs to sign out of their own website; Diesel follows the Pulse sign-in.
+// HR Pulse is told to open with the Pulse sign-in (?hrSso=start), also right after a sign-out; every
+// other tab opens at its home page.
+export function frameUrl(app) {
+  return app.key === 'hr' ? app.url + '?hrSso=start' : app.url;
+}
+
+// A sign-out anywhere tells these tabs to sign out of their own website; Diesel and HR's grant
+// follow the Pulse sign-in.
 export const SIGN_OUT_MESSAGE = 'caliber-one:sign-out';
 export function signOutTargets(apps = APPS) {
   return apps.filter(app => app.key === 'mis' || app.key === 'hr').map(app => ({ key: app.key, origin: new URL(app.url).origin }));

@@ -13,8 +13,10 @@ import { pulseTokenFrom, signOutTargets } from '../public/one/one-tabs.mjs';
 // a second password, each with its own access rule, and Sign out all ends what it opened.
 const proofOf = value => createHash('sha256').update(value).digest('base64url');
 const state = 's'.repeat(43), verifier = 'v'.repeat(43), challenge = proofOf(verifier);
-const PULSE = 'p'.repeat(43);
+// Sign-ins are UUID tokens, as Pulse issues them.
 const PULSE_UUID = '7b0c1d7e-3a4f-4f7a-9d55-1c2b3a4d5e6f';
+const PULSE = PULSE_UUID;
+const CLERK = '0f3b6c1a-2d4e-4a5b-8c7d-9e0f1a2b3c4d';
 const pulseHrProfile = { permissions: { application: 'HR' } };
 
 async function harness(t) {
@@ -42,12 +44,13 @@ async function harness(t) {
       issued.push({ application, login: row.record_data.login, profile: pulseHrProfile, options: { pulseSession: true }, grant, token });
       return { grant, token };
     },
+    hooks: {},
     handlers: { '/api/integrations/hr/validate': async (req, res) => {
       const { rows } = await db.query("SELECT 1 FROM application_identity_grants WHERE grant_hash=$1 AND application='HR'", [req.body.grant]);
       return rows[0] ? res.json({ profile: { login: 'owner', permissions: { application: 'HR' } } }) : res.status(401).json({ error: 'expired' });
     } },
   };
-  const sessions = { [PULSE]: { login: 'owner', name: 'Owner' }, ['c'.repeat(43)]: { login: 'clerk', name: 'Clerk' } };
+  const sessions = { [PULSE]: { login: 'owner', name: 'Owner' }, [CLERK]: { login: 'clerk', name: 'Clerk' } };
   const app = express();
   app.use(express.json());
   const signIn = installCaliberOneSignIn(app, {
@@ -77,7 +80,7 @@ test('a signed-in Pulse person opens MIS without a password; no MIS access or no
   assert.equal(target.origin + target.pathname, 'https://pulse-ll.cmll.in/api/mis-credentials/callback');
   assert.equal(target.searchParams.get('remember'), 'true');
   assert.deepEqual(issued.map(item => [item.application, item.login, item.options.remember]), [['MIS', 'owner', true]]);
-  assert.equal((await post('/api/mis-login/continue', { state, challenge }, 'c'.repeat(43))).status, 403, 'MIS access is still needed');
+  assert.equal((await post('/api/mis-login/continue', { state, challenge }, CLERK)).status, 403, 'MIS access is still needed');
   assert.equal((await post('/api/mis-login/continue', { state, challenge }, '')).status, 401);
   assert.equal((await post('/api/mis-login/continue', { state: 'short', challenge })).status, 400);
   assert.equal(issued.length, 1);
@@ -102,7 +105,7 @@ test('HR Pulse gets a one-time code that only the page holding the verifier can 
   assert.equal((await swap({ code, state, verifier })).status, 401, 'a code works once');
   const preflight = await fetch(base + '/api/integrations/hr/exchange', { method: 'OPTIONS', headers: { Origin: HR_ORIGIN } });
   assert.equal(preflight.status, 204);
-  assert.equal((await post('/api/hr-login/continue', { state, challenge }, 'c'.repeat(43))).status, 403, 'HR access is still needed');
+  assert.equal((await post('/api/hr-login/continue', { state, challenge }, CLERK)).status, 403, 'HR access is still needed');
 });
 
 test('Sign out all ends the MIS and HR sign-ins this Pulse session opened, and no others', async t => {

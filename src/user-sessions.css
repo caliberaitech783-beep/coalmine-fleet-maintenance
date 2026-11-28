@@ -190,3 +190,6 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 
 .session-count-drilldown{border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:3px}.inactive-user-counts{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:16px 0}.inactive-users-panel input[type=date]{padding:10px;border:1px solid #d6dcec;border-radius:8px;background:white;color:#302244}
 .sign-in-location{font-weight:700}.sign-in-location.shared{color:#147a59}.sign-in-location.refused{color:#b42318}.sign-in-location.unavailable,.sign-in-location.none{color:#7b8798}.sign-in-location a{font-weight:800}
+
+/* Inside Caliber One the tabs open the other applications; one sign-in opens them all. */
+.in-caliber-one .login-tender-link,.in-caliber-one .login-mis-link,.in-caliber-one .login-hr-link,.in-caliber-one .login-diesel-link{display:none!important}
