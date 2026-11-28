@@ -21,12 +21,15 @@ export async function initializeSingleLogin(pool,{exceptions=process.env.SESSION
    PRIMARY KEY(session_id));
  ALTER TABLE user_current_sessions ADD COLUMN IF NOT EXISTS application TEXT NOT NULL DEFAULT 'BDMS';
  ALTER TABLE user_current_sessions ADD COLUMN IF NOT EXISTS selected_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ -- A running number orders sign-ins exactly, even two in the same instant (a clock can tie).
+ CREATE SEQUENCE IF NOT EXISTS user_current_sessions_order;
+ ALTER TABLE user_current_sessions ADD COLUMN IF NOT EXISTS selected_order BIGINT NOT NULL DEFAULT nextval('user_current_sessions_order');
  UPDATE user_current_sessions c SET application=COALESCE(NULLIF(s.permissions->>'application',''),'BDMS')
  FROM auth_sessions s WHERE s.session_public_id=c.session_id;
  DELETE FROM user_current_sessions WHERE session_id IS NULL;
  ALTER TABLE user_current_sessions DROP CONSTRAINT IF EXISTS user_current_sessions_pkey;
  ALTER TABLE user_current_sessions ADD PRIMARY KEY(session_id);
- CREATE INDEX IF NOT EXISTS user_current_sessions_login_application ON user_current_sessions(login,application,selected_at DESC);
+ CREATE INDEX IF NOT EXISTS user_current_sessions_login_application ON user_current_sessions(login,application,selected_order DESC);
  CREATE TABLE IF NOT EXISTS session_limit_exceptions(
    login TEXT PRIMARY KEY CHECK(login=lower(trim(login)) AND login<>''),
    max_sessions INTEGER NOT NULL CHECK(max_sessions BETWEEN 1 AND 10));
@@ -40,12 +43,12 @@ export async function initializeSingleLogin(pool,{exceptions=process.env.SESSION
    PERFORM pg_advisory_xact_lock(hashtext('login:'||wanted_application||':'||wanted_login));
    SELECT max_sessions INTO allowed FROM session_limit_exceptions WHERE login=wanted_login;
    allowed:=GREATEST(1,COALESCE(allowed,1));
-   INSERT INTO user_current_sessions(login,application,session_id,selected_at)
-    VALUES(wanted_login,wanted_application,NEW.session_public_id,clock_timestamp())
-    ON CONFLICT(session_id) DO UPDATE SET selected_at=EXCLUDED.selected_at;
+   INSERT INTO user_current_sessions(login,application,session_id,selected_at,selected_order)
+    VALUES(wanted_login,wanted_application,NEW.session_public_id,clock_timestamp(),nextval('user_current_sessions_order'))
+    ON CONFLICT(session_id) DO UPDATE SET selected_at=EXCLUDED.selected_at,selected_order=EXCLUDED.selected_order;
    DELETE FROM user_current_sessions WHERE login=wanted_login AND application=wanted_application
     AND session_id NOT IN (SELECT session_id FROM user_current_sessions WHERE login=wanted_login AND application=wanted_application
-     ORDER BY selected_at DESC,session_id DESC LIMIT allowed);
+     ORDER BY selected_order DESC LIMIT allowed);
   END IF;
   RETURN NEW;
  END $single$;
