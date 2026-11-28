@@ -31,6 +31,17 @@ test('deployment validates staging, swaps, and automatically rolls back',()=>{
   assert.match(workflow,/scheduledJobsEnabled!==true/);
 });
 
+test('production preflight refreshes Azure credentials after the staging wait without skipping checks',()=>{
+  const staging=workflow.indexOf('- name: Restart and verify staging');
+  const refresh=workflow.indexOf('- name: Refresh Azure credentials before production checks');
+  const preflight=workflow.indexOf('- name: Verify production Telegram groups before swap');
+  const swap=workflow.indexOf('- name: Swap staging into production');
+  assert.ok(staging<refresh&&refresh<preflight&&preflight<swap);
+  assert.match(workflow.slice(refresh,preflight),/uses: azure\/login@v3/);
+  assert.match(workflow.slice(preflight,swap),/node scripts\/verify-telegram-membership-readiness\.mjs/);
+  assert.doesNotMatch(workflow.slice(preflight,swap),/continue-on-error|\|\| true/);
+});
+
 test('report-only deployments validate an immutable report delta and protect newer production changes',()=>{
   assert.ok(workflow.includes('ref: ${{ inputs.report_source_sha || github.sha }}'));
   assert.ok(workflow.includes('[[ "$REPORT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]'));

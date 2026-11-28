@@ -4,9 +4,12 @@ import {readFileSync} from 'node:fs';
 
 const source=readFileSync(new URL('../scripts/verify-telegram-membership-readiness.mjs',import.meta.url),'utf8').replace("import {execFileSync} from 'node:child_process';",'');
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-async function run(responses){
+async function run(responses,{tokenError}={}){
   const calls=[],output=[],state={env:{},exitCode:0};
-  const execFileSync=(_file,args)=>JSON.stringify(args.includes('get-access-token')?{accessToken:'test-arm-token'}:args.includes('list-publishing-credentials')?{publishingUserName:'test-publisher',publishingPassword:'test-password'}:['pulse.scm.azurewebsites.net']);
+  const execFileSync=(_file,args)=>{
+    if(tokenError&&args.includes('get-access-token'))throw Object.assign(Error('CLI failed'),{stderr:tokenError});
+    return JSON.stringify(args.includes('get-access-token')?{accessToken:'test-arm-token'}:args.includes('list-publishing-credentials')?{publishingUserName:'test-publisher',publishingPassword:'test-password'}:['pulse.scm.azurewebsites.net']);
+  };
   const fetch=async(url,options)=>{calls.push({url,options});const response=responses.shift();return {status:response.status||200,ok:(response.status||200)<400,json:async()=>({Output:JSON.stringify(response.result)})};};
   await new AsyncFunction('execFileSync','fetch','process','console',source)(execFileSync,fetch,state,{log:value=>output.push(value),error:value=>output.push(value)});
   return {calls,output,state};
@@ -42,4 +45,13 @@ test('a denied production probe fails closed',async()=>{
   assert.equal(result.state.exitCode,1);
   assert.equal(result.calls.length,1);
   assert.match(result.output.join('\n'),/preflightFailed/);
+});
+
+test('expired Azure assertions report a provider code without disclosing the CLI response',async()=>{
+  const result=await run([],{tokenError:'AADSTS700024: assertion expired. private-token private-publishing-password'});
+  assert.equal(result.state.exitCode,1);
+  assert.equal(result.calls.length,0);
+  const error=JSON.parse(result.output.at(-1));
+  assert.deepEqual(error,{preflightFailed:true,stage:'Azure access token',code:'AADSTS700024'});
+  assert.doesNotMatch(result.output.join('\n'),/private-token|private-publishing-password|assertion expired/);
 });

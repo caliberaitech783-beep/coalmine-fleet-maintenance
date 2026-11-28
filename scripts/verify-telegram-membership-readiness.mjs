@@ -6,9 +6,11 @@ const scope=['-g',process.env.AZURE_RESOURCE_GROUP||'coalmine-fleet-maintenance-
 const az=args=>JSON.parse(execFileSync('az',[...args,'--only-show-errors','-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));
 let stage='Azure authorization';
 try{
+  stage='Production host lookup';
   const hosts=az(['webapp','show',...scope,'--query','enabledHostNames']);
   const host=hosts.find(host=>host.includes('.scm.'));
   if(!host)throw Error('SCM unavailable');
+  stage='Azure access token';
   const token=az(['account','get-access-token','--resource','https://management.azure.com/']).accessToken;
   const remote=String.raw`(async()=>{
 let pool;let probeStage='dependencies';
@@ -69,6 +71,9 @@ finally{await pool?.end();}
   if(result.ready!==true){
     console.error('Membership release stopped: register all eight site groups and grant the bot administrator and invitation permissions.');process.exitCode=1;
   }
-}catch{
-  console.error(JSON.stringify({preflightFailed:true,stage}));process.exitCode=1;
+}catch(error){
+  // Report only a provider error identifier, never command arguments, tokens,
+  // publishing credentials or the raw CLI error stream.
+  const code=String(error?.stderr||'').match(/\bAADSTS\d+\b/)?.[0];
+  console.error(JSON.stringify({preflightFailed:true,stage,...(code?{code}:{})}));process.exitCode=1;
 }
