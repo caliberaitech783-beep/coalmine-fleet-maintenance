@@ -54,7 +54,8 @@ export function installCaliberOneSignIn(app,{pool,requireSession,identity,misRed
   if(!valid(state)||!valid(challenge))return res.status(400).json({error:'Start HR sign-in again from HR Pulse.'});
   const row=await userRow(req.session),profile=row&&pulseApplicationProfile(row,'HR');
   if(!profile)return res.status(403).json({error:'HR access is not assigned to your Pulse account. Contact your administrator.'});
-  const {grant,token}=await identity.issueGrant(row,'HR',profile);
+  // Rides on this Pulse session, so it never ends the person's HR sign-in on another screen.
+  const {grant,token}=await identity.attachPulseSessionGrant(row,'HR',bearer(req));
   await remember(req,'HR',token);
   const code=randomBytes(32).toString('base64url');
   await pool.query('DELETE FROM caliber_one_codes WHERE expires_at<=NOW()');
