@@ -22,6 +22,7 @@ import {installMisPulseBridge} from './mis-pulse-bridge.mjs';
 import {createMisVehicleTransfers} from './mis-vehicle-transfer.mjs';
 import {createEquipmentMasterChanges,registerEquipmentMasterChanges} from './equipment-master-changes.mjs';
 import {installMisLoginHandoff} from './mis-login-handoff.mjs';
+import {installCaliberOneSignIn} from './caliber-one-signin.mjs';
 import {prepareMisCredentials} from './mis-credentials.mjs';
 import {bdmsEffectiveReport} from './telegram-bdms-period.mjs';
 import {summarizeUserSessions} from './user-session-summary.mjs';
@@ -1677,6 +1678,8 @@ const misTelegramSignIn={
  checkCode:(code,hash)=>verifyPassword(code,hash),
 };
 const misLoginHandoff=installMisLoginHandoff(app,{pool:authPool,identity:misCredentialIdentity,telegram:misTelegramSignIn});
+// Caliber One: a Pulse session opens MIS and HR Pulse without a second password (owner, 28 Nov 2026).
+const caliberOneSignIn=installCaliberOneSignIn(app,{pool:authPool,requireSession,identity:misCredentialIdentity,misRedirectFor:misLoginHandoff.redirectFor});
 const misSharedSignIn=registerMisSharedSignIn(app,{pool,sessionStore,requireSession,mode:process.env.MIS_SSO_MODE||'issuer'});
 const dieselSharedSignIn=registerDieselSharedSignIn(app,{
   pool:authPool,requireSession,readSession,checkLocation:signInLocationGuard,
@@ -9260,6 +9263,7 @@ async function initializeDatabase(){
       .catch(error=>console.error('Diesel sign-in initialization failed:',error.message));
     await misCredentialIdentity.initialize();
     await misLoginHandoff.initialize();
+    await caliberOneSignIn.initialize();
     databaseReady=true;
     databaseError='';
     await seedCdirMasters()

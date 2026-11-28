@@ -45,7 +45,7 @@ export function installMisLoginHandoff(app,{pool,identity,telegram=null}){
   if(res.statusCode>=400||!result?.profile)return res.json(result);
   res.json({grant:rows[0].grant_token,profile:result.profile,remember:rows[0].remember===true});
  }));
- return {handleTelegramCallback:update=>approval?approval.handleCallback(update):Promise.resolve(false),initialize:async()=>{
+ return {redirectFor,handleTelegramCallback:update=>approval?approval.handleCallback(update):Promise.resolve(false),initialize:async()=>{
   await pool.query('CREATE TABLE IF NOT EXISTS mis_login_codes(code_hash TEXT PRIMARY KEY,challenge TEXT NOT NULL,state TEXT NOT NULL,grant_token TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL)');
   await pool.query('ALTER TABLE mis_login_codes ADD COLUMN IF NOT EXISTS remember BOOLEAN NOT NULL DEFAULT false');
   await pool.query(`CREATE TABLE IF NOT EXISTS mis_telegram_signin_codes(request_hash TEXT PRIMARY KEY,user_id BIGINT NOT NULL,otp_hash TEXT NOT NULL,

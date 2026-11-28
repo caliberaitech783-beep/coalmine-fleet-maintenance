@@ -14,8 +14,8 @@ test('Diesel selected on the launcher or on a shared login link takes priority o
   assert.equal(isDieselLogin('?login=mis'), false);
   assert.equal(isDieselLogin(''), false);
   const app = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-  const routing = app.slice(app.indexOf('if (!session || new URLSearchParams'));
-  assert.match(routing, /if \(locationGate\.phase!=='open'\)[^\n]+\n\s*if \(isDieselLogin\(window\.location\.search\)\) return <DieselSharedSignIn[^\n]+\n\s*if \(session\.userType/);
+  const routing = app.slice(app.indexOf('if (!session || (new URLSearchParams'));
+  assert.match(routing, /if \(locationGate\.phase!=='open'\)[^\n]+\n(?:\s*\/\/[^\n]*\n|\s*if \((?:isMisContinue|isHrLogin)\(window\.location\.search\)\) return <CaliberOneSignIn[^\n]+\n)*\s*if \(isDieselLogin\(window\.location\.search\)\) return <DieselSharedSignIn[^\n]+\n\s*if \(session\.userType/);
 });
 
 test('Diesel shows access errors and a successful retry opens its verified callback', async () => {
